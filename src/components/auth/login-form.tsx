@@ -24,7 +24,7 @@ export function LoginForm() {
     setLoading(true);
     const redirectTo =
       typeof window !== "undefined"
-        ? `${window.location.origin}/login?next=${encodeURIComponent(next)}`
+        ? `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`
         : undefined;
 
     const { error } = await supabase.auth.signInWithOAuth({
