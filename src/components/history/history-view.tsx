@@ -8,9 +8,11 @@ import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { deriveChargingState, formatDuration, type ChargingParams } from "@/lib/charging-math";
+import { formatCurrencyAmount } from "@/lib/i18n";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useSessionsQuery } from "@/hooks/use-sessions-query";
 import { useTranslation } from "@/hooks/use-translation";
+import { useAppPreferences } from "@/stores/use-app-preferences";
 import type { ChargingSessionRow } from "@/types/database";
 
 export function HistoryView() {
@@ -61,6 +63,7 @@ export function HistoryView() {
 function HistoryCard({ session }: { session: ChargingSessionRow }) {
   const nowMs = useTickingClock(session.status === "charging");
   const { locale, t } = useTranslation();
+  const currency = useAppPreferences((s) => s.currency);
   const started = session.started_at ? new Date(session.started_at) : null;
   const ended = session.stopped_at ? new Date(session.stopped_at) : null;
 
@@ -140,7 +143,11 @@ function HistoryCard({ session }: { session: ChargingSessionRow }) {
             label={t("history.cost") as string}
             value={
               session.price_per_kwh > 0
-                ? `€${(derived?.estimatedCost ?? session.estimated_cost).toFixed(2)}`
+                ? formatCurrencyAmount(
+                    currency,
+                    derived?.estimatedCost ?? session.estimated_cost,
+                    locale,
+                  )
                 : "—"
             }
           />

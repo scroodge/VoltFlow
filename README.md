@@ -1,4 +1,4 @@
-# EV Charge Pulse
+# VoltFlow
 
 Mobile-first EV charging tracker — Next.js App Router, Supabase Auth/Postgres/Realtime, TanStack Query + Zustand.
 
@@ -31,9 +31,17 @@ npm run lint
 
 ## PWA / install
 
-- `src/app/manifest.ts` + icons in `/public/icon-*.png`, `apple-touch-icon.png`
+- `src/app/manifest.ts` + VoltFlow icons in `/public/voltflow-*.svg`, `/public/icon-*.png`, `apple-touch-icon.png`
 - Minimal `public/sw.js` registered in production via `src/components/sw-register.tsx`
 - Prefer **Safari → Share → Add to Home Screen** (iOS); Chrome/Android use **Install app** where offered
+
+## Branding
+
+- Colors: dark premium EV base `#12151C`, card `#171B24`, border `#273040`, white `#F8FAFC`, primary green `#00E676`, cyan `#00D1FF`, accent blue `#2962FF`.
+- Typography: Google Font **Space Grotesk** for headings and UI with `Inter, system-ui, sans-serif` fallback.
+- Logo components: `src/components/brand/LogoMark.tsx`, `LogoFull.tsx`, `AppIcon.tsx`, `BrandBadge.tsx`, and `ChargingBolt.tsx`.
+- PWA icons: SVG sources live in `public/voltflow-icon.svg` and `public/voltflow-logo.svg`; PNG exports are `public/icon-192.png`, `public/icon-512.png`, and `public/apple-touch-icon.png`.
+- Mobile-first rules: app screens render inside a centered `430px` mobile container on desktop, use safe-area aware bottom navigation, and keep primary charging controls large enough for touch.
 
 ## Charging model
 

@@ -2,17 +2,23 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "EV Charge Pulse",
-    short_name: "Charge Pulse",
-    description: "Realtime EV charging tracker · mobile-first.",
+    name: "VoltFlow",
+    short_name: "VoltFlow",
+    description: "Real-time EV charging tracker and calculator",
     lang: "en",
     display: "standalone",
     orientation: "portrait",
     scope: "/",
-    start_url: "/dashboard?utm_source=pwa",
-    background_color: "#0b1324",
-    theme_color: "#0b1324",
+    start_url: "/dashboard",
+    background_color: "#12151C",
+    theme_color: "#12151C",
     icons: [
+      {
+        src: "/voltflow-icon.svg",
+        sizes: "any",
+        type: "image/svg+xml",
+        purpose: "maskable",
+      },
       {
         src: "/icon-192.png",
         sizes: "192x192",

@@ -13,12 +13,14 @@ import {
   type ChargingParams,
   type DerivedChargingState,
 } from "@/lib/charging-math";
+import { formatCurrencyAmount } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
 import { mapChargingSession } from "@/lib/db-map";
 import { queryKeys } from "@/lib/query-keys";
 import { fetchSessionById, useSessionQuery } from "@/hooks/use-session-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
+import { useAppPreferences } from "@/stores/use-app-preferences";
 import { useChargingUi } from "@/stores/use-charging-ui";
 import type { ChargingSessionRow } from "@/types/database";
 
@@ -38,7 +40,8 @@ export function ChargingSessionScreen({ sessionId }: { sessionId: string }) {
   const supabase = useMemo(() => createClient(), []);
   const liveDerived = useChargingUi((s) => s.liveDerived);
   const setLiveDerived = useChargingUi((s) => s.setLiveDerived);
-  const { t } = useTranslation();
+  const currency = useAppPreferences((s) => s.currency);
+  const { locale, t } = useTranslation();
 
   const { data: session, error, isLoading } = useSessionQuery(sessionId);
   const completingRef = useRef(false);
@@ -367,7 +370,7 @@ export function ChargingSessionScreen({ sessionId }: { sessionId: string }) {
           label={t("charging.estimatedCost") as string}
           value={
             session.price_per_kwh > 0
-              ? `€${derived.estimatedCost.toFixed(2)}`
+              ? formatCurrencyAmount(currency, derived.estimatedCost, locale)
               : "—"
           }
         />

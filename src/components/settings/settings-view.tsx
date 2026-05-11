@@ -13,10 +13,24 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useTranslation } from "@/hooks/use-translation";
+import {
+  currencies,
+  currencyLabels,
+  currencySymbols,
+  isCurrency,
+  type Currency,
+} from "@/lib/i18n";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import type { Car } from "@/types/database";
 
@@ -26,6 +40,8 @@ export function SettingsView() {
   const [email, setEmail] = useState<string | null>(null);
   const defaultPricePerKwh = useAppPreferences((s) => s.defaultPricePerKwh);
   const setDefaultPrice = useAppPreferences((s) => s.setDefaultPricePerKwh);
+  const currency = useAppPreferences((s) => s.currency);
+  const setCurrency = useAppPreferences((s) => s.setCurrency);
   const { t } = useTranslation();
   useEffect(() => {
     let mounted = true;
@@ -50,6 +66,12 @@ export function SettingsView() {
     }
     setDefaultPrice(numeric);
     toast.success(t("settings.tariffSaved") as string);
+  };
+
+  const handleCurrencyChange = (value: Currency | null) => {
+    if (!value || !isCurrency(value)) return;
+    setCurrency(value);
+    toast.success(t("settings.currencySaved") as string);
   };
 
   const handleSignOut = async () => {
@@ -117,7 +139,38 @@ export function SettingsView() {
         </CardHeader>
         <CardContent className="space-y-8">
           <form className="space-y-4" onSubmit={handlePriceSave}>
-            <Label htmlFor="pref-price">{t("settings.tariff")}</Label>
+            <div className="space-y-4">
+              <Label htmlFor="pref-currency">{t("settings.currency")}</Label>
+              <Select
+                value={currency}
+                onValueChange={handleCurrencyChange}
+                items={currencies.map((item) => ({
+                  value: item,
+                  label: currencyLabels[item],
+                }))}
+              >
+                <SelectTrigger
+                  id="pref-currency"
+                  className="h-[54px] w-full rounded-2xl text-lg"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {currencies.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {currencyLabels[item]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-muted-foreground text-sm">
+                {t("settings.currencyHelp")}
+              </p>
+            </div>
+
+            <Label htmlFor="pref-price">
+              {t("settings.tariff", { currency: currencySymbols[currency] })}
+            </Label>
             <Input
               key={defaultPricePerKwh}
               id="pref-price"

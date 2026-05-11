@@ -1,4 +1,4 @@
-import { MobileShell } from "@/components/layout/mobile-shell";
+import { MobileShell } from "@/components/layout/MobileShell";
 
 export default function AppSectionLayout({
   children,

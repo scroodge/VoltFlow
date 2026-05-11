@@ -1,15 +1,20 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { motion } from "framer-motion";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Gauge, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 
-import { startChargingSession } from "@/actions/sessions";
+import { startChargingSession, stopChargingSession } from "@/actions/sessions";
+import { BrandBadge } from "@/components/brand/BrandBadge";
+import { ChargingBolt } from "@/components/brand/ChargingBolt";
+import { LogoFull } from "@/components/brand/LogoFull";
+import { BatteryRing } from "@/components/charging/BatteryRing";
+import { ChargingActionButton } from "@/components/charging/ChargingActionButton";
+import { ChargingStatsGrid, type ChargingStat } from "@/components/charging/ChargingStatsGrid";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -27,39 +32,44 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { deriveChargingState, formatDuration, type ChargingParams } from "@/lib/charging-math";
-import { queryKeys } from "@/lib/query-keys";
 import { useCarsQuery } from "@/hooks/use-cars-query";
-import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { fetchSessions } from "@/hooks/use-sessions-query";
+import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
+import {
+  deriveChargingState,
+  formatDuration,
+  type ChargingParams,
+} from "@/lib/charging-math";
+import { currencySymbols, formatCurrencyAmount } from "@/lib/i18n";
+import { queryKeys } from "@/lib/query-keys";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import type { ChargingSessionRow } from "@/types/database";
-import type { Car } from "@/types/database";
 
 export function DashboardView() {
   const router = useRouter();
+  const qc = useQueryClient();
   const { data: cars, isLoading } = useCarsQuery();
   const selectedCarId = useAppPreferences((s) => s.selectedCarId);
   const setSelectedCarId = useAppPreferences((s) => s.setSelectedCarId);
   const defaultPrice = useAppPreferences((s) => s.defaultPricePerKwh);
-  const { t } = useTranslation();
+  const currency = useAppPreferences((s) => s.currency);
+  const { locale, t } = useTranslation();
 
   const { data: sessions, isLoading: loadingSessions } = useQuery({
     queryKey: queryKeys.sessions,
     queryFn: fetchSessions,
     refetchInterval: (query) => {
       const list = query.state.data as ChargingSessionRow[] | undefined;
-      const has = list?.some((s) => s.status === "charging");
-      return has ? 1000 : false;
+      return list?.some((s) => s.status === "charging") ? 1000 : false;
     },
   });
 
   const activeSession = useMemo(
-    () => sessions?.find((s) => s.status === "charging"),
+    () => sessions?.find((s) => s.status === "charging") ?? null,
     [sessions],
   );
-
+  const latestSession = sessions?.[0] ?? null;
   const nowMs = useTickingClock(Boolean(activeSession));
 
   const selectedCar =
@@ -81,11 +91,7 @@ export function DashboardView() {
       efficiencyPercent: activeSession.efficiency_percent,
       pricePerKwh: activeSession.price_per_kwh,
     };
-    return deriveChargingState(
-      params,
-      Date.parse(activeSession.started_at),
-      nowMs,
-    );
+    return deriveChargingState(params, Date.parse(activeSession.started_at), nowMs);
   }, [activeSession, nowMs]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -94,6 +100,7 @@ export function DashboardView() {
   const [chargerKw, setChargerKw] = useState("");
   const [price, setPrice] = useState(String(defaultPrice));
   const [submitting, setSubmitting] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const hasMounted = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -101,6 +108,50 @@ export function DashboardView() {
   );
 
   const canStartSession = hasMounted && selectedCar && !activeSession;
+  const dashboardStatus = activeSession
+    ? "charging"
+    : latestSession?.status === "completed"
+      ? "completed"
+      : "idle";
+  const statusLabel =
+    dashboardStatus === "charging"
+      ? "Charging"
+      : dashboardStatus === "completed"
+        ? "Completed"
+        : "Idle";
+  const currentPercent =
+    liveActive?.currentPercent ??
+    activeSession?.current_percent ??
+    latestSession?.current_percent ??
+    Number(startPct);
+
+  const stats: ChargingStat[] = [
+    {
+      label: "Charged kWh",
+      value: `${(liveActive?.chargedEnergyKwh ?? activeSession?.charged_energy_kwh ?? 0).toFixed(2)}`,
+      accent: "green",
+    },
+    {
+      label: "Remaining",
+      value: activeSession
+        ? formatDuration(liveActive?.remainingSeconds ?? 0)
+        : "--",
+      accent: "cyan",
+    },
+    {
+      label: "Power",
+      value: `${(activeSession?.charger_power_kw ?? selectedCar?.default_charger_power_kw ?? 0).toFixed(1)} kW`,
+      accent: "blue",
+    },
+    {
+      label: "Cost",
+      value: formatCurrencyAmount(
+        currency,
+        liveActive?.estimatedCost ?? activeSession?.estimated_cost ?? 0,
+        locale,
+      ),
+    },
+  ];
 
   const handleStart = async () => {
     if (!selectedCar) return;
@@ -133,119 +184,179 @@ export function DashboardView() {
     }
   };
 
+  const handleMainAction = async () => {
+    if (!activeSession) {
+      if (canStartSession) {
+        setPrice(String(defaultPrice));
+        setDialogOpen(true);
+      }
+      return;
+    }
+
+    setStopping(true);
+    const res = await stopChargingSession(activeSession.id);
+    setStopping(false);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    await qc.invalidateQueries({ queryKey: queryKeys.sessions });
+    toast.message(t("charging.saved") as string);
+  };
+
   return (
-    <div className="flex flex-col gap-5 p-4">
-      <header className="space-y-1">
-        <p className="text-muted-foreground text-xs uppercase tracking-[0.3em]">
-          {t("dashboard.eyebrow")}
-        </p>
-        <h1 className="text-balance text-3xl font-semibold tracking-tight">
-          {t("dashboard.title")}
-        </h1>
-        <p className="text-muted-foreground text-base">
-          {t("dashboard.subtitle")}
-        </p>
+    <div className="safe-bottom flex flex-col gap-5 px-4 pb-6 pt-5">
+      <header className="flex items-center justify-between gap-4">
+        <LogoFull />
+        <BrandBadge className="hidden min-[380px]:inline-flex">
+          Full control
+        </BrandBadge>
       </header>
 
       {!isLoading && cars && cars.length === 0 ? (
-        <Card className="border-white/12 bg-card/80 shadow-[0_20px_60px_-30px_rgb(34_211_238/0.65)] backdrop-blur">
-          <CardHeader>
-            <CardTitle className="text-xl tracking-tight">{t("dashboard.addEvTitle")}</CardTitle>
-          </CardHeader>
-          <CardContent className="text-muted-foreground text-base">
-            {t("dashboard.addEvBody")}
-          </CardContent>
-          <CardFooter>
-            <Button asChild size="lg" className="h-[52px] w-full rounded-full text-base font-semibold">
-              <Link href="/cars/new">{t("dashboard.addVehicle")}</Link>
-            </Button>
-          </CardFooter>
-        </Card>
+        <section className="voltflow-card p-5">
+          <div className="flex items-start gap-3">
+            <ChargingBolt className="size-10 shrink-0" aria-hidden />
+            <div>
+              <h1 className="font-heading text-2xl font-bold tracking-normal">
+                {t("dashboard.addEvTitle")}
+              </h1>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {t("dashboard.addEvBody")}
+              </p>
+            </div>
+          </div>
+          <Button
+            asChild
+            size="lg"
+            className="mt-5 h-14 w-full rounded-full bg-[linear-gradient(90deg,#00E676_0%,#00D1FF_100%)] font-heading text-base font-bold text-[#06110B]"
+          >
+            <Link href="/cars/new">{t("dashboard.addVehicle")}</Link>
+          </Button>
+        </section>
       ) : null}
 
       {cars && cars.length > 0 ? (
         <>
-          <div className="space-y-2">
-            <Label className="text-muted-foreground text-xs uppercase tracking-[0.2em]">
-              {t("dashboard.vehicle")}
-            </Label>
-            {isLoading ? (
-              <Skeleton className="h-14 w-full rounded-2xl" />
-            ) : (
-              <Select
-                items={cars.map((car) => ({
-                  value: car.id,
-                  label: car.name,
-                }))}
-                value={selectedCar?.id}
-                onValueChange={(value) => setSelectedCarId(value)}
-              >
-                <SelectTrigger className="h-14 rounded-2xl text-base md:text-lg">
-                  <SelectValue placeholder={t("dashboard.chooseCar") as string} />
-                </SelectTrigger>
-                <SelectContent>
-                  {cars.map((car) => (
-                    <SelectItem key={car.id} value={car.id}>
-                      <div className="flex flex-col text-left leading-tight">
-                        <span className="font-medium">{car.name}</span>
-                        <span className="text-muted-foreground text-xs">
-                          {t("dashboard.pack", {
-                            battery: car.battery_capacity_kwh,
-                            power: car.default_charger_power_kw,
-                          })}
-                        </span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+          <section className="voltflow-card overflow-hidden p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  Vehicle
+                </p>
+                <h1 className="mt-1 font-heading text-2xl font-bold tracking-normal">
+                  {selectedCar?.name ?? "EV"}
+                </h1>
+              </div>
+              <div className="rounded-full border border-border bg-white/[0.04] px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-[var(--voltflow-green)]">
+                {statusLabel}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              {isLoading ? (
+                <Skeleton className="h-14 w-full rounded-2xl" />
+              ) : (
+                <Select
+                  items={cars.map((car) => ({
+                    value: car.id,
+                    label: car.name,
+                  }))}
+                  value={selectedCar?.id}
+                  onValueChange={(value) => setSelectedCarId(value)}
+                >
+                  <SelectTrigger className="h-14 rounded-2xl border-border bg-[#12151C]/70 text-base">
+                    <SelectValue placeholder={t("dashboard.chooseCar") as string} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cars.map((car) => (
+                      <SelectItem key={car.id} value={car.id}>
+                        <div className="flex flex-col text-left leading-tight">
+                          <span className="font-medium">{car.name}</span>
+                          <span className="text-muted-foreground text-xs">
+                            {t("dashboard.pack", {
+                              battery: car.battery_capacity_kwh,
+                              power: car.default_charger_power_kw,
+                            })}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded-2xl border border-border bg-white/[0.03] p-3">
+                <p className="text-muted-foreground">Battery pack</p>
+                <p className="mt-1 font-heading text-lg font-bold">
+                  {selectedCar?.battery_capacity_kwh ?? "--"} kWh
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-white/[0.03] p-3">
+                <p className="text-muted-foreground">Charger power</p>
+                <p className="mt-1 font-heading text-lg font-bold">
+                  {selectedCar?.default_charger_power_kw ?? "--"} kW
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="voltflow-card p-5 text-center">
+            <BatteryRing
+              percent={currentPercent}
+              status={loadingSessions ? "Syncing" : statusLabel}
+              charging={dashboardStatus === "charging"}
+            />
+            <p className="mx-auto mt-1 max-w-[18rem] text-sm leading-6 text-muted-foreground">
+              {activeSession
+                ? "Smart charging. Full control. Every time."
+                : "Energy in motion. Set your target and let VoltFlow track the run."}
+            </p>
+          </section>
+
+          <ChargingStatsGrid stats={stats} />
+
+          <div className="space-y-3">
+            <ChargingActionButton
+              status={dashboardStatus}
+              disabled={!selectedCar || stopping}
+              loading={stopping}
+              onClick={() => void handleMainAction()}
+            />
+            <Button
+              asChild
+              variant="outline"
+              size="lg"
+              className="h-14 w-full rounded-full border-border bg-white/[0.03] font-heading text-base font-bold"
+            >
+              <Link href={activeSession ? `/charging/${activeSession.id}` : "/settings"}>
+                <SlidersHorizontal className="size-5" aria-hidden />
+                Adjust Settings
+              </Link>
+            </Button>
           </div>
 
-          <ActivePulseCard
-            loading={loadingSessions}
-            selectedCar={selectedCar}
-            activeSession={activeSession ?? null}
-            live={liveActive}
-            nowMs={nowMs}
-          />
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <UtilityLink
-              headline={t("dashboard.fleet") as string}
-              subtitle={t("dashboard.fleetSubtitle") as string}
-              href="/cars/new"
-              cta={t("dashboard.addAnother") as string}
-            />
-            <UtilityLink
-              headline={t("nav.history") as string}
-              subtitle={t("dashboard.historySubtitle") as string}
-              href="/history"
-              cta={t("dashboard.viewSessions") as string}
-            />
-          </div>
+          <Link
+            href="/history"
+            className="flex items-center justify-between rounded-3xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground"
+          >
+            <span className="inline-flex items-center gap-2">
+              <Gauge className="size-5 text-[var(--voltflow-cyan)]" aria-hidden />
+              Latest sessions and charge history
+            </span>
+            <span className="font-semibold text-foreground">Open</span>
+          </Link>
         </>
       ) : null}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+7rem)] z-40 mx-auto mt-auto w-full max-w-lg">
-          <Button
-            size="lg"
-            className="shadow-[0_20px_50px_-20px_rgb(45_212_191/0.95)] hover:brightness-110 mt-6 h-[60px] w-full rounded-full text-lg font-semibold tracking-wide shadow-lg"
-            disabled={!canStartSession}
-            onClick={() => {
-              if (canStartSession) {
-                setPrice(String(defaultPrice));
-                setDialogOpen(true);
-              }
-            }}
-          >
-            {activeSession ? t("dashboard.charging") : t("dashboard.startCharging")}
-          </Button>
-        </div>
-        <DialogContent className="gap-6 rounded-[1.75rem] border-white/15">
+        <DialogContent className="gap-6 rounded-[1.75rem] border-border bg-card">
           <DialogHeader>
-            <DialogTitle className="text-xl">{t("dashboard.quickSession")}</DialogTitle>
+            <DialogTitle className="font-heading text-xl">
+              {t("dashboard.quickSession")}
+            </DialogTitle>
             <p className="text-muted-foreground text-base">
               {t("dashboard.quickSessionBody")}
             </p>
@@ -294,7 +405,9 @@ export function DashboardView() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="energy-price">{t("dashboard.price")}</Label>
+              <Label htmlFor="energy-price">
+                {t("dashboard.price", { currency: currencySymbols[currency] })}
+              </Label>
               <Input
                 id="energy-price"
                 type="number"
@@ -318,7 +431,7 @@ export function DashboardView() {
               {t("common.later")}
             </Button>
             <Button
-              className="hover:brightness-110 min-h-[52px] flex-1 rounded-full text-base font-semibold"
+              className="min-h-[52px] flex-1 rounded-full bg-[linear-gradient(90deg,#00E676_0%,#00D1FF_100%)] text-base font-semibold text-[#06110B] hover:brightness-110"
               disabled={submitting || !selectedCar}
               onClick={() => void handleStart()}
             >
@@ -328,121 +441,5 @@ export function DashboardView() {
         </DialogContent>
       </Dialog>
     </div>
-  );
-}
-
-function ActivePulseCard({
-  loading,
-  selectedCar,
-  activeSession,
-  live,
-  nowMs,
-}: {
-  loading: boolean;
-  selectedCar: Car | null;
-  activeSession: ChargingSessionRow | null;
-  live: ReturnType<typeof deriveChargingState> | null;
-  nowMs: number;
-}) {
-  const { t } = useTranslation();
-  const currentLive =
-    live ??
-    (activeSession?.started_at
-      ? deriveChargingState(
-          {
-            startPercent: activeSession.start_percent,
-            targetPercent: activeSession.target_percent,
-            batteryCapacityKwh: activeSession.battery_capacity_kwh,
-            chargerPowerKw: activeSession.charger_power_kw,
-            efficiencyPercent: activeSession.efficiency_percent,
-            pricePerKwh: activeSession.price_per_kwh,
-          },
-          Date.parse(activeSession.started_at),
-          nowMs,
-        )
-      : null);
-
-  return (
-    <Card className="border-white/[0.1] bg-gradient-to-br from-primary/13 via-transparent to-teal-500/13 shadow-[inset_0_1px_0_rgb(255_255_255/0.04)] backdrop-blur">
-      <CardHeader className="space-y-1">
-        <CardTitle className="text-muted-foreground text-xs uppercase tracking-[0.25em]">
-          {t("dashboard.liveCockpit")}
-        </CardTitle>
-        <p className="text-muted-foreground text-sm">
-          {loading ? t("dashboard.hydrating") : t("dashboard.timestampMath")}
-        </p>
-      </CardHeader>
-      <CardContent className="space-y-8">
-        {activeSession ? (
-          <>
-            <div className="flex flex-col items-center gap-2 text-center">
-              <span className="text-muted-foreground text-sm uppercase tracking-[0.2em]">
-                {t("dashboard.battery")}
-              </span>
-              <motion.span
-                className="text-primary text-8xl leading-none font-semibold drop-shadow-[0_0_40px_oklch(0.73_0.15_173/0.4)] tracking-tighter tabular-nums"
-                animate={{ opacity: [0.9, 1, 0.9] }}
-                transition={{ repeat: Infinity, duration: 2.4 }}
-              >
-                {(currentLive?.currentPercent ?? activeSession.current_percent).toFixed(1)}
-                %
-              </motion.span>
-              <p className="text-muted-foreground text-base">
-                {currentLive
-                  ? t("dashboard.remaining", {
-                      duration: formatDuration(currentLive.remainingSeconds),
-                    })
-                  : t("dashboard.calculating")}
-              </p>
-            </div>
-            <Button
-              asChild
-              size="lg"
-              className="h-[52px] w-full rounded-full text-base font-semibold"
-              variant="secondary"
-            >
-              <Link href={`/charging/${activeSession.id}`}>{t("dashboard.openRealtime")}</Link>
-            </Button>
-          </>
-        ) : (
-          <div className="space-y-3 text-muted-foreground text-base leading-relaxed">
-            <p>
-              {selectedCar
-                ? t("dashboard.readyWith", { name: selectedCar.name })
-                : t("dashboard.chooseSaved")}
-            </p>
-            <div className="bg-card rounded-2xl border border-white/[0.08] px-5 py-4 text-sm text-foreground/80">
-              <p className="font-semibold text-foreground tracking-tight">{t("dashboard.tip")}</p>
-              <p className="text-muted-foreground mt-2">
-                {t("dashboard.tipBody")}
-              </p>
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function UtilityLink({
-  headline,
-  subtitle,
-  href,
-  cta,
-}: {
-  headline: string;
-  subtitle: string;
-  href: string;
-  cta: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5 transition-colors hover:bg-white/[0.05]"
-    >
-      <p className="text-lg font-semibold tracking-tight">{headline}</p>
-      <p className="text-muted-foreground mt-2 text-sm">{subtitle}</p>
-      <p className="text-primary mt-4 text-base font-semibold">{cta}</p>
-    </Link>
   );
 }

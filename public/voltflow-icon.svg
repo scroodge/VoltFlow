@@ -1,0 +1,22 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="128" fill="#12151C"/>
+  <g filter="url(#glow)">
+    <path d="M88 116L226 396H286L424 116H340L256 292L172 116H88Z" fill="url(#markGradient)"/>
+    <path d="M284 96L180 260H249L226 416L334 228H268L284 96Z" fill="#12151C"/>
+    <path d="M282 132L207 247H269L252 356L319 241H261L282 132Z" fill="url(#boltGradient)"/>
+  </g>
+  <defs>
+    <filter id="glow" x="24" y="32" width="464" height="448" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="0" stdDeviation="18" flood-color="#00E676" flood-opacity="0.35"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="24" flood-color="#00D1FF" flood-opacity="0.24"/>
+    </filter>
+    <linearGradient id="markGradient" x1="88" y1="116" x2="424" y2="396" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00E676"/>
+      <stop offset="1" stop-color="#00D1FF"/>
+    </linearGradient>
+    <linearGradient id="boltGradient" x1="207" y1="132" x2="319" y2="356" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#00D1FF"/>
+    </linearGradient>
+  </defs>
+</svg>

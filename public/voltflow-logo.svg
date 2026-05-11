@@ -1,0 +1,24 @@
+<svg width="920" height="240" viewBox="0 0 920 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="920" height="240" rx="48" fill="#12151C"/>
+  <g filter="url(#logoGlow)">
+    <path d="M54 48L126 190H156L228 48H184L141 139L98 48H54Z" fill="url(#logoMarkGradient)"/>
+    <path d="M155 36L99 122H136L124 204L182 105H147L155 36Z" fill="#12151C"/>
+    <path d="M154 56L114 116H147L138 174L174 112H143L154 56Z" fill="url(#logoBoltGradient)"/>
+  </g>
+  <text x="280" y="134" fill="#F8FAFC" font-family="Space Grotesk, Inter, system-ui, sans-serif" font-size="76" font-weight="700" letter-spacing="1">VoltFlow</text>
+  <text x="284" y="174" fill="#6B7280" font-family="Space Grotesk, Inter, system-ui, sans-serif" font-size="20" font-weight="700" letter-spacing="6">ENERGY IN MOTION</text>
+  <defs>
+    <filter id="logoGlow" x="18" y="0" width="246" height="240" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="0" stdDeviation="10" flood-color="#00E676" flood-opacity="0.35"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="16" flood-color="#00D1FF" flood-opacity="0.25"/>
+    </filter>
+    <linearGradient id="logoMarkGradient" x1="54" y1="48" x2="228" y2="190" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00E676"/>
+      <stop offset="1" stop-color="#00D1FF"/>
+    </linearGradient>
+    <linearGradient id="logoBoltGradient" x1="114" y1="56" x2="174" y2="174" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#00D1FF"/>
+    </linearGradient>
+  </defs>
+</svg>

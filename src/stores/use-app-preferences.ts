@@ -1,14 +1,23 @@
 import { createJSONStorage, persist } from "zustand/middleware";
 import { create } from "zustand";
 
-import { defaultLocale, isLocale, type Locale } from "@/lib/i18n";
+import {
+  defaultCurrency,
+  defaultLocale,
+  isCurrency,
+  isLocale,
+  type Currency,
+  type Locale,
+} from "@/lib/i18n";
 
 type AppPreferencesState = {
   selectedCarId: string | null;
   defaultPricePerKwh: number;
+  currency: Currency;
   locale: Locale;
   setSelectedCarId: (id: string | null) => void;
   setDefaultPricePerKwh: (n: number) => void;
+  setCurrency: (currency: Currency) => void;
   setLocale: (locale: Locale) => void;
 };
 
@@ -17,10 +26,12 @@ export const useAppPreferences = create(
     (set) => ({
       selectedCarId: null,
       defaultPricePerKwh: 0.12,
+      currency: defaultCurrency,
       locale: defaultLocale,
       setSelectedCarId: (selectedCarId) => set({ selectedCarId }),
       setDefaultPricePerKwh: (defaultPricePerKwh) =>
         set({ defaultPricePerKwh }),
+      setCurrency: (currency) => set({ currency }),
       setLocale: (locale) => set({ locale }),
     }),
     {
@@ -31,6 +42,10 @@ export const useAppPreferences = create(
         return {
           ...current,
           ...saved,
+          currency:
+            saved?.currency && isCurrency(saved.currency)
+              ? saved.currency
+              : current.currency,
           locale:
             saved?.locale && isLocale(saved.locale)
               ? saved.locale
@@ -41,6 +56,7 @@ export const useAppPreferences = create(
       partialize: (s) => ({
         selectedCarId: s.selectedCarId,
         defaultPricePerKwh: s.defaultPricePerKwh,
+        currency: s.currency,
         locale: s.locale,
       }) as unknown as AppPreferencesState,
     },

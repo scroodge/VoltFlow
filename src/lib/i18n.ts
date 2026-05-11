@@ -19,6 +19,44 @@ export const localeLabels: Record<Locale, string> = {
 export const isLocale = (value: string): value is Locale =>
   locales.includes(value as Locale);
 
+export const currencies = ["EUR", "USD", "BYN", "RUB"] as const;
+
+export type Currency = (typeof currencies)[number];
+
+export const defaultCurrency: Currency = "EUR";
+
+export const currencySymbols: Record<Currency, string> = {
+  EUR: "€",
+  USD: "$",
+  BYN: "Br",
+  RUB: "₽",
+};
+
+export const currencyLabels: Record<Currency, string> = {
+  EUR: "EUR · €",
+  USD: "USD · $",
+  BYN: "BYN · Br",
+  RUB: "RUB · ₽",
+};
+
+export const isCurrency = (value: string): value is Currency =>
+  currencies.includes(value as Currency);
+
+export function formatCurrencyAmount(
+  currency: Currency,
+  value: number,
+  locale: Locale,
+) {
+  const localeCode = locale === "be" ? "be-BY" : locale === "ru" ? "ru-RU" : "en-US";
+
+  return new Intl.NumberFormat(localeCode, {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
 export const dictionaries = {
   en: {
     common: {
@@ -43,7 +81,7 @@ export const dictionaries = {
       eyebrow: "EV cockpit · realtime",
       title: "Charging clarity for your pocket-sized drive log.",
       subtitle:
-        "Deterministic ETA, delivered kWh, and tariff deltas — streamed from Supabase in one calm interface with tap-friendly controls.",
+        "Deterministic ETA, delivered kWh, and tariff deltas — streamed and saved from Supabase in one calm interface with tap-friendly controls.",
       start: "Start tracking",
       tour: "Product tour",
       mobileTitle: "Mobile-first ergonomics",
@@ -55,7 +93,7 @@ export const dictionaries = {
       stack: "Stack · Next.js · Supabase auth · Postgres · Realtime broadcast",
     },
     auth: {
-      title: "Charge Pulse identity",
+      title: "VoltFlow identity",
       description: "Minimal auth · Supabase session cookies + row-level guards.",
       login: "Login",
       register: "Register",
@@ -77,8 +115,8 @@ export const dictionaries = {
     },
     dashboard: {
       eyebrow: "EV dashboard",
-      title: "Charge Pulse",
-      subtitle: "Big controls, realtime math, synced to Supabase.",
+      title: "VoltFlow",
+      subtitle: "Online control of your EV charging sessions",
       addEvTitle: "Add your EV",
       addEvBody:
         "We need a battery size and onboard charger preset to simulate energy and time.",
@@ -100,7 +138,7 @@ export const dictionaries = {
       targetCharge: "Target charge %",
       powerOverride: "AC power override (optional)",
       defaultPower: "Default · {power} kW",
-      price: "Electricity price €/kWh",
+      price: "Electricity price ({currency}/kWh)",
       priceHelp:
         "Mirrors your utility statement — uses AC energy from the pedestal.",
       starting: "Starting...",
@@ -117,7 +155,7 @@ export const dictionaries = {
       calculating: "Calculating timers…",
       openRealtime: "Open realtime view",
       readyWith:
-        "Ready with {name}. Pulse math runs off wall timestamps and persists to Supabase.",
+        "Ready with {name}. VoltFlow math runs off wall timestamps and persists to Supabase.",
       chooseSaved:
         "Choose a saved vehicle above to simulate time, kWh and cost precisely.",
       tip: "Tip",
@@ -146,7 +184,7 @@ export const dictionaries = {
       stop: "Stop charging",
       complete: "Marked complete · view history for details.",
       paused: "Paused · totals saved at stop time.",
-      hubEyebrow: "Pulse bay",
+      hubEyebrow: "VoltFlow bay",
       idle: "Idle · no live session",
       idleBody:
         "Start from home to mint a deterministic session — wall clock math keeps ETA honest even if LTE drops.",
@@ -204,7 +242,10 @@ export const dictionaries = {
       signOut: "Sign out",
       signedOut: "Signed out cleanly.",
       economics: "Economics defaults",
-      tariff: "Electricity tariff (€/kWh)",
+      currency: "Currency",
+      currencyHelp: "Used for tariff labels and cost estimates across the app.",
+      currencySaved: "Currency synced locally",
+      tariff: "Electricity tariff ({currency}/kWh)",
       tariffHelp:
         "Saved on-device · used as the initial value on the cockpit dialog.",
       tariffPositive: "Tariff needs to stay positive.",
@@ -221,7 +262,7 @@ export const dictionaries = {
       removed: "{name} removed",
       pedestal: "{battery} kWh · {power} kW pedestal",
       privacy:
-        "Pulse never talks to chargers directly — timers are deterministic modeling for trip planning · always confirm hardware states on the pedestal.",
+        "VoltFlow never talks to chargers directly — timers are deterministic modeling for trip planning · always confirm hardware states on the pedestal.",
       privacyTitle: "Telemetry privacy",
       privacyItems: [
         "Rls policies enforced with auth.uid()",
@@ -265,7 +306,7 @@ export const dictionaries = {
       stack: "Стэк · Next.js · Supabase auth · Postgres · Realtime broadcast",
     },
     auth: {
-      title: "Ідэнтыфікацыя Charge Pulse",
+      title: "Ідэнтыфікацыя Charge VoltFlow",
       description: "Мінімальная аўтарызацыя · cookies Supabase + RLS-абарона.",
       login: "Увайсці",
       register: "Рэгістрацыя",
@@ -288,7 +329,7 @@ export const dictionaries = {
     },
     dashboard: {
       eyebrow: "EV-панэль",
-      title: "Charge Pulse",
+      title: "VoltFlow",
       subtitle: "Вялікія кнопкі, жывая матэматыка, сінхранізацыя з Supabase.",
       addEvTitle: "Дадайце свой EV",
       addEvBody:
@@ -311,7 +352,7 @@ export const dictionaries = {
       targetCharge: "Мэтавы зарад %",
       powerOverride: "Іншая AC-магутнасць (неабавязкова)",
       defaultPower: "Па змаўчанні · {power} кВт",
-      price: "Кошт электрычнасці €/кВт·г",
+      price: "Кошт электрычнасці ({currency}/кВт·г)",
       priceHelp:
         "Як у рахунку за электрычнасць — выкарыстоўваецца AC-энергія з зарадкі.",
       starting: "Запуск...",
@@ -328,7 +369,7 @@ export const dictionaries = {
       calculating: "Разлічваем таймеры…",
       openRealtime: "Адкрыць жывы экран",
       readyWith:
-        "{name} гатова. Pulse лічыць па часавых метках і захоўвае ў Supabase.",
+        "{name} гатова. VoltFlow лічыць па часавых метках і захоўвае ў Supabase.",
       chooseSaved:
         "Выберыце захаванае аўто вышэй, каб дакладна мадэляваць час, кВт·г і кошт.",
       tip: "Парада",
@@ -415,7 +456,10 @@ export const dictionaries = {
       signOut: "Выйсці",
       signedOut: "Выхад выкананы.",
       economics: "Эканамічныя налады",
-      tariff: "Тарыф электрычнасці (€/кВт·г)",
+      currency: "Валюта",
+      currencyHelp: "Выкарыстоўваецца ў подпісах тарыфу і ацэнцы кошту.",
+      currencySaved: "Валюта захавана лакальна",
+      tariff: "Тарыф электрычнасці ({currency}/кВт·г)",
       tariffHelp:
         "Захоўваецца на прыладзе · пачатковае значэнне ў дыялогу кабіны.",
       tariffPositive: "Тарыф павінен быць неадмоўным.",
@@ -432,7 +476,7 @@ export const dictionaries = {
       removed: "{name} выдалена",
       pedestal: "{battery} кВт·г · стойка {power} кВт",
       privacy:
-        "Pulse не размаўляе з зарадкамі наўпрост — таймеры толькі мадэлююць план паездкі · заўсёды правярайце стан абсталявання на стойцы.",
+        "VoltFlow не размаўляе з зарадкамі наўпрост — таймеры толькі мадэлююць план паездкі · заўсёды правярайце стан абсталявання на стойцы.",
       privacyTitle: "Прыватнасць тэлеметрыі",
       privacyItems: [
         "RLS-палітыкі працуюць праз auth.uid()",
@@ -476,7 +520,7 @@ export const dictionaries = {
       stack: "Стек · Next.js · Supabase auth · Postgres · Realtime broadcast",
     },
     auth: {
-      title: "Идентификация Charge Pulse",
+      title: "Идентификация VoltFlow",
       description: "Минимальная авторизация · cookies Supabase + RLS-защита.",
       login: "Войти",
       register: "Регистрация",
@@ -498,7 +542,7 @@ export const dictionaries = {
     },
     dashboard: {
       eyebrow: "EV-панель",
-      title: "Charge Pulse",
+      title: "VoltFlow",
       subtitle: "Большие кнопки, живые расчеты, синхронизация с Supabase.",
       addEvTitle: "Добавьте свой EV",
       addEvBody:
@@ -521,7 +565,7 @@ export const dictionaries = {
       targetCharge: "Целевой заряд %",
       powerOverride: "Другая AC-мощность (необязательно)",
       defaultPower: "По умолчанию · {power} кВт",
-      price: "Цена электричества €/кВт·ч",
+      price: "Цена электричества ({currency}/кВт·ч)",
       priceHelp:
         "Как в счете за электричество — используется AC-энергия с зарядной стойки.",
       starting: "Запуск...",
@@ -538,7 +582,7 @@ export const dictionaries = {
       calculating: "Считаем таймеры…",
       openRealtime: "Открыть живой экран",
       readyWith:
-        "{name} готова. Pulse считает по временным меткам и сохраняет в Supabase.",
+        "{name} готова. VoltFlow считает по временным меткам и сохраняет в Supabase.",
       chooseSaved:
         "Выберите сохраненное авто выше, чтобы точно моделировать время, кВт·ч и стоимость.",
       tip: "Совет",
@@ -552,7 +596,7 @@ export const dictionaries = {
       backHome: "Назад домой",
       live: "Живая зарядка",
       session: "Сессия",
-      updating: "Зарядка · оценки обновляются каждую секунду",
+      updating: "Зарядка · проценты обновляются каждую секунду",
       frozen: "Зафиксировано",
       dashboard: "Панель",
       battery: "Батарея",
@@ -560,7 +604,7 @@ export const dictionaries = {
       segment: "Путь к цели · {pct}%",
       elapsed: "Прошло",
       remaining: "Осталось",
-      energyDelivered: "Доставлено энергии",
+      energyDelivered: "Заряжено энергии",
       estimatedCost: "Оценочная стоимость",
       acPower: "AC-мощность",
       batteryPack: "Батарея",
@@ -568,7 +612,7 @@ export const dictionaries = {
       complete: "Отмечено завершенной · подробности в истории.",
       paused: "Приостановлено · итоги сохранены на момент стопа.",
       hubEyebrow: "Зарядный бокс",
-      idle: "Тихо · нет живой сессии",
+      idle: "Пауза · нет живой сессии",
       idleBody:
         "Начните с главной, чтобы создать сессию — расчет по часам держит ETA честным даже без LTE.",
       refreshing: "Обновляем историю…",
@@ -583,9 +627,9 @@ export const dictionaries = {
       description:
         "Для realtime роста кВт·ч и расчета ETA — все остается в пределах вашего аккаунта.",
       nickname: "Название",
-      nicknamePlaceholder: "Городской бегун",
+      nicknamePlaceholder: "Название вашего авто",
       battery: "Полезная батарея (кВт·ч)",
-      wallbox: "Wallbox кВт",
+      wallbox: "Зарядная станция в  кВт",
       wallboxHelp: "Соответствует лимиту вашей AC-стойки.",
       efficiency: "AC-эффективность",
       efficiencyHelp: "Коэффициент сеть-батарея для тарифного расчета.",
@@ -625,7 +669,10 @@ export const dictionaries = {
       signOut: "Выйти",
       signedOut: "Выход выполнен.",
       economics: "Экономические настройки",
-      tariff: "Тариф электричества (€/кВт·ч)",
+      currency: "Валюта",
+      currencyHelp: "Используется в подписях тарифа и оценке стоимости.",
+      currencySaved: "Валюта сохранена локально",
+      tariff: "Тариф электричества ({currency}/кВт·ч)",
       tariffHelp:
         "Сохраняется на устройстве · начальное значение в диалоге кокпита.",
       tariffPositive: "Тариф должен быть неотрицательным.",
@@ -642,12 +689,12 @@ export const dictionaries = {
       removed: "{name} удалена",
       pedestal: "{battery} кВт·ч · стойка {power} кВт",
       privacy:
-        "Pulse не общается с зарядками напрямую — таймеры только моделируют план поездки · всегда проверяйте состояние оборудования на стойке.",
-      privacyTitle: "Приватность телеметрии",
+        "VoltFlow не общается с зарядными станциями напрямую — таймеры только моделируют прогресс зарядки.",
+      privacyTitle: "Правила хранения телеметрии",
       privacyItems: [
         "RLS-политики работают через auth.uid()",
         "Anon JWT видит только ваши строки · service role отсутствует на устройстве",
-        "Realtime-публикация ограничена inserts/updates в charging_sessions · без утечек между водителями",
+        "Realtime-публикация ограничена inserts/updates в charging_sessions · без утечек между пользователями",
       ],
     },
   },
