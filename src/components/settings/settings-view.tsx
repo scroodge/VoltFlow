@@ -39,6 +39,7 @@ export function SettingsView() {
   const router = useRouter();
   const { data: cars, isLoading } = useCarsQuery();
   const [email, setEmail] = useState<string | null>(null);
+  const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const defaultPricePerKwh = useAppPreferences((s) => s.defaultPricePerKwh);
   const setDefaultPrice = useAppPreferences((s) => s.setDefaultPricePerKwh);
   const currency = useAppPreferences((s) => s.currency);
@@ -46,15 +47,34 @@ export function SettingsView() {
   const { t } = useTranslation();
   useEffect(() => {
     let mounted = true;
-    void createClient()
-      .auth.getUser()
-      .then(({ data }) => {
-        if (mounted) setEmail(data.user?.email ?? null);
-      });
+    const supabase = createClient();
+
+    void supabase.auth.getUser().then(async ({ data }) => {
+      const user = data.user;
+      if (!mounted) return;
+
+      setEmail(user?.email ?? null);
+      setProfileUserId(user?.id ?? null);
+      if (!user) return;
+
+      const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("preferred_currency")
+        .eq("id", user.id)
+        .single();
+
+      if (!mounted || error) return;
+
+      const preferredCurrency = profile?.preferred_currency;
+      if (typeof preferredCurrency === "string" && isCurrency(preferredCurrency)) {
+        setCurrency(preferredCurrency);
+      }
+    });
+
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [setCurrency]);
 
   const handlePriceSave = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -71,8 +91,26 @@ export function SettingsView() {
 
   const handleCurrencyChange = (value: Currency | null) => {
     if (!value || !isCurrency(value)) return;
+    const previous = currency;
     setCurrency(value);
-    toast.success(t("settings.currencySaved") as string);
+
+    if (!profileUserId) {
+      toast.success(t("settings.currencySaved") as string);
+      return;
+    }
+
+    void createClient()
+      .from("profiles")
+      .update({ preferred_currency: value })
+      .eq("id", profileUserId)
+      .then(({ error }) => {
+        if (error) {
+          setCurrency(previous);
+          toast.error(error.message);
+          return;
+        }
+        toast.success(t("settings.currencySaved") as string);
+      });
   };
 
   const handleSignOut = async () => {
