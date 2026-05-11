@@ -23,12 +23,13 @@ import { useTranslation } from "@/hooks/use-translation";
 type IpLocation = {
   city?: string;
   region?: string;
+  country_code?: string;
   country_name?: string;
   timezone?: string;
 };
 
 export default function LandingPage() {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const [location, setLocation] = useState<IpLocation | null>(null);
   const [locationStatus, setLocationStatus] = useState<"loading" | "ready" | "error">(
     "loading",
@@ -76,11 +77,15 @@ export default function LandingPage() {
     },
   ];
 
-  const locationParts = [
-    location?.city,
-    location?.region,
-    location?.country_name,
-  ].filter(Boolean);
+  const localizedCountry =
+    location?.country_code && typeof Intl.DisplayNames !== "undefined"
+      ? new Intl.DisplayNames([locale], { type: "region" }).of(
+          location.country_code,
+        )
+      : location?.country_name;
+  const locationParts = [location?.city, location?.region, localizedCountry].filter(
+    Boolean,
+  );
   const locationLabel =
     locationStatus === "loading"
       ? (t("landing.geoDetecting") as string)

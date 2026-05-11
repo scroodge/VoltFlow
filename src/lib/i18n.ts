@@ -112,7 +112,7 @@ export const dictionaries = {
         "Large controls, safe-area navigation and a centered 430px app frame on desktop.",
       highlightControlTitle: "Full control",
       highlightControlBody:
-        "Supabase auth keeps charging sessions scoped to your account while the cockpit stays quick.",
+        "Supabase authentication keeps charging sessions scoped to your account while the cockpit stays quick.",
       copyright: "© {year} VoltFlow. All rights reserved.",
       rights:
         "Third-party packages, maps and services remain under their own licenses.",
@@ -341,7 +341,7 @@ export const dictionaries = {
       badge: "Разумная зарадка. Поўны кантроль.",
       brandLine: "Энергія ў руху.",
       brandDescription:
-        "Realtime-трэкер і калькулятар EV-зарадкі для ўпэўненага старту, чыстага стопу, жывых кВт·г і кантролю кошту.",
+        "Трэкер і калькулятар EV-зарадкі ў рэальным часе для ўпэўненага старту, чыстага стопу, жывых кВт·г і кантролю кошту.",
       dashboardAria: "Адкрыць панэль",
       liveCockpit: "Жывая кабіна",
       demoCar: "Model Y",
@@ -360,15 +360,15 @@ export const dictionaries = {
       geoTimezone: "Часавы пояс · {timezone}",
       geoPrivacy: "Прыкладная лакацыя вызначаецца толькі па IP.",
       highlightsTitle: "Створана для кантролю зарадкі",
-      highlightRealtimeTitle: "Realtime-паток зарадкі",
+      highlightRealtimeTitle: "Паток зарадкі ў рэальным часе",
       highlightRealtimeBody:
         "Працэнт батарэі, кВт·г, ETA, магутнасць і кошт жывуць ад разліку сесіі па часавых метках.",
-      highlightMobileTitle: "Mobile-first PWA",
+      highlightMobileTitle: "PWA спачатку для тэлефона",
       highlightMobileBody:
-        "Вялікія элементы кіравання, safe-area навігацыя і цэнтраваны 430px app-frame на desktop.",
+        "Вялікія элементы кіравання, safe-area навігацыя і цэнтраваны app-frame 430px на desktop.",
       highlightControlTitle: "Поўны кантроль",
       highlightControlBody:
-        "Supabase auth трымае зарадныя сесіі ў межах вашага акаўнта, а кабіна застаецца хуткай.",
+        "Аўтарызацыя Supabase трымае зарадныя сесіі ў межах вашага акаўнта, а кабіна застаецца хуткай.",
       copyright: "© {year} VoltFlow. Усе правы абаронены.",
       rights:
         "Пакеты, карты і сэрвісы трэціх бакоў застаюцца пад сваімі ліцэнзіямі.",
@@ -598,7 +598,7 @@ export const dictionaries = {
       badge: "Умная зарядка. Полный контроль.",
       brandLine: "Энергия в движении.",
       brandDescription:
-        "Realtime-трекер и калькулятор EV-зарядки для уверенного старта, чистой остановки, живых кВт·ч и контроля стоимости.",
+        "Трекер и калькулятор EV-зарядки в реальном времени для уверенного старта, чистой остановки, живых кВт·ч и контроля стоимости.",
       dashboardAria: "Открыть панель",
       liveCockpit: "Живой кокпит",
       demoCar: "Model Y",
@@ -617,15 +617,15 @@ export const dictionaries = {
       geoTimezone: "Часовой пояс · {timezone}",
       geoPrivacy: "Примерная геопозиция определяется только по IP.",
       highlightsTitle: "Создано для контроля зарядки",
-      highlightRealtimeTitle: "Realtime-поток зарядки",
+      highlightRealtimeTitle: "Поток зарядки в реальном времени",
       highlightRealtimeBody:
         "Процент батареи, кВт·ч, ETA, мощность и стоимость остаются живыми благодаря расчету сессии по временным меткам.",
-      highlightMobileTitle: "Mobile-first PWA",
+      highlightMobileTitle: "PWA сначала для телефона",
       highlightMobileBody:
         "Крупные элементы управления, safe-area навигация и центрированный app-frame 430px на desktop.",
       highlightControlTitle: "Полный контроль",
       highlightControlBody:
-        "Supabase auth держит зарядные сессии в рамках вашего аккаунта, а кокпит остается быстрым.",
+        "Авторизация Supabase держит зарядные сессии в рамках вашего аккаунта, а кокпит остается быстрым.",
       copyright: "© {year} VoltFlow. Все права защищены.",
       rights:
         "Пакеты, карты и сервисы третьих сторон остаются под собственными лицензиями.",
