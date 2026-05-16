@@ -8,17 +8,19 @@ import { SearchBox } from "@/components/telegram/SearchBox";
 import { SectionHeader } from "@/components/telegram/ChargingGuides";
 import { accessories } from "@/data/telegram/accessories";
 import { accessoryCategories } from "@/data/telegram/categories";
+import type { AccessoryItem } from "@/types/telegram";
 
 type AccessoryCategory = (typeof accessoryCategories)[number];
 
-export function AccessoriesCatalog() {
+export function AccessoriesCatalog({ items: providedItems }: { items?: AccessoryItem[] }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<AccessoryCategory | "All">("All");
+  const sourceItems = providedItems ?? accessories;
 
   const items = useMemo(() => {
     const value = query.trim().toLowerCase();
 
-    return accessories.filter((item) => {
+    return sourceItems.filter((item) => {
       const matchesCategory = category === "All" || item.category === category;
       const matchesQuery =
         !value ||
@@ -36,7 +38,7 @@ export function AccessoriesCatalog() {
 
       return matchesCategory && matchesQuery;
     });
-  }, [category, query]);
+  }, [category, query, sourceItems]);
 
   return (
     <section className="space-y-4" aria-labelledby="accessories-title">

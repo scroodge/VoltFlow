@@ -1,6 +1,7 @@
 import { accessories } from "@/data/telegram/accessories";
 import { faqItems } from "@/data/telegram/faq";
 import { allArticles } from "@/lib/telegram/knowledge";
+import type { TelegramKnowledgeData } from "@/types/knowledge";
 
 export type SearchResult = {
   id: string;
@@ -79,12 +80,18 @@ const index: SearchIndexItem[] = [
   })),
 ];
 
-export function searchTelegramKnowledge(query: string, limit = 12): SearchResult[] {
+export function searchTelegramKnowledge(
+  query: string,
+  limit = 12,
+  data?: Pick<TelegramKnowledgeData, "articles" | "faq" | "accessories">,
+): SearchResult[] {
   const terms = normalizeQuery(query);
 
   if (terms.length === 0) return [];
 
-  return index
+  const searchIndex = data ? buildIndex(data) : index;
+
+  return searchIndex
     .map((item) => {
       const score = terms.reduce((total, term) => {
         return (
@@ -113,6 +120,66 @@ export function searchTelegramKnowledge(query: string, limit = 12): SearchResult
       score,
       href: item.href,
     }));
+}
+
+function buildIndex(data: Pick<TelegramKnowledgeData, "articles" | "faq" | "accessories">): SearchIndexItem[] {
+  return [
+    ...data.articles.map((article) => ({
+      id: article.slug,
+      type: "article" as const,
+      title: article.title,
+      summary: article.summary,
+      category: article.category,
+      categorySlug: article.categorySlug,
+      score: 0,
+      href: `/telegram/article/${article.slug}`,
+      titleText: article.title,
+      tagText: article.tags.join(" "),
+      summaryText: article.summary,
+      bodyText: [
+        article.sections
+          .map((section) => `${section.heading} ${section.body}`)
+          .join(" "),
+        article.tips?.join(" "),
+        article.warnings?.join(" "),
+      ].join(" "),
+      keywordText: "",
+    })),
+    ...data.faq.map((item) => ({
+      id: item.id,
+      type: "faq" as const,
+      title: item.question,
+      summary: item.answer,
+      category: item.category,
+      categorySlug: item.categorySlug,
+      score: 0,
+      href: `/telegram?tab=faq&q=${encodeURIComponent(item.question)}`,
+      titleText: item.question,
+      tagText: item.tags.join(" "),
+      summaryText: "",
+      bodyText: item.answer,
+      keywordText: "",
+    })),
+    ...data.accessories.map((item) => ({
+      id: item.id,
+      type: "accessory" as const,
+      title: item.title,
+      summary: item.whyUseful,
+      category: item.category,
+      categorySlug: item.categorySlug,
+      score: 0,
+      href: `/telegram/category/${item.categorySlug}?q=${encodeURIComponent(item.title)}`,
+      titleText: item.title,
+      tagText: item.category,
+      summaryText: `${item.useCase} ${item.whyUseful}`,
+      bodyText: [
+        item.whatToCheckBeforeBuying.join(" "),
+        item.riskNotes?.join(" "),
+        item.priority,
+      ].join(" "),
+      keywordText: item.searchKeywords.join(" "),
+    })),
+  ];
 }
 
 export function highlightSearchMatch(text: string, query: string) {

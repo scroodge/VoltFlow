@@ -3,6 +3,7 @@ import { chargingGuides } from "@/data/telegram/charging-guides";
 import { faqItems } from "@/data/telegram/faq";
 import { maintenanceArticles } from "@/data/telegram/maintenance";
 import { ownershipExperienceArticles } from "@/data/telegram/ownership-experience";
+import type { TelegramKnowledgeData } from "@/types/knowledge";
 import type { AccessoryItem, FAQItem, KnowledgeArticle } from "@/types/telegram";
 
 export type TelegramCategory = {
@@ -73,6 +74,13 @@ export const telegramCategories: TelegramCategory[] = [
     description: "Model-specific ownership and knowledge-base meta topics.",
   },
 ];
+
+export const staticTelegramKnowledgeData: TelegramKnowledgeData = {
+  categories: telegramCategories,
+  articles: allArticles,
+  faq: faqItems,
+  accessories,
+};
 
 export function getArticleBySlug(slug: string) {
   return allArticles.find((article) => article.slug === slug);

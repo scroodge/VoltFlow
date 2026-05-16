@@ -6,20 +6,22 @@ import { ArticleCard } from "@/components/telegram/ArticleCard";
 import { SearchBox } from "@/components/telegram/SearchBox";
 import { SectionHeader } from "@/components/telegram/ChargingGuides";
 import { maintenanceArticles } from "@/data/telegram/maintenance";
+import type { KnowledgeArticle } from "@/types/telegram";
 
-export function MaintenanceGuides() {
+export function MaintenanceGuides({ articles: providedArticles }: { articles?: KnowledgeArticle[] }) {
   const [query, setQuery] = useState("");
+  const sourceArticles = providedArticles ?? maintenanceArticles;
   const articles = useMemo(() => {
     const value = query.trim().toLowerCase();
-    if (!value) return maintenanceArticles;
+    if (!value) return sourceArticles;
 
-    return maintenanceArticles.filter((article) =>
+    return sourceArticles.filter((article) =>
       [article.title, article.summary, article.tags.join(" "), article.sections.map((section) => section.body).join(" ")]
         .join(" ")
         .toLowerCase()
         .includes(value),
     );
-  }, [query]);
+  }, [query, sourceArticles]);
 
   return (
     <section className="space-y-4" aria-labelledby="maintenance-title">

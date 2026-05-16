@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { ArticleRenderer } from "@/components/telegram/ArticleRenderer";
+import { getTelegramKnowledgeDataWithFallback } from "@/lib/supabase/knowledge";
 import {
   allArticles,
   getArticleBySlug,
-  getRelatedArticles,
+  staticTelegramKnowledgeData,
 } from "@/lib/telegram/knowledge";
 
 type PageProps = {
@@ -18,7 +19,8 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const article = getArticleBySlug(slug);
+  const data = await getTelegramKnowledgeDataWithFallback(staticTelegramKnowledgeData);
+  const article = data.articles.find((item) => item.slug === slug) ?? getArticleBySlug(slug);
 
   if (!article) {
     return {
@@ -39,7 +41,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function TelegramArticlePage({ params }: PageProps) {
   const { slug } = await params;
-  const article = getArticleBySlug(slug);
+  const data = await getTelegramKnowledgeDataWithFallback(staticTelegramKnowledgeData);
+  const article = data.articles.find((item) => item.slug === slug) ?? getArticleBySlug(slug);
+  const relatedArticles = (article?.relatedIds ?? [])
+    .map((id) => data.articles.find((item) => item.id === id))
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
   return (
     <main className="relative isolate min-h-dvh overflow-hidden bg-background text-foreground">
@@ -48,7 +54,7 @@ export default async function TelegramArticlePage({ params }: PageProps) {
         {article ? (
           <ArticleRenderer
             article={article}
-            relatedArticles={getRelatedArticles(article)}
+            relatedArticles={relatedArticles}
           />
         ) : (
           <section className="voltflow-card p-5">

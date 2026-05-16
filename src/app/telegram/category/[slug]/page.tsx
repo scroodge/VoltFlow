@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { AccessoryCard, ArticleCard } from "@/components/telegram/ArticleCard";
+import { getTelegramKnowledgeDataWithFallback } from "@/lib/supabase/knowledge";
 import {
   getCategoryBySlug,
   getCategoryContent,
+  staticTelegramKnowledgeData,
   telegramCategories,
 } from "@/lib/telegram/knowledge";
 
@@ -18,7 +20,8 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const category = getCategoryBySlug(slug);
+  const data = await getTelegramKnowledgeDataWithFallback(staticTelegramKnowledgeData);
+  const category = data.categories.find((item) => item.slug === slug) ?? getCategoryBySlug(slug);
 
   return {
     title: category ? `${category.title} Knowledge` : "Category not found",
@@ -32,8 +35,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function TelegramCategoryPage({ params }: PageProps) {
   const { slug } = await params;
-  const category = getCategoryBySlug(slug);
-  const content = getCategoryContent(slug);
+  const data = await getTelegramKnowledgeDataWithFallback(staticTelegramKnowledgeData);
+  const category = data.categories.find((item) => item.slug === slug) ?? getCategoryBySlug(slug);
+  const fallbackContent = getCategoryContent(slug);
+  const content = {
+    articles: data.articles.filter((article) => article.categorySlug === slug),
+    faq: data.faq.filter((item) => item.categorySlug === slug),
+    accessories: data.accessories.filter((item) => item.categorySlug === slug),
+  };
+  const safeContent =
+    content.articles.length || content.faq.length || content.accessories.length
+      ? content
+      : fallbackContent;
 
   return (
     <main className="relative isolate min-h-dvh overflow-hidden bg-background text-foreground">
@@ -60,19 +73,19 @@ export default async function TelegramCategoryPage({ params }: PageProps) {
               </p>
             </header>
 
-            {content.articles.length ? (
+            {safeContent.articles.length ? (
               <section className="space-y-3" aria-label="Articles">
                 <h2 className="font-heading text-xl font-bold">Articles</h2>
-                {content.articles.map((article) => (
+                {safeContent.articles.map((article) => (
                   <ArticleCard key={article.id} article={article} />
                 ))}
               </section>
             ) : null}
 
-            {content.faq.length ? (
+            {safeContent.faq.length ? (
               <section className="space-y-3" aria-label="FAQ">
                 <h2 className="font-heading text-xl font-bold">FAQ</h2>
-                {content.faq.map((item) => (
+                {safeContent.faq.map((item) => (
                   <article key={item.id} className="voltflow-card p-4">
                     <h3 className="font-heading text-base font-bold">
                       {item.question}
@@ -85,18 +98,18 @@ export default async function TelegramCategoryPage({ params }: PageProps) {
               </section>
             ) : null}
 
-            {content.accessories.length ? (
+            {safeContent.accessories.length ? (
               <section className="space-y-3" aria-label="Accessories">
                 <h2 className="font-heading text-xl font-bold">Accessories</h2>
-                {content.accessories.map((item) => (
+                {safeContent.accessories.map((item) => (
                   <AccessoryCard key={item.id} item={item} />
                 ))}
               </section>
             ) : null}
 
-            {!content.articles.length &&
-            !content.faq.length &&
-            !content.accessories.length ? (
+            {!safeContent.articles.length &&
+            !safeContent.faq.length &&
+            !safeContent.accessories.length ? (
               <div className="voltflow-card p-4 text-sm leading-6 text-muted-foreground">
                 This category is prepared for Phase 1.5, but content has not
                 been added yet.

@@ -16,8 +16,9 @@ import { SmartFAQ } from "@/components/telegram/SmartFAQ";
 import { guideCategories } from "@/data/telegram/categories";
 import { getTelegramThemeStyle } from "@/lib/telegram/theme";
 import { useTelegramWebApp } from "@/lib/telegram/useTelegramWebApp";
+import type { TelegramKnowledgeData } from "@/types/knowledge";
 
-export function TelegramShell() {
+export function TelegramShell({ data }: { data?: TelegramKnowledgeData }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -118,6 +119,7 @@ export function TelegramShell() {
               <KnowledgeHome
               isTelegram={telegram.isTelegram}
               onNavigate={changeTab}
+              data={data}
             />
           ) : null}
           {activeTab === "guides" ? (
@@ -129,17 +131,23 @@ export function TelegramShell() {
                   if (category !== "All") setGuideCategory(category);
                 }}
               />
-              {guideCategory === "Charging" ? <ChargingGuides /> : null}
-              {guideCategory === "Ownership" ? <OwnershipExperience /> : null}
-              {guideCategory === "Maintenance" ? <MaintenanceGuides /> : null}
-              {guideCategory === "Accessories" ? <AccessoriesCatalog /> : null}
+              {guideCategory === "Charging" ? (
+                <ChargingGuides articles={data?.articles.filter((article) => article.categorySlug === "charging")} />
+              ) : null}
+              {guideCategory === "Ownership" ? (
+                <OwnershipExperience articles={data?.articles.filter((article) => article.categorySlug === "ownership")} />
+              ) : null}
+              {guideCategory === "Maintenance" ? (
+                <MaintenanceGuides articles={data?.articles.filter((article) => article.categorySlug === "maintenance")} />
+              ) : null}
+              {guideCategory === "Accessories" ? <AccessoriesCatalog items={data?.accessories} /> : null}
             </div>
           ) : null}
-          {activeTab === "faq" ? <SmartFAQ /> : null}
+          {activeTab === "faq" ? <SmartFAQ items={data?.faq} /> : null}
           {activeTab === "tools" ? <Calculators /> : null}
           {activeTab === "more" ? (
             <div className="space-y-5">
-              <AccessoriesCatalog />
+              <AccessoriesCatalog items={data?.accessories} />
               <div className="voltflow-card p-4 text-sm leading-6 text-muted-foreground">
                 Future phases are intentionally not active yet: Telegram group
                 import, semantic search, AI assistant, embeddings, telemetry,

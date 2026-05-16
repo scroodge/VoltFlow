@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { TelegramShell } from "@/components/telegram/TelegramShell";
+import { getTelegramKnowledgeDataWithFallback } from "@/lib/supabase/knowledge";
+import { staticTelegramKnowledgeData } from "@/lib/telegram/knowledge";
 
 export const metadata: Metadata = {
   title: "BYD YUAN UP Knowledge Base",
@@ -15,10 +17,12 @@ export const metadata: Metadata = {
   },
 };
 
-export default function TelegramPage() {
+export default async function TelegramPage() {
+  const data = await getTelegramKnowledgeDataWithFallback(staticTelegramKnowledgeData);
+
   return (
     <Suspense fallback={null}>
-      <TelegramShell />
+      <TelegramShell data={data} />
     </Suspense>
   );
 }

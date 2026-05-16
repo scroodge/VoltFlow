@@ -18,10 +18,12 @@ import type { TelegramTab } from "@/components/telegram/BottomTabs";
 import { ArticleCard } from "@/components/telegram/ArticleCard";
 import { SearchBox } from "@/components/telegram/SearchBox";
 import { SearchResults } from "@/components/telegram/SearchResults";
+import type { TelegramKnowledgeData } from "@/types/knowledge";
 
 type KnowledgeHomeProps = {
   isTelegram: boolean;
   onNavigate: (tab: TelegramTab) => void;
+  data?: Pick<TelegramKnowledgeData, "articles" | "faq" | "accessories">;
 };
 
 const quickCards = [
@@ -37,10 +39,10 @@ const quickCards = [
   icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
 }>;
 
-export function KnowledgeHome({ isTelegram, onNavigate }: KnowledgeHomeProps) {
+export function KnowledgeHome({ isTelegram, onNavigate, data }: KnowledgeHomeProps) {
   const [query, setQuery] = useState("");
-  const results = useMemo(() => searchTelegramKnowledge(query, 6), [query]);
-  const popularArticles = chargingGuides.slice(0, 4);
+  const results = useMemo(() => searchTelegramKnowledge(query, 6, data), [data, query]);
+  const popularArticles = (data?.articles.filter((article) => article.categorySlug === "charging") ?? chargingGuides).slice(0, 4);
 
   return (
     <section className="space-y-5" aria-labelledby="knowledge-home-title">

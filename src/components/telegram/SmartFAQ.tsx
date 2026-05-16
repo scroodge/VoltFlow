@@ -10,20 +10,22 @@ import { SearchBox } from "@/components/telegram/SearchBox";
 import { faqCategories } from "@/data/telegram/categories";
 import { faqItems } from "@/data/telegram/faq";
 import { cn } from "@/lib/utils";
+import type { FAQItem } from "@/types/telegram";
 
 type FaqCategory = (typeof faqCategories)[number];
 type FaqFilter = "All" | FaqCategory;
 
-export function SmartFAQ() {
+export function SmartFAQ({ items: providedItems }: { items?: FAQItem[] }) {
   const searchParams = useSearchParams();
+  const sourceItems = providedItems ?? faqItems;
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<FaqFilter>("All");
-  const [openQuestion, setOpenQuestion] = useState(faqItems[0]?.question ?? "");
+  const [openQuestion, setOpenQuestion] = useState(sourceItems[0]?.question ?? "");
 
   const filteredItems = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    return faqItems.filter((item) => {
+    return sourceItems.filter((item) => {
       const matchesCategory = category === "All" || item.category === category;
       const matchesQuery =
         normalizedQuery.length === 0 ||
@@ -34,7 +36,7 @@ export function SmartFAQ() {
 
       return matchesCategory && matchesQuery;
     });
-  }, [category, query]);
+  }, [category, query, sourceItems]);
 
   useEffect(() => {
     const q = searchParams.get("q");

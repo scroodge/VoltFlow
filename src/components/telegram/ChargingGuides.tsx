@@ -5,15 +5,17 @@ import { useMemo, useState } from "react";
 import { ArticleCard } from "@/components/telegram/ArticleCard";
 import { SearchBox } from "@/components/telegram/SearchBox";
 import { chargingGuides } from "@/data/telegram/charging-guides";
+import type { KnowledgeArticle } from "@/types/telegram";
 
-export function ChargingGuides() {
+export function ChargingGuides({ articles: providedArticles }: { articles?: KnowledgeArticle[] }) {
   const [query, setQuery] = useState("");
+  const sourceArticles = providedArticles ?? chargingGuides;
 
   const articles = useMemo(() => {
     const value = query.trim().toLowerCase();
-    if (!value) return chargingGuides;
+    if (!value) return sourceArticles;
 
-    return chargingGuides.filter((article) =>
+    return sourceArticles.filter((article) =>
       [
         article.title,
         article.summary,
@@ -24,7 +26,7 @@ export function ChargingGuides() {
         .toLowerCase()
         .includes(value),
     );
-  }, [query]);
+  }, [query, sourceArticles]);
 
   return (
     <section className="space-y-4" aria-labelledby="charging-guides-title">
