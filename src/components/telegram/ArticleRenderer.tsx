@@ -3,7 +3,7 @@
 import { AlertTriangle, ArrowLeft, Clipboard, Lightbulb } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import type { KnowledgeArticle } from "@/types/telegram";
 
@@ -17,21 +17,24 @@ export function ArticleRenderer({
   relatedArticles = [],
 }: ArticleRendererProps) {
   const router = useRouter();
-  const [copied, setCopied] = useState(false);
-  const canCopy = typeof navigator !== "undefined" && Boolean(navigator.clipboard);
-  const articleUrl = useMemo(() => {
-    if (typeof window === "undefined") return "";
-    return `${window.location.origin}/telegram/article/${article.slug}`;
-  }, [article.slug]);
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "unavailable">(
+    "idle",
+  );
 
   async function copyLink() {
-    if (!canCopy || !articleUrl) return;
+    if (typeof window === "undefined" || !navigator.clipboard) {
+      setCopyStatus("unavailable");
+      return;
+    }
+
     try {
+      const articleUrl = `${window.location.origin}/telegram/article/${article.slug}`;
       await navigator.clipboard.writeText(articleUrl);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
+      setCopyStatus("copied");
+      window.setTimeout(() => setCopyStatus("idle"), 1800);
     } catch {
-      setCopied(false);
+      setCopyStatus("unavailable");
+      window.setTimeout(() => setCopyStatus("idle"), 1800);
     }
   }
 
@@ -52,16 +55,18 @@ export function ArticleRenderer({
         >
           Home
         </Link>
-        {canCopy ? (
-          <button
-            type="button"
-            onClick={copyLink}
-            className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-white/[0.04] px-4 text-sm font-semibold text-[var(--voltflow-cyan)] transition hover:bg-white/[0.07] focus-visible:ring-3 focus-visible:ring-[var(--voltflow-cyan)]/30"
-          >
-            <Clipboard className="size-4" aria-hidden />
-            {copied ? "Copied" : "Copy link"}
-          </button>
-        ) : null}
+        <button
+          type="button"
+          onClick={copyLink}
+          className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-white/[0.04] px-4 text-sm font-semibold text-[var(--voltflow-cyan)] transition hover:bg-white/[0.07] focus-visible:ring-3 focus-visible:ring-[var(--voltflow-cyan)]/30"
+        >
+          <Clipboard className="size-4" aria-hidden />
+          {copyStatus === "copied"
+            ? "Copied"
+            : copyStatus === "unavailable"
+              ? "Copy unavailable"
+              : "Copy link"}
+        </button>
       </div>
 
       <header className="voltflow-card p-5">
