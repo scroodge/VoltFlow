@@ -21,7 +21,7 @@ export function AccessoryForm({
   const [state, formAction, pending] = useActionState(action, {});
 
   return (
-    <form action={formAction} className="max-w-4xl" encType="multipart/form-data">
+    <form action={formAction} className="max-w-4xl">
       <Panel>
         <FieldError message={state.message} />
         <div className="grid gap-4 md:grid-cols-2">
