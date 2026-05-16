@@ -67,6 +67,8 @@ export type AccessoryItem = {
   risk_notes: string[];
   search_keywords: string[];
   external_url: string | null;
+  image_url: string | null;
+  image_alt: string | null;
   status: ArticleStatus;
   sort_order: number;
   created_at: string;
@@ -107,6 +109,8 @@ export type AccessoryInput = {
   risk_notes: string[];
   search_keywords: string[];
   external_url: string | null;
+  image_url: string | null;
+  image_alt: string | null;
   status: ArticleStatus;
   sort_order: number;
 };

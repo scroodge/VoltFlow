@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useActionState } from "react";
 
 import type { AdminFormState } from "@/actions/knowledge-admin";
@@ -20,7 +21,7 @@ export function AccessoryForm({
   const [state, formAction, pending] = useActionState(action, {});
 
   return (
-    <form action={formAction} className="max-w-4xl">
+    <form action={formAction} className="max-w-4xl" encType="multipart/form-data">
       <Panel>
         <FieldError message={state.message} />
         <div className="grid gap-4 md:grid-cols-2">
@@ -62,6 +63,40 @@ export function AccessoryForm({
           <span>Внешняя ссылка</span>
           <input name="external_url" defaultValue={item?.external_url ?? ""} className={inputClass} />
         </label>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="space-y-1.5 text-sm font-semibold">
+            <span>Изображение</span>
+            <input
+              name="image_file"
+              type="file"
+              accept="image/*"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-sm file:font-bold file:text-primary-foreground"
+            />
+            <span className="text-xs font-normal text-muted-foreground">
+              Новый файл заменит текущую ссылку на изображение.
+            </span>
+          </label>
+          <label className="space-y-1.5 text-sm font-semibold">
+            <span>Описание изображения</span>
+            <input name="image_alt" defaultValue={item?.image_alt ?? ""} className={inputClass} />
+          </label>
+        </div>
+        <input type="hidden" name="image_url" value={item?.image_url ?? ""} />
+        {item?.image_url ? (
+          <div className="rounded-lg border border-border bg-white/[0.03] p-3">
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
+              Текущее изображение
+            </p>
+            <Image
+              src={item.image_url}
+              alt={item.image_alt ?? item.title}
+              width={480}
+              height={270}
+              unoptimized
+              className="mt-3 max-h-48 rounded-lg object-cover"
+            />
+          </div>
+        ) : null}
         <div className="grid gap-4 md:grid-cols-3">
           <label className="space-y-1.5 text-sm font-semibold">
             <span>Приоритет</span>

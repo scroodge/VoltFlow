@@ -505,5 +505,7 @@ function toTelegramAccessory(item: AccessoryItem): TelegramAccessoryItem {
     riskNotes: item.risk_notes,
     searchKeywords: item.search_keywords,
     externalUrl: item.external_url ?? undefined,
+    imageUrl: item.image_url ?? undefined,
+    imageAlt: item.image_alt ?? undefined,
   };
 }

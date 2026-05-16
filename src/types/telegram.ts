@@ -41,4 +41,6 @@ export type AccessoryItem = {
   riskNotes?: string[];
   searchKeywords: string[];
   externalUrl?: string;
+  imageUrl?: string;
+  imageAlt?: string;
 };

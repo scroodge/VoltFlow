@@ -1,3 +1,5 @@
+import { ExternalLink } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 
 import type { AccessoryItem, KnowledgeArticle } from "@/types/telegram";
@@ -29,8 +31,24 @@ export function ArticleCard({ article }: ArticleCardProps) {
 }
 
 export function AccessoryCard({ item }: { item: AccessoryItem }) {
+  const priorityLabel = {
+    "must-have": "Обязательно",
+    useful: "Полезно",
+    optional: "Опционально",
+  }[item.priority];
+
   return (
     <article className="voltflow-card p-4">
+      {item.imageUrl ? (
+        <Image
+          src={item.imageUrl}
+          alt={item.imageAlt ?? item.title}
+          width={640}
+          height={360}
+          unoptimized
+          className="mb-4 aspect-[16/9] w-full rounded-lg border border-border object-cover"
+        />
+      ) : null}
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--voltflow-green)]">
@@ -39,7 +57,7 @@ export function AccessoryCard({ item }: { item: AccessoryItem }) {
           <h3 className="mt-1 font-heading text-lg font-bold">{item.title}</h3>
         </div>
         <span className="shrink-0 rounded-full border border-border bg-white/[0.04] px-3 py-1 text-xs font-bold text-[var(--voltflow-cyan)]">
-          {item.priority}
+          {priorityLabel}
         </span>
       </div>
       <p className="mt-3 text-sm leading-6 text-muted-foreground">
@@ -72,6 +90,17 @@ export function AccessoryCard({ item }: { item: AccessoryItem }) {
             </div>
           ))}
         </div>
+      ) : null}
+      {item.externalUrl ? (
+        <a
+          href={item.externalUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-white/[0.04] px-4 text-sm font-semibold text-[var(--voltflow-cyan)] transition hover:bg-white/[0.07]"
+        >
+          Открыть ссылку
+          <ExternalLink className="size-4" aria-hidden />
+        </a>
       ) : null}
     </article>
   );

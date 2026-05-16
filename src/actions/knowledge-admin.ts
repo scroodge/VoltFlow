@@ -123,7 +123,7 @@ export async function createAccessoryAction(
   const guard = await requireAdmin();
   if (!guard.ok) return { message: "Нет доступа администратора." };
 
-  const input = parseAccessoryForm(formData);
+  const input = await parseAccessoryForm(formData);
   if (isFormState(input)) return input;
 
   await createAccessory(input);
@@ -139,7 +139,7 @@ export async function updateAccessoryAction(
   const guard = await requireAdmin();
   if (!guard.ok) return { message: "Нет доступа администратора." };
 
-  const input = parseAccessoryForm(formData);
+  const input = await parseAccessoryForm(formData);
   if (isFormState(input)) return input;
 
   await updateAccessory(id, input);
@@ -224,7 +224,7 @@ function parseFAQForm(formData: FormData): FAQInput | AdminFormState {
   return Object.keys(errors).length ? { errors } : input;
 }
 
-function parseAccessoryForm(formData: FormData): AccessoryInput | AdminFormState {
+async function parseAccessoryForm(formData: FormData): Promise<AccessoryInput | AdminFormState> {
   const input: AccessoryInput = {
     title: stringValue(formData, "title"),
     category_id: stringValue(formData, "category_id"),
@@ -235,9 +235,16 @@ function parseAccessoryForm(formData: FormData): AccessoryInput | AdminFormState
     risk_notes: multilineValue(formData, "risk_notes"),
     search_keywords: listValue(formData, "search_keywords"),
     external_url: nullableString(formData, "external_url"),
+    image_url: nullableString(formData, "image_url"),
+    image_alt: nullableString(formData, "image_alt"),
     status: statusValue(formData),
     sort_order: numberValue(formData, "sort_order"),
   };
+
+  const image = formData.get("image_file");
+  if (image instanceof File && image.size > 0) {
+    input.image_url = await uploadAccessoryImage(image);
+  }
 
   const errors: Record<string, string> = {};
   if (!input.title) errors.title = "Название обязательно.";
@@ -245,6 +252,26 @@ function parseAccessoryForm(formData: FormData): AccessoryInput | AdminFormState
   if (!statuses.includes(input.status)) errors.status = "Выберите корректный статус.";
   if (!priorities.includes(input.priority)) errors.priority = "Выберите корректный приоритет.";
   return Object.keys(errors).length ? { errors } : input;
+}
+
+async function uploadAccessoryImage(file: File) {
+  const supabase = await createClient();
+  const extension = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+  const path = `${crypto.randomUUID()}.${extension}`;
+  const { error } = await supabase.storage
+    .from("knowledge-accessories")
+    .upload(path, file, {
+      contentType: file.type || "image/jpeg",
+      upsert: false,
+    });
+
+  if (error) throw error;
+
+  const { data } = supabase.storage
+    .from("knowledge-accessories")
+    .getPublicUrl(path);
+
+  return data.publicUrl;
 }
 
 async function parseCategoryForm(
