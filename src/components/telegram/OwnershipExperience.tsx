@@ -33,8 +33,8 @@ export function OwnershipExperience({ articles: providedArticles }: { articles?:
       />
       <SearchBox value={query} onChange={setQuery} placeholder="Искать по эксплуатации" />
       <div className="space-y-3">
-        {articles.map((article) => (
-          <ArticleCard key={article.id} article={article} />
+        {articles.map((article, index) => (
+          <ArticleCard key={article.id} article={article} priorityImage={index === 0} />
         ))}
       </div>
     </section>

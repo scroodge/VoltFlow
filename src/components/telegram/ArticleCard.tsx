@@ -6,9 +6,10 @@ import type { AccessoryItem, KnowledgeArticle } from "@/types/telegram";
 
 type ArticleCardProps = {
   article: KnowledgeArticle;
+  priorityImage?: boolean;
 };
 
-export function ArticleCard({ article }: ArticleCardProps) {
+export function ArticleCard({ article, priorityImage = false }: ArticleCardProps) {
   const cover = article.images?.[0];
 
   return (
@@ -23,6 +24,7 @@ export function ArticleCard({ article }: ArticleCardProps) {
           width={640}
           height={360}
           unoptimized
+          priority={priorityImage}
           className="mb-4 aspect-[16/9] w-full rounded-lg border border-border object-cover"
         />
       ) : null}

@@ -47,8 +47,8 @@ export function ArticleList({
       </div>
       <SearchBox value={query} onChange={setQuery} placeholder={placeholder} />
       <div className="space-y-3">
-        {filtered.map((article) => (
-          <ArticleCard key={article.id} article={article} />
+        {filtered.map((article, index) => (
+          <ArticleCard key={article.id} article={article} priorityImage={index === 0} />
         ))}
       </div>
     </section>

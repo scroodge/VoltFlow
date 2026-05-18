@@ -90,8 +90,8 @@ export function KnowledgeHome({ isTelegram, onNavigate, data }: KnowledgeHomePro
             Популярные статьи
           </h2>
         </div>
-        {popularArticles.map((article) => (
-          <ArticleCard key={article.id} article={article} />
+        {popularArticles.map((article, index) => (
+          <ArticleCard key={article.id} article={article} priorityImage={index === 0} />
         ))}
         <Link
           href="/telegram/category/charging"

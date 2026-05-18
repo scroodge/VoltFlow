@@ -125,6 +125,7 @@ export function ArticleRenderer({
               width={800}
               height={450}
               unoptimized
+              priority
               className="aspect-[16/9] w-full object-cover"
             />
           </button>
