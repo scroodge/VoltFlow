@@ -250,6 +250,17 @@ export const dictionaries = {
       title: "New vehicle profile",
       description:
         "Used for realtime kWh ramps and ETA math — everything stays scoped to your account.",
+      editTitle: "Edit vehicle",
+      editDescription: "Update generation, battery size, and AC limits for this EV.",
+      generationLabel: "Model generation",
+      generation: {
+        gen1_2024: "2024 · 1st generation",
+        gen2_2025: "2025+ · 2nd generation",
+      },
+      generationHelp: {
+        gen1_2024: "BYD Yuan Up models from the 2024 model year.",
+        gen2_2025: "Facelift / 2nd generation Yuan Up from 2025.",
+      },
       nickname: "Nickname",
       nicknamePlaceholder: "Urban Runner",
       battery: "Useable battery (kWh)",
@@ -258,7 +269,10 @@ export const dictionaries = {
       efficiency: "AC efficiency",
       efficiencyHelp: "Grid-to-pack factor for tariff math.",
       save: "Save vehicle",
+      update: "Save changes",
       saved: "Vehicle saved",
+      updated: "Vehicle updated",
+      notFound: "Vehicle not found or no longer in your garage.",
     },
     history: {
       eyebrow: "Sessions",
@@ -306,6 +320,7 @@ export const dictionaries = {
       housekeepingBody:
         "Removing a saved EV only touches your garage inventory — histories remain readable.",
       addEv: "Add EV",
+      edit: "Edit",
       noRides: "No rides yet · add one anytime.",
       remove: "Remove",
       removeConfirm: "Remove {name}?",
@@ -524,6 +539,17 @@ export const dictionaries = {
       title: "Новы профіль аўто",
       description:
         "Для realtime росту кВт·г і разліку ETA — усё застаецца ў межах вашага акаўнта.",
+      editTitle: "Рэдагаванне аўто",
+      editDescription: "Абнавіце пакаленне, ёмістасць батарэі і ліміты AC.",
+      generationLabel: "Пакаленне мадэлі",
+      generation: {
+        gen1_2024: "2024 · 1-е пакаленне",
+        gen2_2025: "2025+ · 2-е пакаленне",
+      },
+      generationHelp: {
+        gen1_2024: "BYD Yuan Up мадэлі 2024 года выпуску.",
+        gen2_2025: "Рэстайлінг / 2-е пакаленне Yuan Up з 2025 года.",
+      },
       nickname: "Назва",
       nicknamePlaceholder: "Гарадскі бегун",
       battery: "Карысная батарэя (кВт·г)",
@@ -532,7 +558,10 @@ export const dictionaries = {
       efficiency: "AC-эфектыўнасць",
       efficiencyHelp: "Каэфіцыент сетка-батарэя для тарыфнага разліку.",
       save: "Захаваць аўто",
+      update: "Захаваць змены",
       saved: "Аўто захавана",
+      updated: "Аўто абноўлена",
+      notFound: "Аўто не знойдзена або ўжо выдалена.",
     },
     history: {
       eyebrow: "Сесіі",
@@ -580,6 +609,7 @@ export const dictionaries = {
       housekeepingBody:
         "Выдаленне EV закране толькі спіс аўто — гісторыя застанецца даступнай.",
       addEv: "Дадаць EV",
+      edit: "Рэдагаваць",
       noRides: "Пакуль няма аўто · можна дадаць у любы час.",
       remove: "Выдаліць",
       removeConfirm: "Выдаліць {name}?",
@@ -797,6 +827,17 @@ export const dictionaries = {
       title: "Новый профиль авто",
       description:
         "Для realtime роста кВт·ч и расчета ETA — все остается в пределах вашего аккаунта.",
+      editTitle: "Редактирование авто",
+      editDescription: "Обновите поколение, емкость батареи и лимиты AC.",
+      generationLabel: "Поколение модели",
+      generation: {
+        gen1_2024: "2024 · 1-е поколение",
+        gen2_2025: "2025+ · 2-е поколение",
+      },
+      generationHelp: {
+        gen1_2024: "BYD Yuan Up модели 2024 года выпуска.",
+        gen2_2025: "Рестайлинг / 2-е поколение Yuan Up с 2025 года.",
+      },
       nickname: "Название",
       nicknamePlaceholder: "Название вашего авто",
       battery: "Полезная батарея (кВт·ч)",
@@ -805,7 +846,10 @@ export const dictionaries = {
       efficiency: "AC-эффективность",
       efficiencyHelp: "Коэффициент сеть-батарея для тарифного расчета.",
       save: "Сохранить авто",
+      update: "Сохранить изменения",
       saved: "Авто сохранено",
+      updated: "Авто обновлено",
+      notFound: "Авто не найдено или уже удалено.",
     },
     history: {
       eyebrow: "Сессии",
@@ -853,6 +897,7 @@ export const dictionaries = {
       housekeepingBody:
         "Удаление EV затронет только список авто — история останется доступной.",
       addEv: "Добавить EV",
+      edit: "Редактировать",
       noRides: "Пока нет авто · можно добавить в любой момент.",
       remove: "Удалить",
       removeConfirm: "Удалить {name}?",

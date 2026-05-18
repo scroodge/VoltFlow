@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Pencil } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Code2, Copy, ExternalLink, KeyRound, MessageCircle, RefreshCw, Scale, ShieldCheck } from "lucide-react";
 import type { FormEvent } from "react";
@@ -418,6 +419,8 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
 
 function CarRow({ car }: { car: Car }) {
   const { t } = useTranslation();
+  const generationLabel = t(`cars.generation.${car.model_generation}`) as string;
+
   const handleDelete = async () => {
     if (!confirm(t("settings.removeConfirm", { name: car.name }) as string)) return;
     const res = await deleteCar(car.id);
@@ -434,6 +437,7 @@ function CarRow({ car }: { car: Car }) {
     <div className="border-white/[0.08] flex flex-wrap items-start justify-between gap-6 rounded-3xl border bg-white/[0.02] px-6 py-6">
       <div>
         <p className="text-lg font-semibold tracking-tight">{car.name}</p>
+        <p className="text-muted-foreground text-sm">{generationLabel}</p>
         <p className="text-muted-foreground text-base">
           {t("settings.pedestal", {
             battery: car.battery_capacity_kwh,
@@ -441,15 +445,28 @@ function CarRow({ car }: { car: Car }) {
           })}
         </p>
       </div>
-      <Button
-        variant="ghost"
-        size="lg"
-        className="rounded-full px-11 text-[15px]"
-        type="button"
-        onClick={() => void handleDelete()}
-      >
-        {t("settings.remove")}
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="secondary"
+          size="lg"
+          className="rounded-full px-8 text-[15px]"
+          asChild
+        >
+          <Link href={`/cars/${car.id}/edit`}>
+            <Pencil className="mr-2 size-4" aria-hidden />
+            {t("settings.edit")}
+          </Link>
+        </Button>
+        <Button
+          variant="ghost"
+          size="lg"
+          className="rounded-full px-8 text-[15px]"
+          type="button"
+          onClick={() => void handleDelete()}
+        >
+          {t("settings.remove")}
+        </Button>
+      </div>
     </div>
   );
 }

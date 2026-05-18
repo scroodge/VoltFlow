@@ -1,3 +1,4 @@
+import { isCarGeneration } from "@/lib/car-generations";
 import type { ChargingSessionRow, Car, Profile } from "@/types/database";
 
 function num(v: unknown, fallback = 0): number {
@@ -18,6 +19,9 @@ export function mapCar(raw: Record<string, unknown>): Car {
     id: String(raw.id),
     user_id: String(raw.user_id),
     name: String(raw.name),
+    model_generation: isCarGeneration(raw.model_generation)
+      ? raw.model_generation
+      : "gen1_2024",
     battery_capacity_kwh: num(raw.battery_capacity_kwh),
     default_charger_power_kw: num(raw.default_charger_power_kw, 4.4),
     default_efficiency_percent: num(raw.default_efficiency_percent, 90),

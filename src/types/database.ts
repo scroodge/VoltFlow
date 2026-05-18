@@ -10,10 +10,13 @@ export type Profile = {
   created_at: string;
 };
 
+import type { CarGeneration } from "@/lib/car-generations";
+
 export type Car = {
   id: string;
   user_id: string;
   name: string;
+  model_generation: CarGeneration;
   battery_capacity_kwh: number;
   default_charger_power_kw: number;
   default_efficiency_percent: number;
