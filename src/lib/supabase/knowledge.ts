@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type {
   AccessoryInput,
+  AccessoryExternalLink,
   AccessoryItem,
   ArticleInput,
   FAQInput,
@@ -29,9 +30,10 @@ type RawFAQ = Omit<FAQItem, "category"> & {
   knowledge_categories?: CategoryRelation;
 };
 
-type RawAccessory = Omit<AccessoryItem, "category" | "what_to_check" | "risk_notes"> & {
+type RawAccessory = Omit<AccessoryItem, "category" | "what_to_check" | "risk_notes" | "external_links"> & {
   what_to_check: unknown;
   risk_notes: unknown;
+  external_links: unknown;
   knowledge_categories?: CategoryRelation;
 };
 
@@ -434,6 +436,7 @@ function mapAccessory(row: RawAccessory): AccessoryItem {
     what_to_check: parseStringArray(row.what_to_check),
     risk_notes: parseStringArray(row.risk_notes),
     search_keywords: row.search_keywords ?? [],
+    external_links: parseExternalLinks(row.external_links),
   };
 }
 
@@ -461,6 +464,24 @@ function parseSections(value: unknown): KnowledgeArticleSection[] {
 function parseStringArray(value: unknown) {
   if (!Array.isArray(value)) return [];
   return value.map((item) => String(item)).filter(Boolean);
+}
+
+function parseExternalLinks(value: unknown): AccessoryExternalLink[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const link = item as Record<string, unknown>;
+      const url = String(link.url ?? "").trim();
+      if (!url) return null;
+
+      return {
+        label: String(link.label ?? "").trim() || "Ссылка на товар",
+        url,
+      };
+    })
+    .filter((item): item is AccessoryExternalLink => Boolean(item));
 }
 
 function toTelegramArticle(article: KnowledgeArticle): TelegramKnowledgeArticle {
@@ -505,6 +526,11 @@ function toTelegramAccessory(item: AccessoryItem): TelegramAccessoryItem {
     riskNotes: item.risk_notes,
     searchKeywords: item.search_keywords,
     externalUrl: item.external_url ?? undefined,
+    externalLinks: item.external_links.length
+      ? item.external_links
+      : item.external_url
+        ? [{ label: "Ссылка на товар", url: item.external_url }]
+        : undefined,
     imageUrl: item.image_url ?? undefined,
     imageAlt: item.image_alt ?? undefined,
   };

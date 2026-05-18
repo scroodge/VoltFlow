@@ -6,6 +6,7 @@ import { useActionState } from "react";
 
 import type { AdminFormState } from "@/actions/knowledge-admin";
 import { FieldError, inputClass, Panel, textareaClass } from "@/components/admin/knowledge/ArticleForm";
+import { ExternalLinksEditor } from "@/components/admin/knowledge/ExternalLinksEditor";
 import { TagsInput } from "@/components/admin/knowledge/TagsInput";
 import type { AccessoryItem, KnowledgeCategory } from "@/types/knowledge";
 
@@ -60,9 +61,13 @@ export function AccessoryForm({
         </label>
         <TagsInput name="search_keywords" label="Поисковые фразы" defaultValue={item?.search_keywords} />
         <label className="space-y-1.5 text-sm font-semibold">
-          <span>Внешняя ссылка</span>
+          <span>Основная внешняя ссылка</span>
           <input name="external_url" defaultValue={item?.external_url ?? ""} className={inputClass} />
+          <span className="text-xs font-normal text-muted-foreground">
+            Старое одиночное поле. Для нескольких магазинов используйте список ниже.
+          </span>
         </label>
+        <ExternalLinksEditor defaultValue={item?.external_links} />
         <div className="grid gap-4 md:grid-cols-2">
           <label className="space-y-1.5 text-sm font-semibold">
             <span>Изображение</span>

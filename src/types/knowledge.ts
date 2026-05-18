@@ -7,6 +7,11 @@ import type {
 export type ArticleStatus = "draft" | "published" | "archived";
 export type AccessoryPriority = "must-have" | "useful" | "optional";
 
+export type AccessoryExternalLink = {
+  label: string;
+  url: string;
+};
+
 export type KnowledgeArticleSection = {
   heading: string;
   body: string;
@@ -67,6 +72,7 @@ export type AccessoryItem = {
   risk_notes: string[];
   search_keywords: string[];
   external_url: string | null;
+  external_links: AccessoryExternalLink[];
   image_url: string | null;
   image_alt: string | null;
   status: ArticleStatus;
@@ -109,6 +115,7 @@ export type AccessoryInput = {
   risk_notes: string[];
   search_keywords: string[];
   external_url: string | null;
+  external_links: AccessoryExternalLink[];
   image_url: string | null;
   image_alt: string | null;
   status: ArticleStatus;

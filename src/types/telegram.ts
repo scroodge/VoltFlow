@@ -29,6 +29,11 @@ export type FAQItem = {
 
 export type AccessoryPriority = "must-have" | "useful" | "optional";
 
+export type AccessoryExternalLink = {
+  label: string;
+  url: string;
+};
+
 export type AccessoryItem = {
   id: string;
   title: string;
@@ -41,6 +46,7 @@ export type AccessoryItem = {
   riskNotes?: string[];
   searchKeywords: string[];
   externalUrl?: string;
+  externalLinks?: AccessoryExternalLink[];
   imageUrl?: string;
   imageAlt?: string;
 };

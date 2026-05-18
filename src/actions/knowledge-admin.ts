@@ -235,6 +235,7 @@ async function parseAccessoryForm(formData: FormData): Promise<AccessoryInput | 
     risk_notes: multilineValue(formData, "risk_notes"),
     search_keywords: listValue(formData, "search_keywords"),
     external_url: nullableString(formData, "external_url"),
+    external_links: externalLinksValue(formData),
     image_url: nullableString(formData, "image_url"),
     image_alt: nullableString(formData, "image_alt"),
     status: statusValue(formData),
@@ -345,6 +346,18 @@ function multilineValue(formData: FormData, name: string) {
     .split("\n")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function externalLinksValue(formData: FormData) {
+  const labels = formData.getAll("external_link_label").map(String);
+  const urls = formData.getAll("external_link_url").map(String);
+
+  return urls
+    .map((url, index) => ({
+      label: labels[index]?.trim() || "Ссылка на товар",
+      url: url.trim(),
+    }))
+    .filter((link) => link.url);
 }
 
 function sectionValue(formData: FormData, prefix: string): KnowledgeArticleSection[] {

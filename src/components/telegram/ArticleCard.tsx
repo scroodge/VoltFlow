@@ -36,6 +36,12 @@ export function AccessoryCard({ item }: { item: AccessoryItem }) {
     useful: "Полезно",
     optional: "Опционально",
   }[item.priority];
+  const links =
+    item.externalLinks?.length
+      ? item.externalLinks
+      : item.externalUrl
+        ? [{ label: "Открыть ссылку", url: item.externalUrl }]
+        : [];
 
   return (
     <article className="voltflow-card p-4">
@@ -91,16 +97,21 @@ export function AccessoryCard({ item }: { item: AccessoryItem }) {
           ))}
         </div>
       ) : null}
-      {item.externalUrl ? (
-        <a
-          href={item.externalUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-white/[0.04] px-4 text-sm font-semibold text-[var(--voltflow-cyan)] transition hover:bg-white/[0.07]"
-        >
-          Открыть ссылку
-          <ExternalLink className="size-4" aria-hidden />
-        </a>
+      {links.length ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {links.map((link) => (
+            <a
+              key={`${link.label}-${link.url}`}
+              href={link.url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-white/[0.04] px-4 text-sm font-semibold text-[var(--voltflow-cyan)] transition hover:bg-white/[0.07]"
+            >
+              {link.label}
+              <ExternalLink className="size-4" aria-hidden />
+            </a>
+          ))}
+        </div>
       ) : null}
     </article>
   );

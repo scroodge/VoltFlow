@@ -223,6 +223,10 @@ export const russianTelegramKnowledgeData: TelegramKnowledgeData = {
       priority: "must-have",
       riskNotes: ["Покупайте кабель, рассчитанный именно на зарядку EV."],
       searchKeywords: ["кабель Type 2 EV", "BYD Yuan Up кабель зарядки"],
+      externalLinks: [
+        { label: "Поиск на Ozon", url: "https://www.ozon.ru/search/?text=type%202%20ev%20%D0%BA%D0%B0%D0%B1%D0%B5%D0%BB%D1%8C" },
+        { label: "Поиск на Wildberries", url: "https://www.wildberries.ru/catalog/0/search.aspx?search=type%202%20ev%20%D0%BA%D0%B0%D0%B1%D0%B5%D0%BB%D1%8C" },
+      ],
     },
     {
       id: "portable-evse-ru",
