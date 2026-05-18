@@ -9,9 +9,13 @@ import type { KnowledgeArticle } from "@/types/telegram";
 export function ArticleList({
   articles,
   placeholder = "Искать статьи",
+  title = "Статьи базы знаний",
+  eyebrow = "Все гайды",
 }: {
   articles: KnowledgeArticle[];
   placeholder?: string;
+  title?: string;
+  eyebrow?: string;
 }) {
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => {
@@ -35,10 +39,10 @@ export function ArticleList({
     <section className="space-y-4" aria-labelledby="all-guides-title">
       <div>
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--voltflow-cyan)]">
-          Все гайды
+          {eyebrow}
         </p>
         <h2 id="all-guides-title" className="mt-1 font-heading text-2xl font-bold">
-          Статьи базы знаний
+          {title}
         </h2>
       </div>
       <SearchBox value={query} onChange={setQuery} placeholder={placeholder} />

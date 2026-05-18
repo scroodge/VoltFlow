@@ -4,12 +4,14 @@ type CategoryFilterProps<T extends string> = {
   categories: readonly T[];
   activeCategory: T | "All";
   onChange: (category: T | "All") => void;
+  labels?: Partial<Record<T | "All", string>>;
 };
 
 export function CategoryFilter<T extends string>({
   categories,
   activeCategory,
   onChange,
+  labels,
 }: CategoryFilterProps<T>) {
   return (
     <div className="flex flex-wrap gap-2">
@@ -25,7 +27,7 @@ export function CategoryFilter<T extends string>({
               : "border-border bg-white/[0.03] text-muted-foreground",
           )}
         >
-          {category === "All" ? "Все" : category}
+          {labels?.[category] ?? (category === "All" ? "Все" : category)}
         </button>
       ))}
     </div>

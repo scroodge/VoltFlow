@@ -9,12 +9,8 @@ import { ArticleList } from "@/components/telegram/ArticleList";
 import { BuyCatalog } from "@/components/telegram/BuyCatalog";
 import { Calculators } from "@/components/telegram/Calculators";
 import { CategoryFilter } from "@/components/telegram/CategoryFilter";
-import { ChargingGuides } from "@/components/telegram/ChargingGuides";
 import { KnowledgeHome } from "@/components/telegram/KnowledgeHome";
-import { MaintenanceGuides } from "@/components/telegram/MaintenanceGuides";
-import { OwnershipExperience } from "@/components/telegram/OwnershipExperience";
 import { SmartFAQ } from "@/components/telegram/SmartFAQ";
-import { guideCategories } from "@/data/telegram/categories";
 import { getTelegramThemeStyle } from "@/lib/telegram/theme";
 import { useTelegramWebApp } from "@/lib/telegram/useTelegramWebApp";
 import type { TelegramKnowledgeData } from "@/types/knowledge";
@@ -24,8 +20,14 @@ export function TelegramShell({ data }: { data?: TelegramKnowledgeData }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<TelegramTab>("home");
-  const [guideCategory, setGuideCategory] =
-    useState<(typeof guideCategories)[number] | "All">("All");
+  const [guideCategory, setGuideCategory] = useState<string | "All">("All");
+  const articleCategories = useMemo(() => {
+    const categoryMap = new Map<string, string>();
+    for (const article of data?.articles ?? []) {
+      categoryMap.set(article.categorySlug, article.category);
+    }
+    return Array.from(categoryMap.entries()).map(([slug, title]) => ({ slug, title }));
+  }, [data?.articles]);
   const telegram = useTelegramWebApp();
   const themeStyle = useMemo(
     () => getTelegramThemeStyle(telegram.themeParams),
@@ -126,21 +128,22 @@ export function TelegramShell({ data }: { data?: TelegramKnowledgeData }) {
           {activeTab === "guides" ? (
             <div className="space-y-4">
               <CategoryFilter
-                categories={guideCategories}
+                categories={articleCategories.map((category) => category.slug)}
                 activeCategory={guideCategory}
                 onChange={setGuideCategory}
+                labels={Object.fromEntries(
+                  articleCategories.map((category) => [category.slug, category.title]),
+                )}
               />
               {guideCategory === "All" ? (
                 <ArticleList articles={data?.articles ?? []} />
               ) : null}
-              {guideCategory === "Зарядка" ? (
-                <ChargingGuides articles={data?.articles.filter((article) => article.categorySlug === "charging")} />
-              ) : null}
-              {guideCategory === "Эксплуатация" ? (
-                <OwnershipExperience articles={data?.articles.filter((article) => article.categorySlug === "ownership")} />
-              ) : null}
-              {guideCategory === "Обслуживание" ? (
-                <MaintenanceGuides articles={data?.articles.filter((article) => article.categorySlug === "maintenance")} />
+              {guideCategory !== "All" ? (
+                <ArticleList
+                  articles={(data?.articles ?? []).filter((article) => article.categorySlug === guideCategory)}
+                  eyebrow={articleCategories.find((category) => category.slug === guideCategory)?.title ?? "Гайды"}
+                  title="Статьи раздела"
+                />
               ) : null}
             </div>
           ) : null}
