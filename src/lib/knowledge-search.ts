@@ -14,10 +14,32 @@ export type KnowledgeSearchResult = {
   similarity: number;
 };
 
+export type KnowledgeSourceType =
+  | "article"
+  | "faq"
+  | "accessory"
+  | "spare_part"
+  | "manual"
+  | "seed";
+
+const knowledgeSourceTypes = new Set<KnowledgeSourceType>([
+  "article",
+  "faq",
+  "accessory",
+  "spare_part",
+  "manual",
+  "seed",
+]);
+
+export function isKnowledgeSourceType(value: unknown): value is KnowledgeSourceType {
+  return typeof value === "string" && knowledgeSourceTypes.has(value as KnowledgeSourceType);
+}
+
 export async function searchKnowledge(params: {
   query: string;
   category?: string | null;
   generation?: CarGeneration | null;
+  sourceTypes?: KnowledgeSourceType[] | null;
   limit?: number;
 }) {
   const query = params.query.trim();
@@ -34,6 +56,7 @@ export async function searchKnowledge(params: {
     match_count: params.limit ?? 8,
     filter_category: params.category || null,
     filter_generation: isCarGeneration(params.generation) ? params.generation : null,
+    filter_source_types: params.sourceTypes?.length ? params.sourceTypes : null,
   });
 
   if (error) {

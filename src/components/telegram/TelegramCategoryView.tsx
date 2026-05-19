@@ -7,6 +7,10 @@ import { GenerationFilter } from "@/components/telegram/GenerationFilter";
 import { GenerationFilteredArticles } from "@/components/telegram/GenerationFilteredArticles";
 import { SparePartsCatalog } from "@/components/telegram/SparePartsCatalog";
 import { useTelegramGeneration } from "@/hooks/use-telegram-generation";
+import {
+  filterArticlesByGeneration,
+  normalizeModelGenerations,
+} from "@/lib/telegram/generation";
 import type { SparePartItem } from "@/types/knowledge";
 import type { AccessoryItem, FAQItem, KnowledgeArticle } from "@/types/telegram";
 
@@ -26,6 +30,10 @@ type TelegramCategoryViewProps = {
 
 export function TelegramCategoryView({ category, content }: TelegramCategoryViewProps) {
   const [generation, setGeneration] = useTelegramGeneration();
+  const accessories = filterArticlesByGeneration(content.accessories, generation);
+  const spareParts = content.spareParts.filter((item) =>
+    normalizeModelGenerations(item.model_generations).includes(generation),
+  );
 
   return (
     <>
@@ -63,16 +71,18 @@ export function TelegramCategoryView({ category, content }: TelegramCategoryView
         </section>
       ) : null}
 
-      {content.accessories.length ? (
+      {accessories.length ? (
         <section className="space-y-3" aria-label="Аксессуары">
           <h2 className="font-heading text-xl font-bold">Аксессуары</h2>
-          {content.accessories.map((item, index) => (
+          {accessories.map((item, index) => (
             <AccessoryCard key={item.id} item={item} priorityImage={index === 0} />
           ))}
         </section>
       ) : null}
 
-      {content.spareParts.length ? <SparePartsCatalog items={content.spareParts} /> : null}
+      {spareParts.length ? (
+        <SparePartsCatalog generation={generation} items={spareParts} />
+      ) : null}
 
       {!content.articles.length &&
       !content.faq.length &&

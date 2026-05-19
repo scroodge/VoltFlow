@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { AccessoriesCatalog } from "@/components/telegram/AccessoriesCatalog";
 import { SparePartsCatalog } from "@/components/telegram/SparePartsCatalog";
+import type { CarGeneration } from "@/lib/car-generations";
 import { cn } from "@/lib/utils";
 import type { TelegramKnowledgeData } from "@/types/knowledge";
 
@@ -16,9 +17,11 @@ const tabs = [
 
 export function BuyCatalog({
   accessories,
+  generation,
   spareParts,
 }: {
   accessories?: TelegramKnowledgeData["accessories"];
+  generation: CarGeneration;
   spareParts?: TelegramKnowledgeData["spareParts"];
 }) {
   const [activeTab, setActiveTab] = useState<BuyTab>("accessories");
@@ -57,9 +60,9 @@ export function BuyCatalog({
       </div>
 
       {activeTab === "accessories" ? (
-        <AccessoriesCatalog items={accessories} compactHeader />
+        <AccessoriesCatalog generation={generation} items={accessories} compactHeader />
       ) : (
-        <SparePartsCatalog items={spareParts} compactHeader />
+        <SparePartsCatalog generation={generation} items={spareParts} compactHeader />
       )}
     </section>
   );

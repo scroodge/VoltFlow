@@ -7,46 +7,70 @@ import { useEffect, useMemo, useState } from "react";
 
 import { CategoryFilter } from "@/components/telegram/CategoryFilter";
 import { SearchBox } from "@/components/telegram/SearchBox";
+import { SemanticSearchResults } from "@/components/telegram/SemanticSearchResults";
 import { faqCategories } from "@/data/telegram/categories";
 import { faqItems } from "@/data/telegram/faq";
+import { useSemanticKnowledgeSearch } from "@/hooks/use-semantic-knowledge-search";
+import type { CarGeneration } from "@/lib/car-generations";
 import { cn } from "@/lib/utils";
 import type { FAQItem } from "@/types/telegram";
 
 type FaqCategory = (typeof faqCategories)[number];
 type FaqFilter = "All" | FaqCategory;
 
-export function SmartFAQ({ items: providedItems }: { items?: FAQItem[] }) {
+const faqCategorySlugs: Record<FaqCategory, string> = {
+  "BYD Yuan Up": "byd-yuan-up",
+  "Аксессуары": "accessories",
+  "Батарея": "battery",
+  "Безопасность": "safety",
+  "Зарядка": "charging",
+  "Зима": "winter",
+  "Обслуживание": "maintenance",
+  "Расходы": "costs",
+  "Эксплуатация": "ownership",
+};
+
+export function SmartFAQ({
+  generation,
+  items: providedItems,
+}: {
+  generation: CarGeneration;
+  items?: FAQItem[];
+}) {
   const searchParams = useSearchParams();
   const sourceItems = providedItems ?? faqItems;
-  const [query, setQuery] = useState("");
   const [category, setCategory] = useState<FaqFilter>("All");
   const [openQuestion, setOpenQuestion] = useState(sourceItems[0]?.question ?? "");
+  const {
+    error,
+    isSearching,
+    query,
+    results,
+    search,
+    trimmedQuery,
+  } = useSemanticKnowledgeSearch({
+    category: category === "All" ? null : faqCategorySlugs[category],
+    generation,
+    limit: 8,
+    sourceTypes: ["faq"],
+  });
 
   const filteredItems = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-
     return sourceItems.filter((item) => {
       const matchesCategory = category === "All" || item.category === category;
-      const matchesQuery =
-        normalizedQuery.length === 0 ||
-        item.question.toLowerCase().includes(normalizedQuery) ||
-        item.answer.toLowerCase().includes(normalizedQuery) ||
-        item.category.toLowerCase().includes(normalizedQuery) ||
-        item.tags.join(" ").toLowerCase().includes(normalizedQuery);
-
-      return matchesCategory && matchesQuery;
+      return matchesCategory;
     });
-  }, [category, query, sourceItems]);
+  }, [category, sourceItems]);
 
   useEffect(() => {
     const q = searchParams.get("q");
     if (q) {
       window.setTimeout(() => {
-        setQuery(q);
+        search(q);
         setOpenQuestion(q);
       }, 0);
     }
-  }, [searchParams]);
+  }, [search, searchParams]);
 
   return (
     <section className="space-y-4" aria-labelledby="telegram-faq-title">
@@ -61,8 +85,9 @@ export function SmartFAQ({ items: providedItems }: { items?: FAQItem[] }) {
 
       <SearchBox
         value={query}
-        onChange={setQuery}
+        onChange={search}
         placeholder="Искать вопрос, ответ или тег"
+        debounceMs={350}
       />
 
       <CategoryFilter
@@ -71,8 +96,17 @@ export function SmartFAQ({ items: providedItems }: { items?: FAQItem[] }) {
         onChange={setCategory}
       />
 
-      <div className="space-y-3">
-        {filteredItems.map((item) => {
+      {trimmedQuery ? (
+        <SemanticSearchResults
+          error={error}
+          isLoading={isSearching}
+          query={trimmedQuery}
+          results={results}
+          title="Найденные вопросы"
+        />
+      ) : (
+        <div className="space-y-3">
+          {filteredItems.map((item) => {
           const isOpen = openQuestion === item.question;
 
           return (
@@ -119,10 +153,11 @@ export function SmartFAQ({ items: providedItems }: { items?: FAQItem[] }) {
               ) : null}
             </article>
           );
-        })}
-      </div>
+          })}
+        </div>
+      )}
 
-      {filteredItems.length === 0 ? (
+      {!trimmedQuery && filteredItems.length === 0 ? (
         <div className="voltflow-card p-4 text-sm leading-6 text-muted-foreground">
           Подходящих вопросов пока нет. Попробуйте более короткий запрос или другой раздел.
         </div>

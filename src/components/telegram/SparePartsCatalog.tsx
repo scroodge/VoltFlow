@@ -4,15 +4,27 @@ import { ChevronLeft, ChevronRight, ExternalLink, X } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
 
+import { SearchBox } from "@/components/telegram/SearchBox";
+import { SemanticSearchResults } from "@/components/telegram/SemanticSearchResults";
+import { useSemanticKnowledgeSearch } from "@/hooks/use-semantic-knowledge-search";
+import type { CarGeneration } from "@/lib/car-generations";
 import type { SparePartItem } from "@/types/knowledge";
 
 export function SparePartsCatalog({
+  generation,
   items = [],
   compactHeader = false,
 }: {
+  generation: CarGeneration;
   items?: SparePartItem[];
   compactHeader?: boolean;
 }) {
+  const search = useSemanticKnowledgeSearch({
+    generation,
+    limit: 8,
+    sourceTypes: ["spare_part"],
+  });
+
   if (!items.length) return null;
 
   return (
@@ -30,11 +42,27 @@ export function SparePartsCatalog({
           </p>
         </div>
       )}
-      <div className="space-y-3">
-        {items.map((item) => (
-          <SparePartCard key={item.id} item={item} />
-        ))}
-      </div>
+      <SearchBox
+        value={search.query}
+        onChange={search.search}
+        placeholder="Искать запчасти"
+        debounceMs={350}
+      />
+      {search.trimmedQuery ? (
+        <SemanticSearchResults
+          error={search.error}
+          isLoading={search.isSearching}
+          query={search.trimmedQuery}
+          results={search.results}
+          title="Найденные запчасти"
+        />
+      ) : (
+        <div className="space-y-3">
+          {items.map((item) => (
+            <SparePartCard key={item.id} item={item} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }

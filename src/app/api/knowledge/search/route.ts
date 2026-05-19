@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { isCarGeneration } from "@/lib/car-generations";
-import { searchKnowledge } from "@/lib/knowledge-search";
+import { isKnowledgeSourceType, searchKnowledge } from "@/lib/knowledge-search";
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,6 +10,9 @@ export async function POST(request: NextRequest) {
     const query = typeof body.query === "string" ? body.query.trim() : "";
     const category = typeof body.category === "string" ? body.category : null;
     const generation = isCarGeneration(body.generation) ? body.generation : null;
+    const sourceTypes = Array.isArray(body.sourceTypes)
+      ? body.sourceTypes.filter(isKnowledgeSourceType)
+      : null;
     const limit =
       typeof body.limit === "number" && body.limit > 0 && body.limit <= 20
         ? body.limit
@@ -26,6 +29,7 @@ export async function POST(request: NextRequest) {
       query,
       category,
       generation,
+      sourceTypes,
       limit,
     });
 

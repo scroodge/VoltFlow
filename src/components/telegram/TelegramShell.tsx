@@ -147,13 +147,15 @@ export function TelegramShell({ data }: { data?: TelegramKnowledgeData }) {
                 )}
               />
               {guideCategory === "All" ? (
-                <ArticleList articles={filteredArticles} />
+                <ArticleList articles={filteredArticles} generation={generation} />
               ) : null}
               {guideCategory !== "All" ? (
                 <ArticleList
                   articles={filteredArticles.filter(
                     (article) => article.categorySlug === guideCategory,
                   )}
+                  generation={generation}
+                  semanticCategory={guideCategory}
                   eyebrow={
                     articleCategories.find((category) => category.slug === guideCategory)
                       ?.title ?? "Гайды"
@@ -169,9 +171,13 @@ export function TelegramShell({ data }: { data?: TelegramKnowledgeData }) {
               ) : null}
             </div>
           ) : null}
-          {activeTab === "faq" ? <SmartFAQ items={data?.faq} /> : null}
+          {activeTab === "faq" ? <SmartFAQ generation={generation} items={data?.faq} /> : null}
           {activeTab === "buy" ? (
-            <BuyCatalog accessories={data?.accessories} spareParts={data?.spareParts} />
+            <BuyCatalog
+              accessories={data?.accessories}
+              generation={generation}
+              spareParts={data?.spareParts}
+            />
           ) : null}
           {activeTab === "more" ? (
             <div className="space-y-5">

@@ -1,39 +1,33 @@
 "use client";
 
-import { useMemo, useState } from "react";
-
 import { ArticleCard } from "@/components/telegram/ArticleCard";
 import { SearchBox } from "@/components/telegram/SearchBox";
+import { SemanticSearchResults } from "@/components/telegram/SemanticSearchResults";
+import { useSemanticKnowledgeSearch } from "@/hooks/use-semantic-knowledge-search";
+import type { CarGeneration } from "@/lib/car-generations";
 import type { KnowledgeArticle } from "@/types/telegram";
 
 export function ArticleList({
   articles,
+  generation,
+  semanticCategory,
   placeholder = "Искать статьи",
   title = "Статьи базы знаний",
   eyebrow = "Все гайды",
 }: {
   articles: KnowledgeArticle[];
+  generation: CarGeneration;
+  semanticCategory?: string | null;
   placeholder?: string;
   title?: string;
   eyebrow?: string;
 }) {
-  const [query, setQuery] = useState("");
-  const filtered = useMemo(() => {
-    const value = query.trim().toLowerCase();
-    if (!value) return articles;
-
-    return articles.filter((article) =>
-      [
-        article.title,
-        article.summary,
-        article.tags.join(" "),
-        article.sections.map((section) => `${section.heading} ${section.body}`).join(" "),
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(value),
-    );
-  }, [articles, query]);
+  const search = useSemanticKnowledgeSearch({
+    category: semanticCategory,
+    generation,
+    limit: 8,
+    sourceTypes: ["article"],
+  });
 
   return (
     <section className="space-y-4" aria-labelledby="all-guides-title">
@@ -45,12 +39,27 @@ export function ArticleList({
           {title}
         </h2>
       </div>
-      <SearchBox value={query} onChange={setQuery} placeholder={placeholder} />
-      <div className="space-y-3">
-        {filtered.map((article, index) => (
-          <ArticleCard key={article.id} article={article} priorityImage={index === 0} />
-        ))}
-      </div>
+      <SearchBox
+        value={search.query}
+        onChange={search.search}
+        placeholder={placeholder}
+        debounceMs={350}
+      />
+      {search.trimmedQuery ? (
+        <SemanticSearchResults
+          error={search.error}
+          isLoading={search.isSearching}
+          query={search.trimmedQuery}
+          results={search.results}
+          title="Найденные статьи"
+        />
+      ) : (
+        <div className="space-y-3">
+          {articles.map((article, index) => (
+            <ArticleCard key={article.id} article={article} priorityImage={index === 0} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
