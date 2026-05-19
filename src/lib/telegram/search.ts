@@ -20,65 +20,19 @@ type SearchIndexItem = SearchResult & {
   summaryText: string;
   bodyText: string;
   keywordText: string;
+  categoryText: string;
 };
 
-const index: SearchIndexItem[] = [
-  ...allArticles.map((article) => ({
-    id: article.slug,
-    type: "article" as const,
-    title: article.title,
-    summary: article.summary,
-    category: article.category,
-    categorySlug: article.categorySlug,
-    score: 0,
-    href: `/telegram/article/${article.slug}`,
-    titleText: article.title,
-    tagText: article.tags.join(" "),
-    summaryText: article.summary,
-    bodyText: [
-      article.sections
-        .map((section) => `${section.heading} ${section.body}`)
-        .join(" "),
-      article.tips?.join(" "),
-      article.warnings?.join(" "),
-    ].join(" "),
-    keywordText: "",
-  })),
-  ...faqItems.map((item) => ({
-    id: item.id,
-    type: "faq" as const,
-    title: item.question,
-    summary: item.answer,
-    category: item.category,
-    categorySlug: item.categorySlug,
-    score: 0,
-    href: `/telegram?tab=faq&q=${encodeURIComponent(item.question)}`,
-    titleText: item.question,
-    tagText: item.tags.join(" "),
-    summaryText: "",
-    bodyText: item.answer,
-    keywordText: "",
-  })),
-  ...accessories.map((item) => ({
-    id: item.id,
-    type: "accessory" as const,
-    title: item.title,
-    summary: item.whyUseful,
-    category: item.category,
-    categorySlug: item.categorySlug,
-    score: 0,
-    href: `/telegram/category/${item.categorySlug}?q=${encodeURIComponent(item.title)}`,
-    titleText: item.title,
-    tagText: item.category,
-    summaryText: `${item.useCase} ${item.whyUseful}`,
-    bodyText: [
-      item.whatToCheckBeforeBuying.join(" "),
-      item.riskNotes?.join(" "),
-      item.priority,
-    ].join(" "),
-    keywordText: item.searchKeywords.join(" "),
-  })),
-];
+const dynamicIndexCache = new WeakMap<
+  Pick<TelegramKnowledgeData, "articles" | "faq" | "accessories">,
+  SearchIndexItem[]
+>();
+
+const index = buildIndex({
+  articles: allArticles,
+  faq: faqItems,
+  accessories,
+});
 
 export function searchTelegramKnowledge(
   query: string,
@@ -89,7 +43,7 @@ export function searchTelegramKnowledge(
 
   if (terms.length === 0) return [];
 
-  const searchIndex = data ? buildIndex(data) : index;
+  const searchIndex = data ? getDynamicIndex(data) : index;
 
   return searchIndex
     .map((item) => {
@@ -101,7 +55,7 @@ export function searchTelegramKnowledge(
           scoreField(item.keywordText, term, 7) +
           scoreField(item.summaryText, term, 5) +
           scoreField(item.bodyText, term, 2) +
-          scoreField(item.category, term, 3)
+          scoreField(item.categoryText, term, 3)
         );
       }, 0);
 
@@ -122,64 +76,92 @@ export function searchTelegramKnowledge(
     }));
 }
 
+function getDynamicIndex(
+  data: Pick<TelegramKnowledgeData, "articles" | "faq" | "accessories">,
+) {
+  const cached = dynamicIndexCache.get(data);
+  if (cached) return cached;
+
+  const nextIndex = buildIndex(data);
+  dynamicIndexCache.set(data, nextIndex);
+
+  return nextIndex;
+}
+
 function buildIndex(data: Pick<TelegramKnowledgeData, "articles" | "faq" | "accessories">): SearchIndexItem[] {
   return [
-    ...data.articles.map((article) => ({
-      id: article.slug,
-      type: "article" as const,
-      title: article.title,
-      summary: article.summary,
-      category: article.category,
-      categorySlug: article.categorySlug,
-      score: 0,
-      href: `/telegram/article/${article.slug}`,
-      titleText: article.title,
-      tagText: article.tags.join(" "),
-      summaryText: article.summary,
-      bodyText: [
-        article.sections
-          .map((section) => `${section.heading} ${section.body}`)
-          .join(" "),
-        article.tips?.join(" "),
-        article.warnings?.join(" "),
-      ].join(" "),
-      keywordText: "",
-    })),
-    ...data.faq.map((item) => ({
-      id: item.id,
-      type: "faq" as const,
-      title: item.question,
-      summary: item.answer,
-      category: item.category,
-      categorySlug: item.categorySlug,
-      score: 0,
-      href: `/telegram?tab=faq&q=${encodeURIComponent(item.question)}`,
-      titleText: item.question,
-      tagText: item.tags.join(" "),
-      summaryText: "",
-      bodyText: item.answer,
-      keywordText: "",
-    })),
-    ...data.accessories.map((item) => ({
-      id: item.id,
-      type: "accessory" as const,
-      title: item.title,
-      summary: item.whyUseful,
-      category: item.category,
-      categorySlug: item.categorySlug,
-      score: 0,
-      href: `/telegram/category/${item.categorySlug}?q=${encodeURIComponent(item.title)}`,
-      titleText: item.title,
-      tagText: item.category,
-      summaryText: `${item.useCase} ${item.whyUseful}`,
-      bodyText: [
-        item.whatToCheckBeforeBuying.join(" "),
-        item.riskNotes?.join(" "),
-        item.priority,
-      ].join(" "),
-      keywordText: item.searchKeywords.join(" "),
-    })),
+    ...data.articles.map((article) =>
+      createIndexItem({
+        id: article.slug,
+        type: "article",
+        title: article.title,
+        summary: article.summary,
+        category: article.category,
+        categorySlug: article.categorySlug,
+        href: `/telegram/article/${article.slug}`,
+        titleText: article.title,
+        tagText: article.tags.join(" "),
+        summaryText: article.summary,
+        bodyText: [
+          article.sections
+            .map((section) => `${section.heading} ${section.body}`)
+            .join(" "),
+          article.tips?.join(" "),
+          article.warnings?.join(" "),
+        ].join(" "),
+        keywordText: "",
+      }),
+    ),
+    ...data.faq.map((item) =>
+      createIndexItem({
+        id: item.id,
+        type: "faq",
+        title: item.question,
+        summary: item.answer,
+        category: item.category,
+        categorySlug: item.categorySlug,
+        href: `/telegram?tab=faq&q=${encodeURIComponent(item.question)}`,
+        titleText: item.question,
+        tagText: item.tags.join(" "),
+        summaryText: "",
+        bodyText: item.answer,
+        keywordText: "",
+      }),
+    ),
+    ...data.accessories.map((item) =>
+      createIndexItem({
+        id: item.id,
+        type: "accessory",
+        title: item.title,
+        summary: item.whyUseful,
+        category: item.category,
+        categorySlug: item.categorySlug,
+        href: `/telegram/category/${item.categorySlug}?q=${encodeURIComponent(item.title)}`,
+        titleText: item.title,
+        tagText: item.category,
+        summaryText: `${item.useCase} ${item.whyUseful}`,
+        bodyText: [
+          item.whatToCheckBeforeBuying.join(" "),
+          item.riskNotes?.join(" "),
+          item.priority,
+        ].join(" "),
+        keywordText: item.searchKeywords.join(" "),
+      }),
+    ),
   ];
+}
+
+function createIndexItem(item: Omit<SearchIndexItem, "score" | "categoryText">): SearchIndexItem {
+  return {
+    ...item,
+    score: 0,
+    titleText: normalizeText(item.titleText),
+    tagText: normalizeText(item.tagText),
+    summaryText: normalizeText(item.summaryText),
+    bodyText: normalizeText(item.bodyText),
+    keywordText: normalizeText(item.keywordText),
+    categoryText: normalizeText(item.category),
+  };
 }
 
 export function highlightSearchMatch(text: string, query: string) {
@@ -204,13 +186,12 @@ function normalizeText(text: string) {
   return text.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-function scoreField(text: string | undefined, term: string, weight: number) {
-  if (!text) return 0;
+function scoreField(normalizedText: string | undefined, term: string, weight: number) {
+  if (!normalizedText) return 0;
 
-  const normalized = normalizeText(text);
-  if (normalized === term) return weight * 3;
-  if (normalized.startsWith(term)) return weight * 2;
-  if (normalized.includes(term)) return weight;
+  if (normalizedText === term) return weight * 3;
+  if (normalizedText.startsWith(term)) return weight * 2;
+  if (normalizedText.includes(term)) return weight;
 
   return 0;
 }
