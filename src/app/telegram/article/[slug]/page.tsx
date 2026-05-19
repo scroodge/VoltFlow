@@ -20,7 +20,8 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const data = await getTelegramKnowledgeDataWithFallback(staticTelegramKnowledgeData);
-  const article = data.articles.find((item) => item.slug === slug) ?? getArticleBySlug(slug);
+  const articleBySlug = new Map(data.articles.map((item) => [item.slug, item]));
+  const article = articleBySlug.get(slug) ?? getArticleBySlug(slug);
 
   if (!article) {
     return {
@@ -42,9 +43,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function TelegramArticlePage({ params }: PageProps) {
   const { slug } = await params;
   const data = await getTelegramKnowledgeDataWithFallback(staticTelegramKnowledgeData);
-  const article = data.articles.find((item) => item.slug === slug) ?? getArticleBySlug(slug);
+  const articleBySlug = new Map(data.articles.map((item) => [item.slug, item]));
+  const articleById = new Map(data.articles.map((item) => [item.id, item]));
+  const article = articleBySlug.get(slug) ?? getArticleBySlug(slug);
   const relatedArticles = (article?.relatedIds ?? [])
-    .map((id) => data.articles.find((item) => item.id === id))
+    .map((id) => articleById.get(id))
     .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
   return (
