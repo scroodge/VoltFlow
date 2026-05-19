@@ -15,7 +15,7 @@ export function ArticleCard({ article, priorityImage = false }: ArticleCardProps
   return (
     <Link
       href={`/telegram/article/${article.slug}`}
-      className="voltflow-card block p-4 transition hover:border-[var(--voltflow-cyan)]/60 focus-visible:ring-3 focus-visible:ring-[var(--voltflow-cyan)]/30"
+      className="voltflow-card block p-3 transition hover:border-[var(--voltflow-cyan)]/60 focus-visible:ring-3 focus-visible:ring-[var(--voltflow-cyan)]/30"
     >
       {cover ? (
         <Image
@@ -25,19 +25,19 @@ export function ArticleCard({ article, priorityImage = false }: ArticleCardProps
           height={360}
           unoptimized
           priority={priorityImage}
-          className="mb-4 aspect-[16/9] w-full rounded-lg border border-border object-cover"
+          className="mb-3 aspect-[16/9] w-full rounded-lg border border-border object-cover"
         />
       ) : null}
-      <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--voltflow-green)]">
+      <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--voltflow-green)]">
         {article.category}
       </span>
-      <span className="mt-1 block font-heading text-lg font-bold leading-snug">
+      <span className="mt-0.5 block font-heading text-base font-bold leading-snug">
         {article.title}
       </span>
-      <span className="mt-2 block text-sm leading-6 text-muted-foreground">
+      <span className="mt-1 block line-clamp-2 text-xs leading-5 text-muted-foreground">
         {article.summary}
       </span>
-      <span className="mt-3 block text-xs font-semibold text-[var(--voltflow-cyan)]">
+      <span className="mt-2 block text-xs font-semibold text-[var(--voltflow-cyan)]">
         Открыть статью
       </span>
     </Link>

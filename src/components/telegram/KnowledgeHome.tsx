@@ -53,7 +53,6 @@ const quickCards = [
 }>;
 
 export function KnowledgeHome({
-  isTelegram,
   onNavigate,
   generation,
   data,
@@ -112,23 +111,16 @@ export function KnowledgeHome({
   }
 
   return (
-    <section className="space-y-5" aria-labelledby="knowledge-home-title">
-      <div className="space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--voltflow-cyan)]">
-              VoltFlow
-            </p>
-            <h1 id="knowledge-home-title" className="mt-1 font-heading text-3xl font-bold leading-tight">
-              База знаний BYD YUAN UP
-            </h1>
-          </div>
-          <span className="shrink-0 rounded-full border border-border bg-white/[0.04] px-3 py-1.5 text-xs font-bold text-[var(--voltflow-cyan)]">
-            {isTelegram ? "Мини-приложение Telegram" : "Веб-режим"}
-          </span>
-        </div>
-        <p className="text-base leading-7 text-muted-foreground">
-          Зарядка, обслуживание, аксессуары и практический опыт владельца
+    <section className="space-y-3" aria-labelledby="knowledge-home-title">
+      <div className="space-y-2">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--voltflow-cyan)]">
+          VoltFlow
+        </p>
+        <h1 id="knowledge-home-title" className="font-heading text-2xl font-bold leading-tight">
+          Умный поиск
+        </h1>
+        <p className="text-sm leading-5 text-muted-foreground">
+          Введите любой запрос и умный поиск найдет информацию
         </p>
       </div>
 
@@ -148,24 +140,24 @@ export function KnowledgeHome({
         />
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-2">
         {quickCards.map(({ label, tab, icon: Icon }) => (
           <button
             key={label}
             type="button"
             onClick={() => onNavigate(tab)}
-            className="voltflow-card flex min-h-24 flex-col items-start justify-between p-4 text-left transition hover:border-[var(--voltflow-cyan)]/60"
+            className="voltflow-card flex min-h-14 items-center gap-3 p-3 text-left transition hover:border-[var(--voltflow-cyan)]/60"
           >
-            <Icon className="size-6 text-[var(--voltflow-green)]" aria-hidden />
-            <span className="font-heading text-base font-bold">{label}</span>
+            <Icon className="size-5 shrink-0 text-[var(--voltflow-green)]" aria-hidden />
+            <span className="font-heading text-sm font-bold leading-none">{label}</span>
           </button>
         ))}
       </div>
 
-      <section className="space-y-3" aria-labelledby="popular-title">
+      <section className="space-y-2.5" aria-labelledby="popular-title">
         <div className="flex items-center gap-2">
           <Settings className="size-4 text-[var(--voltflow-cyan)]" aria-hidden />
-          <h2 id="popular-title" className="font-heading text-xl font-bold">
+          <h2 id="popular-title" className="font-heading text-base font-bold">
             Популярные статьи
           </h2>
         </div>
@@ -174,13 +166,13 @@ export function KnowledgeHome({
         ))}
         <Link
           href={`/telegram/category/charging?gen=${generation}`}
-          className="inline-flex min-h-11 items-center rounded-lg border border-border bg-white/[0.04] px-4 text-sm font-semibold text-[var(--voltflow-cyan)]"
+          className="inline-flex min-h-9 items-center rounded-lg border border-border bg-white/[0.04] px-3 text-sm font-semibold text-[var(--voltflow-cyan)]"
         >
           Открыть раздел зарядки
         </Link>
       </section>
 
-      <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">
+      <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs leading-5 text-amber-100">
         База знаний сейчас ведется вручную. Импорт из сообщества и AI-помощник
         будут добавлены позже.
       </div>
@@ -201,28 +193,28 @@ function SemanticSearchResults({
 }) {
   if (isLoading) {
     return (
-      <div className="voltflow-card flex items-center gap-3 p-4 text-sm font-semibold text-muted-foreground">
-        <Loader2 className="size-5 animate-spin text-[var(--voltflow-cyan)]" aria-hidden />
+      <div className="voltflow-card flex items-center gap-2.5 p-3 text-sm font-semibold text-muted-foreground">
+        <Loader2 className="size-4 animate-spin text-[var(--voltflow-cyan)]" aria-hidden />
         Ищем по смыслу...
       </div>
     );
   }
 
   if (error) {
-    return <div className="voltflow-card p-4 text-sm leading-6 text-muted-foreground">{error}</div>;
+    return <div className="voltflow-card p-3 text-sm leading-5 text-muted-foreground">{error}</div>;
   }
 
   if (!results.length) {
     return (
-      <div className="voltflow-card p-4 text-sm leading-6 text-muted-foreground">
+      <div className="voltflow-card p-3 text-sm leading-5 text-muted-foreground">
         Ничего не найдено для «{query}». Попробуйте переформулировать вопрос.
       </div>
     );
   }
 
   return (
-    <section className="space-y-3" aria-label="Результаты умного поиска">
-      <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--voltflow-cyan)]">
+    <section className="space-y-2" aria-label="Результаты умного поиска">
+      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--voltflow-cyan)]">
         Умный поиск
       </p>
       {results.map((result) => {
@@ -230,24 +222,24 @@ function SemanticSearchResults({
           <>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--voltflow-green)]">
+                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--voltflow-green)]">
                   {categoryLabel(result.category)}
                 </p>
-                <h3 className="mt-1 font-heading text-base font-bold">{result.title}</h3>
+                <h3 className="mt-0.5 font-heading text-sm font-bold">{result.title}</h3>
               </div>
-              <span className="shrink-0 rounded-full border border-[var(--voltflow-green)]/40 bg-[var(--voltflow-green)]/10 px-2.5 py-1 text-xs font-bold text-[var(--voltflow-green)]">
+              <span className="shrink-0 rounded-full border border-[var(--voltflow-green)]/40 bg-[var(--voltflow-green)]/10 px-2 py-0.5 text-[11px] font-bold text-[var(--voltflow-green)]">
                 {Math.round(result.similarity * 100)}%
               </span>
             </div>
-            <p className="mt-2 line-clamp-3 text-sm leading-6 text-muted-foreground">
+            <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-muted-foreground">
               {result.content}
             </p>
             {result.tags.length ? (
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-2 flex flex-wrap gap-1.5">
                 {result.tags.slice(0, 4).map((tag) => (
                   <span
                     key={tag}
-                    className="rounded-full border border-border bg-white/[0.04] px-2.5 py-1 text-xs font-semibold text-muted-foreground"
+                    className="rounded-full border border-border bg-white/[0.04] px-2 py-0.5 text-[11px] font-semibold text-muted-foreground"
                   >
                     {tag}
                   </span>
@@ -261,12 +253,12 @@ function SemanticSearchResults({
           <Link
             key={result.id}
             href={result.source_url}
-            className="voltflow-card block p-4 transition hover:border-[var(--voltflow-cyan)]/60 focus-visible:ring-3 focus-visible:ring-[var(--voltflow-cyan)]/30"
+            className="voltflow-card block p-3 transition hover:border-[var(--voltflow-cyan)]/60 focus-visible:ring-3 focus-visible:ring-[var(--voltflow-cyan)]/30"
           >
             {card}
           </Link>
         ) : (
-          <article key={result.id} className="voltflow-card p-4">
+          <article key={result.id} className="voltflow-card p-3">
             {card}
           </article>
         );

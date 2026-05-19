@@ -96,37 +96,37 @@ export function TelegramShell({ data }: { data?: TelegramKnowledgeData }) {
       className="relative isolate min-h-dvh overflow-x-hidden scroll-smooth bg-background text-foreground"
       style={themeStyle}
     >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_-8%,rgba(0,209,255,0.24),transparent_26rem),radial-gradient(circle_at_8%_18%,rgba(0,230,118,0.14),transparent_20rem),linear-gradient(180deg,rgba(18,21,28,0)_0%,#12151C_78%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_-8%,rgba(0,209,255,0.16),transparent_22rem),linear-gradient(180deg,rgba(18,21,28,0)_0%,#12151C_72%)]" />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px voltflow-gradient" />
 
-      <div className="mobile-page relative min-h-dvh px-4 pb-[calc(env(safe-area-inset-bottom)+7.5rem)] pt-[calc(env(safe-area-inset-top)+1rem)]">
-        <header className="sticky top-0 z-30 -mx-4 space-y-4 border-b border-border/60 bg-background/88 px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)] backdrop-blur-xl">
+      <div className="mobile-page relative min-h-dvh px-3 pb-[calc(env(safe-area-inset-bottom)+5.75rem)] pt-[calc(env(safe-area-inset-top)+0.5rem)]">
+        <header className="sticky top-0 z-30 -mx-3 space-y-2 border-b border-border/60 bg-background/88 px-3 pb-2.5 pt-[calc(env(safe-area-inset-top)+0.5rem)] backdrop-blur-xl">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="grid size-11 shrink-0 place-items-center rounded-lg border border-[var(--voltflow-green)]/30 bg-[var(--voltflow-green)]/10 text-[var(--voltflow-green)]">
-                <Zap className="size-6" aria-hidden />
+              <div className="grid size-8 shrink-0 place-items-center rounded-lg border border-[var(--voltflow-green)]/30 bg-[var(--voltflow-green)]/10 text-[var(--voltflow-green)]">
+                <Zap className="size-4" aria-hidden />
               </div>
               <div>
-                <h1 className="font-heading text-2xl font-bold leading-none">
+                <h1 className="font-heading text-lg font-bold leading-none">
                   VoltFlow
                 </h1>
-                <p className="mt-1 text-sm font-semibold text-muted-foreground">
+                <p className="mt-0.5 text-xs font-semibold text-muted-foreground">
                   База знаний BYD YUAN UP
                 </p>
               </div>
             </div>
 
-            <span className="shrink-0 rounded-full border border-border bg-white/[0.04] px-3 py-1.5 text-xs font-bold text-[var(--voltflow-cyan)]">
+            <span className="shrink-0 rounded-full border border-border bg-white/[0.04] px-2.5 py-1 text-[11px] font-bold text-[var(--voltflow-cyan)]">
               {telegram.isTelegram ? "Telegram" : "Веб"}
             </span>
           </div>
 
-          <section className="voltflow-card p-2.5" aria-label="Поколение автомобиля">
+          <section className="rounded-lg border border-border bg-white/[0.03] p-1.5" aria-label="Поколение автомобиля">
             <GenerationFilter value={generation} onChange={setGeneration} />
           </section>
         </header>
 
-        <div className="mt-5">
+        <div className="mt-3">
           {activeTab === "home" ? (
             <KnowledgeHome
               key={generation}

@@ -12,7 +12,7 @@ type GenerationFilterProps = {
 export function GenerationFilter({ value, onChange }: GenerationFilterProps) {
   return (
     <div
-      className="flex flex-nowrap justify-center gap-16 overflow-x-auto"
+      className="grid grid-cols-2 gap-1"
       role="group"
       aria-label="Поколение BYD Yuan Up"
     >
@@ -22,7 +22,7 @@ export function GenerationFilter({ value, onChange }: GenerationFilterProps) {
           type="button"
           onClick={() => onChange(generation)}
           className={cn(
-            "min-h-8 shrink-0 whitespace-nowrap rounded-full border px-3 text-xs font-semibold transition",
+            "min-h-7 min-w-0 truncate rounded-md border px-2 text-[11px] font-semibold transition",
             value === generation
               ? "border-[var(--voltflow-green)] bg-[var(--voltflow-green)] text-[#06110B]"
               : "border-border bg-white/[0.03] text-muted-foreground",
