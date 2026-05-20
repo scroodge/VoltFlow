@@ -46,6 +46,38 @@ const payloadSchema = z
   })
   .passthrough();
 
+const batchPayloadSchema = z.union([
+  z.array(payloadSchema).min(1).max(300),
+  z
+    .object({
+      samples: z.array(payloadSchema).min(1).max(300),
+    })
+    .passthrough(),
+]);
+
+function normalizePayloads(json: unknown) {
+  const batchParsed = batchPayloadSchema.safeParse(json);
+  if (batchParsed.success) {
+    return {
+      success: true as const,
+      payloads: Array.isArray(batchParsed.data) ? batchParsed.data : batchParsed.data.samples,
+    };
+  }
+
+  const parsed = payloadSchema.safeParse(json);
+  if (!parsed.success) {
+    return {
+      success: false as const,
+      issues: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  return {
+    success: true as const,
+    payloads: [parsed.data],
+  };
+}
+
 export async function POST(request: Request) {
   const apiKey = request.headers.get("x-api-key") ?? "";
   const headerVehicleId = request.headers.get("x-vehicle-id")?.trim();
@@ -60,24 +92,34 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
   }
 
-  const parsed = payloadSchema.safeParse(json);
-  if (!parsed.success) {
+  const normalized = normalizePayloads(json);
+  if (!normalized.success) {
     return Response.json(
-      { ok: false, error: "Invalid payload", issues: parsed.error.flatten().fieldErrors },
+      { ok: false, error: "Invalid payload", issues: normalized.issues },
       { status: 400 },
     );
   }
 
-  const payload = parsed.data;
-  if (payload.vehicle_id !== headerVehicleId) {
+  const payloads = normalized.payloads;
+  const mismatchedPayload = payloads.find((payload) => payload.vehicle_id !== headerVehicleId);
+  if (mismatchedPayload) {
     return Response.json({ ok: false, error: "Vehicle ID mismatch" }, { status: 400 });
   }
 
   const receivedAt = new Date().toISOString();
-  const deviceTime = new Date(payload.device_time);
-  if (Number.isNaN(deviceTime.getTime())) {
+  const parsedSamples = payloads.map((payload) => ({
+    payload,
+    deviceTime: new Date(payload.device_time),
+  }));
+
+  if (parsedSamples.some((sample) => Number.isNaN(sample.deviceTime.getTime()))) {
     return Response.json({ ok: false, error: "Invalid device_time" }, { status: 400 });
   }
+
+  const samples = parsedSamples.map(({ payload, deviceTime }) => ({
+    ...payload,
+    device_time: deviceTime.toISOString(),
+  }));
 
   try {
     const supabase = createServiceClient();
@@ -95,23 +137,36 @@ export async function POST(request: Request) {
       return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
-    const { error: ingestError } = await supabase.rpc("bydmate_ingest_telemetry", {
-      p_user_id: profile.id,
-      p_vehicle_id: payload.vehicle_id,
-      p_source: payload.source,
-      p_schema_version: payload.schema_version,
-      p_device_time: deviceTime.toISOString(),
-      p_received_at: receivedAt,
-      p_telemetry: payload.telemetry,
-      p_location: payload.location ?? {},
-      p_raw_payload: payload,
-    });
+    const { data: ingestResult, error: ingestError } =
+      samples.length === 1
+        ? await supabase.rpc("bydmate_ingest_telemetry", {
+            p_user_id: profile.id,
+            p_vehicle_id: samples[0].vehicle_id,
+            p_source: samples[0].source,
+            p_schema_version: samples[0].schema_version,
+            p_device_time: samples[0].device_time,
+            p_received_at: receivedAt,
+            p_telemetry: samples[0].telemetry,
+            p_location: samples[0].location ?? {},
+            p_raw_payload: samples[0],
+          })
+        : await supabase.rpc("bydmate_ingest_telemetry_batch", {
+            p_user_id: profile.id,
+            p_received_at: receivedAt,
+            p_samples: samples,
+          });
 
     if (ingestError) {
       return Response.json({ ok: false, error: "Telemetry ingest failed" }, { status: 500 });
     }
 
-    return Response.json({ ok: true, vehicle_id: payload.vehicle_id, received_at: receivedAt });
+    return Response.json({
+      ok: true,
+      vehicle_id: headerVehicleId,
+      sample_count: samples.length,
+      received_at: receivedAt,
+      ingest: ingestResult,
+    });
   } catch {
     return Response.json({ ok: false, error: "Receiver failed" }, { status: 500 });
   }
