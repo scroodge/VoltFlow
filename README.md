@@ -1,6 +1,5 @@
 # <img src="public/icon-192.png" alt="VoltFlow icon" width="40" height="40" align="center"> VoltFlow
 
-**Для установки на телефон:** [инструкция для iPhone и Android](#установка-pwa)
 
 ![Next.js](https://img.shields.io/badge/Next.js-16.2.6-black?style=for-the-badge&logo=nextdotjs)
 ![React](https://img.shields.io/badge/React-19.2.4-149eca?style=for-the-badge&logo=react&logoColor=white)
@@ -9,9 +8,10 @@
 ![License](https://img.shields.io/badge/license-MIT-f8fafc?style=for-the-badge)
 
 **VoltFlow** is a mobile-first EV charging cockpit for live session tracking, deterministic ETA, energy delivery, tariff-aware cost estimates, and charging history.
-
 **VoltFlow** — мобильная панель для контроля зарядки электромобиля: живые сессии, точный ETA, расчет энергии, стоимость по тарифу и история зарядок.
 
+
+**Для установки на телефон:** [инструкция для iPhone и Android](#iPhone и iPad)
 ---
 
 ## Language / Язык
