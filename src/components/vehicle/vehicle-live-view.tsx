@@ -11,6 +11,7 @@ import {
   Clock3,
   Gauge,
   Maximize2,
+  Minimize2,
   Minus,
   MapPin,
   Plus,
@@ -1406,6 +1407,7 @@ export function RouteMap({
                 onResetView={resetView}
                 selectedLayer={selectedLayer}
                 onLayerChange={setSelectedLayer}
+                onCloseFullscreen={() => setIsFullscreenOpen(false)}
                 className="min-h-0 flex-1 rounded-lg"
                 isFullscreen
               />
@@ -1437,6 +1439,7 @@ function InteractiveRouteCanvas({
   onZoomOut,
   onResetView,
   onOpenFullscreen,
+  onCloseFullscreen,
   selectedLayer,
   onLayerChange,
   className = "h-64",
@@ -1450,6 +1453,7 @@ function InteractiveRouteCanvas({
   onZoomOut: () => void;
   onResetView: () => void;
   onOpenFullscreen?: () => void;
+  onCloseFullscreen?: () => void;
   selectedLayer: RouteLayer;
   onLayerChange: (layer: RouteLayer) => void;
   className?: string;
@@ -1479,10 +1483,11 @@ function InteractiveRouteCanvas({
 
   return (
     <div className={`relative overflow-hidden bg-background ${className}`}>
-      <div className="absolute left-3 top-3 z-10 flex max-w-[calc(100%-7rem)] flex-wrap gap-1 rounded-full border border-border bg-background/85 p-1 shadow-sm backdrop-blur">
+      <div className="absolute left-2 top-2 z-10 grid w-[8.75rem] grid-cols-2 gap-1 rounded-2xl border border-border bg-background/85 p-1 shadow-sm backdrop-blur sm:left-3 sm:top-3 sm:w-auto sm:grid-cols-4 sm:rounded-full">
         {ROUTE_LAYER_OPTIONS.map((option) => {
           const selected = option.id === selectedLayer;
           const label = tx(`vehicle.route.layers.${option.id}` as TranslationKey);
+          const shortLabel = tx(`vehicle.route.layerShort.${option.id}` as TranslationKey);
 
           return (
             <button
@@ -1490,20 +1495,22 @@ function InteractiveRouteCanvas({
               type="button"
               onClick={() => onLayerChange(option.id)}
               className={
-                "inline-flex h-7 items-center gap-1.5 rounded-full px-2 text-[11px] font-semibold uppercase tracking-[0.12em] transition " +
+                "inline-flex h-7 min-w-0 items-center justify-center gap-1 rounded-full px-2 text-[10px] font-semibold uppercase tracking-normal transition sm:h-8 sm:px-2.5 sm:text-[11px] " +
                 (selected
                   ? "bg-primary/15 text-foreground"
                   : "text-muted-foreground hover:bg-white/10 hover:text-foreground")
               }
               aria-pressed={selected}
+              aria-label={label}
+              title={label}
             >
-              <span className="size-2 rounded-full" style={{ backgroundColor: option.color }} />
-              {label}
+              <span className="size-1.5 shrink-0 rounded-full sm:size-2" style={{ backgroundColor: option.color }} />
+              <span className="truncate">{shortLabel}</span>
             </button>
           );
         })}
       </div>
-      <div className="absolute right-3 top-3 z-10 flex gap-2">
+      <div className="absolute right-2 top-2 z-10 flex gap-1.5 sm:right-3 sm:top-3 sm:gap-2">
         <MapIconButton label={tx("vehicle.route.zoomIn")} onClick={onZoomIn}>
           <Plus className="size-4" aria-hidden />
         </MapIconButton>
@@ -1516,6 +1523,11 @@ function InteractiveRouteCanvas({
         {!isFullscreen && onOpenFullscreen ? (
           <MapIconButton label={tx("vehicle.route.fullscreen")} onClick={onOpenFullscreen}>
             <Maximize2 className="size-4" aria-hidden />
+          </MapIconButton>
+        ) : null}
+        {isFullscreen && onCloseFullscreen ? (
+          <MapIconButton label={tx("vehicle.route.exitFullscreen")} onClick={onCloseFullscreen}>
+            <Minimize2 className="size-4" aria-hidden />
           </MapIconButton>
         ) : null}
       </div>
@@ -1615,7 +1627,7 @@ function MapIconButton({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex size-9 items-center justify-center rounded-full border border-border bg-background/85 text-foreground shadow-sm backdrop-blur transition hover:border-primary/50 hover:text-primary"
+      className="inline-flex size-8 items-center justify-center rounded-full border border-border bg-background/85 text-foreground shadow-sm backdrop-blur transition hover:border-primary/50 hover:text-primary sm:size-9"
       title={label}
       aria-label={label}
     >
