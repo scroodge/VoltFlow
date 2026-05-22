@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Activity,
@@ -490,6 +490,21 @@ type TelemetryChart = {
   hasData: boolean;
 };
 
+type DeltaBySocPoint = {
+  soc: number;
+  delta: number;
+  time: number;
+};
+
+type DeltaBySocChartModel = {
+  points: DeltaBySocPoint[];
+  minSoc: number;
+  maxSoc: number;
+  minDelta: number;
+  maxDelta: number;
+  latest: DeltaBySocPoint | null;
+};
+
 type TripSegment = {
   id: string;
   points: BydmateTelemetryPointRow[];
@@ -507,6 +522,7 @@ type TripSegment = {
 const TRIP_GAP_MS = 5 * 60 * 1000;
 const MAX_CHART_POINTS = 240;
 const MAX_CHART_MARKERS = 80;
+const MAX_DELTA_BY_SOC_POINTS = 240;
 const MAX_ROUTE_POINTS = 400;
 const MAP_VIEW_WIDTH = 320;
 const MAP_VIEW_HEIGHT = 180;
@@ -985,6 +1001,11 @@ function addChartPoint(chart: TelemetryChart, seriesIndex: number, time: number,
   chart.hasData = true;
 }
 
+function addDeltaBySocPoint(points: DeltaBySocPoint[], time: number, soc: number | null, delta: number | null) {
+  if (soc == null || delta == null || !Number.isFinite(time)) return;
+  points.push({ soc, delta, time });
+}
+
 function cellDeltaValue(point: TelemetryChartSource) {
   const columnValue = validNumber(point.diplus_cell_delta_v);
   if (columnValue != null) return columnValue;
@@ -1009,6 +1030,29 @@ function cellDeltaValue(point: TelemetryChartSource) {
   return min != null && max != null ? max - min : null;
 }
 
+function prepareDeltaBySoc(points: DeltaBySocPoint[]): DeltaBySocChartModel {
+  const sampled = downsamplePoints(points, MAX_DELTA_BY_SOC_POINTS);
+  if (sampled.length === 0) {
+    return {
+      points: [],
+      minSoc: 0,
+      maxSoc: 100,
+      minDelta: 0,
+      maxDelta: 1,
+      latest: null,
+    };
+  }
+
+  return {
+    points: sampled,
+    minSoc: Math.min(...sampled.map((point) => point.soc)),
+    maxSoc: Math.max(...sampled.map((point) => point.soc)),
+    minDelta: Math.min(...sampled.map((point) => point.delta)),
+    maxDelta: Math.max(...sampled.map((point) => point.delta)),
+    latest: sampled.at(-1) ?? null,
+  };
+}
+
 function prepareTelemetryHistory(points: TelemetryChartSource[], t: Translator) {
   const socChart = createChart(t("vehicle.charts.soc"), "%", [
     { label: "SOC", color: "var(--voltflow-cyan)", points: [] },
@@ -1027,6 +1071,7 @@ function prepareTelemetryHistory(points: TelemetryChartSource[], t: Translator) 
   const cellDeltaChart = createChart(t("vehicle.charts.cellDelta"), "V", [
     { label: "Delta", color: "#fb7185", points: [] },
   ], 3);
+  const deltaBySocPoints: DeltaBySocPoint[] = [];
 
   let visiblePointCount = 0;
   let start: string | undefined;
@@ -1040,13 +1085,16 @@ function prepareTelemetryHistory(points: TelemetryChartSource[], t: Translator) 
     end = point.device_time;
 
     const time = pointTimeMs(point);
-    addChartPoint(socChart, 0, time, validNumber(point.telemetry.soc));
+    const soc = validNumber(point.telemetry.soc);
+    const cellDelta = cellDeltaValue(point);
+    addChartPoint(socChart, 0, time, soc);
     addChartPoint(speedChart, 0, time, validNumber(point.telemetry.speed_kmh));
     addChartPoint(powerChart, 0, time, validNumber(point.telemetry.power_kw));
     addChartPoint(temperatureChart, 0, time, validTempNumber(point.telemetry.battery_temp_c));
     addChartPoint(temperatureChart, 1, time, validTempNumber(point.telemetry.outside_temp_c));
     addChartPoint(temperatureChart, 2, time, validTempNumber(point.telemetry.cabin_temp_c));
-    addChartPoint(cellDeltaChart, 0, time, cellDeltaValue(point));
+    addChartPoint(cellDeltaChart, 0, time, cellDelta);
+    addDeltaBySocPoint(deltaBySocPoints, time, soc, cellDelta);
   }
 
   const charts = [socChart, speedChart, powerChart, temperatureChart, cellDeltaChart].map((chart) => ({
@@ -1062,6 +1110,7 @@ function prepareTelemetryHistory(points: TelemetryChartSource[], t: Translator) 
     start,
     end,
     charts,
+    deltaBySoc: prepareDeltaBySoc(deltaBySocPoints),
   };
 }
 
@@ -1126,6 +1175,7 @@ export function TelemetryHistoryCharts({
               />
             ))}
           </div>
+          <DeltaBySocChart chart={history.deltaBySoc} />
         </>
       )}
     </section>
@@ -1189,6 +1239,178 @@ function TelemetryLineChart({ chart }: { chart: TelemetryChart }) {
         })}
       </svg>
     </article>
+  );
+}
+
+function DeltaBySocChart({ chart }: { chart: DeltaBySocChartModel }) {
+  const { t } = useTranslation();
+  const tx = t as Translator;
+  const clipId = useId();
+  const [zoom, setZoom] = useState(0);
+  const { points, latest } = chart;
+
+  if (points.length === 0) {
+    return null;
+  }
+
+  const zoomFactor = 1 + zoom * 0.45;
+  const socSpan = Math.max(chart.maxSoc - chart.minSoc, 10) / zoomFactor;
+  const xMax = Math.min(100, chart.maxSoc);
+  const xMin = Math.max(0, xMax - socSpan);
+  const xVisiblePoints = points.filter((point) => point.soc >= xMin && point.soc <= xMax);
+  const ySourcePoints = xVisiblePoints.length > 0 ? xVisiblePoints : points;
+  const visibleMinDelta = Math.min(...ySourcePoints.map((point) => point.delta));
+  const visibleMaxDelta = Math.max(...ySourcePoints.map((point) => point.delta));
+  const deltaPad = Math.max((visibleMaxDelta - visibleMinDelta) * 0.14, 0.005);
+  const yMin = Math.max(0, visibleMinDelta - deltaPad);
+  const yMax = visibleMaxDelta + deltaPad;
+
+  const x = (soc: number) => {
+    if (xMax === xMin) return 160;
+    return 24 + ((soc - xMin) / (xMax - xMin)) * 272;
+  };
+  const y = (delta: number) => {
+    if (yMax === yMin) return 72;
+    return 110 - ((delta - yMin) / (yMax - yMin)) * 92;
+  };
+  const inView = (point: DeltaBySocPoint) =>
+    point.soc >= xMin && point.soc <= xMax && point.delta >= yMin && point.delta <= yMax;
+  const visiblePoints = points.filter(inView);
+  const linePath = points
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${x(point.soc).toFixed(2)} ${y(point.delta).toFixed(2)}`)
+    .join(" ");
+  const markerPoints = visiblePoints.length <= MAX_CHART_MARKERS ? visiblePoints : [];
+
+  const zoomOut = () => setZoom((value) => Math.max(0, value - 1));
+  const zoomIn = () => setZoom((value) => Math.min(5, value + 1));
+  const resetZoom = () => setZoom(0);
+
+  return (
+    <article className="mt-3 rounded-2xl border border-border bg-white/[0.02] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="font-heading text-lg font-semibold tracking-tight">
+            {tx("vehicle.charts.deltaBySoc")}
+          </h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {tx("vehicle.charts.deltaBySocSubtitle", { value: points.length })}
+          </p>
+        </div>
+        <div className="flex items-center gap-1">
+          <IconButton
+            label={tx("vehicle.charts.zoomOut")}
+            onClick={zoomOut}
+            disabled={zoom === 0}
+          >
+            <Minus className="size-4" aria-hidden />
+          </IconButton>
+          <button
+            type="button"
+            onClick={resetZoom}
+            className="h-9 rounded-full border border-border bg-white/[0.03] px-3 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground transition hover:border-primary/50 hover:text-foreground disabled:opacity-45"
+            disabled={zoom === 0}
+            title={tx("vehicle.charts.resetZoom")}
+          >
+            {zoom === 0 ? "1x" : `${fmt(zoomFactor, 1)}x`}
+          </button>
+          <IconButton
+            label={tx("vehicle.charts.zoomIn")}
+            onClick={zoomIn}
+            disabled={zoom === 5}
+          >
+            <Plus className="size-4" aria-hidden />
+          </IconButton>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_15rem]">
+        <div className="rounded-2xl border border-border bg-background/30 p-3">
+          <svg className="h-72 w-full overflow-hidden" viewBox="0 0 320 142" role="img" aria-label={tx("vehicle.charts.deltaBySoc")}>
+            <defs>
+              <clipPath id={clipId}>
+                <rect x="24" y="18" width="272" height="92" />
+              </clipPath>
+            </defs>
+            <line x1="24" x2="296" y1="110" y2="110" stroke="currentColor" className="text-border" strokeWidth="1" />
+            <line x1="24" x2="24" y1="18" y2="110" stroke="currentColor" className="text-border" strokeWidth="1" />
+            <line x1="24" x2="296" y1="64" y2="64" stroke="currentColor" className="text-border/70" strokeWidth="1" strokeDasharray="4 6" />
+            <text x="24" y="132" className="fill-muted-foreground text-[10px]">
+              {fmt(xMin, 0)}% SOC
+            </text>
+            <text x="296" y="132" textAnchor="end" className="fill-muted-foreground text-[10px]">
+              {fmt(xMax, 0)}% SOC
+            </text>
+            <text x="30" y="14" className="fill-muted-foreground text-[10px]">
+              {fmt(yMax, 3)} V
+            </text>
+            <text x="30" y="106" className="fill-muted-foreground text-[10px]">
+              {fmt(yMin, 3)} V
+            </text>
+            <g clipPath={`url(#${clipId})`}>
+              {points.length > 1 ? (
+                <path d={linePath} fill="none" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.72" />
+              ) : null}
+              {markerPoints.map((point, index) => {
+                const isLatest = point === latest;
+                return (
+                  <circle
+                    key={`${point.time}-${index}`}
+                    cx={x(point.soc)}
+                    cy={y(point.delta)}
+                    r={isLatest ? 4.5 : 3}
+                    fill={isLatest ? "#facc15" : "#fb7185"}
+                    opacity={isLatest ? 1 : 0.78}
+                  />
+                );
+              })}
+            </g>
+          </svg>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+          <DeltaBySocStat label={tx("vehicle.charts.points")} value={points.length.toString()} />
+          <DeltaBySocStat label={tx("vehicle.charts.socRange")} value={`${fmt(chart.minSoc, 0)}-${fmt(chart.maxSoc, 0)}%`} />
+          <DeltaBySocStat label={tx("vehicle.charts.deltaRange")} value={`${fmt(chart.minDelta, 3)}-${fmt(chart.maxDelta, 3)} V`} />
+          <DeltaBySocStat
+            label={tx("vehicle.charts.latestPoint")}
+            value={latest ? `${fmt(latest.soc, 0)}% / ${fmt(latest.delta, 3)} V` : "—"}
+          />
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function IconButton({
+  label,
+  onClick,
+  disabled,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="grid size-9 place-items-center rounded-full border border-border bg-white/[0.03] text-muted-foreground transition hover:border-primary/50 hover:text-foreground disabled:opacity-45"
+      title={label}
+      aria-label={label}
+    >
+      {children}
+    </button>
+  );
+}
+
+function DeltaBySocStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-border bg-background/30 p-3">
+      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
+      <p className="mt-2 font-mono text-sm text-foreground">{value}</p>
+    </div>
   );
 }
 

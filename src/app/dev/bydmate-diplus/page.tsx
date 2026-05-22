@@ -32,6 +32,7 @@ type DiplusRow = {
 
 const DEFAULT_VEHICLE_ID = "way";
 const SAMPLE_LIMIT = 60;
+const DELTA_BY_SOC_LIMIT = 60;
 
 const DIPLUS_KEYS: DiplusKey[] = [
   { key: "soc", column: "diplus_soc", label: "SOC" },
@@ -88,6 +89,10 @@ const DIPLUS_KEYS: DiplusKey[] = [
 
 const DIPLUS_COLUMNS = DIPLUS_KEYS.map((item) => item.column).filter(Boolean).join(", ");
 
+function fmt(value: number | null | undefined, digits = 0) {
+  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
+}
+
 export default async function BydmateDiplusDebugPage({
   searchParams,
 }: {
@@ -121,8 +126,9 @@ export default async function BydmateDiplusDebugPage({
   const samples = (samplesQuery.data ?? []) as unknown as DiplusRow[];
   const latestWithRawDiplus = samples.find((row) => Object.keys(row.diplus ?? {}).length > 0) ?? null;
   const latestWithCellDelta =
-    samples.find((row) => valueFor(row, "diplus_cell_delta_v") != null || valueFor(row, "cell_delta_v") != null) ??
+    samples.find((row) => cellDeltaValue(row) != null) ??
     null;
+  const deltaBySoc = prepareDeltaBySoc(samples);
 
   return (
     <main className="safe-bottom mx-auto flex max-w-7xl flex-col gap-5 px-4 pb-8 pt-5">
@@ -158,6 +164,19 @@ export default async function BydmateDiplusDebugPage({
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Cell delta by SOC</CardTitle>
+          <CardDescription>
+            Last {Math.min(samples.length, DELTA_BY_SOC_LIMIT)} samples for{" "}
+            <span className="font-mono">{vehicleId}</span>. X is SOC, Y is cell voltage delta.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DeltaBySocChart chart={deltaBySoc} />
+        </CardContent>
+      </Card>
 
       <section className="grid gap-4 xl:grid-cols-[1fr_420px]">
         <Card>
@@ -272,6 +291,8 @@ function SamplesTable({ rows }: { rows: DiplusRow[] }) {
         <tbody className="divide-y divide-border">
           {rows.map((row) => {
             const hasRawDiplus = Object.keys(row.diplus ?? {}).length > 0;
+            const soc = socValue(row);
+            const cellDelta = cellDeltaValue(row);
             return (
               <tr key={row.id ?? `${row.device_time}-${row.received_at}`}>
                 <td className="py-2 pr-3">
@@ -284,7 +305,7 @@ function SamplesTable({ rows }: { rows: DiplusRow[] }) {
                 </td>
                 <td className="px-3 py-2 font-mono text-xs">{formatDate(row.device_time)}</td>
                 <td className="px-3 py-2 font-mono text-xs">{formatDate(row.received_at)}</td>
-                <td className="px-3 py-2 font-mono text-xs">{formatValue(valueFor(row, "diplus_soc"))}</td>
+                <td className="px-3 py-2 font-mono text-xs">{formatValue(soc)}</td>
                 <td className="px-3 py-2 font-mono text-xs">
                   {formatValue(valueFor(row, "diplus_min_cell_voltage_v"))}
                 </td>
@@ -292,13 +313,107 @@ function SamplesTable({ rows }: { rows: DiplusRow[] }) {
                   {formatValue(valueFor(row, "diplus_max_cell_voltage_v"))}
                 </td>
                 <td className="py-2 pl-3 font-mono text-xs">
-                  {formatValue(valueFor(row, "diplus_cell_delta_v"))}
+                  {formatValue(cellDelta)}
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+type DeltaBySocPoint = {
+  soc: number;
+  delta: number;
+  deviceTime: string;
+};
+
+type DeltaBySocChartModel = {
+  points: DeltaBySocPoint[];
+  minSoc: number;
+  maxSoc: number;
+  minDelta: number;
+  maxDelta: number;
+  latest: DeltaBySocPoint | null;
+};
+
+function DeltaBySocChart({ chart }: { chart: DeltaBySocChartModel }) {
+  const { points, latest } = chart;
+
+  if (points.length === 0) {
+    return <EmptyState />;
+  }
+
+  const xMin = Math.max(0, Math.floor(chart.minSoc / 5) * 5);
+  const xMax = Math.min(100, Math.ceil(chart.maxSoc / 5) * 5);
+  const deltaPad = Math.max((chart.maxDelta - chart.minDelta) * 0.14, 0.005);
+  const yMin = Math.max(0, chart.minDelta - deltaPad);
+  const yMax = chart.maxDelta + deltaPad;
+
+  const x = (soc: number) => {
+    if (xMax === xMin) return 160;
+    return 24 + ((soc - xMin) / (xMax - xMin)) * 272;
+  };
+  const y = (delta: number) => {
+    if (yMax === yMin) return 72;
+    return 110 - ((delta - yMin) / (yMax - yMin)) * 92;
+  };
+  const chartPoints = [...points].reverse();
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
+      <div className="rounded-lg border bg-muted/20 p-3">
+        <svg className="h-72 w-full overflow-visible" viewBox="0 0 320 142" role="img" aria-label="Cell delta by SOC chart">
+          <line x1="24" x2="296" y1="110" y2="110" stroke="currentColor" className="text-border" strokeWidth="1" />
+          <line x1="24" x2="24" y1="18" y2="110" stroke="currentColor" className="text-border" strokeWidth="1" />
+          <line x1="24" x2="296" y1="64" y2="64" stroke="currentColor" className="text-border/70" strokeWidth="1" strokeDasharray="4 6" />
+          <text x="24" y="132" className="fill-muted-foreground text-[10px]">
+            {xMin}% SOC
+          </text>
+          <text x="296" y="132" textAnchor="end" className="fill-muted-foreground text-[10px]">
+            {xMax}% SOC
+          </text>
+          <text x="30" y="14" className="fill-muted-foreground text-[10px]">
+            {formatVoltage(yMax)}
+          </text>
+          <text x="30" y="106" className="fill-muted-foreground text-[10px]">
+            {formatVoltage(yMin)}
+          </text>
+          {chartPoints.map((point, index) => {
+            const isLatest = point === latest;
+            return (
+              <circle
+                key={`${point.deviceTime}-${index}`}
+                cx={x(point.soc)}
+                cy={y(point.delta)}
+                r={isLatest ? 4.5 : 3}
+                fill={isLatest ? "#facc15" : "#fb7185"}
+                opacity={isLatest ? 1 : 0.76}
+              />
+            );
+          })}
+        </svg>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+        <DeltaBySocStat label="Points" value={points.length.toString()} />
+        <DeltaBySocStat label="SOC range" value={`${fmt(chart.minSoc, 0)}-${fmt(chart.maxSoc, 0)}%`} />
+        <DeltaBySocStat label="Delta range" value={`${formatVoltage(chart.minDelta)}-${formatVoltage(chart.maxDelta)}`} />
+        <DeltaBySocStat
+          label="Latest point"
+          value={latest ? `${fmt(latest.soc, 0)}% / ${formatVoltage(latest.delta)}` : "none"}
+        />
+      </div>
+    </div>
+  );
+}
+
+function DeltaBySocStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border bg-muted/20 p-3">
+      <p className="text-muted-foreground text-xs uppercase tracking-[0.16em]">{label}</p>
+      <p className="mt-2 font-mono text-sm text-foreground">{value}</p>
     </div>
   );
 }
@@ -325,8 +440,54 @@ function valueFor(row: DiplusRow, key: string) {
   return row.diplus?.[key];
 }
 
+function numberValue(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function socValue(row: DiplusRow) {
+  return numberValue(valueFor(row, "diplus_soc")) ?? numberValue(row.telemetry?.soc) ?? numberValue(valueFor(row, "soc"));
+}
+
+function cellDeltaValue(row: DiplusRow) {
+  const stored = numberValue(valueFor(row, "diplus_cell_delta_v")) ?? numberValue(row.telemetry?.diplus_cell_delta_v) ??
+    numberValue(row.telemetry?.cell_delta_v) ?? numberValue(valueFor(row, "cell_delta_v"));
+  if (stored != null) return stored;
+
+  const min = numberValue(valueFor(row, "diplus_min_cell_voltage_v")) ??
+    numberValue(row.telemetry?.diplus_min_cell_voltage_v) ??
+    numberValue(row.telemetry?.cell_voltage_min_v) ??
+    numberValue(valueFor(row, "min_cell_voltage_v"));
+  const max = numberValue(valueFor(row, "diplus_max_cell_voltage_v")) ??
+    numberValue(row.telemetry?.diplus_max_cell_voltage_v) ??
+    numberValue(row.telemetry?.cell_voltage_max_v) ??
+    numberValue(valueFor(row, "max_cell_voltage_v"));
+
+  return min != null && max != null ? max - min : null;
+}
+
+function prepareDeltaBySoc(rows: DiplusRow[]): DeltaBySocChartModel {
+  const points = rows.slice(0, DELTA_BY_SOC_LIMIT).flatMap((row) => {
+    const soc = socValue(row);
+    const delta = cellDeltaValue(row);
+    return soc != null && delta != null ? [{ soc, delta, deviceTime: row.device_time }] : [];
+  });
+
+  return {
+    points,
+    minSoc: Math.min(...points.map((point) => point.soc)),
+    maxSoc: Math.max(...points.map((point) => point.soc)),
+    minDelta: Math.min(...points.map((point) => point.delta)),
+    maxDelta: Math.max(...points.map((point) => point.delta)),
+    latest: points[0] ?? null,
+  };
+}
+
 function formatCellDelta(row: DiplusRow) {
-  return `${formatValue(valueFor(row, "diplus_cell_delta_v") ?? valueFor(row, "cell_delta_v"))} V`;
+  return `${formatValue(cellDeltaValue(row))} V`;
+}
+
+function formatVoltage(value: number) {
+  return `${fmt(value, 3)} V`;
 }
 
 function formatValue(value: unknown) {
