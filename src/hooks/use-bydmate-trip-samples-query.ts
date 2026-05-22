@@ -3,11 +3,15 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { queryKeys } from "@/lib/query-keys";
-import type { BydmateTelemetry } from "@/types/database";
+import type { BydmateDiplus, BydmateTelemetry } from "@/types/database";
 
 export type TripTelemetrySample = {
   device_time: string;
   telemetry: BydmateTelemetry;
+  diplus?: BydmateDiplus;
+  diplus_min_cell_voltage_v?: number | null;
+  diplus_max_cell_voltage_v?: number | null;
+  diplus_cell_delta_v?: number | null;
 };
 
 async function fetchTripSamples(tripId: string): Promise<TripTelemetrySample[]> {

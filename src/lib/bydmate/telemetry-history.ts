@@ -6,7 +6,7 @@ import {
   resolveTelemetryWindow,
   type TelemetryHistoryRange,
 } from "@/lib/bydmate/telemetry-ranges";
-import type { BydmateTelemetry, BydmateTelemetrySampleRow } from "@/types/database";
+import type { BydmateDiplus, BydmateTelemetry, BydmateTelemetrySampleRow } from "@/types/database";
 
 type HourlyRow = {
   hour_start: string;
@@ -24,6 +24,10 @@ type HourlyRow = {
 export type TelemetryHistoryPoint = {
   device_time: string;
   telemetry: BydmateTelemetry;
+  diplus?: BydmateDiplus;
+  diplus_min_cell_voltage_v?: number | null;
+  diplus_max_cell_voltage_v?: number | null;
+  diplus_cell_delta_v?: number | null;
 };
 
 function hourlyToSample(row: HourlyRow): TelemetryHistoryPoint {
@@ -59,7 +63,7 @@ export async function fetchTelemetryHistory({
   if (range === "day") {
     const { data, error } = await supabase
       .from("bydmate_telemetry_samples")
-      .select("device_time, telemetry")
+      .select("device_time, telemetry, diplus, diplus_min_cell_voltage_v, diplus_max_cell_voltage_v, diplus_cell_delta_v")
       .eq("user_id", userId)
       .match(vehicleFilter)
       .gte("device_time", window.from)
@@ -98,7 +102,7 @@ export async function fetchTelemetryHistory({
 
   const { data: rawData, error: rawError } = await supabase
     .from("bydmate_telemetry_samples")
-    .select("device_time, telemetry")
+    .select("device_time, telemetry, diplus, diplus_min_cell_voltage_v, diplus_max_cell_voltage_v, diplus_cell_delta_v")
     .eq("user_id", userId)
     .match(vehicleFilter)
     .gte("device_time", rawFrom)
@@ -138,7 +142,7 @@ export async function fetchTripSamples({
 
   const { data, error } = await supabase
     .from("bydmate_telemetry_samples")
-    .select("device_time, telemetry")
+    .select("device_time, telemetry, diplus, diplus_min_cell_voltage_v, diplus_max_cell_voltage_v, diplus_cell_delta_v")
     .eq("user_id", userId)
     .eq("vehicle_id", trip.vehicle_id)
     .gte("device_time", trip.started_at)

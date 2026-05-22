@@ -165,6 +165,9 @@ function makeTelemetryPoints(
       current_trip_consumption_kwh_100km: 15.8 + wave * 1.4 + fastWave * 0.7,
       range_est_km: 360 - index * 0.04,
     };
+    const minCellVoltage = 3.31 + Math.sin(index / 31) * 0.006;
+    const cellDelta = 0.014 + Math.abs(Math.sin(index / 17)) * 0.018;
+    const maxCellVoltage = minCellVoltage + cellDelta;
 
     return {
       id: `${options.idPrefix}-${index}`,
@@ -175,6 +178,14 @@ function makeTelemetryPoints(
       device_time: new Date(timestampMs).toISOString(),
       received_at: new Date(timestampMs).toISOString(),
       telemetry,
+      diplus: {
+        min_cell_voltage_v: minCellVoltage,
+        max_cell_voltage_v: maxCellVoltage,
+        cell_delta_v: cellDelta,
+      },
+      diplus_min_cell_voltage_v: minCellVoltage,
+      diplus_max_cell_voltage_v: maxCellVoltage,
+      diplus_cell_delta_v: cellDelta,
       location: makeLocation(index, options.gps),
       raw_payload: null,
     };

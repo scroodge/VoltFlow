@@ -36,6 +36,7 @@ import { useTranslation } from "@/hooks/use-translation";
 import type { Locale, TranslationKey } from "@/lib/i18n";
 import type {
   BydmateLiveSnapshotRow,
+  BydmateDiplus,
   BydmateLocation,
   BydmateTelemetry,
   BydmateTelemetryPointRow,
@@ -480,6 +481,7 @@ type ChartSeries = {
 type TelemetryChart = {
   title: string;
   unit: string;
+  valueDigits: number;
   series: ChartSeries[];
   minValue: number;
   maxValue: number;
@@ -546,6 +548,10 @@ type TelemetryChartSource = {
   device_time: string;
   received_at?: string;
   telemetry: BydmateTelemetry;
+  diplus?: BydmateDiplus;
+  diplus_min_cell_voltage_v?: number | null;
+  diplus_max_cell_voltage_v?: number | null;
+  diplus_cell_delta_v?: number | null;
   location?: BydmateLocation;
 };
 
@@ -953,10 +959,12 @@ function createChart(
   title: string,
   unit: string,
   series: ChartSeries[],
+  valueDigits = 1,
 ): TelemetryChart {
   return {
     title,
     unit,
+    valueDigits,
     series,
     minValue: 0,
     maxValue: 1,
@@ -977,6 +985,30 @@ function addChartPoint(chart: TelemetryChart, seriesIndex: number, time: number,
   chart.hasData = true;
 }
 
+function cellDeltaValue(point: TelemetryChartSource) {
+  const columnValue = validNumber(point.diplus_cell_delta_v);
+  if (columnValue != null) return columnValue;
+
+  const telemetryValue =
+    validNumber(point.telemetry.diplus_cell_delta_v) ??
+    validNumber(point.telemetry.cell_delta_v);
+  if (telemetryValue != null) return telemetryValue;
+
+  const rawValue = validNumber(point.diplus?.cell_delta_v);
+  if (rawValue != null) return rawValue;
+
+  const min = validNumber(point.diplus_min_cell_voltage_v) ??
+    validNumber(point.telemetry.diplus_min_cell_voltage_v) ??
+    validNumber(point.telemetry.cell_voltage_min_v) ??
+    validNumber(point.diplus?.min_cell_voltage_v);
+  const max = validNumber(point.diplus_max_cell_voltage_v) ??
+    validNumber(point.telemetry.diplus_max_cell_voltage_v) ??
+    validNumber(point.telemetry.cell_voltage_max_v) ??
+    validNumber(point.diplus?.max_cell_voltage_v);
+
+  return min != null && max != null ? max - min : null;
+}
+
 function prepareTelemetryHistory(points: TelemetryChartSource[], t: Translator) {
   const socChart = createChart(t("vehicle.charts.soc"), "%", [
     { label: "SOC", color: "var(--voltflow-cyan)", points: [] },
@@ -992,6 +1024,9 @@ function prepareTelemetryHistory(points: TelemetryChartSource[], t: Translator) 
     { label: t("vehicle.charts.outside"), color: "#38bdf8", points: [] },
     { label: t("vehicle.charts.cabin"), color: "#fb7185", points: [] },
   ]);
+  const cellDeltaChart = createChart(t("vehicle.charts.cellDelta"), "V", [
+    { label: "Delta", color: "#fb7185", points: [] },
+  ], 3);
 
   let visiblePointCount = 0;
   let start: string | undefined;
@@ -1011,9 +1046,10 @@ function prepareTelemetryHistory(points: TelemetryChartSource[], t: Translator) 
     addChartPoint(temperatureChart, 0, time, validTempNumber(point.telemetry.battery_temp_c));
     addChartPoint(temperatureChart, 1, time, validTempNumber(point.telemetry.outside_temp_c));
     addChartPoint(temperatureChart, 2, time, validTempNumber(point.telemetry.cabin_temp_c));
+    addChartPoint(cellDeltaChart, 0, time, cellDeltaValue(point));
   }
 
-  const charts = [socChart, speedChart, powerChart, temperatureChart].map((chart) => ({
+  const charts = [socChart, speedChart, powerChart, temperatureChart, cellDeltaChart].map((chart) => ({
     ...chart,
     series: chart.series.map((series) => ({
       ...series,
@@ -1099,7 +1135,7 @@ export function TelemetryHistoryCharts({
 function TelemetryLineChart({ chart }: { chart: TelemetryChart }) {
   const { t } = useTranslation();
   const tx = t as Translator;
-  const { title, unit, series, hasData, minValue, maxValue, minTime, maxTime } = chart;
+  const { title, unit, valueDigits, series, hasData, minValue, maxValue, minTime, maxTime } = chart;
   const valuePad = Math.max((maxValue - minValue) * 0.12, maxValue === minValue ? 1 : 0);
   const yMin = minValue - valuePad;
   const yMax = maxValue + valuePad;
@@ -1119,7 +1155,7 @@ function TelemetryLineChart({ chart }: { chart: TelemetryChart }) {
         <div>
           <h3 className="font-heading text-lg font-semibold tracking-tight">{title}</h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            {hasData ? `${fmt(minValue, 1)}-${fmt(maxValue, 1)} ${unit}` : tx("vehicle.charts.noValues")}
+            {hasData ? `${fmt(minValue, valueDigits)}-${fmt(maxValue, valueDigits)} ${unit}` : tx("vehicle.charts.noValues")}
           </p>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
