@@ -117,3 +117,44 @@ test("accepts numeric BYDMate Di+ states and telemetry cell voltage fields", () 
   assert.equal(result.payloads[0].diplus?.charge_gun_state, 1);
   assert.equal(result.payloads[0].diplus?.drl, 1);
 });
+
+test("coerces numeric BYDMate values sent as strings", () => {
+  const result = normalizePayloads({
+    ...basePayload,
+    telemetry: {
+      soc: "72",
+      speed_kmh: "0",
+      power_kw: "-4.5",
+      is_charging: "true",
+      cell_voltage_min_v: "3.301",
+      cell_voltage_max_v: "3.312",
+      diplus_cell_delta_v: "0.011",
+    },
+    diplus: {
+      soc: "72",
+      speed_kmh: "0",
+      mileage_km: "14250.5",
+      power_kw: "-4.5",
+      voltage_12v: "13.7",
+      min_cell_voltage_v: "3.301",
+      max_cell_voltage_v: "3.312",
+      cell_delta_v: "0.011",
+      tire_press_fl_kpa: "230",
+      drl: "1",
+    },
+    location: {
+      lat: "53.9",
+      lon: "27.56",
+      accuracy_m: "8",
+      bearing_deg: "180",
+    },
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(result.payloads[0].telemetry.soc, 72);
+  assert.equal(result.payloads[0].telemetry.power_kw, -4.5);
+  assert.equal(result.payloads[0].telemetry.is_charging, true);
+  assert.equal(result.payloads[0].diplus?.mileage_km, 14_250.5);
+  assert.equal(result.payloads[0].diplus?.drl, "1");
+  assert.equal(result.payloads[0].location.lat, 53.9);
+});

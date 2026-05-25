@@ -1,73 +1,96 @@
 import { z } from "zod";
 
+const numericSchema = z.preprocess((value) => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed === "") return null;
+
+    const numberValue = Number(trimmed);
+    return Number.isFinite(numberValue) ? numberValue : value;
+  }
+
+  return value;
+}, z.number().nullable().optional());
+
+const booleanSchema = z.preprocess((value) => {
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "") return null;
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+  }
+
+  return value;
+}, z.boolean().nullable().optional());
+
 const diplusStateSchema = z.union([z.string(), z.number()]);
 const diplusFlagSchema = z.union([z.string(), z.number(), z.boolean()]);
 
 export const telemetrySchema = z
   .object({
-    soc: z.number().nullable().optional(),
-    speed_kmh: z.number().nullable().optional(),
-    power_kw: z.number().nullable().optional(),
-    battery_temp_c: z.number().nullable().optional(),
-    cabin_temp_c: z.number().nullable().optional(),
-    outside_temp_c: z.number().nullable().optional(),
-    battery_voltage_v: z.number().nullable().optional(),
-    aux_voltage_v: z.number().nullable().optional(),
-    cell_voltage_min_v: z.number().nullable().optional(),
-    cell_voltage_max_v: z.number().nullable().optional(),
-    cell_delta_v: z.number().nullable().optional(),
-    diplus_min_cell_voltage_v: z.number().nullable().optional(),
-    diplus_max_cell_voltage_v: z.number().nullable().optional(),
-    diplus_cell_delta_v: z.number().nullable().optional(),
-    odometer_km: z.number().nullable().optional(),
-    soh_percent: z.number().nullable().optional(),
-    is_charging: z.boolean().nullable().optional(),
-    charge_power_kw: z.number().nullable().optional(),
+    soc: numericSchema,
+    speed_kmh: numericSchema,
+    power_kw: numericSchema,
+    battery_temp_c: numericSchema,
+    cabin_temp_c: numericSchema,
+    outside_temp_c: numericSchema,
+    battery_voltage_v: numericSchema,
+    aux_voltage_v: numericSchema,
+    cell_voltage_min_v: numericSchema,
+    cell_voltage_max_v: numericSchema,
+    cell_delta_v: numericSchema,
+    diplus_min_cell_voltage_v: numericSchema,
+    diplus_max_cell_voltage_v: numericSchema,
+    diplus_cell_delta_v: numericSchema,
+    odometer_km: numericSchema,
+    soh_percent: numericSchema,
+    is_charging: booleanSchema,
+    charge_power_kw: numericSchema,
     charge_type: z.string().nullable().optional(),
-    kwh_charged: z.number().nullable().optional(),
-    range_est_km: z.number().nullable().optional(),
-    current_trip_distance_km: z.number().nullable().optional(),
-    current_trip_consumption_kwh_100km: z.number().nullable().optional(),
+    kwh_charged: numericSchema,
+    range_est_km: numericSchema,
+    current_trip_distance_km: numericSchema,
+    current_trip_consumption_kwh_100km: numericSchema,
   })
   .passthrough();
 
 export const diplusSchema = z
   .object({
-    soc: z.number().nullable().optional(),
-    speed_kmh: z.number().nullable().optional(),
-    mileage_km: z.number().nullable().optional(),
-    power_kw: z.number().nullable().optional(),
+    soc: numericSchema,
+    speed_kmh: numericSchema,
+    mileage_km: numericSchema,
+    power_kw: numericSchema,
     charge_gun_state: diplusStateSchema.nullable().optional(),
     charging_status: diplusStateSchema.nullable().optional(),
-    battery_capacity_kwh: z.number().nullable().optional(),
-    total_elec_consumption_kwh: z.number().nullable().optional(),
-    voltage_12v: z.number().nullable().optional(),
-    max_cell_voltage_v: z.number().nullable().optional(),
-    min_cell_voltage_v: z.number().nullable().optional(),
-    cell_delta_v: z.number().nullable().optional(),
-    avg_battery_temp_c: z.number().nullable().optional(),
-    exterior_temp_c: z.number().nullable().optional(),
+    battery_capacity_kwh: numericSchema,
+    total_elec_consumption_kwh: numericSchema,
+    voltage_12v: numericSchema,
+    max_cell_voltage_v: numericSchema,
+    min_cell_voltage_v: numericSchema,
+    cell_delta_v: numericSchema,
+    avg_battery_temp_c: numericSchema,
+    exterior_temp_c: numericSchema,
     gear: diplusStateSchema.nullable().optional(),
     power_state: diplusStateSchema.nullable().optional(),
-    inside_temp_c: z.number().nullable().optional(),
+    inside_temp_c: numericSchema,
     ac_status: diplusFlagSchema.nullable().optional(),
-    ac_temp_c: z.number().nullable().optional(),
-    fan_level: z.number().nullable().optional(),
+    ac_temp_c: numericSchema,
+    fan_level: numericSchema,
     door_fl: diplusFlagSchema.nullable().optional(),
     door_fr: diplusFlagSchema.nullable().optional(),
     door_rl: diplusFlagSchema.nullable().optional(),
     door_rr: diplusFlagSchema.nullable().optional(),
-    window_fl_percent: z.number().nullable().optional(),
-    window_fr_percent: z.number().nullable().optional(),
-    window_rl_percent: z.number().nullable().optional(),
-    window_rr_percent: z.number().nullable().optional(),
-    sunroof_percent: z.number().nullable().optional(),
+    window_fl_percent: numericSchema,
+    window_fr_percent: numericSchema,
+    window_rl_percent: numericSchema,
+    window_rr_percent: numericSchema,
+    sunroof_percent: numericSchema,
     trunk: diplusFlagSchema.nullable().optional(),
     hood: diplusFlagSchema.nullable().optional(),
-    tire_press_fl_kpa: z.number().nullable().optional(),
-    tire_press_fr_kpa: z.number().nullable().optional(),
-    tire_press_rl_kpa: z.number().nullable().optional(),
-    tire_press_rr_kpa: z.number().nullable().optional(),
+    tire_press_fl_kpa: numericSchema,
+    tire_press_fr_kpa: numericSchema,
+    tire_press_rl_kpa: numericSchema,
+    tire_press_rr_kpa: numericSchema,
     drive_mode: diplusStateSchema.nullable().optional(),
     work_mode: diplusStateSchema.nullable().optional(),
     auto_park: diplusFlagSchema.nullable().optional(),
@@ -79,10 +102,10 @@ export const diplusSchema = z
 
 export const locationSchema = z
   .object({
-    lat: z.number().nullable().optional(),
-    lon: z.number().nullable().optional(),
-    accuracy_m: z.number().nullable().optional(),
-    bearing_deg: z.number().nullable().optional(),
+    lat: numericSchema,
+    lon: numericSchema,
+    accuracy_m: numericSchema,
+    bearing_deg: numericSchema,
   })
   .passthrough();
 
