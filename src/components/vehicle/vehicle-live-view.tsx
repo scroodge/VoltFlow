@@ -1352,7 +1352,6 @@ function DeltaBySocChart({ chart }: { chart: DeltaBySocChartModel }) {
 
 function DeltaBySocPlot({
   chart,
-  zoom,
   heightClassName,
 }: {
   chart: DeltaBySocChartModel;
@@ -1363,38 +1362,35 @@ function DeltaBySocPlot({
   const tx = t as Translator;
   const clipId = useId();
   const { points, latest } = chart;
-  const zoomFactor = 1 + zoom * 0.45;
-  const socSpan = 100 / zoomFactor;
-  const leftSoc = chart.socDirection === "discharge" ? 100 : 0;
-  const rightSoc =
-    chart.socDirection === "discharge"
-      ? Math.max(0, leftSoc - socSpan)
-      : Math.min(100, leftSoc + socSpan);
-  const minVisibleSoc = Math.min(leftSoc, rightSoc);
-  const maxVisibleSoc = Math.max(leftSoc, rightSoc);
-  const xVisiblePoints = points.filter((point) => point.soc >= minVisibleSoc && point.soc <= maxVisibleSoc);
-  const ySourcePoints = xVisiblePoints.length > 0 ? xVisiblePoints : points;
-  const visibleMinDelta = Math.min(...ySourcePoints.map((point) => point.delta));
-  const visibleMaxDelta = Math.max(...ySourcePoints.map((point) => point.delta));
+  const visibleMinDelta = Math.min(...points.map((point) => point.delta));
+  const visibleMaxDelta = Math.max(...points.map((point) => point.delta));
+  const minSoc = Math.min(...points.map((point) => point.soc));
+  const maxSoc = Math.max(...points.map((point) => point.soc));
+  const minTime = Math.min(...points.map((point) => point.time));
+  const maxTime = Math.max(...points.map((point) => point.time));
   const deltaPad = Math.max((visibleMaxDelta - visibleMinDelta) * 0.14, 0.005);
   const yMin = Math.max(0, visibleMinDelta - deltaPad);
   const yMax = visibleMaxDelta + deltaPad;
 
-  const x = (soc: number) => {
-    if (leftSoc === rightSoc) return 160;
-    return 24 + ((soc - leftSoc) / (rightSoc - leftSoc)) * 272;
+  const x = (time: number) => {
+    if (maxTime === minTime || !Number.isFinite(time)) return 160;
+    return 24 + ((time - minTime) / (maxTime - minTime)) * 272;
   };
   const y = (delta: number) => {
     if (yMax === yMin) return 72;
     return 110 - ((delta - yMin) / (yMax - yMin)) * 92;
   };
-  const inView = (point: DeltaBySocPoint) =>
-    point.soc >= minVisibleSoc && point.soc <= maxVisibleSoc && point.delta >= yMin && point.delta <= yMax;
-  const visiblePoints = points.filter(inView);
+  const socY = (soc: number) => {
+    if (maxSoc === minSoc) return 72;
+    return 110 - ((soc - minSoc) / (maxSoc - minSoc)) * 92;
+  };
   const linePath = points
-    .map((point, index) => `${index === 0 ? "M" : "L"} ${x(point.soc).toFixed(2)} ${y(point.delta).toFixed(2)}`)
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${x(point.time).toFixed(2)} ${y(point.delta).toFixed(2)}`)
     .join(" ");
-  const markerPoints = visiblePoints.length <= MAX_CHART_MARKERS ? visiblePoints : [];
+  const socPath = points
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${x(point.time).toFixed(2)} ${socY(point.soc).toFixed(2)}`)
+    .join(" ");
+  const markerPoints = points.length <= MAX_CHART_MARKERS ? points : [];
 
   return (
     <div className="rounded-2xl border border-border bg-background/30 p-3">
@@ -1408,10 +1404,10 @@ function DeltaBySocPlot({
         <line x1="24" x2="24" y1="18" y2="110" stroke="currentColor" className="text-border" strokeWidth="1" />
         <line x1="24" x2="296" y1="64" y2="64" stroke="currentColor" className="text-border/70" strokeWidth="1" strokeDasharray="4 6" />
         <text x="24" y="132" className="fill-muted-foreground text-[10px]">
-          {fmt(leftSoc, 0)}% SOC
+          {formatClock(minTime)}
         </text>
         <text x="296" y="132" textAnchor="end" className="fill-muted-foreground text-[10px]">
-          {fmt(rightSoc, 0)}% SOC
+          {formatClock(maxTime)}
         </text>
         <text x="30" y="14" className="fill-muted-foreground text-[10px]">
           {fmt(yMax, 3)} V
@@ -1419,18 +1415,27 @@ function DeltaBySocPlot({
         <text x="30" y="106" className="fill-muted-foreground text-[10px]">
           {fmt(yMin, 3)} V
         </text>
+        <text x="296" y="14" textAnchor="end" className="fill-primary text-[10px]">
+          {fmt(maxSoc, 0)}% SOC
+        </text>
+        <text x="296" y="106" textAnchor="end" className="fill-primary text-[10px]">
+          {fmt(minSoc, 0)}% SOC
+        </text>
         <g clipPath={`url(#${clipId})`}>
           {points.length > 1 ? (
-            <path d={linePath} fill="none" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.72" />
+            <path d={socPath} fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.78" strokeDasharray="3 5" />
+          ) : null}
+          {points.length > 1 ? (
+            <path d={linePath} fill="none" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.78" />
           ) : null}
           {markerPoints.map((point, index) => {
             const isLatest = point === latest;
             return (
               <circle
                 key={`${point.time}-${index}`}
-                cx={x(point.soc)}
+                cx={x(point.time)}
                 cy={y(point.delta)}
-                r={isLatest ? 4.5 : 3}
+                r={isLatest ? 4 : 3}
                 fill={isLatest ? "#facc15" : "#fb7185"}
                 opacity={isLatest ? 1 : 0.78}
               />
@@ -1438,6 +1443,16 @@ function DeltaBySocPlot({
           })}
         </g>
       </svg>
+      <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2 rounded-full bg-[#38bdf8]" />
+          Delta
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-0.5 w-4 rounded-full border-t-2 border-dashed border-[#22c55e]" />
+          SOC
+        </span>
+      </div>
     </div>
   );
 }

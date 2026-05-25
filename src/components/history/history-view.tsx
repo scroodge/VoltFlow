@@ -234,7 +234,7 @@ function prepareChargeDeltaPoints(samples: ChargingSessionTelemetrySample[]) {
         ? [{ soc, delta, time }]
         : [];
     })
-    .sort((a, b) => a.soc - b.soc || a.time - b.time);
+    .sort((a, b) => a.time - b.time);
 }
 
 function ChargingDeltaBySoc({ session }: { session: ChargingSessionRow }) {
@@ -259,17 +259,29 @@ function ChargeDeltaPlot({ points }: { points: DeltaBySocPoint[] }) {
   const maxSoc = Math.max(...points.map((point) => point.soc));
   const minDelta = Math.min(...points.map((point) => point.delta));
   const maxDelta = Math.max(...points.map((point) => point.delta));
+  const minTime = Math.min(...points.map((point) => point.time));
+  const maxTime = Math.max(...points.map((point) => point.time));
   const deltaPad = Math.max((maxDelta - minDelta) * 0.14, 0.005);
   const yMin = Math.max(0, minDelta - deltaPad);
   const yMax = maxDelta + deltaPad;
 
-  const x = (soc: number) => 24 + (Math.min(100, Math.max(0, soc)) / 100) * 272;
+  const x = (time: number) => {
+    if (maxTime === minTime || !Number.isFinite(time)) return 160;
+    return 24 + ((time - minTime) / (maxTime - minTime)) * 272;
+  };
   const y = (delta: number) => {
     if (yMax === yMin) return 72;
     return 110 - ((delta - yMin) / (yMax - yMin)) * 92;
   };
+  const socY = (soc: number) => {
+    if (maxSoc === minSoc) return 72;
+    return 110 - ((soc - minSoc) / (maxSoc - minSoc)) * 92;
+  };
   const path = points
-    .map((point, index) => `${index === 0 ? "M" : "L"} ${x(point.soc).toFixed(2)} ${y(point.delta).toFixed(2)}`)
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${x(point.time).toFixed(2)} ${y(point.delta).toFixed(2)}`)
+    .join(" ");
+  const socPath = points
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${x(point.time).toFixed(2)} ${socY(point.soc).toFixed(2)}`)
     .join(" ");
   const markers = points.length <= 80 ? points : [];
 
@@ -296,18 +308,23 @@ function ChargeDeltaPlot({ points }: { points: DeltaBySocPoint[] }) {
         <line x1="24" x2="296" y1="110" y2="110" stroke="currentColor" className="text-border" strokeWidth="1" />
         <line x1="24" x2="24" y1="18" y2="110" stroke="currentColor" className="text-border" strokeWidth="1" />
         <line x1="24" x2="296" y1="64" y2="64" stroke="currentColor" className="text-border/70" strokeWidth="1" strokeDasharray="4 6" />
-        <text x="24" y="132" className="fill-muted-foreground text-[10px]">0% SOC</text>
-        <text x="296" y="132" textAnchor="end" className="fill-muted-foreground text-[10px]">100% SOC</text>
+        <text x="24" y="132" className="fill-muted-foreground text-[10px]">{formatPlotTime(minTime)}</text>
+        <text x="296" y="132" textAnchor="end" className="fill-muted-foreground text-[10px]">{formatPlotTime(maxTime)}</text>
         <text x="30" y="14" className="fill-muted-foreground text-[10px]">{maxDelta.toFixed(3)} V</text>
         <text x="30" y="106" className="fill-muted-foreground text-[10px]">{minDelta.toFixed(3)} V</text>
+        <text x="296" y="14" textAnchor="end" className="fill-primary text-[10px]">{maxSoc.toFixed(0)}% SOC</text>
+        <text x="296" y="106" textAnchor="end" className="fill-primary text-[10px]">{minSoc.toFixed(0)}% SOC</text>
         <g clipPath={`url(#${clipId})`}>
+          {points.length > 1 ? (
+            <path d={socPath} fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.78" strokeDasharray="3 5" />
+          ) : null}
           {points.length > 1 ? (
             <path d={path} fill="none" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.78" />
           ) : null}
           {markers.map((point, index) => (
             <circle
               key={`${point.time}-${index}`}
-              cx={x(point.soc)}
+              cx={x(point.time)}
               cy={y(point.delta)}
               r={point === latest ? 4 : 3}
               fill={point === latest ? "#facc15" : "#fb7185"}
@@ -316,6 +333,16 @@ function ChargeDeltaPlot({ points }: { points: DeltaBySocPoint[] }) {
           ))}
         </g>
       </svg>
+      <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2 rounded-full bg-[#38bdf8]" />
+          Delta
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-0.5 w-4 rounded-full border-t-2 border-dashed border-[#22c55e]" />
+          SOC
+        </span>
+      </div>
 
       <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
         <DeltaStat label="SOC" value={`${minSoc.toFixed(0)}-${maxSoc.toFixed(0)}%`} />
@@ -324,6 +351,11 @@ function ChargeDeltaPlot({ points }: { points: DeltaBySocPoint[] }) {
       </div>
     </article>
   );
+}
+
+function formatPlotTime(ms: number) {
+  if (!Number.isFinite(ms)) return "—";
+  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 function DeltaStat({ label, value }: { label: string; value: string }) {
