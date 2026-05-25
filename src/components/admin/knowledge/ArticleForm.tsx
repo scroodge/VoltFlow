@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useActionState, useState, useTransition } from "react";
 
 import type { AdminFormState } from "@/actions/knowledge-admin";
 import { JsonSectionsEditor } from "@/components/admin/knowledge/JsonSectionsEditor";
@@ -21,9 +21,13 @@ type ArticleFormProps = {
 
 export function ArticleForm({ article, categories, articles, action }: ArticleFormProps) {
   const [state, formAction, pending] = useActionState(action, {});
+  const [isPreparing, setIsPreparing] = useState(false);
+  const [isDispatching, startTransition] = useTransition();
+  const [clientError, setClientError] = useState<string | null>(null);
   const [title, setTitle] = useState(stateString(state, "title", article?.title ?? ""));
   const [slug, setSlug] = useState(stateString(state, "slug", article?.slug ?? ""));
   const [slugTouched, setSlugTouched] = useState(Boolean(article?.slug));
+  const isSaving = pending || isPreparing || isDispatching;
   const images = state.values
     ? stateList(state, "existing_image_url").map((url, index) => ({
         url,
@@ -31,11 +35,28 @@ export function ArticleForm({ article, categories, articles, action }: ArticleFo
       }))
     : article?.images ?? [];
 
+  async function submitPreparedForm(formData: FormData) {
+    setClientError(null);
+    setIsPreparing(true);
+
+    try {
+      const preparedFormData = await compressArticleImages(formData);
+      startTransition(() => {
+        formAction(preparedFormData);
+      });
+    } catch {
+      setClientError("Не удалось подготовить изображения. Попробуйте выбрать другие файлы или уменьшить их размер.");
+    } finally {
+      setIsPreparing(false);
+    }
+  }
+
   return (
-    <form key={stateKey(state)} action={formAction} className="grid gap-5 lg:grid-cols-[1fr_20rem]">
+    <form key={stateKey(state)} action={submitPreparedForm} className="grid gap-5 lg:grid-cols-[1fr_20rem]">
       <div className="space-y-4">
         <Panel>
           <FieldError message={state.message} />
+          <FieldError message={clientError ?? undefined} />
           <label className="space-y-1.5 text-sm font-semibold">
             <span>Название</span>
             <input
@@ -191,8 +212,8 @@ export function ArticleForm({ article, categories, articles, action }: ArticleFo
             </select>
           </label>
           <div className="flex flex-wrap gap-2 pt-2">
-            <button disabled={pending} className="min-h-10 rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground disabled:opacity-60">
-              {pending ? "Сохранение..." : "Сохранить"}
+            <button disabled={isSaving} className="min-h-10 rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground disabled:opacity-60">
+              {isPreparing ? "Подготовка фото..." : pending || isDispatching ? "Сохранение..." : "Сохранить"}
             </button>
             <Link href="/admin/knowledge/articles" className="inline-flex min-h-10 items-center rounded-lg border border-border px-4 text-sm font-semibold">
               Отмена
@@ -203,6 +224,11 @@ export function ArticleForm({ article, categories, articles, action }: ArticleFo
     </form>
   );
 }
+
+const imageFieldPattern = /^(image_files|content_image_files_\d+)$/;
+const imageCompressionThreshold = 700 * 1024;
+const maxImageDimension = 1600;
+const compressedImageQuality = 0.82;
 
 export const inputClass =
   "min-h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/40";
@@ -242,4 +268,73 @@ function sectionsFromState(state: AdminFormState) {
       .filter((image) => image.sectionIndex === index && image.url)
       .map(({ url, alt }) => ({ url, alt })),
   }));
+}
+
+async function compressArticleImages(formData: FormData) {
+  const nextFormData = new FormData();
+
+  for (const [name, value] of formData.entries()) {
+    if (value instanceof File && shouldCompressArticleImage(name, value)) {
+      nextFormData.append(name, await compressImageFile(value));
+      continue;
+    }
+
+    nextFormData.append(name, value);
+  }
+
+  return nextFormData;
+}
+
+function shouldCompressArticleImage(name: string, file: File) {
+  return (
+    imageFieldPattern.test(name) &&
+    file.size > imageCompressionThreshold &&
+    file.type.startsWith("image/") &&
+    file.type !== "image/gif" &&
+    file.type !== "image/svg+xml"
+  );
+}
+
+async function compressImageFile(file: File) {
+  const image = await loadImage(file);
+  const scale = Math.min(1, maxImageDimension / Math.max(image.width, image.height));
+  const width = Math.max(1, Math.round(image.width * scale));
+  const height = Math.max(1, Math.round(image.height * scale));
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+
+  if (!context) return file;
+
+  canvas.width = width;
+  canvas.height = height;
+  context.drawImage(image, 0, 0, width, height);
+
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, "image/jpeg", compressedImageQuality);
+  });
+
+  if (!blob || blob.size >= file.size) return file;
+
+  const name = file.name.replace(/\.[^.]+$/, "") || "article-image";
+  return new File([blob], `${name}.jpg`, {
+    type: "image/jpeg",
+    lastModified: file.lastModified,
+  });
+}
+
+function loadImage(file: File) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new window.Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Image failed to load."));
+    };
+    image.src = url;
+  });
 }
