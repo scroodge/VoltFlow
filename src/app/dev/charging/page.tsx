@@ -36,6 +36,9 @@ type SessionRow = {
   start_percent: number;
   current_percent: number;
   target_percent: number;
+  battery_capacity_kwh: number;
+  efficiency_percent: number;
+  price_per_kwh: number;
   charged_energy_kwh: number;
   estimated_cost: number;
   charger_power_kw: number;
@@ -84,7 +87,7 @@ export default async function DevChargingPage({
 
   const { data: activeRows, error: activeError } = await supabase
     .from("charging_sessions")
-    .select("id, user_id, status, started_at, stopped_at, updated_at, created_at, start_percent, current_percent, target_percent, charged_energy_kwh, estimated_cost, charger_power_kw")
+    .select("id, user_id, status, started_at, stopped_at, updated_at, created_at, start_percent, current_percent, target_percent, battery_capacity_kwh, efficiency_percent, price_per_kwh, charged_energy_kwh, estimated_cost, charger_power_kw")
     .eq("status", "charging")
     .order("created_at", { ascending: false })
     .limit(3);
@@ -239,10 +242,11 @@ export default async function DevChargingPage({
                       charging
                     </span>
                   </div>
-                  <dl className="mt-3 grid grid-cols-3 gap-2">
+                  <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <Metric label="Energy" value={`${fmt(session.charged_energy_kwh, 2)} kWh`} />
                     <Metric label="Power" value={`${fmt(session.charger_power_kw, 1)} kW`} />
-                    <Metric label="Cost" value={fmt(session.estimated_cost, 2)} />
+                    <Metric label="Now cost" value={fmt(session.estimated_cost, 2)} />
+                    <Metric label="Cost at 100%" value={fmt(sessionFullCost(session), 2)} />
                   </dl>
                   <div className="mt-4">
                     <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
@@ -558,6 +562,14 @@ function Metric({ label, value }: { label: string; value: string }) {
       <dd className="mt-1 font-mono text-sm text-foreground">{value}</dd>
     </div>
   );
+}
+
+function sessionFullCost(session: SessionRow) {
+  if (session.price_per_kwh <= 0 || session.efficiency_percent <= 0) return null;
+  const batteryEnergyKwh =
+    (session.battery_capacity_kwh * Math.max(0, 100 - session.start_percent)) / 100;
+  const gridEnergyKwh = batteryEnergyKwh / (session.efficiency_percent / 100);
+  return gridEnergyKwh * session.price_per_kwh;
 }
 
 function isChargingSample(sample: SampleRow | LiveRow) {

@@ -9,7 +9,10 @@ import { toast } from "sonner";
 import { sendChargeCompletedPush } from "@/actions/push";
 import { Button } from "@/components/ui/button";
 import {
+  costFromGridEnergy,
   deriveChargingState,
+  energyFromGridKwh,
+  energyNeededKwh,
   formatDuration,
   type ChargingParams,
   type DerivedChargingState,
@@ -334,6 +337,20 @@ export function ChargingSessionScreen({ sessionId }: { sessionId: string }) {
   }
 
   const charging = session.status === "charging";
+  const costAtFull =
+    session.price_per_kwh > 0
+      ? costFromGridEnergy(
+          energyFromGridKwh(
+            energyNeededKwh(
+              session.battery_capacity_kwh,
+              session.start_percent,
+              100,
+            ),
+            session.efficiency_percent,
+          ),
+          session.price_per_kwh,
+        )
+      : null;
 
   return (
     <div className="flex flex-1 flex-col gap-5 p-4">
@@ -416,10 +433,18 @@ export function ChargingSessionScreen({ sessionId }: { sessionId: string }) {
           value={`${derived.chargedEnergyKwh.toFixed(2)} kWh`}
         />
         <StatCard
-          label={t("charging.estimatedCost") as string}
+          label={t("charging.currentCost") as string}
           value={
             session.price_per_kwh > 0
               ? formatCurrencyAmount(currency, derived.estimatedCost, locale)
+              : "—"
+          }
+        />
+        <StatCard
+          label={t("charging.fullCost") as string}
+          value={
+            costAtFull != null
+              ? formatCurrencyAmount(currency, costAtFull, locale)
               : "—"
           }
         />
