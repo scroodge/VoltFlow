@@ -228,9 +228,7 @@ export function DashboardView() {
   const statusLabel =
     dashboardStatus === "charging"
       ? (t("dashboard.statusCharging") as string)
-      : dashboardStatus === "completed"
-        ? (t("dashboard.statusCompleted") as string)
-        : (t("dashboard.statusIdle") as string);
+      : (t("dashboard.statusIdle") as string);
   const currentPercent =
     liveActive?.currentPercent ??
     activeSession?.current_percent ??
