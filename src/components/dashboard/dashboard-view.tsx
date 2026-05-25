@@ -189,10 +189,10 @@ export function DashboardView() {
       : "idle";
   const statusLabel =
     dashboardStatus === "charging"
-      ? "Charging"
+      ? (t("dashboard.statusCharging") as string)
       : dashboardStatus === "completed"
-        ? "Completed"
-        : "Idle";
+        ? (t("dashboard.statusCompleted") as string)
+        : (t("dashboard.statusIdle") as string);
   const currentPercent =
     liveActive?.currentPercent ??
     activeSession?.current_percent ??
@@ -201,24 +201,24 @@ export function DashboardView() {
 
   const stats: ChargingStat[] = [
     {
-      label: "Charged kWh",
+      label: t("dashboard.chargedKwh") as string,
       value: `${(liveActive?.chargedEnergyKwh ?? activeSession?.charged_energy_kwh ?? 0).toFixed(2)}`,
       accent: "green",
     },
     {
-      label: "Remaining",
+      label: t("dashboard.remainingStat") as string,
       value: activeSession
         ? formatDuration(liveActive?.remainingSeconds ?? 0)
         : "--",
       accent: "cyan",
     },
     {
-      label: "Power",
+      label: t("dashboard.powerStat") as string,
       value: `${(activeSession?.charger_power_kw ?? selectedCar?.default_charger_power_kw ?? 0).toFixed(1)} kW`,
       accent: "blue",
     },
     {
-      label: "Cost",
+      label: t("dashboard.costStat") as string,
       value: formatCurrencyAmount(
         currency,
         liveActive?.estimatedCost ?? activeSession?.estimated_cost ?? 0,
@@ -288,7 +288,7 @@ export function DashboardView() {
       <header className="flex items-center justify-between gap-4">
         <LogoFull />
         <BrandBadge className="hidden min-[380px]:inline-flex">
-          Full control
+          {t("dashboard.fullControl")}
         </BrandBadge>
       </header>
 
@@ -321,7 +321,7 @@ export function DashboardView() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                  Vehicle
+                  {t("dashboard.vehicle")}
                 </p>
                 <h1 className="mt-1 font-heading text-2xl font-bold tracking-normal">
                   {selectedCar?.name ?? "EV"}
@@ -368,13 +368,13 @@ export function DashboardView() {
 
             <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
               <div className="rounded-2xl border border-border bg-white/[0.03] p-3">
-                <p className="text-muted-foreground">Battery pack</p>
+                <p className="text-muted-foreground">{t("dashboard.batteryPack")}</p>
                 <p className="mt-1 font-heading text-lg font-bold">
                   {selectedCar?.battery_capacity_kwh ?? "--"} kWh
                 </p>
               </div>
               <div className="rounded-2xl border border-border bg-white/[0.03] p-3">
-                <p className="text-muted-foreground">Charger power</p>
+                <p className="text-muted-foreground">{t("dashboard.chargerPower")}</p>
                 <p className="mt-1 font-heading text-lg font-bold">
                   {selectedCar?.default_charger_power_kw ?? "--"} kW
                 </p>
@@ -385,13 +385,13 @@ export function DashboardView() {
           <section className="voltflow-card p-5 text-center">
             <BatteryRing
               percent={currentPercent}
-              status={loadingSessions ? "Syncing" : statusLabel}
+              status={loadingSessions ? (t("dashboard.syncing") as string) : statusLabel}
               charging={dashboardStatus === "charging"}
             />
             <p className="mx-auto mt-1 max-w-[18rem] text-sm leading-6 text-muted-foreground">
               {activeSession
-                ? "Smart charging. Full control. Every time."
-                : "Energy in motion. Set your target and let VoltFlow track the run."}
+                ? t("dashboard.activeRingBody")
+                : t("dashboard.idleRingBody")}
             </p>
           </section>
 
@@ -402,6 +402,11 @@ export function DashboardView() {
               status={dashboardStatus}
               disabled={!selectedCar || stopping}
               loading={stopping}
+              labels={{
+                start: t("dashboard.startCharging") as string,
+                stop: t("charging.stop") as string,
+                syncing: t("dashboard.syncing") as string,
+              }}
               onClick={() => void handleMainAction()}
             />
             <Button
@@ -412,7 +417,7 @@ export function DashboardView() {
             >
               <Link href={activeSession ? `/charging/${activeSession.id}` : "/settings"}>
                 <SlidersHorizontal className="size-5" aria-hidden />
-                Adjust Settings
+                {t("dashboard.adjustSettings")}
               </Link>
             </Button>
           </div>
@@ -423,9 +428,9 @@ export function DashboardView() {
           >
             <span className="inline-flex items-center gap-2">
               <Gauge className="size-5 text-[var(--voltflow-cyan)]" aria-hidden />
-              Latest sessions and charge history
+              {t("dashboard.latestHistory")}
             </span>
-            <span className="font-semibold text-foreground">Open</span>
+            <span className="font-semibold text-foreground">{t("dashboard.open")}</span>
           </Link>
         </>
       ) : null}
