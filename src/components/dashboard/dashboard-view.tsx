@@ -529,7 +529,7 @@ export function DashboardView() {
             />
           </section>
 
-          <ChargingStatsGrid stats={stats} compact />
+          {activeSession ? <ChargingStatsGrid stats={stats} compact /> : null}
         </>
       ) : null}
 

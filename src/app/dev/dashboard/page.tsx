@@ -7,17 +7,9 @@ import { BrandBadge } from "@/components/brand/BrandBadge";
 import { LogoFull } from "@/components/brand/LogoFull";
 import { BatteryRing } from "@/components/charging/BatteryRing";
 import { ChargingActionButton } from "@/components/charging/ChargingActionButton";
-import { ChargingStatsGrid, type ChargingStat } from "@/components/charging/ChargingStatsGrid";
 import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
-
-const stats: ChargingStat[] = [
-  { label: "Charged kWh", value: "12.40", accent: "green" },
-  { label: "Remaining", value: "1h 18m", accent: "cyan" },
-  { label: "Power", value: "6.8 kW", accent: "blue" },
-  { label: "Cost", value: "4.96 BYN" },
-];
 
 const summaryCards = [
   {
@@ -122,8 +114,6 @@ export default function DevDashboardPage() {
           <DashboardSummaryCard key={card.label} {...card} />
         ))}
       </section>
-
-      <ChargingStatsGrid stats={stats} compact />
 
       <nav className="grid grid-cols-3 gap-2 text-center text-xs text-muted-foreground">
         <Link className="rounded-full border border-border px-3 py-2" href="/dev/charging">
