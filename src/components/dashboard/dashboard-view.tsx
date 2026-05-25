@@ -109,14 +109,14 @@ function DashboardSummaryCard({
   return (
     <Link
       href={href}
-      className="grid min-h-36 content-between rounded-2xl border border-border bg-white/[0.03] p-4 transition hover:border-primary/50 hover:bg-white/[0.05]"
+      className="grid min-h-[104px] content-between rounded-2xl border border-border bg-white/[0.03] p-3.5 transition hover:border-primary/50 hover:bg-white/[0.05]"
     >
-      <span className="flex items-center justify-between gap-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+      <span className="flex items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         <span>{label}</span>
         <span className="text-[var(--voltflow-cyan)]">{icon}</span>
       </span>
-      <span className="mt-4 block">
-        <span className="block font-heading text-xl font-bold tracking-normal text-foreground">
+      <span className="mt-3 block">
+        <span className="block font-heading text-lg font-bold tracking-normal text-foreground">
           {title}
         </span>
         <span className="mt-1 block text-sm leading-5 text-muted-foreground">{body}</span>
@@ -353,84 +353,102 @@ export function DashboardView() {
       {cars && cars.length > 0 ? (
         <>
           <section className="voltflow-card overflow-hidden p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                   {t("dashboard.vehicle")}
                 </p>
-                <h1 className="mt-1 font-heading text-2xl font-bold tracking-normal">
+                <h1 className="mt-1 truncate font-heading text-xl font-bold tracking-normal">
                   {selectedCar?.name ?? "EV"}
                 </h1>
               </div>
-              <div className="rounded-full border border-border bg-white/[0.04] px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-[var(--voltflow-green)]">
+              <div className="rounded-full border border-border bg-white/[0.04] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--voltflow-green)]">
                 {statusLabel}
               </div>
             </div>
 
-            <div className="mt-4">
-              {isLoading ? (
-                <Skeleton className="h-14 w-full rounded-2xl" />
-              ) : (
-                <Select
-                  items={cars.map((car) => ({
-                    value: car.id,
-                    label: car.name,
-                  }))}
-                  value={selectedCar?.id}
-                  onValueChange={(value) => setSelectedCarId(value)}
-                >
-                  <SelectTrigger className="h-14 rounded-2xl border-border bg-[#12151C]/70 text-base">
-                    <SelectValue placeholder={t("dashboard.chooseCar") as string} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {cars.map((car) => (
-                      <SelectItem key={car.id} value={car.id}>
-                        <div className="flex flex-col text-left leading-tight">
-                          <span className="font-medium">{car.name}</span>
-                          <span className="text-muted-foreground text-xs">
-                            {t("dashboard.pack", {
-                              battery: car.battery_capacity_kwh,
-                              power: car.default_charger_power_kw,
-                            })}
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+            <div className="mt-3 grid grid-cols-[132px_minmax(0,1fr)] items-center gap-4">
+              <BatteryRing
+                percent={currentPercent}
+                status={loadingSessions ? (t("dashboard.syncing") as string) : statusLabel}
+                charging={dashboardStatus === "charging"}
+                size="compact"
+              />
+              <div className="min-w-0 space-y-3">
+                {isLoading ? (
+                  <Skeleton className="h-10 w-full rounded-xl" />
+                ) : (
+                  <Select
+                    items={cars.map((car) => ({
+                      value: car.id,
+                      label: car.name,
+                    }))}
+                    value={selectedCar?.id}
+                    onValueChange={(value) => setSelectedCarId(value)}
+                  >
+                    <SelectTrigger className="h-10 rounded-xl border-border bg-[#12151C]/70 text-sm">
+                      <SelectValue placeholder={t("dashboard.chooseCar") as string} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {cars.map((car) => (
+                        <SelectItem key={car.id} value={car.id}>
+                          <div className="flex flex-col text-left leading-tight">
+                            <span className="font-medium">{car.name}</span>
+                            <span className="text-muted-foreground text-xs">
+                              {t("dashboard.pack", {
+                                battery: car.battery_capacity_kwh,
+                                power: car.default_charger_power_kw,
+                              })}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-xl border border-border bg-white/[0.03] p-2.5">
+                    <p className="truncate text-muted-foreground">{t("dashboard.batteryPack")}</p>
+                    <p className="mt-1 font-heading text-base font-bold">
+                      {selectedCar?.battery_capacity_kwh ?? "--"} kWh
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-white/[0.03] p-2.5">
+                    <p className="truncate text-muted-foreground">{t("dashboard.chargerPower")}</p>
+                    <p className="mt-1 font-heading text-base font-bold">
+                      {selectedCar?.default_charger_power_kw ?? "--"} kW
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <div className="rounded-2xl border border-border bg-white/[0.03] p-3">
-                <p className="text-muted-foreground">{t("dashboard.batteryPack")}</p>
-                <p className="mt-1 font-heading text-lg font-bold">
-                  {selectedCar?.battery_capacity_kwh ?? "--"} kWh
-                </p>
-              </div>
-              <div className="rounded-2xl border border-border bg-white/[0.03] p-3">
-                <p className="text-muted-foreground">{t("dashboard.chargerPower")}</p>
-                <p className="mt-1 font-heading text-lg font-bold">
-                  {selectedCar?.default_charger_power_kw ?? "--"} kW
-                </p>
-              </div>
+            <div className="mt-4 grid gap-2">
+              <ChargingActionButton
+                status={dashboardStatus}
+                disabled={!selectedCar || stopping}
+                loading={stopping}
+                labels={{
+                  start: t("dashboard.startCharging") as string,
+                  stop: t("charging.stop") as string,
+                  syncing: t("dashboard.syncing") as string,
+                }}
+                onClick={() => void handleMainAction()}
+              />
+              <Button
+                asChild
+                variant="outline"
+                size="lg"
+                className="h-11 w-full rounded-full border-border bg-white/[0.03] font-heading text-sm font-bold"
+              >
+                <Link href={activeSession ? `/charging/${activeSession.id}` : "/settings"}>
+                  <SlidersHorizontal className="size-4" aria-hidden />
+                  {t("dashboard.adjustSettings")}
+                </Link>
+              </Button>
             </div>
           </section>
-
-          <section className="voltflow-card p-5 text-center">
-            <BatteryRing
-              percent={currentPercent}
-              status={loadingSessions ? (t("dashboard.syncing") as string) : statusLabel}
-              charging={dashboardStatus === "charging"}
-            />
-            <p className="mx-auto mt-1 max-w-[18rem] text-sm leading-6 text-muted-foreground">
-              {activeSession
-                ? t("dashboard.activeRingBody")
-                : t("dashboard.idleRingBody")}
-            </p>
-          </section>
-
-          <ChargingStatsGrid stats={stats} />
 
           <section className="grid gap-3 min-[520px]:grid-cols-3">
             <DashboardSummaryCard
@@ -511,30 +529,7 @@ export function DashboardView() {
             />
           </section>
 
-          <div className="space-y-3">
-            <ChargingActionButton
-              status={dashboardStatus}
-              disabled={!selectedCar || stopping}
-              loading={stopping}
-              labels={{
-                start: t("dashboard.startCharging") as string,
-                stop: t("charging.stop") as string,
-                syncing: t("dashboard.syncing") as string,
-              }}
-              onClick={() => void handleMainAction()}
-            />
-            <Button
-              asChild
-              variant="outline"
-              size="lg"
-              className="h-14 w-full rounded-full border-border bg-white/[0.03] font-heading text-base font-bold"
-            >
-              <Link href={activeSession ? `/charging/${activeSession.id}` : "/settings"}>
-                <SlidersHorizontal className="size-5" aria-hidden />
-                {t("dashboard.adjustSettings")}
-              </Link>
-            </Button>
-          </div>
+          <ChargingStatsGrid stats={stats} compact />
         </>
       ) : null}
 

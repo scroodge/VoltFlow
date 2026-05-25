@@ -12,17 +12,27 @@ const accentClasses = {
   blue: "text-[var(--voltflow-blue)]",
 };
 
-export function ChargingStatsGrid({ stats }: { stats: ChargingStat[] }) {
+export function ChargingStatsGrid({
+  stats,
+  compact = false,
+}: {
+  stats: ChargingStat[];
+  compact?: boolean;
+}) {
   return (
     <div className="grid grid-cols-2 gap-3">
       {stats.map((stat) => (
-        <div key={stat.label} className="voltflow-card min-h-[92px] p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        <div key={stat.label} className={cn("voltflow-card", compact ? "min-h-[72px] p-3" : "min-h-[92px] p-4")}>
+          <p className={cn(
+            "font-semibold uppercase text-muted-foreground",
+            compact ? "text-[10px] tracking-[0.14em]" : "text-[11px] tracking-[0.18em]",
+          )}>
             {stat.label}
           </p>
           <p
             className={cn(
-              "mt-3 font-heading text-2xl font-bold tracking-normal text-foreground tabular-nums",
+              "font-heading font-bold tracking-normal text-foreground tabular-nums",
+              compact ? "mt-2 text-xl" : "mt-3 text-2xl",
               stat.accent && accentClasses[stat.accent],
             )}
           >

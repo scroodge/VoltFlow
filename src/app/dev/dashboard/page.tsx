@@ -52,7 +52,7 @@ export default function DevDashboardPage() {
   }
 
   return (
-    <main className="safe-bottom mx-auto flex max-w-md flex-col gap-5 px-4 pb-8 pt-5">
+    <main className="safe-bottom mx-auto flex max-w-md flex-col gap-4 px-4 pb-8 pt-5">
       <header className="flex items-center justify-between gap-4">
         <LogoFull />
         <BrandBadge className="hidden min-[380px]:inline-flex">
@@ -61,40 +61,61 @@ export default function DevDashboardPage() {
       </header>
 
       <section className="voltflow-card overflow-hidden p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Vehicle
             </p>
-            <h1 className="mt-1 font-heading text-2xl font-bold tracking-normal">
+            <h1 className="mt-1 truncate font-heading text-xl font-bold tracking-normal">
               BYD Yuan Up
             </h1>
           </div>
-          <div className="rounded-full border border-border bg-white/[0.04] px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-[var(--voltflow-green)]">
+          <div className="rounded-full border border-border bg-white/[0.04] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--voltflow-green)]">
             Idle
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-          <div className="rounded-2xl border border-border bg-white/[0.03] p-3">
-            <p className="text-muted-foreground">Battery pack</p>
-            <p className="mt-1 font-heading text-lg font-bold">45.1 kWh</p>
-          </div>
-          <div className="rounded-2xl border border-border bg-white/[0.03] p-3">
-            <p className="text-muted-foreground">Charger power</p>
-            <p className="mt-1 font-heading text-lg font-bold">7 kW</p>
+        <div className="mt-3 grid grid-cols-[132px_minmax(0,1fr)] items-center gap-4">
+          <BatteryRing percent={68} status="Idle" size="compact" />
+          <div className="min-w-0 space-y-3">
+            <div className="h-10 rounded-xl border border-border bg-[#12151C]/70 px-3 py-2 text-sm">
+              Yuan Up
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-xl border border-border bg-white/[0.03] p-2.5">
+                <p className="truncate text-muted-foreground">Battery pack</p>
+                <p className="mt-1 font-heading text-base font-bold">45.1 kWh</p>
+              </div>
+              <div className="rounded-xl border border-border bg-white/[0.03] p-2.5">
+                <p className="truncate text-muted-foreground">Charger power</p>
+                <p className="mt-1 font-heading text-base font-bold">7 kW</p>
+              </div>
+            </div>
           </div>
         </div>
-      </section>
 
-      <section className="voltflow-card p-5 text-center">
-        <BatteryRing percent={68} status="Idle" />
-        <p className="mx-auto mt-1 max-w-[18rem] text-sm leading-6 text-muted-foreground">
-          Energy in motion. Set your target and let VoltFlow track the run.
-        </p>
+        <div className="mt-4 grid gap-2">
+          <ChargingActionButton
+            status="idle"
+            labels={{
+              start: "Start charging",
+              stop: "Stop charging",
+              syncing: "Syncing",
+            }}
+          />
+          <Button
+            asChild
+            variant="outline"
+            size="lg"
+            className="h-11 w-full rounded-full border-border bg-white/[0.03] font-heading text-sm font-bold"
+          >
+            <Link href="/settings">
+              <SlidersHorizontal className="size-4" aria-hidden />
+              Adjust settings
+            </Link>
+          </Button>
+        </div>
       </section>
-
-      <ChargingStatsGrid stats={stats} />
 
       <section className="grid gap-3">
         {summaryCards.map((card) => (
@@ -102,27 +123,7 @@ export default function DevDashboardPage() {
         ))}
       </section>
 
-      <div className="space-y-3">
-        <ChargingActionButton
-          status="idle"
-          labels={{
-            start: "Start charging",
-            stop: "Stop charging",
-            syncing: "Syncing",
-          }}
-        />
-        <Button
-          asChild
-          variant="outline"
-          size="lg"
-          className="h-14 w-full rounded-full border-border bg-white/[0.03] font-heading text-base font-bold"
-        >
-          <Link href="/settings">
-            <SlidersHorizontal className="size-5" aria-hidden />
-            Adjust settings
-          </Link>
-        </Button>
-      </div>
+      <ChargingStatsGrid stats={stats} compact />
 
       <nav className="grid grid-cols-3 gap-2 text-center text-xs text-muted-foreground">
         <Link className="rounded-full border border-border px-3 py-2" href="/dev/charging">
@@ -157,14 +158,14 @@ function DashboardSummaryCard({
   return (
     <Link
       href={href}
-      className="grid min-h-36 content-between rounded-2xl border border-border bg-white/[0.03] p-4 transition hover:border-primary/50 hover:bg-white/[0.05]"
+      className="grid min-h-[104px] content-between rounded-2xl border border-border bg-white/[0.03] p-3.5 transition hover:border-primary/50 hover:bg-white/[0.05]"
     >
-      <span className="flex items-center justify-between gap-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+      <span className="flex items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         <span>{label}</span>
         <span className="text-[var(--voltflow-cyan)]">{icon}</span>
       </span>
-      <span className="mt-4 block">
-        <span className="block font-heading text-xl font-bold tracking-normal text-foreground">
+      <span className="mt-3 block">
+        <span className="block font-heading text-lg font-bold tracking-normal text-foreground">
           {title}
         </span>
         <span className="mt-1 block text-sm leading-5 text-muted-foreground">{body}</span>

@@ -8,21 +8,25 @@ export function BatteryRing({
   percent,
   status,
   charging = false,
+  size = "default",
   className,
 }: {
   percent: number;
   status: string;
   charging?: boolean;
+  size?: "default" | "compact";
   className?: string;
 }) {
   const value = Math.max(0, Math.min(100, percent));
   const radius = 92;
   const circumference = 2 * Math.PI * radius;
+  const compact = size === "compact";
 
   return (
     <div
       className={cn(
-        "relative mx-auto grid aspect-square w-full max-w-[280px] place-items-center",
+        "relative mx-auto grid aspect-square w-full place-items-center",
+        compact ? "max-w-[132px]" : "max-w-[280px]",
         className,
       )}
     >
@@ -40,7 +44,7 @@ export function BatteryRing({
           cy="120"
           r={radius}
           stroke="url(#battery-ring-gradient)"
-          strokeWidth="16"
+          strokeWidth={compact ? "18" : "16"}
           strokeLinecap="round"
           fill="none"
           strokeDasharray={circumference}
@@ -76,11 +80,21 @@ export function BatteryRing({
         )}
       />
       <div className="relative text-center">
-        <p className="font-heading text-6xl font-bold leading-none tracking-normal text-foreground tabular-nums">
+        <p
+          className={cn(
+            "font-heading font-bold leading-none tracking-normal text-foreground tabular-nums",
+            compact ? "text-4xl" : "text-6xl",
+          )}
+        >
           {Math.round(value)}
-          <span className="text-2xl text-muted-foreground">%</span>
+          <span className={cn("text-muted-foreground", compact ? "text-base" : "text-2xl")}>%</span>
         </p>
-        <p className="mt-3 text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+        <p
+          className={cn(
+            "font-semibold uppercase text-muted-foreground",
+            compact ? "mt-1 text-[9px] tracking-[0.18em]" : "mt-3 text-xs tracking-[0.24em]",
+          )}
+        >
           {status}
         </p>
       </div>
