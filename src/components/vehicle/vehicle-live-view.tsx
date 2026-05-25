@@ -165,7 +165,11 @@ function VehicleLiveContent({
     isLoading: isTripsLoading,
     error: tripsError,
   } = useBydmateTripsQuery(selectedDate, snapshot.vehicle_id, !fixturePoints);
+  const {
+    data: forecastApiTrips = [],
+  } = useBydmateTripsQuery(fallbackDate, snapshot.vehicle_id, !fixturePoints && selectedDate !== fallbackDate);
   const trips = fixtureTrips ?? apiTrips;
+  const forecastTrips = fixtureTrips ?? (selectedDate === fallbackDate ? apiTrips : forecastApiTrips);
   const [selectedTripId, setSelectedTripId] = useState<string | null | undefined>(undefined);
   const defaultTripId = trips[0]?.id ?? null;
   const expandedTripId = selectedTripId === undefined ? defaultTripId : selectedTripId;
@@ -176,7 +180,7 @@ function VehicleLiveContent({
   return (
     <div className="safe-bottom flex flex-col gap-5 px-4 pb-6 pt-5">
       <Header />
-      <Hero snapshot={snapshot} nowMs={nowMs} isStale={isStale} />
+      <Hero snapshot={snapshot} nowMs={nowMs} isStale={isStale} forecastTrips={forecastTrips} />
       <CellHealthCard snapshot={snapshot} />
       {isStale ? (
         <StaleTelemetryNotice />
@@ -225,14 +229,17 @@ function Hero({
   snapshot,
   nowMs,
   isStale,
+  forecastTrips,
 }: {
   snapshot: BydmateLiveSnapshotRow;
   nowMs: number;
   isStale: boolean;
+  forecastTrips: BydmateTripRow[];
 }) {
   const { t: translate } = useTranslation();
   const t = translate as Translator;
   const telemetry = snapshot.telemetry;
+  const rangeEstimate = estimateVehicleRangeKm(snapshot, forecastTrips);
 
   return (
     <section className="voltflow-card overflow-hidden p-5">
@@ -265,13 +272,13 @@ function Hero({
         <div className="mt-6 grid grid-cols-3 gap-3">
           <HeroMetric icon={BatteryCharging} label={t("vehicle.metrics.soc")} value={`${fmt(telemetry.soc, 0)}%`} />
           <HeroMetric icon={Activity} label={t("vehicle.metrics.soh")} value={`${fmt(telemetry.soh_percent, 1)}%`} />
-          <HeroMetric icon={Route} label={t("vehicle.metrics.range")} value={`${fmt(telemetry.range_est_km, 0)} km`} />
+          <HeroMetric icon={Route} label={t("vehicle.metrics.range")} value={`${fmt(rangeEstimate.estimatedRangeKm, 0)} km`} />
         </div>
       ) : (
         <div className="mt-6 grid grid-cols-3 gap-3">
           <HeroMetric icon={Gauge} label={t("vehicle.metrics.speed")} value={`${fmt(telemetry.speed_kmh, 0)} km/h`} />
           <HeroMetric icon={Zap} label={t("vehicle.metrics.power")} value={`${fmt(telemetry.power_kw, 1)} kW`} />
-          <HeroMetric icon={Route} label={t("vehicle.metrics.range")} value={`${fmt(telemetry.range_est_km, 0)} km`} />
+          <HeroMetric icon={Route} label={t("vehicle.metrics.range")} value={`${fmt(rangeEstimate.estimatedRangeKm, 0)} km`} />
         </div>
       )}
     </section>
@@ -534,6 +541,10 @@ const DEFAULT_MAP_ZOOM = 15;
 const WEB_MERCATOR_MAX_LAT = 85.05112878;
 const MAX_MAP_ZOOM_OFFSET = 3;
 const MIN_MAP_ZOOM_OFFSET = -3;
+const DEFAULT_USABLE_BATTERY_KWH = 45.1;
+const DEFAULT_CONSUMPTION_KWH_100KM = 18.5;
+const MIN_FORECAST_CONSUMPTION_KWH_100KM = 8;
+const MAX_FORECAST_CONSUMPTION_KWH_100KM = 42;
 const ROUTE_LAYER_OPTIONS: Array<{
   id: RouteLayer;
   label: string;
@@ -549,9 +560,168 @@ function validNumber(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
 function validTempNumber(value: number | null | undefined) {
   const n = validNumber(value);
   return n != null && n >= -50 && n <= 90 ? n : null;
+}
+
+type WeightedConsumption = {
+  value: number;
+  weight: number;
+};
+
+type RangeEstimate = {
+  estimatedRangeKm: number | null;
+  consumptionKwh100Km: number | null;
+};
+
+function estimateVehicleRangeKm(
+  snapshot: BydmateLiveSnapshotRow,
+  recentTrips: BydmateTripRow[],
+): RangeEstimate {
+  const telemetry = snapshot.telemetry;
+  const soc = validNumber(telemetry.soc);
+  if (soc == null) return { estimatedRangeKm: null, consumptionKwh100Km: null };
+
+  const soh = validNumber(telemetry.soh_percent);
+  const usableBatteryKwh = DEFAULT_USABLE_BATTERY_KWH * (soh != null ? clamp(soh, 70, 105) / 100 : 1);
+  const usableEnergyKwh = usableBatteryKwh * (clamp(soc, 0, 100) / 100);
+  const consumptionKwh100Km = estimateConsumptionKwh100Km(snapshot, recentTrips);
+
+  if (consumptionKwh100Km == null || consumptionKwh100Km <= 0) {
+    return { estimatedRangeKm: null, consumptionKwh100Km: null };
+  }
+
+  return {
+    estimatedRangeKm: (usableEnergyKwh / consumptionKwh100Km) * 100,
+    consumptionKwh100Km,
+  };
+}
+
+function estimateConsumptionKwh100Km(
+  snapshot: BydmateLiveSnapshotRow,
+  recentTrips: BydmateTripRow[],
+) {
+  const telemetry = snapshot.telemetry;
+  const estimates: WeightedConsumption[] = [];
+
+  const currentTripConsumption = validNumber(telemetry.current_trip_consumption_kwh_100km);
+  const currentTripDistance = validNumber(telemetry.current_trip_distance_km);
+  if (
+    currentTripConsumption != null &&
+    currentTripConsumption >= MIN_FORECAST_CONSUMPTION_KWH_100KM &&
+    currentTripConsumption <= MAX_FORECAST_CONSUMPTION_KWH_100KM
+  ) {
+    estimates.push({
+      value: currentTripConsumption,
+      weight: currentTripDistance != null ? clamp(currentTripDistance / 12, 0.25, 1.8) : 0.7,
+    });
+  }
+
+  const tripAverage = averageTripConsumption(
+    recentTrips.filter((trip) => {
+      const consumption = validNumber(trip.avg_consumption_kwh_100km);
+      const distance = validNumber(trip.distance_km);
+      return (
+        consumption != null &&
+        consumption >= MIN_FORECAST_CONSUMPTION_KWH_100KM &&
+        consumption <= MAX_FORECAST_CONSUMPTION_KWH_100KM &&
+        distance != null &&
+        distance >= 1 &&
+        trip.sample_count >= 3
+      );
+    }),
+  );
+  if (tripAverage != null) {
+    estimates.push({ value: tripAverage, weight: 1.2 });
+  }
+
+  const speedKmh = validNumber(telemetry.speed_kmh);
+  const powerKw = validNumber(telemetry.power_kw);
+  if (speedKmh != null && speedKmh >= 12 && powerKw != null && powerKw > 0) {
+    estimates.push({
+      value: clamp((powerKw / speedKmh) * 100, MIN_FORECAST_CONSUMPTION_KWH_100KM, MAX_FORECAST_CONSUMPTION_KWH_100KM),
+      weight: speedKmh >= 35 ? 0.9 : 0.45,
+    });
+  }
+
+  const reportedRangeKm = validNumber(telemetry.range_est_km);
+  const soc = validNumber(telemetry.soc);
+  if (reportedRangeKm != null && reportedRangeKm > 10 && soc != null && soc > 2) {
+    const reportedConsumption = ((DEFAULT_USABLE_BATTERY_KWH * (soc / 100)) / reportedRangeKm) * 100;
+    if (
+      reportedConsumption >= MIN_FORECAST_CONSUMPTION_KWH_100KM &&
+      reportedConsumption <= MAX_FORECAST_CONSUMPTION_KWH_100KM
+    ) {
+      estimates.push({ value: reportedConsumption, weight: 0.35 });
+    }
+  }
+
+  if (estimates.length === 0) {
+    estimates.push({ value: DEFAULT_CONSUMPTION_KWH_100KM, weight: 1 });
+  }
+
+  const weightedConsumption =
+    estimates.reduce((sum, estimate) => sum + estimate.value * estimate.weight, 0) /
+    estimates.reduce((sum, estimate) => sum + estimate.weight, 0);
+
+  return clamp(
+    weightedConsumption * environmentConsumptionFactor(snapshot),
+    MIN_FORECAST_CONSUMPTION_KWH_100KM,
+    MAX_FORECAST_CONSUMPTION_KWH_100KM,
+  );
+}
+
+function environmentConsumptionFactor(snapshot: BydmateLiveSnapshotRow) {
+  const telemetry = snapshot.telemetry;
+  let factor = 1;
+
+  const outsideTemp = validTempNumber(telemetry.outside_temp_c);
+  const batteryTemp =
+    validTempNumber(telemetry.battery_temp_c) ?? validTempNumber(snapshot.diplus?.avg_battery_temp_c);
+  const speedKmh = validNumber(telemetry.speed_kmh);
+
+  if (outsideTemp != null) {
+    if (outsideTemp < -10) factor += 0.28;
+    else if (outsideTemp < 0) factor += 0.18;
+    else if (outsideTemp < 8) factor += 0.08;
+    else if (outsideTemp > 30) factor += 0.05;
+  }
+
+  if (batteryTemp != null) {
+    if (batteryTemp < 5) factor += 0.12;
+    else if (batteryTemp < 12) factor += 0.05;
+    else if (batteryTemp > 42) factor += 0.04;
+  }
+
+  if (speedKmh != null) {
+    if (speedKmh > 115) factor += 0.16;
+    else if (speedKmh > 95) factor += 0.08;
+    else if (speedKmh > 75) factor += 0.03;
+  }
+
+  if (snapshot.diplus?.ac_status === 1 || snapshot.diplus?.ac_status === true) {
+    factor += outsideTemp != null && (outsideTemp < 8 || outsideTemp > 27) ? 0.08 : 0.03;
+  }
+
+  const tirePressures = [
+    snapshot.diplus?.tire_press_fl_kpa,
+    snapshot.diplus?.tire_press_fr_kpa,
+    snapshot.diplus?.tire_press_rl_kpa,
+    snapshot.diplus?.tire_press_rr_kpa,
+  ]
+    .map(validNumber)
+    .filter((value): value is number => value != null && value > 100);
+  if (tirePressures.length > 0) {
+    const avgPressure = tirePressures.reduce((sum, value) => sum + value, 0) / tirePressures.length;
+    if (avgPressure < 220) factor += 0.05;
+  }
+
+  return clamp(factor, 0.9, 1.45);
 }
 
 function pointTimeMs(point: { device_time: string; received_at?: string }) {
