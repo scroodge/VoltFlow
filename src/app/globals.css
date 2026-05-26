@@ -172,10 +172,19 @@
 
   .mobile-page {
     min-height: 100dvh;
+    height: 100dvh;
     width: 100%;
     max-width: 430px;
     margin-inline: auto;
     background: var(--background);
+  }
+
+  .app-bottom-nav {
+    flex-shrink: 0;
+    border-top: 1px solid rgba(39, 48, 64, 0.9);
+    background: rgba(18, 21, 28, 0.94);
+    padding: 0.5rem 0.75rem max(env(safe-area-inset-bottom), 0.5rem);
+    backdrop-filter: blur(18px);
   }
 
   .bottom-nav {

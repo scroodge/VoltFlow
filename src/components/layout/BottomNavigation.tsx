@@ -32,7 +32,7 @@ export function BottomNavigation() {
   );
 
   return (
-    <nav className="bottom-nav" aria-label={t("nav.aria") as string}>
+    <nav className="app-bottom-nav" aria-label={t("nav.aria") as string}>
       <div
         className={cn(
           "grid gap-1",

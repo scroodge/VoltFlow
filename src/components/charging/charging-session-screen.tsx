@@ -494,7 +494,7 @@ export function ChargingSessionScreen({
       <ChargingDeltaCard session={session} />
 
       {!historyMode && (
-        <div className="mt-auto sticky bottom-[calc(env(safe-area-inset-bottom)+6rem)] z-40 space-y-3">
+        <div className="mt-auto space-y-3">
           <Button
             type="button"
             size="lg"
