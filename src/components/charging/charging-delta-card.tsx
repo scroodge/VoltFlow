@@ -64,6 +64,27 @@ function preparePoints(samples: ChargingSessionTelemetrySample[]) {
     .sort((a, b) => a.time - b.time);
 }
 
+function smoothDeltaPoints(points: DeltaPoint[]) {
+  if (points.length < 9) return points;
+
+  const windowRadius = points.length > 120 ? 6 : 3;
+  return points.map((point, index) => {
+    const from = Math.max(0, index - windowRadius);
+    const to = Math.min(points.length, index + windowRadius + 1);
+    const values = points
+      .slice(from, to)
+      .map((candidate) => candidate.delta)
+      .sort((a, b) => a - b);
+    const middle = Math.floor(values.length / 2);
+    const delta =
+      values.length % 2 === 0
+        ? (values[middle - 1] + values[middle]) / 2
+        : values[middle];
+
+    return { ...point, delta };
+  });
+}
+
 export function ChargingDeltaCard({
   session,
   vehicleId = "way",
@@ -106,6 +127,7 @@ export function ChargingDeltaCard({
 
 function DeltaPlot({ points, vehicleId }: { points: DeltaPoint[]; vehicleId: string }) {
   const clipId = useId();
+  const smoothedPoints = useMemo(() => smoothDeltaPoints(points), [points]);
   const latest = points.at(-1) ?? null;
   const minSoc = Math.min(...points.map((point) => point.soc));
   const maxSoc = Math.max(...points.map((point) => point.soc));
@@ -129,7 +151,7 @@ function DeltaPlot({ points, vehicleId }: { points: DeltaPoint[]; vehicleId: str
     if (maxSoc === minSoc) return 72;
     return 110 - ((soc - minSoc) / (maxSoc - minSoc)) * 92;
   };
-  const deltaPath = points
+  const deltaPath = smoothedPoints
     .map((point, index) => `${index === 0 ? "M" : "L"} ${x(point.time).toFixed(2)} ${y(point.delta).toFixed(2)}`)
     .join(" ");
   const socPath = points
