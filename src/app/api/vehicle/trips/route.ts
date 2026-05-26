@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { isStationaryChargingLikeTrip } from "@/lib/bydmate/trip-filter";
 import { calculateTripEnergy } from "@/lib/bydmate/trip-energy";
 import { createClient } from "@/lib/supabase/server";
 import type { BydmateTelemetry, BydmateTripRow } from "@/types/database";
@@ -72,13 +73,20 @@ async function attachTripEnergy({
     samplesByTrip.set(trip.id, rows);
   }
 
-  return trips.map((trip) => {
+  return trips.flatMap((trip) => {
     const points = (samplesByTrip.get(trip.id) ?? []).map((sample) => ({
       device_time: sample.device_time,
       power_kw: sample.telemetry?.power_kw,
+      speed_kmh: sample.telemetry?.speed_kmh,
+      current_trip_distance_km: sample.telemetry?.current_trip_distance_km,
     }));
+
+    if (isStationaryChargingLikeTrip(trip, points)) {
+      return [];
+    }
+
     const energy = calculateTripEnergy(points);
-    return { ...trip, ...energy };
+    return [{ ...trip, ...energy }];
   });
 }
 
@@ -95,12 +103,13 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(Math.max(Number(params.get("limit") ?? 1) || 1, 1), 20);
 
   if (!date) {
+    const queryLimit = Math.min(limit * 4, 80);
     let latestQuery = supabase
       .from("bydmate_trips")
       .select("*")
       .eq("user_id", userData.user.id)
       .order("started_at", { ascending: false })
-      .limit(limit);
+      .limit(queryLimit);
 
     if (vehicleId) {
       latestQuery = latestQuery.eq("vehicle_id", vehicleId);
@@ -118,7 +127,7 @@ export async function GET(request: NextRequest) {
       vehicleId,
     });
 
-    return NextResponse.json({ trips });
+    return NextResponse.json({ trips: trips.slice(0, limit) });
   }
 
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
