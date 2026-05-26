@@ -18,9 +18,13 @@ async function fetchChargingSessionSamples(
   sessionId: string,
   vehicleId: string,
 ): Promise<ChargingSessionTelemetrySample[]> {
-  const params = new URLSearchParams({ vehicle_id: vehicleId });
+  const params = new URLSearchParams({
+    vehicle_id: vehicleId,
+    t: String(Date.now()),
+  });
   const response = await fetch(
     `/api/vehicle/charging-sessions/${sessionId}/samples?${params.toString()}`,
+    { cache: "no-store" },
   );
   if (!response.ok) throw new Error("Failed to load charging samples");
 

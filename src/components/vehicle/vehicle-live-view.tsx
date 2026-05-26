@@ -139,6 +139,7 @@ function VehicleLiveContent({
   nowMs: number;
   fixturePoints?: BydmateTelemetryPointRow[];
 }) {
+  const isCharging = isChargingTelemetry(snapshot.telemetry);
   const [fallbackDate] = useState(() => localDateKey(Date.now()));
   const [selectedDateOverride, setSelectedDateOverride] = useState<string | null>(null);
   const fixtureDateKeys = useMemo(() => {
@@ -164,10 +165,10 @@ function VehicleLiveContent({
     data: apiTrips = [],
     isLoading: isTripsLoading,
     error: tripsError,
-  } = useBydmateTripsQuery(selectedDate, snapshot.vehicle_id, !fixturePoints);
+  } = useBydmateTripsQuery(selectedDate, snapshot.vehicle_id, !fixturePoints && !isCharging);
   const {
     data: forecastApiTrips = [],
-  } = useBydmateTripsQuery(fallbackDate, snapshot.vehicle_id, !fixturePoints && selectedDate !== fallbackDate);
+  } = useBydmateTripsQuery(fallbackDate, snapshot.vehicle_id, !fixturePoints && !isCharging && selectedDate !== fallbackDate);
   const trips = fixtureTrips ?? apiTrips;
   const forecastTrips = fixtureTrips ?? (selectedDate === fallbackDate ? apiTrips : forecastApiTrips);
   const [selectedTripId, setSelectedTripId] = useState<string | null | undefined>(undefined);
@@ -180,33 +181,45 @@ function VehicleLiveContent({
   return (
     <div className="safe-bottom flex flex-col gap-5 px-4 pb-6 pt-5">
       <Header />
-      <Hero snapshot={snapshot} nowMs={nowMs} isStale={isStale} forecastTrips={forecastTrips} />
-      <CellHealthCard snapshot={snapshot} />
-      {isStale ? (
-        <StaleTelemetryNotice />
-      ) : (
-        <TelemetryGrid telemetry={snapshot.telemetry} />
-      )}
-      <TripBrowser
-        selectedDate={selectedDate}
-        availableDateKeys={fixtureDateKeys}
-        onDateChange={(value) => {
-          setSelectedDateOverride(value);
-          setSelectedTripId(undefined);
-        }}
-        trips={trips}
-        selectedTripId={expandedTripId}
-        onSelectTrip={(tripId) => {
-          setSelectedTripId((currentTripId) => {
-            const currentExpandedTripId = currentTripId === undefined ? defaultTripId : currentTripId;
-            return currentExpandedTripId === tripId ? null : tripId;
-          });
-        }}
-        isLoading={isTripsLoading}
-        hasError={Boolean(tripsError)}
-        expandedFixtureTrip={expandedFixtureTrip}
+      <Hero
+        snapshot={snapshot}
+        nowMs={nowMs}
+        isStale={isStale}
+        isCharging={isCharging}
+        forecastTrips={forecastTrips}
       />
-      <LocationCard snapshot={snapshot} />
+      {isCharging ? (
+        <ChargingModeCard snapshot={snapshot} />
+      ) : (
+        <>
+          <CellHealthCard snapshot={snapshot} />
+          {isStale ? (
+            <StaleTelemetryNotice />
+          ) : (
+            <TelemetryGrid telemetry={snapshot.telemetry} />
+          )}
+          <TripBrowser
+            selectedDate={selectedDate}
+            availableDateKeys={fixtureDateKeys}
+            onDateChange={(value) => {
+              setSelectedDateOverride(value);
+              setSelectedTripId(undefined);
+            }}
+            trips={trips}
+            selectedTripId={expandedTripId}
+            onSelectTrip={(tripId) => {
+              setSelectedTripId((currentTripId) => {
+                const currentExpandedTripId = currentTripId === undefined ? defaultTripId : currentTripId;
+                return currentExpandedTripId === tripId ? null : tripId;
+              });
+            }}
+            isLoading={isTripsLoading}
+            hasError={Boolean(tripsError)}
+            expandedFixtureTrip={expandedFixtureTrip}
+          />
+          <LocationCard snapshot={snapshot} />
+        </>
+      )}
     </div>
   );
 }
@@ -229,11 +242,13 @@ function Hero({
   snapshot,
   nowMs,
   isStale,
+  isCharging,
   forecastTrips,
 }: {
   snapshot: BydmateLiveSnapshotRow;
   nowMs: number;
   isStale: boolean;
+  isCharging: boolean;
   forecastTrips: BydmateTripRow[];
 }) {
   const { t: translate } = useTranslation();
@@ -261,10 +276,12 @@ function Hero({
             "rounded-full border px-4 py-2 font-heading text-xs font-semibold uppercase tracking-[0.2em] " +
             (isStale
               ? "border-yellow-300/25 bg-yellow-300/10 text-yellow-200"
+              : isCharging
+                ? "border-cyan-300/25 bg-cyan-300/10 text-cyan-100"
               : "border-primary/25 bg-primary/10 text-primary")
           }
         >
-          {isStale ? t("vehicle.status.stale") : t("vehicle.status.live")}
+          {isStale ? t("vehicle.status.stale") : isCharging ? t("vehicle.status.charging") : t("vehicle.status.live")}
         </span>
       </div>
 
@@ -276,8 +293,17 @@ function Hero({
         </div>
       ) : (
         <div className="mt-6 grid grid-cols-3 gap-3">
-          <HeroMetric icon={Gauge} label={t("vehicle.metrics.speed")} value={`${fmt(telemetry.speed_kmh, 0)} km/h`} />
-          <HeroMetric icon={Zap} label={t("vehicle.metrics.power")} value={`${fmt(telemetry.power_kw, 1)} kW`} />
+          {isCharging ? (
+            <>
+              <HeroMetric icon={BatteryCharging} label={t("vehicle.telemetry.charging")} value={fmtBool(telemetry.is_charging, t)} />
+              <HeroMetric icon={Zap} label={t("vehicle.telemetry.chargePower")} value={`${fmt(telemetry.charge_power_kw, 1)} kW`} />
+            </>
+          ) : (
+            <>
+              <HeroMetric icon={Gauge} label={t("vehicle.metrics.speed")} value={`${fmt(telemetry.speed_kmh, 0)} km/h`} />
+              <HeroMetric icon={Zap} label={t("vehicle.metrics.power")} value={`${fmt(telemetry.power_kw, 1)} kW`} />
+            </>
+          )}
           <HeroMetric icon={Route} label={t("vehicle.metrics.range")} value={`${fmt(rangeEstimate.estimatedRangeKm, 0)} km`} />
         </div>
       )}
@@ -300,6 +326,45 @@ function HeroMetric({
       <p className="text-muted-foreground text-[11px] uppercase tracking-[0.18em]">{label}</p>
       <p className="mt-1 font-heading text-lg font-semibold tabular-nums">{value}</p>
     </div>
+  );
+}
+
+function ChargingModeCard({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
+  const { t } = useTranslation();
+  const tx = t as Translator;
+  const telemetry = snapshot.telemetry;
+  const items = [
+    { icon: Zap, label: tx("vehicle.telemetry.chargePower"), value: `${fmt(telemetry.charge_power_kw, 1)} kW` },
+    { icon: Activity, label: tx("vehicle.telemetry.chargeType"), value: telemetry.charge_type ?? "—" },
+    { icon: Thermometer, label: tx("vehicle.telemetry.batteryTemp"), value: fmtTemp(telemetry.battery_temp_c) },
+    { icon: Thermometer, label: tx("vehicle.telemetry.outsideTemp"), value: fmtTemp(telemetry.outside_temp_c) },
+  ];
+
+  return (
+    <Card className="border-cyan-300/20 bg-cyan-300/[0.06]">
+      <CardHeader className="p-5 pb-3">
+        <CardTitle className="flex items-center gap-2 font-heading text-lg">
+          <BatteryCharging className="size-5 text-cyan-100" aria-hidden />
+          {tx("vehicle.chargingMode.title")}
+        </CardTitle>
+        <p className="pt-2 text-sm text-muted-foreground">
+          {tx("vehicle.chargingMode.body")}
+        </p>
+      </CardHeader>
+      <CardContent className="grid grid-cols-2 gap-3 p-5 pt-0">
+        {items.map((item) => (
+          <div key={item.label} className="rounded-2xl border border-cyan-100/10 bg-black/10 p-3">
+            <item.icon className="mb-2 size-4 text-cyan-100" aria-hidden />
+            <p className="text-muted-foreground text-[11px] uppercase tracking-[0.16em]">
+              {item.label}
+            </p>
+            <p className="mt-1 font-heading text-lg font-semibold tabular-nums">
+              {item.value}
+            </p>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }
 

@@ -25,8 +25,14 @@ export async function GET(request: NextRequest, context: RouteContext) {
       vehicleId,
     });
 
-    return NextResponse.json({ sessionId, vehicleId, points });
+    return NextResponse.json(
+      { sessionId, vehicleId, points },
+      { headers: { "Cache-Control": "no-store, max-age=0" } },
+    );
   } catch {
-    return NextResponse.json({ error: "Failed to load charging samples" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to load charging samples" },
+      { status: 500, headers: { "Cache-Control": "no-store, max-age=0" } },
+    );
   }
 }

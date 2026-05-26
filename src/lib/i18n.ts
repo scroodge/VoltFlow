@@ -314,6 +314,7 @@ export const dictionaries = {
       status: {
         live: "live",
         stale: "stale",
+        charging: "charging",
       },
       metrics: {
         soc: "SOC",
@@ -325,6 +326,10 @@ export const dictionaries = {
       staleTitle: "Car data hidden",
       staleBody:
         "The latest vehicle snapshot is stale, so live car values are hidden until fresh telemetry arrives.",
+      chargingMode: {
+        title: "Charging",
+        body: "The car is parked and plugged in, so trips, route, and location panels are hidden.",
+      },
       telemetry: {
         charging: "Charging",
         chargePower: "Charge power",
@@ -780,6 +785,7 @@ export const dictionaries = {
       status: {
         live: "жыва",
         stale: "састарэла",
+        charging: "зарадка",
       },
       metrics: {
         soc: "SOC",
@@ -791,6 +797,10 @@ export const dictionaries = {
       staleTitle: "Даныя аўто схаваныя",
       staleBody:
         "Апошні здымак аўто састарэў, таму жывыя значэнні схаваныя да прыходу свежай тэлеметрыі.",
+      chargingMode: {
+        title: "Зарадка",
+        body: "Аўто стаіць і падключана, таму паездкі, маршрут і лакацыя схаваныя.",
+      },
       telemetry: {
         charging: "Зарадка",
         chargePower: "Магутнасць зарадкі",
@@ -1245,6 +1255,7 @@ export const dictionaries = {
       status: {
         live: "онлайн",
         stale: "устарело",
+        charging: "зарядка",
       },
       metrics: {
         soc: "SOC",
@@ -1256,6 +1267,10 @@ export const dictionaries = {
       staleTitle: "Данные авто скрыты",
       staleBody:
         "Последний снимок авто устарел, поэтому живые значения скрыты до прихода свежей телеметрии.",
+      chargingMode: {
+        title: "Идет зарядка",
+        body: "Машина стоит и подключена, поэтому поездки, маршрут и геопозиция скрыты.",
+      },
       telemetry: {
         charging: "Зарядка",
         chargePower: "Мощность зарядки",
