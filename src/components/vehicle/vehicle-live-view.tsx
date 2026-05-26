@@ -545,6 +545,7 @@ type RouteSegment = {
   color: string;
   opacity: number;
   title: string;
+  dash?: string;
 };
 
 type ChartSeries = {
@@ -1501,12 +1502,14 @@ function TelemetryLineChart({ chart }: { chart: TelemetryChart }) {
     return 104 - ((value - yMin) / (yMax - yMin)) * 88;
   };
   const startTime = Number.isFinite(minTime) ? minTime : 0;
-  const durationMinutes = maxTime > minTime ? Math.round((maxTime - minTime) / 60000) : 0;
   const xTicks = hasData
     ? [
-        { label: "0m", time: minTime },
-        { label: `${Math.max(1, Math.round(durationMinutes / 2))}m`, time: minTime + (maxTime - minTime) / 2 },
-        { label: `${durationMinutes}m`, time: maxTime },
+        { label: new Date(minTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), time: minTime },
+        {
+          label: new Date(minTime + (maxTime - minTime) / 2).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          time: minTime + (maxTime - minTime) / 2,
+        },
+        { label: new Date(maxTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), time: maxTime },
       ]
     : [];
   const yTicks = hasData
@@ -2082,16 +2085,21 @@ function buildRouteSegments(
     const value = routeLayerValue(point, selectedLayer);
     const normalized =
       value == null || maxValue === minValue ? 1 : (value - minValue) / (maxValue - minValue);
+    const hasRegen = selectedLayer === "regen" && value != null && value > 0;
 
     return {
       key: `${selectedLayer}-${previous.time}-${point.time}-${index}`,
       path: `M ${mappedPrevious.x.toFixed(2)} ${mappedPrevious.y.toFixed(2)} L ${mappedPoint.x.toFixed(2)} ${mappedPoint.y.toFixed(2)}`,
-      color: routeLayerSegmentColor(selectedLayer, normalized),
+      color:
+        selectedLayer === "regen" && !hasRegen
+          ? "var(--voltflow-cyan)"
+          : routeLayerSegmentColor(selectedLayer, normalized),
       opacity:
-        value == null || (selectedLayer === "regen" && value === 0)
-          ? 0.28
-          : 1,
+        selectedLayer === "regen"
+          ? hasRegen ? 1 : 0.22
+          : value == null ? 0.35 : 1,
       title: `${formatClock(point.time)} · ${point.powerKw == null ? "—" : `${fmt(point.powerKw, 1)} kW`}`,
+      dash: hasRegen ? "7 5" : undefined,
     };
   });
 }
@@ -2377,6 +2385,7 @@ function InteractiveRouteCanvas({
               strokeWidth="4"
               strokeLinecap="round"
               strokeLinejoin="round"
+              strokeDasharray={segment.dash}
               opacity={segment.opacity}
               filter="url(#route-line-shadow)"
             >
