@@ -4,10 +4,7 @@ import { BarChart3, CarFront, Home, Settings, Zap } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
-import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
-import { findFreshChargingSnapshot } from "@/lib/charging-live";
 import { cn } from "@/lib/utils";
 
 const items = [
@@ -21,25 +18,11 @@ const items = [
 export function BottomNavigation() {
   const pathname = usePathname();
   const { t } = useTranslation();
-  const { data: liveSnapshots } = useBydmateLiveQuery();
-  const nowMs = useTickingClock(true, 5000);
-  const hasActiveCharging = findFreshChargingSnapshot(
-    liveSnapshots ?? [],
-    nowMs,
-  ) != null;
-  const visibleItems = items.filter(
-    (item) => item.href !== "/charging" || hasActiveCharging,
-  );
 
   return (
     <nav className="app-bottom-nav" aria-label={t("nav.aria") as string}>
-      <div
-        className={cn(
-          "grid gap-1",
-          visibleItems.length === 5 ? "grid-cols-5" : "grid-cols-4",
-        )}
-      >
-        {visibleItems.map(({ href, label, fallback, icon: Icon }) => {
+      <div className="grid grid-cols-5 gap-1">
+        {items.map(({ href, label, fallback, icon: Icon }) => {
           const active =
             pathname === href ||
             (href === "/charging" && pathname.startsWith("/charging/")) ||
