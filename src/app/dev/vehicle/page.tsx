@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import type { ChargingSampleRef } from "@/app/dev/vehicle-telemetry-fixtures/build-charging-snapshot";
 import { VehicleFixtureModeSwitch } from "@/app/dev/vehicle-telemetry-fixtures/VehicleFixtureModeSwitch";
-import { Button } from "@/components/ui/button";
 import { createServiceClient } from "@/lib/supabase/service";
 import type {
   BydmateLiveSnapshotRow,
@@ -56,51 +55,44 @@ export default async function DevVehiclePage({
     .order("device_time", { ascending: false })
     .limit(SAMPLE_LIMIT);
 
+  const { data: chargingRows } = await supabase
+    .from("bydmate_telemetry_samples")
+    .select("device_time, received_at, telemetry, diplus, diplus_min_cell_voltage_v, diplus_max_cell_voltage_v, diplus_cell_delta_v")
+    .eq("vehicle_id", vehicleId)
+    .eq("telemetry->>is_charging", "true")
+    .order("device_time", { ascending: false })
+    .limit(1);
+
   const snapshot = ((liveRows ?? []) as BydmateLiveSnapshotRow[])[0] ?? null;
+  const chargingSample = ((chargingRows ?? [])[0] as ChargingSampleRef | undefined) ?? null;
   const points = ((sampleRows ?? []) as SampleRow[])
     .map(sampleToPoint)
     .sort((a, b) => Date.parse(a.device_time) - Date.parse(b.device_time));
 
+  if (liveError || samplesError) {
+    return (
+      <main className="mx-auto max-w-lg px-4 py-8 text-sm">
+        {liveError ? <p className="text-destructive">Live query: {liveError.message}</p> : null}
+        {samplesError ? <p className="text-destructive">Samples query: {samplesError.message}</p> : null}
+      </main>
+    );
+  }
+
+  if (!snapshot) {
+    return (
+      <main className="mx-auto max-w-lg px-4 py-8 text-sm text-muted-foreground">
+        No live snapshot found for <span className="font-mono">{vehicleId}</span>.
+      </main>
+    );
+  }
+
   return (
-    <main className="safe-bottom mx-auto flex max-w-6xl flex-col gap-5 px-4 pb-8 pt-5">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-muted-foreground text-xs uppercase tracking-[0.24em]">
-            Dev / Vehicle
-          </p>
-          <h1 className="mt-2 font-heading text-3xl font-bold tracking-normal">
-            BYDMate vehicle page
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Real Supabase data for <span className="font-mono text-foreground">{vehicleId}</span>.
-            Trip delta chart is drawn from 100% SOC to 0% SOC.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button asChild variant="outline">
-            <Link href={`/dev/history?vehicle_id=${vehicleId}`}>Dev history</Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href={`/dev/bydmate-diplus?vehicle_id=${vehicleId}`}>Di+ debug</Link>
-          </Button>
-        </div>
-      </header>
-
-      {(liveError || samplesError) ? (
-        <section className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm">
-          {liveError ? <p>Live query: {liveError.message}</p> : null}
-          {samplesError ? <p>Samples query: {samplesError.message}</p> : null}
-        </section>
-      ) : null}
-
-      {!snapshot ? (
-        <section className="rounded-2xl border border-border bg-white/[0.03] p-5 text-sm text-muted-foreground">
-          No live snapshot found for <span className="font-mono">{vehicleId}</span>.
-        </section>
-      ) : (
-        <VehicleFixtureModeSwitch snapshot={snapshot} points={points} />
-      )}
-    </main>
+    <VehicleFixtureModeSwitch
+      snapshot={snapshot}
+      points={points}
+      vehicleId={vehicleId}
+      chargingSample={chargingSample}
+    />
   );
 }
 

@@ -117,6 +117,29 @@ function toCalKey(year: number, month: number, day: number) {
   return `${year}-${pad2(month + 1)}-${pad2(day)}`;
 }
 
+function localTodayKey() {
+  const now = new Date();
+  return toCalKey(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+function pickInitialChargingDate(sessions: ChargingSessionRow[]) {
+  const today = localTodayKey();
+  if (sessions.some((s) => s.started_at && localDateKey(s.started_at) === today)) {
+    return today;
+  }
+  const latest = sessions.find((s) => s.started_at)?.started_at;
+  return latest ? localDateKey(latest) : today;
+}
+
+function pickInitialTripDate(trips: BydmateTripRow[]) {
+  const today = localTodayKey();
+  if (trips.some((t) => localDateKey(t.started_at) === today)) {
+    return today;
+  }
+  const latest = trips[0]?.started_at;
+  return latest ? localDateKey(latest) : today;
+}
+
 function MiniCalendar({
   year,
   month,
@@ -134,7 +157,7 @@ function MiniCalendar({
   onNext: () => void;
   onSelect: (date: string | null) => void;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localTodayKey();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const offset = (new Date(year, month, 1).getDay() + 6) % 7;
 
@@ -198,8 +221,10 @@ function MiniCalendar({
               ].join(" ")}
             >
               {day}
-              {hasData && !isSelected && (
-                <span className="absolute bottom-0.5 left-1/2 size-1 -translate-x-1/2 rounded-full bg-primary" />
+              {hasData && (
+                <span
+                  className={`absolute bottom-0.5 left-1/2 size-1 -translate-x-1/2 rounded-full ${isSelected ? "bg-[#06110B]" : "bg-primary"}`}
+                />
               )}
             </button>
           );
@@ -355,7 +380,9 @@ function ChargingTab({ sessions }: { sessions: ChargingSessionRow[] }) {
   const now = new Date();
   const [calYear, setCalYear] = useState(now.getFullYear());
   const [calMonth, setCalMonth] = useState(now.getMonth());
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(() =>
+    pickInitialChargingDate(sessions),
+  );
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const sessionDates = useMemo(() => {
@@ -398,7 +425,9 @@ function ChargingTab({ sessions }: { sessions: ChargingSessionRow[] }) {
 
       {filteredSessions.length === 0 ? (
         <p className="rounded-2xl border border-border bg-white/[0.02] p-4 text-center text-sm text-muted-foreground">
-          No sessions on this date.
+          {sessions.length === 0
+            ? "No charging sessions yet."
+            : "No sessions on this date. Pick a highlighted day on the calendar."}
         </p>
       ) : (
         <div className="flex flex-col gap-2.5">
@@ -562,7 +591,9 @@ function TripsTab({ allTrips }: { allTrips: BydmateTripRow[] }) {
   const now = new Date();
   const [calYear, setCalYear] = useState(now.getFullYear());
   const [calMonth, setCalMonth] = useState(now.getMonth());
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(() =>
+    pickInitialTripDate(allTrips),
+  );
   const [selectedTripId, setSelectedTripId] = useState<string | null | undefined>(undefined);
 
   const tripDates = useMemo(() => {
@@ -665,7 +696,13 @@ export function HistoryDevClient({
       <TabToggle active={tab} onChange={setTab} />
 
       {tab === "charging" ? (
-        <ChargingTab sessions={sessions} />
+        sessions.length === 0 ? (
+          <p className="rounded-2xl border border-border bg-white/[0.02] p-6 text-center text-sm text-muted-foreground">
+            No charging sessions yet for this vehicle user.
+          </p>
+        ) : (
+          <ChargingTab sessions={sessions} />
+        )
       ) : (
         <TripsTab allTrips={trips} />
       )}

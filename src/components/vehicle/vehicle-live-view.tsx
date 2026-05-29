@@ -86,9 +86,9 @@ export function VehicleLiveView() {
 
   if (isLoading) {
     return (
-      <div className="safe-bottom flex flex-col gap-5 px-4 pb-6 pt-5">
+      <div className="safe-bottom flex flex-col gap-3 px-4 pb-6 pt-4">
         <Header />
-        <Skeleton className="h-40 rounded-[1.75rem]" />
+        <Skeleton className="h-32 rounded-[1.75rem]" />
         <div className="grid grid-cols-2 gap-3">
           {Array.from({ length: 6 }).map((_, index) => (
             <Skeleton key={index} className="h-28 rounded-[1.5rem]" />
@@ -100,7 +100,7 @@ export function VehicleLiveView() {
 
   if (error) {
     return (
-      <div className="safe-bottom flex flex-col gap-5 px-4 pb-6 pt-5">
+      <div className="safe-bottom flex flex-col gap-3 px-4 pb-6 pt-4">
         <Header />
         <Card className="voltflow-card border-border bg-transparent">
           <CardContent className="p-6 text-muted-foreground">
@@ -181,7 +181,7 @@ function VehicleLiveContent({
     fixtureTripSegments?.find((trip) => trip.id === expandedTripId) ?? null;
 
   return (
-    <div className="safe-bottom flex flex-col gap-5 px-4 pb-6 pt-5">
+    <div className="safe-bottom flex flex-col gap-3 px-4 pb-6 pt-4">
       <Header />
       <Hero
         snapshot={snapshot}
@@ -265,23 +265,23 @@ function Hero({
   const rangeEstimate = estimateVehicleRangeKm(snapshot, forecastTrips);
 
   return (
-    <section className="voltflow-card overflow-hidden p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-muted-foreground text-xs uppercase tracking-[0.28em]">
+    <section className="voltflow-card overflow-hidden p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
             {snapshot.vehicle_id}
           </p>
-          <h1 className="mt-3 font-heading text-5xl font-bold tracking-normal tabular-nums">
+          <h1 className="mt-1.5 font-heading text-4xl font-bold tracking-normal tabular-nums">
             {fmt(telemetry.soc)}
-            <span className="text-2xl text-muted-foreground">%</span>
+            <span className="text-xl text-muted-foreground">%</span>
           </h1>
-          <p className="mt-2 text-muted-foreground" suppressHydrationWarning>
+          <p className="mt-1 text-xs text-muted-foreground" suppressHydrationWarning>
             {t("vehicle.lastUpdate", { value: timeAgo(snapshot.received_at, nowMs, t) })}
           </p>
         </div>
         <span
           className={
-            "rounded-full border px-4 py-2 font-heading text-xs font-semibold uppercase tracking-[0.2em] " +
+            "shrink-0 rounded-full border px-3 py-1.5 font-heading text-[10px] font-semibold uppercase tracking-[0.16em] " +
             (isStale
               ? "border-yellow-300/25 bg-yellow-300/10 text-yellow-200"
               : isCharging
@@ -294,13 +294,13 @@ function Hero({
       </div>
 
       {isStale ? (
-        <div className="mt-6 grid grid-cols-3 gap-3">
+        <div className="mt-4 grid grid-cols-3 gap-2">
           <HeroMetric icon={BatteryCharging} label={t("vehicle.metrics.soc")} value={`${fmt(telemetry.soc, 0)}%`} />
           <HeroMetric icon={Activity} label={t("vehicle.metrics.soh")} value={`${fmt(telemetry.soh_percent, 1)}%`} />
           <HeroMetric icon={Route} label={t("vehicle.metrics.range")} value={`${fmt(rangeEstimate.estimatedRangeKm, 0)} km`} />
         </div>
       ) : (
-        <div className="mt-6 grid grid-cols-3 gap-3">
+        <div className="mt-4 grid grid-cols-3 gap-2">
           {isCharging ? (
             <>
               <HeroMetric icon={BatteryCharging} label={t("vehicle.telemetry.charging")} value={fmtBool(telemetry.is_charging, t)} />
@@ -329,10 +329,10 @@ function HeroMetric({
   value: string;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-white/[0.03] p-3">
-      <Icon className="mb-2 size-4 text-primary" aria-hidden />
-      <p className="text-muted-foreground text-[11px] uppercase tracking-[0.18em]">{label}</p>
-      <p className="mt-1 font-heading text-lg font-semibold tabular-nums">{value}</p>
+    <div className="rounded-xl border border-border bg-white/[0.03] p-2.5">
+      <Icon className="mb-1 size-3.5 text-primary" aria-hidden />
+      <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+      <p className="mt-0.5 font-heading text-base font-semibold tabular-nums">{value}</p>
     </div>
   );
 }
@@ -381,12 +381,12 @@ function StaleTelemetryNotice() {
   const tx = t as Translator;
 
   return (
-    <Card className="border-yellow-300/20 bg-yellow-300/[0.06]">
-      <CardContent className="p-5">
-        <p className="font-heading text-lg font-semibold tracking-tight text-yellow-100">
+    <Card size="sm" className="border-yellow-300/20 bg-yellow-300/[0.06]">
+      <CardContent className="px-4 py-3">
+        <p className="font-heading text-base font-semibold tracking-tight text-yellow-100">
           {tx("vehicle.staleTitle")}
         </p>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">
           {tx("vehicle.staleBody")}
         </p>
       </CardContent>
@@ -495,21 +495,21 @@ function CellHealthCard({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
   ];
 
   return (
-    <Card className={`border ${cellStatusClasses(status)}`}>
-      <CardHeader className="flex-row items-center justify-between space-y-0 p-4 pb-2">
-        <CardTitle className="flex items-center gap-2 font-heading text-base">
-          <HeartPulse className="size-5" aria-hidden />
+    <Card size="sm" className={`border ${cellStatusClasses(status)}`}>
+      <CardHeader className="flex-row items-center justify-between space-y-0 px-3 pt-3 pb-1">
+        <CardTitle className="flex items-center gap-1.5 font-heading text-sm">
+          <HeartPulse className="size-4" aria-hidden />
           {tx("vehicle.cellHealth.title")}
         </CardTitle>
-        <span className="rounded-full border border-current/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]">
+        <span className="rounded-full border border-current/20 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em]">
           {tx(`vehicle.cellHealth.status.${status}`)}
         </span>
       </CardHeader>
-      <CardContent className="grid grid-cols-3 gap-3 p-4 pt-2">
+      <CardContent className="grid grid-cols-3 gap-2 px-3 pb-3 pt-0">
         {items.map((item) => (
-          <div key={item.label} className="rounded-2xl border border-current/10 bg-black/10 p-3">
-            <p className="text-[11px] uppercase tracking-[0.16em] opacity-75">{item.label}</p>
-            <p className="mt-1 font-heading text-lg font-semibold tabular-nums">{item.value}</p>
+          <div key={item.label} className="rounded-xl border border-current/10 bg-black/10 p-2">
+            <p className="text-[10px] uppercase tracking-[0.14em] opacity-75">{item.label}</p>
+            <p className="mt-0.5 font-heading text-sm font-semibold tabular-nums">{item.value}</p>
           </div>
         ))}
       </CardContent>
@@ -2469,14 +2469,14 @@ function LocationCard({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
   const hasLocation = typeof loc.lat === "number" && typeof loc.lon === "number";
 
   return (
-    <Card className="voltflow-card border-border bg-transparent">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-3 text-xl tracking-tight">
-          <MapPin className="size-5 text-primary" aria-hidden />
+    <Card size="sm" className="voltflow-card gap-2 border-border bg-transparent">
+      <CardHeader className="px-3 pt-3 pb-0">
+        <CardTitle className="flex items-center gap-2 text-base tracking-tight">
+          <MapPin className="size-4 text-primary" aria-hidden />
           {tx("vehicle.location.title")}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3 text-base">
+      <CardContent className="space-y-0 px-3 pb-3 text-sm">
         {hasLocation ? (
           <>
             <Row label={tx("vehicle.location.latitude")} value={fmt(loc.lat, 6)} />
@@ -2498,9 +2498,9 @@ function LocationCard({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-t border-border py-3 first:border-t-0 first:pt-0">
+    <div className="flex items-center justify-between gap-3 border-t border-border py-2 first:border-t-0 first:pt-0">
       <span className="text-muted-foreground">{label}</span>
-      <span className="font-heading font-semibold tabular-nums">{value}</span>
+      <span className="text-right font-heading text-sm font-semibold tabular-nums">{value}</span>
     </div>
   );
 }
@@ -2512,30 +2512,30 @@ function LastTripCard({ vehicleId }: { vehicleId: string }) {
   const trip = trips[0] ?? null;
 
   return (
-    <section className="voltflow-card p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="font-heading text-2xl font-semibold tracking-tight">
+    <section className="voltflow-card p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="font-heading text-xl font-semibold tracking-tight">
             {tx("vehicle.trips.lastTrip")}
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-0.5 text-xs text-muted-foreground">
             {tx("vehicle.trips.olderInHistory")}
           </p>
         </div>
         <Link
           href="/history"
-          className="shrink-0 rounded-full border border-border bg-white/[0.03] px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-muted-foreground transition hover:border-primary/50 hover:text-foreground"
+          className="shrink-0 rounded-full border border-border bg-white/[0.03] px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground transition hover:border-primary/50 hover:text-foreground"
         >
           {tx("vehicle.trips.viewHistory")}
         </Link>
       </div>
 
       {isLoading ? (
-        <div className="mt-5">
-          <Skeleton className="h-28 rounded-2xl" />
+        <div className="mt-3">
+          <Skeleton className="h-24 rounded-xl" />
         </div>
       ) : !trip ? (
-        <p className="mt-5 rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
+        <p className="mt-3 rounded-xl border border-border bg-white/[0.03] p-3 text-xs text-muted-foreground">
           {tx("vehicle.trips.empty")}
         </p>
       ) : (
@@ -2553,22 +2553,22 @@ function LastTripDetail({ trip }: { trip: BydmateTripRow }) {
   const durationMs = Math.max(0, endMs - startMs);
 
   return (
-    <div className="mt-5 grid gap-3">
-      <div className="rounded-2xl border border-primary bg-primary/10 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="font-heading text-lg font-semibold tracking-tight">
+    <div className="mt-3 grid gap-2">
+      <div className="rounded-xl border border-primary bg-primary/10 p-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="font-heading text-base font-semibold tracking-tight">
               {formatClock(startMs)} — {formatClock(endMs)}
             </p>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-0.5 text-xs text-muted-foreground">
               {formatDuration(durationMs)} · {new Date(startMs).toLocaleDateString()}
             </p>
           </div>
-          <span className="rounded-full border border-border bg-background/40 px-3 py-1 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+          <span className="rounded-full border border-border bg-background/40 px-2.5 py-0.5 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
             {tx("vehicle.trips.pointShort", { value: trip.sample_count })}
           </span>
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-3 min-[430px]:grid-cols-[repeat(auto-fit,minmax(6.5rem,1fr))]">
+        <div className="mt-3 grid grid-cols-2 gap-2 min-[380px]:grid-cols-[repeat(auto-fit,minmax(5.5rem,1fr))]">
           <MiniStat label={tx("vehicle.trips.distance")} value={`${fmt(trip.distance_km, 1)} km`} />
           <MiniStat label={tx("vehicle.trips.regen")} value={`${fmt(trip.regen_energy_kwh, 2)} kWh`} />
           <MiniStat label={tx("vehicle.trips.traction")} value={`${fmt(trip.traction_energy_kwh, 2)} kWh`} />
@@ -2588,9 +2588,9 @@ function EmptyVehicleState() {
   const tx = t as Translator;
 
   return (
-    <div className="safe-bottom flex flex-col gap-5 px-4 pb-6 pt-5">
+    <div className="safe-bottom flex flex-col gap-3 px-4 pb-6 pt-4">
       <Header />
-      <section className="voltflow-card p-6">
+      <section className="voltflow-card p-4">
         <CarFront className="size-10 text-primary" aria-hidden />
         <h1 className="mt-5 font-heading text-3xl font-bold tracking-normal">
           {tx("vehicle.empty.title")}

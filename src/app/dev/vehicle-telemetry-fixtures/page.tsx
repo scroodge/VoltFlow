@@ -90,7 +90,7 @@ export default function VehicleTelemetryFixturesPage() {
             expandable trip list.
           </p>
         </div>
-        <VehicleFixtureModeSwitch snapshot={liveSnapshot} points={vehiclePageTrips} />
+        <VehicleFixtureModeSwitch snapshot={liveSnapshot} points={vehiclePageTrips} vehicleId="fixture-car-live" />
       </section>
 
       <FixtureSection
