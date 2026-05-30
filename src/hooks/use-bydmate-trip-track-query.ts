@@ -2,11 +2,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 
+import { devFetch } from "@/lib/dev/dev-fetch";
 import { queryKeys } from "@/lib/query-keys";
 import type { BydmateTripTrackPointRow } from "@/types/database";
 
 async function fetchTripTrack(tripId: string): Promise<BydmateTripTrackPointRow[]> {
-  const response = await fetch(`/api/vehicle/trips/${tripId}/track`);
+  const response = await devFetch(`/api/vehicle/trips/${tripId}/track`);
   if (!response.ok) throw new Error("Failed to load trip track");
 
   const payload = (await response.json()) as { points: BydmateTripTrackPointRow[] };

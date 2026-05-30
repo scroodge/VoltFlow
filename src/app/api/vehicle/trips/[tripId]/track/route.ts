@@ -1,36 +1,36 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { sanitizeTripTrackPoints } from "@/lib/bydmate/telemetry-sanitizer";
-import { createClient } from "@/lib/supabase/server";
+import { resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
 
 type RouteContext = {
   params: Promise<{ tripId: string }>;
 };
 
-export async function GET(_request: Request, context: RouteContext) {
-  const { tripId } = await context.params;
-  const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData.user) {
+export async function GET(request: NextRequest, context: RouteContext) {
+  const access = await resolveVehicleApiAccess(request);
+  if (!access) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: trip, error: tripError } = await supabase
+  const { tripId } = await context.params;
+
+  const { data: trip, error: tripError } = await access.supabase
     .from("bydmate_trips")
     .select("id")
     .eq("id", tripId)
-    .eq("user_id", userData.user.id)
+    .eq("user_id", access.userId)
     .maybeSingle();
 
   if (tripError || !trip) {
     return NextResponse.json({ error: "Trip not found" }, { status: 404 });
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await access.supabase
     .from("bydmate_trip_track_points")
     .select("device_time, lat, lon, accuracy_m, bearing_deg, speed_kmh, power_kw, soc")
     .eq("trip_id", tripId)
-    .eq("user_id", userData.user.id)
+    .eq("user_id", access.userId)
     .order("device_time", { ascending: true });
 
   if (error) {

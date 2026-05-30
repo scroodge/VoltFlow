@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -25,6 +25,7 @@ import {
 
 import { BrandBadge } from "@/components/brand/BrandBadge";
 import { LogoFull } from "@/components/brand/LogoFull";
+import { useVehicleDevSnapshotOverride } from "@/components/dev/vehicle-dev-snapshot-context";
 import { VehicleAnalyticsPanels } from "@/components/vehicle/vehicle-analytics-panels";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -34,6 +35,7 @@ import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useBydmateTripSamplesQuery } from "@/hooks/use-bydmate-trip-samples-query";
 import { useBydmateTripTrackQuery } from "@/hooks/use-bydmate-trip-track-query";
 import { useBydmateTripsQuery, useLatestBydmateTripsQuery } from "@/hooks/use-bydmate-trips-query";
+import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
 import { useAppPath } from "@/lib/dev/dev-path";
@@ -65,6 +67,15 @@ function fmtTemp(value: number | null | undefined, digits = 1) {
   return `${value.toFixed(digits)} °C`;
 }
 
+function isMissingMetricValue(value: string) {
+  return value === "—" || value.includes("—%") || /^—\s/.test(value);
+}
+
+function telemetryGridClass(count: number) {
+  if (count % 3 === 0) return "grid grid-cols-3 gap-2";
+  return "grid grid-cols-2 gap-2 min-[380px]:grid-cols-3";
+}
+
 type Translator = (key: TranslationKey, values?: Record<string, string | number>) => string;
 
 function localeCode(locale: Locale) {
@@ -80,6 +91,14 @@ function timeAgo(iso: string, nowMs: number, t: Translator) {
   return t("vehicle.timeAgoHours", { value: hours });
 }
 
+function useClientMounted() {
+  return useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+}
+
 export function VehicleLiveView() {
   const { t } = useTranslation();
   const tx = t as Translator;
@@ -87,7 +106,9 @@ export function VehicleLiveView() {
   const initialTripId = searchParams.get("trip");
   const { data, isLoading, error } = useBydmateLiveQuery();
   const nowMs = useTickingClock(true);
-  const snapshot = data?.[0] ?? null;
+  const baseSnapshot = data?.[0] ?? null;
+  const snapshot = useVehicleDevSnapshotOverride(baseSnapshot);
+  const hasMounted = useClientMounted();
 
   if (isLoading) {
     return (
@@ -121,7 +142,12 @@ export function VehicleLiveView() {
   }
 
   return (
-    <VehicleLiveContent snapshot={snapshot} nowMs={nowMs} initialTripId={initialTripId} />
+    <VehicleLiveContent
+      snapshot={snapshot}
+      nowMs={nowMs}
+      initialTripId={initialTripId}
+      hasMounted={hasMounted}
+    />
   );
 }
 
@@ -134,7 +160,7 @@ export function VehicleLiveFixtureView({
 }) {
   const nowMs = useTickingClock(true);
 
-  return <VehicleLiveContent snapshot={snapshot} nowMs={nowMs} fixturePoints={points} />;
+  return <VehicleLiveContent snapshot={snapshot} nowMs={nowMs} fixturePoints={points} hasMounted />;
 }
 
 function VehicleLiveContent({
@@ -142,12 +168,21 @@ function VehicleLiveContent({
   nowMs,
   fixturePoints,
   initialTripId = null,
+  hasMounted = true,
 }: {
   snapshot: BydmateLiveSnapshotRow;
   nowMs: number;
   fixturePoints?: BydmateTelemetryPointRow[];
   initialTripId?: string | null;
+  hasMounted?: boolean;
 }) {
+  const { data: carsData } = useCarsQuery();
+  const vehicleLabel = useMemo(() => {
+    const car = carsData?.cars.find(
+      (item) => item.vehicle_alias === snapshot.vehicle_id,
+    );
+    return car?.name ?? snapshot.vehicle_id;
+  }, [carsData?.cars, snapshot.vehicle_id]);
   const isCharging = isChargingTelemetry(snapshot.telemetry);
   const isStale = nowMs - Date.parse(snapshot.received_at) > 90_000;
   const [fallbackDate] = useState(() => localDateKey(Date.now()));
@@ -198,6 +233,8 @@ function VehicleLiveContent({
         isStale={isStale}
         isCharging={isCharging}
         forecastTrips={forecastTrips}
+        vehicleLabel={vehicleLabel}
+        hasMounted={hasMounted}
       />
       {isCharging ? (
         <ChargingModeCard snapshot={snapshot} />
@@ -207,13 +244,15 @@ function VehicleLiveContent({
           {isStale ? (
             <>
               <StaleTelemetryNotice />
-              <LastTripCard vehicleId={snapshot.vehicle_id} />
-              <LocationCard snapshot={snapshot} />
+              <LastTripCard vehicleId={snapshot.vehicle_id} hasMounted={hasMounted} />
+              {!fixturePoints ? <VehicleAnalyticsPanels vehicleId={snapshot.vehicle_id} /> : null}
+              <LocationCard snapshot={snapshot} hasMounted={hasMounted} />
             </>
           ) : (
             <>
               <TelemetryGrid telemetry={snapshot.telemetry} />
               <TripBrowser
+                showDateFilter={Boolean(fixturePoints)}
                 selectedDate={selectedDate}
                 availableDateKeys={fixtureDateKeys}
                 onDateChange={(value) => {
@@ -233,7 +272,7 @@ function VehicleLiveContent({
                 expandedFixtureTrip={expandedFixtureTrip}
               />
               {!fixturePoints ? <VehicleAnalyticsPanels vehicleId={snapshot.vehicle_id} /> : null}
-              <LocationCard snapshot={snapshot} />
+              <LocationCard snapshot={snapshot} hasMounted={hasMounted} />
             </>
           )}
         </>
@@ -262,12 +301,16 @@ function Hero({
   isStale,
   isCharging,
   forecastTrips,
+  vehicleLabel,
+  hasMounted,
 }: {
   snapshot: BydmateLiveSnapshotRow;
   nowMs: number;
   isStale: boolean;
   isCharging: boolean;
   forecastTrips: BydmateTripRow[];
+  vehicleLabel: string;
+  hasMounted: boolean;
 }) {
   const { t: translate } = useTranslation();
   const t = translate as Translator;
@@ -279,14 +322,16 @@ function Hero({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-            {snapshot.vehicle_id}
+            {vehicleLabel}
           </p>
           <h1 className="mt-1.5 font-heading text-4xl font-bold tracking-normal tabular-nums">
             {fmt(telemetry.soc)}
             <span className="text-xl text-muted-foreground">%</span>
           </h1>
           <p className="mt-1 text-xs text-muted-foreground" suppressHydrationWarning>
-            {t("vehicle.lastUpdate", { value: timeAgo(snapshot.received_at, nowMs, t) })}
+            {hasMounted
+              ? t("vehicle.lastUpdate", { value: timeAgo(snapshot.received_at, nowMs, t) })
+              : "\u00a0"}
           </p>
         </div>
         <span
@@ -360,8 +405,8 @@ function ChargingModeCard({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
 
   return (
     <Card className="border-cyan-300/20 bg-cyan-300/[0.06]">
-      <CardHeader className="p-5 pb-3">
-        <CardTitle className="flex items-center gap-2 font-heading text-lg">
+      <CardHeader className="p-4 pb-2">
+        <CardTitle className="flex items-center gap-2 font-heading text-base">
           <BatteryCharging className="size-5 text-cyan-100" aria-hidden />
           {tx("vehicle.chargingMode.title")}
         </CardTitle>
@@ -369,17 +414,9 @@ function ChargingModeCard({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
           {tx("vehicle.chargingMode.body")}
         </p>
       </CardHeader>
-      <CardContent className="grid grid-cols-2 gap-3 p-5 pt-0">
+      <CardContent className="grid grid-cols-2 gap-2 p-4 pt-0 min-[380px]:grid-cols-4">
         {items.map((item) => (
-          <div key={item.label} className="rounded-2xl border border-cyan-100/10 bg-black/10 p-3">
-            <item.icon className="mb-2 size-4 text-cyan-100" aria-hidden />
-            <p className="text-muted-foreground text-[11px] uppercase tracking-[0.16em]">
-              {item.label}
-            </p>
-            <p className="mt-1 font-heading text-lg font-semibold tabular-nums">
-              {item.value}
-            </p>
-          </div>
+          <HeroMetric key={item.label} icon={item.icon} label={item.label} value={item.value} />
         ))}
       </CardContent>
     </Card>
@@ -407,39 +444,92 @@ function StaleTelemetryNotice() {
 function TelemetryGrid({ telemetry }: { telemetry: BydmateTelemetry }) {
   const { t } = useTranslation();
   const tx = t as Translator;
-  const items = [
-    { icon: BatteryCharging, label: tx("vehicle.telemetry.charging"), value: fmtBool(telemetry.is_charging, tx) },
-    { icon: Zap, label: tx("vehicle.telemetry.chargePower"), value: `${fmt(telemetry.charge_power_kw, 1)} kW` },
-    { icon: Activity, label: tx("vehicle.telemetry.chargeType"), value: telemetry.charge_type ?? "—" },
-    { icon: Thermometer, label: tx("vehicle.telemetry.batteryTemp"), value: fmtTemp(telemetry.battery_temp_c) },
-    { icon: Thermometer, label: tx("vehicle.telemetry.cabinTemp"), value: fmtTemp(telemetry.cabin_temp_c) },
-    { icon: Thermometer, label: tx("vehicle.telemetry.outsideTemp"), value: fmtTemp(telemetry.outside_temp_c) },
-    { icon: Activity, label: tx("vehicle.telemetry.odometer"), value: `${fmt(telemetry.odometer_km, 1)} km` },
-    { icon: Activity, label: tx("vehicle.telemetry.soh"), value: `${fmt(telemetry.soh_percent, 1)}%` },
-    { icon: Zap, label: tx("vehicle.telemetry.auxBattery"), value: `${fmt(telemetry.aux_voltage_v, 1)} V` },
-    { icon: Route, label: tx("vehicle.telemetry.tripDistance"), value: `${fmt(telemetry.current_trip_distance_km, 1)} km` },
-    {
-      icon: Gauge,
-      label: tx("vehicle.telemetry.tripConsumption"),
-      value: `${fmt(telemetry.current_trip_consumption_kwh_100km, 1)} kWh/100`,
-    },
-    { icon: BatteryCharging, label: tx("vehicle.telemetry.kwhCharged"), value: `${fmt(telemetry.kwh_charged, 2)} kWh` },
-  ];
+  const isCharging = Boolean(telemetry.is_charging);
+
+  const items = useMemo(() => {
+    const all: {
+      key: string;
+      icon: typeof Gauge;
+      label: string;
+      value: string;
+      when?: "charging" | "driving";
+    }[] = [
+      {
+        key: "chargeType",
+        icon: Activity,
+        label: tx("vehicle.telemetry.chargeType"),
+        value: telemetry.charge_type ?? "—",
+        when: "charging",
+      },
+      {
+        key: "batteryTemp",
+        icon: Thermometer,
+        label: tx("vehicle.telemetry.batteryTemp"),
+        value: fmtTemp(telemetry.battery_temp_c),
+      },
+      {
+        key: "outsideTemp",
+        icon: Thermometer,
+        label: tx("vehicle.telemetry.outsideTemp"),
+        value: fmtTemp(telemetry.outside_temp_c),
+      },
+      {
+        key: "odometer",
+        icon: Activity,
+        label: tx("vehicle.telemetry.odometer"),
+        value: `${fmt(telemetry.odometer_km, 1)} km`,
+      },
+      {
+        key: "soh",
+        icon: Activity,
+        label: tx("vehicle.telemetry.soh"),
+        value: `${fmt(telemetry.soh_percent, 1)}%`,
+      },
+      {
+        key: "auxBattery",
+        icon: Zap,
+        label: tx("vehicle.telemetry.auxBattery"),
+        value: `${fmt(telemetry.aux_voltage_v, 1)} V`,
+      },
+      {
+        key: "tripDistance",
+        icon: Route,
+        label: tx("vehicle.telemetry.tripDistance"),
+        value: `${fmt(telemetry.current_trip_distance_km, 1)} km`,
+        when: "driving",
+      },
+      {
+        key: "tripConsumption",
+        icon: Gauge,
+        label: tx("vehicle.telemetry.tripConsumption"),
+        value: `${fmt(telemetry.current_trip_consumption_kwh_100km, 1)} kWh/100`,
+        when: "driving",
+      },
+      {
+        key: "kwhCharged",
+        icon: BatteryCharging,
+        label: tx("vehicle.telemetry.kwhCharged"),
+        value: `${fmt(telemetry.kwh_charged, 2)} kWh`,
+        when: "charging",
+      },
+    ];
+
+    return all.filter((item) => {
+      if (item.when === "charging") {
+        if (!isCharging) return false;
+      } else if (item.when === "driving") {
+        if (isCharging) return false;
+      }
+      return !isMissingMetricValue(item.value);
+    });
+  }, [isCharging, telemetry, tx]);
+
+  if (items.length === 0) return null;
 
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className={telemetryGridClass(items.length)}>
       {items.map((item) => (
-        <Card key={item.label} className="border-border bg-white/[0.02]">
-          <CardContent className="p-4">
-            <item.icon className="mb-3 size-5 text-primary" aria-hidden />
-            <p className="text-muted-foreground text-xs uppercase tracking-[0.18em]">
-              {item.label}
-            </p>
-            <p className="mt-2 font-heading text-xl font-semibold tracking-normal tabular-nums">
-              {item.value}
-            </p>
-          </CardContent>
-        </Card>
+        <HeroMetric key={item.key} icon={item.icon} label={item.label} value={item.value} />
       ))}
     </div>
   );
@@ -1004,7 +1094,8 @@ function ExpandedTripPanel({ tripId }: { tripId: string }) {
 }
 
 function TripBrowser({
-  selectedDate,
+  showDateFilter = false,
+  selectedDate = "",
   availableDateKeys = [],
   onDateChange,
   trips,
@@ -1014,9 +1105,10 @@ function TripBrowser({
   hasError,
   expandedFixtureTrip,
 }: {
-  selectedDate: string;
+  showDateFilter?: boolean;
+  selectedDate?: string;
   availableDateKeys?: string[];
-  onDateChange: (value: string) => void;
+  onDateChange?: (value: string) => void;
   trips: BydmateTripRow[];
   selectedTripId: string | null;
   onSelectTrip: (id: string) => void;
@@ -1044,7 +1136,7 @@ function TripBrowser({
 
   return (
     <section className="voltflow-card p-5">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className={showDateFilter ? "flex flex-wrap items-end justify-between gap-4" : undefined}>
         <div>
           <h2 className="font-heading text-2xl font-semibold tracking-tight">
             {tx("vehicle.trips.title")}
@@ -1053,18 +1145,20 @@ function TripBrowser({
             {tx("vehicle.trips.subtitle")}
           </p>
         </div>
-        <label className="grid gap-1 text-sm text-muted-foreground">
-          {tx("vehicle.trips.date")}
-          <Input
-            type="date"
-            value={selectedDate}
-            onChange={(event) => onDateChange(event.target.value)}
-            className="w-44"
-          />
-        </label>
+        {showDateFilter ? (
+          <label className="grid gap-1 text-sm text-muted-foreground">
+            {tx("vehicle.trips.date")}
+            <Input
+              type="date"
+              value={selectedDate}
+              onChange={(event) => onDateChange?.(event.target.value)}
+              className="w-44"
+            />
+          </label>
+        ) : null}
       </div>
 
-      {availableDateKeys.length > 0 ? (
+      {showDateFilter && availableDateKeys.length > 0 ? (
         <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
           {availableDateKeys.slice(0, 14).map((dateKey) => {
             const selected = dateKey === selectedDate;
@@ -1073,7 +1167,7 @@ function TripBrowser({
               <button
                 key={dateKey}
                 type="button"
-                onClick={() => onDateChange(dateKey)}
+                onClick={() => onDateChange?.(dateKey)}
                 className={
                   "shrink-0 rounded-full border px-3 py-2 text-sm transition " +
                   (selected
@@ -1276,6 +1370,51 @@ function downsamplePoints<T>(points: T[], maxPoints: number) {
   return sampled;
 }
 
+function finalizeChart(chart: TelemetryChart, maxPoints = MAX_CHART_POINTS): TelemetryChart {
+  const series = chart.series
+    .map((item) => ({
+      ...item,
+      points: downsamplePoints(item.points, maxPoints),
+    }))
+    .filter((item) => item.points.length > 0);
+
+  if (series.length === 0) {
+    return {
+      ...chart,
+      series,
+      hasData: false,
+      minValue: 0,
+      maxValue: 1,
+      minTime: 0,
+      maxTime: 1,
+    };
+  }
+
+  let minValue = Infinity;
+  let maxValue = -Infinity;
+  let minTime = Infinity;
+  let maxTime = -Infinity;
+
+  for (const item of series) {
+    for (const point of item.points) {
+      minValue = Math.min(minValue, point.value);
+      maxValue = Math.max(maxValue, point.value);
+      minTime = Math.min(minTime, point.time);
+      maxTime = Math.max(maxTime, point.time);
+    }
+  }
+
+  return {
+    ...chart,
+    series,
+    hasData: true,
+    minValue,
+    maxValue,
+    minTime,
+    maxTime,
+  };
+}
+
 function createChart(
   title: string,
   unit: string,
@@ -1443,13 +1582,9 @@ function prepareTelemetryHistory(points: TelemetryChartSource[], t: Translator) 
     }
   }
 
-  const charts = [socChart, speedChart, powerChart, regenChart, temperatureChart, cellDeltaChart].map((chart) => ({
-    ...chart,
-    series: chart.series.map((series) => ({
-      ...series,
-      points: downsamplePoints(series.points, MAX_CHART_POINTS),
-    })),
-  }));
+  const charts = [socChart, speedChart, powerChart, regenChart, temperatureChart, cellDeltaChart].map((chart) =>
+    finalizeChart(chart),
+  );
 
   return {
     visiblePointCount,
@@ -2483,11 +2618,23 @@ function MapIconButton({
   );
 }
 
-function LocationCard({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
+function LocationCard({
+  snapshot,
+  hasMounted = true,
+}: {
+  snapshot: BydmateLiveSnapshotRow;
+  hasMounted?: boolean;
+}) {
   const { locale, t } = useTranslation();
   const tx = t as Translator;
   const loc = snapshot.location;
   const hasLocation = typeof loc.lat === "number" && typeof loc.lon === "number";
+  const deviceTimeLabel = hasMounted
+    ? new Date(snapshot.device_time).toLocaleString(localeCode(locale))
+    : "—";
+  const receivedLabel = hasMounted
+    ? new Date(snapshot.received_at).toLocaleString(localeCode(locale))
+    : "—";
 
   return (
     <Card size="sm" className="voltflow-card gap-2 border-border bg-transparent">
@@ -2510,8 +2657,8 @@ function LocationCard({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
             {tx("vehicle.location.empty")}
           </p>
         )}
-        <Row label={tx("vehicle.location.deviceTime")} value={new Date(snapshot.device_time).toLocaleString(localeCode(locale))} />
-        <Row label={tx("vehicle.location.received")} value={new Date(snapshot.received_at).toLocaleString(localeCode(locale))} />
+        <Row label={tx("vehicle.location.deviceTime")} value={deviceTimeLabel} />
+        <Row label={tx("vehicle.location.received")} value={receivedLabel} />
       </CardContent>
     </Card>
   );
@@ -2526,7 +2673,13 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function LastTripCard({ vehicleId }: { vehicleId: string }) {
+function LastTripCard({
+  vehicleId,
+  hasMounted = true,
+}: {
+  vehicleId: string;
+  hasMounted?: boolean;
+}) {
   const { t } = useTranslation();
   const appPath = useAppPath();
   const tx = t as Translator;
@@ -2561,29 +2714,41 @@ function LastTripCard({ vehicleId }: { vehicleId: string }) {
           {tx("vehicle.trips.empty")}
         </p>
       ) : (
-        <LastTripDetail trip={trip} />
+        <LastTripDetail trip={trip} hasMounted={hasMounted} />
       )}
     </section>
   );
 }
 
-function LastTripDetail({ trip }: { trip: BydmateTripRow }) {
+function LastTripDetail({
+  trip,
+  hasMounted = true,
+}: {
+  trip: BydmateTripRow;
+  hasMounted?: boolean;
+}) {
   const { t } = useTranslation();
   const tx = t as Translator;
   const startMs = Date.parse(trip.started_at);
   const endMs = Date.parse(trip.ended_at ?? trip.last_device_time);
   const durationMs = Math.max(0, endMs - startMs);
+  const timeRangeLabel = hasMounted
+    ? `${formatClock(startMs)} — ${formatClock(endMs)}`
+    : "—";
+  const dateLabel = hasMounted
+    ? new Date(startMs).toLocaleDateString()
+    : "—";
 
   return (
     <div className="mt-3 grid gap-2">
       <div className="rounded-xl border border-primary bg-primary/10 p-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="font-heading text-base font-semibold tracking-tight">
-              {formatClock(startMs)} — {formatClock(endMs)}
+            <p className="font-heading text-base font-semibold tracking-tight" suppressHydrationWarning>
+              {timeRangeLabel}
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {formatDuration(durationMs)} · {new Date(startMs).toLocaleDateString()}
+            <p className="mt-0.5 text-xs text-muted-foreground" suppressHydrationWarning>
+              {formatDuration(durationMs)} · {dateLabel}
             </p>
           </div>
           <span className="rounded-full border border-border bg-background/40 px-2.5 py-0.5 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
