@@ -2747,6 +2747,38 @@ function prepareRoute(points: BydmateTelemetryPointRow[]) {
   };
 }
 
+function prepareLiveLocationRoute(
+  location: BydmateLocation,
+  deviceTimeMs: number,
+  telemetry: BydmateLiveSnapshotRow["telemetry"],
+): ReturnType<typeof prepareRoute> {
+  const lat = validNumber(location.lat);
+  const lon = validNumber(location.lon);
+  if (lat == null || lon == null || !Number.isFinite(deviceTimeMs)) {
+    return prepareRoute([]);
+  }
+
+  const point: RoutePoint = {
+    lat,
+    lon,
+    time: deviceTimeMs,
+    powerKw: validNumber(telemetry.power_kw),
+    speedKmh: validNumber(telemetry.speed_kmh),
+    soc: validNumber(telemetry.soc),
+  };
+
+  return {
+    points: [point],
+    totalPoints: 1,
+    start: point,
+    end: point,
+    minLat: lat,
+    maxLat: lat,
+    minLon: lon,
+    maxLon: lon,
+  };
+}
+
 function clampLatitude(value: number) {
   return Math.min(WEB_MERCATOR_MAX_LAT, Math.max(-WEB_MERCATOR_MAX_LAT, value));
 }
@@ -3234,10 +3266,6 @@ export function RouteMap({
               OpenStreetMap contributors
             </a>
           </div>
-          <div className="grid grid-cols-2 gap-3 border-t border-border p-4 text-sm">
-            <MiniStat label={tx("vehicle.route.start")} value={start ? `${start.lat.toFixed(5)}, ${start.lon.toFixed(5)}` : "—"} />
-            <MiniStat label={tx("vehicle.route.end")} value={end ? `${end.lat.toFixed(5)}, ${end.lon.toFixed(5)}` : "—"} />
-          </div>
           <Dialog open={isFullscreenOpen} onOpenChange={setIsFullscreenOpen}>
             <DialogContent className="h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] gap-3 p-3 sm:max-w-[calc(100vw-2rem)]">
               <DialogTitle className="sr-only">{tx("vehicle.route.dialogTitle")}</DialogTitle>
@@ -3377,6 +3405,7 @@ function InteractiveRouteCanvas({
   isFullscreen = false,
   showLayerLegend = true,
   showToolbarControls = true,
+  markerMode = "trip",
 }: {
   route: ReturnType<typeof prepareRoute>;
   zoomOffset: number;
@@ -3393,6 +3422,7 @@ function InteractiveRouteCanvas({
   isFullscreen?: boolean;
   showLayerLegend?: boolean;
   showToolbarControls?: boolean;
+  markerMode?: "trip" | "lastPoint";
 }) {
   const { t } = useTranslation();
   const tx = t as Translator;
@@ -3523,7 +3553,7 @@ function InteractiveRouteCanvas({
         className={`size-full touch-none ${allowMapInteraction ? "cursor-grab active:cursor-grabbing" : hoveredPoint ? "cursor-crosshair" : "cursor-default"}`}
         viewBox="0 0 320 180"
         role="img"
-        aria-label={tx("vehicle.route.aria")}
+        aria-label={markerMode === "lastPoint" ? tx("vehicle.location.mapAria") : tx("vehicle.route.aria")}
         onPointerDown={
           allowMapInteraction
             ? (event) => {
@@ -3628,12 +3658,17 @@ function InteractiveRouteCanvas({
             />
           </>
         ) : null}
-        {mappedStart ? (
+        {markerMode === "lastPoint" && mappedEnd ? (
+          <circle cx={mappedEnd.x} cy={mappedEnd.y} r="6" fill="#38bdf8" stroke="rgba(0,0,0,0.55)" strokeWidth="2">
+            <title>{tx("vehicle.location.lastKnown")}</title>
+          </circle>
+        ) : null}
+        {markerMode === "trip" && mappedStart ? (
           <circle cx={mappedStart.x} cy={mappedStart.y} r="5" fill="#22c55e" stroke="rgba(0,0,0,0.55)" strokeWidth="2">
             <title>{tx("vehicle.route.start")}</title>
           </circle>
         ) : null}
-        {mappedEnd ? (
+        {markerMode === "trip" && mappedEnd && route.totalPoints > 1 ? (
           <circle cx={mappedEnd.x} cy={mappedEnd.y} r="5" fill="#facc15" stroke="rgba(0,0,0,0.55)" strokeWidth="2">
             <title>{tx("vehicle.route.end")}</title>
           </circle>
@@ -3676,6 +3711,115 @@ function MapIconButton({
   );
 }
 
+function LiveLocationMap({
+  location,
+  deviceTimeMs,
+  telemetry,
+}: {
+  location: BydmateLocation;
+  deviceTimeMs: number;
+  telemetry: BydmateTelemetry;
+}) {
+  const { t } = useTranslation();
+  const tx = t as Translator;
+  const route = useMemo(
+    () => prepareLiveLocationRoute(location, deviceTimeMs, telemetry),
+    [deviceTimeMs, location, telemetry],
+  );
+  const baseZoom = useMemo(() => chooseRouteZoom(route), [route]);
+  const [zoomOffset, setZoomOffset] = useState(0);
+  const [pan, setPan] = useState<MapPan>({ x: 0, y: 0 });
+  const panRef = useRef(pan);
+  panRef.current = pan;
+  const [selectedLayer, setSelectedLayer] = useState<RouteLayer>("route");
+  const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
+  const lat = validNumber(location.lat);
+  const lon = validNumber(location.lon);
+
+  if (route.totalPoints === 0 || lat == null || lon == null) return null;
+
+  const zoomBy = (delta: number) => {
+    setZoomOffset((offset) => {
+      const next = stepRouteMapZoom(baseZoom, offset, panRef.current, delta);
+      if (next.zoomOffset !== offset) {
+        setPan(next.pan);
+      }
+      return next.zoomOffset;
+    });
+  };
+  const zoomIn = () => zoomBy(1);
+  const zoomOut = () => zoomBy(-1);
+  const resetView = () => {
+    setZoomOffset(0);
+    setPan({ x: 0, y: 0 });
+  };
+
+  const canvasProps = {
+    route,
+    zoomOffset,
+    pan,
+    onPanChange: setPan,
+    onZoomIn: zoomIn,
+    onZoomOut: zoomOut,
+    onResetView: resetView,
+    selectedLayer,
+    onLayerChange: setSelectedLayer,
+    markerMode: "lastPoint" as const,
+  };
+
+  return (
+    <>
+      <div className="overflow-hidden rounded-xl border border-border bg-background">
+        <InteractiveRouteCanvas
+          {...canvasProps}
+          onOpenFullscreen={() => setIsFullscreenOpen(true)}
+          showLayerLegend={false}
+          showToolbarControls={false}
+          className="h-40"
+        />
+        <div className="border-t border-border px-3 py-2 text-center font-mono text-[11px] tabular-nums text-muted-foreground">
+          {lat.toFixed(5)}, {lon.toFixed(5)}
+        </div>
+        <div className="border-t border-border px-3 py-1.5 text-[10px] text-muted-foreground">
+          {tx("vehicle.route.mapData")} &copy;{" "}
+          <a
+            href="https://www.openstreetmap.org/copyright"
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-2"
+          >
+            OpenStreetMap contributors
+          </a>
+        </div>
+      </div>
+      <Dialog open={isFullscreenOpen} onOpenChange={setIsFullscreenOpen}>
+        <DialogContent className="h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] gap-3 p-3 sm:max-w-[calc(100vw-2rem)]">
+          <DialogTitle className="sr-only">{tx("vehicle.location.lastKnown")}</DialogTitle>
+          <InteractiveRouteCanvas
+            {...canvasProps}
+            onCloseFullscreen={() => setIsFullscreenOpen(false)}
+            showLayerLegend={false}
+            showToolbarControls
+            className="min-h-0 flex-1 rounded-lg"
+            isFullscreen
+          />
+          <div className="px-1 text-[11px] text-muted-foreground">
+            {tx("vehicle.route.mapData")} &copy;{" "}
+            <a
+              href="https://www.openstreetmap.org/copyright"
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-2"
+            >
+              OpenStreetMap contributors
+            </a>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 function LocationCard({
   snapshot,
   hasMounted = true,
@@ -3702,21 +3846,28 @@ function LocationCard({
           {tx("vehicle.location.title")}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-0 px-3 pb-3 text-sm">
+      <CardContent className="space-y-3 px-3 pb-3 text-sm">
         {hasLocation ? (
           <>
-            <Row label={tx("vehicle.location.latitude")} value={fmt(loc.lat, 6)} />
-            <Row label={tx("vehicle.location.longitude")} value={fmt(loc.lon, 6)} />
-            <Row label={tx("vehicle.location.accuracy")} value={`${fmt(loc.accuracy_m, 1)} m`} />
-            <Row label={tx("vehicle.location.bearing")} value={`${fmt(loc.bearing_deg, 0)}°`} />
+            <LiveLocationMap
+              location={loc}
+              deviceTimeMs={Date.parse(snapshot.device_time)}
+              telemetry={snapshot.telemetry}
+            />
+            <div className="space-y-0">
+              <Row label={tx("vehicle.location.accuracy")} value={`${fmt(loc.accuracy_m, 1)} m`} />
+              <Row label={tx("vehicle.location.bearing")} value={`${fmt(loc.bearing_deg, 0)}°`} />
+            </div>
           </>
         ) : (
           <p className="text-muted-foreground">
             {tx("vehicle.location.empty")}
           </p>
         )}
-        <Row label={tx("vehicle.location.deviceTime")} value={deviceTimeLabel} />
-        <Row label={tx("vehicle.location.received")} value={receivedLabel} />
+        <div className="space-y-0">
+          <Row label={tx("vehicle.location.deviceTime")} value={deviceTimeLabel} />
+          <Row label={tx("vehicle.location.received")} value={receivedLabel} />
+        </div>
       </CardContent>
     </Card>
   );

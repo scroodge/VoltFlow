@@ -470,6 +470,8 @@ export const dictionaries = {
         longitude: "Longitude",
         accuracy: "Accuracy",
         bearing: "Bearing",
+        lastKnown: "Last known position",
+        mapAria: "Map showing the last known vehicle position",
         empty:
           "No GPS in the latest payload. BYDMate sends location only when Android location permission is granted.",
         deviceTime: "Device time",
@@ -1062,6 +1064,8 @@ export const dictionaries = {
         longitude: "Даўгата",
         accuracy: "Дакладнасць",
         bearing: "Курс",
+        lastKnown: "Апошняя вядомая пазіцыя",
+        mapAria: "Карта з апошняй вядомай пазіцыяй аўта",
         empty:
           "У апошнім payload няма GPS. BYDMate дасылае лакацыю толькі калі Android мае дазвол на геалакацыю.",
         deviceTime: "Час прылады",
@@ -1653,6 +1657,8 @@ export const dictionaries = {
         longitude: "Долгота",
         accuracy: "Точность",
         bearing: "Курс",
+        lastKnown: "Последняя известная позиция",
+        mapAria: "Карта с последней известной позицией автомобиля",
         empty:
           "В последнем payload нет GPS. BYDMate отправляет геопозицию только когда Android выдал разрешение на геолокацию.",
         deviceTime: "Время устройства",
