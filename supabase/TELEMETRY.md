@@ -18,6 +18,20 @@ X-Vehicle-Id: <vehicle id>
 
 `X-Vehicle-Id` must match every sample `vehicle_id`.
 
+### Device pairing (6-digit code)
+
+Preferred APK setup uses a short code instead of copying a 64-character API key:
+
+1. User opens VoltFlow **Settings → VoltFlow Mate** and taps **Link BYDMate**.
+2. Server creates a row in `bydmate_link_codes` (hashed code, 10-minute TTL) and returns `{ code, expires_at }`.
+3. User enters the code in VoltFlow Mate on DiLink and taps **Connect**.
+4. APK calls `POST /api/bydmate/link-code/redeem` with `{ "code": "482913" }`.
+5. Server marks the code redeemed, returns `{ api_key, endpoint_url }`; APK stores them as `cloud_sync_api_key` and `cloud_sync_url`.
+
+API details: `supabase/BYDMATE_APK_API.md`. Migration: `20260531120000_bydmate_link_codes.sql`. Failed redeems are rate-limited via `bydmate_link_redeem_attempts` (10 failures / 15 minutes per hashed client IP). Existing installs that already pasted the full API key keep working.
+
+Dev preview: create code on `/dev/settings` (dev auth bypass). Redeem is not in the web UI — use the APK or curl against `/api/bydmate/link-code/redeem`.
+
 The Android app may send either one sample directly:
 
 ```json

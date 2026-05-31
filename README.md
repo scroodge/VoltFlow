@@ -97,6 +97,7 @@ This repository already contains the main production surface of VoltFlow. Future
 #### VoltFlow Mate and vehicle telemetry
 
 - Cloud ingest endpoint: `POST /api/bydmate/telemetry`.
+- **Device pairing:** `POST /api/bydmate/link-code` (Settings, logged-in user) issues a 6-digit code; `POST /api/bydmate/link-code/redeem` (APK) returns `api_key` + `endpoint_url`. See `supabase/BYDMATE_APK_API.md`.
 - Accepted payloads: single sample, `{ "samples": [...] }`, and direct JSON array batches.
 - API-key and vehicle-id checks through profile VoltFlow Mate cloud key and `X-Vehicle-Id`.
 - Normalized live snapshot storage in `bydmate_live_snapshots`.
@@ -123,7 +124,7 @@ This repository already contains the main production surface of VoltFlow. Future
 
 #### Developer and diagnostic tools
 
-- Dev pages under `/dev`: dashboard, charging, history, vehicle, VoltFlow Mate Di+, vehicle telemetry fixtures, and Wildberries product search (`/dev/api`).
+- Dev pages under `/dev`: dashboard, charging, history, vehicle, **Settings (pairing code UI)**, VoltFlow Mate Di+, vehicle telemetry fixtures, and Wildberries product search (`/dev/api`). Pairing create works on `/dev/settings` with dev auth bypass; redeem is tested from the APK or `POST /api/bydmate/link-code/redeem`.
 - `/dev/site/` mirror rewrites any app route with auth bypass so protected pages can be viewed in development without a real session.
 - Wildberries dev API proxy under `src/app/api/dev/wb/` and debugger UI in `src/components/dev/wb-api-debugger.tsx`.
 - VoltFlow Mate parser, sanitizer, range estimate, trip filter, trip energy, telemetry history, app preferences, and push-threshold tests.
@@ -176,7 +177,11 @@ OPENAI_API_KEY=your-openai-api-key
 NEXT_PUBLIC_VAPID_PUBLIC_KEY=your-vapid-public-key
 VAPID_PRIVATE_KEY=your-vapid-private-key
 VAPID_SUBJECT=mailto:your@email.com
+BYDMATE_LINK_CODE_PEPPER=random-long-secret
+BYDMATE_TELEMETRY_ENDPOINT_URL=https://your-production-domain.com/api/bydmate/telemetry
 ```
+
+`BYDMATE_LINK_CODE_PEPPER` hashes pairing codes and rate-limit IP rows (falls back to service role key if unset). `BYDMATE_TELEMETRY_ENDPOINT_URL` is returned to the APK on successful redeem when not using the default Vercel host.
 
 The client uses the anon key with RLS. The service role key is used by server-side admin, knowledge search, and VoltFlow Mate ingestion flows and should never be exposed to the browser. `OPENAI_API_KEY` enables semantic search indexing/search. VAPID keys enable browser push notifications.
 
@@ -196,6 +201,7 @@ They create and evolve:
 - `push_subscriptions`
 - knowledge CMS tables for categories, articles, FAQ, accessories, spare parts, and semantic search
 - VoltFlow Mate telemetry snapshots, samples, trips, and track points
+- `bydmate_link_codes` and `bydmate_link_redeem_attempts` for 6-digit APK pairing
 - RLS policies scoped by `auth.uid()`
 - profile creation trigger
 - `updated_at` trigger
@@ -442,6 +448,7 @@ VoltFlow помогает владельцам электромобилей мо
 #### VoltFlow Mate и телеметрия автомобиля
 
 - Cloud ingest endpoint: `POST /api/bydmate/telemetry`.
+- **Подключение APK:** `POST /api/bydmate/link-code` (Настройки, авторизованный пользователь) выдаёт 6-значный код; `POST /api/bydmate/link-code/redeem` (APK) возвращает `api_key` и `endpoint_url`. См. `supabase/BYDMATE_APK_API.md`.
 - Поддерживаются single sample, `{ "samples": [...] }` и прямой JSON array batch.
 - Проверки API key и `X-Vehicle-Id` через профильный VoltFlow Mate cloud key.
 - Live-состояние хранится в `bydmate_live_snapshots`.
@@ -468,7 +475,7 @@ VoltFlow помогает владельцам электромобилей мо
 
 #### Dev и диагностика
 
-- Dev pages под `/dev`: dashboard, charging, history, vehicle, VoltFlow Mate Di+, vehicle telemetry fixtures и Wildberries product search (`/dev/api`).
+- Dev pages под `/dev`: dashboard, charging, history, vehicle, **Settings (UI кода подключения)**, VoltFlow Mate Di+, vehicle telemetry fixtures и Wildberries product search (`/dev/api`). Создание кода — `/dev/settings` с dev auth bypass; redeem — из APK или `POST /api/bydmate/link-code/redeem`.
 - `/dev/site/` зеркало перезаписывает любой app route с bypass авторизации — защищённые страницы открываются в dev без реальной сессии.
 - Wildberries dev API proxy находится в `src/app/api/dev/wb/`, UI debugger — в `src/components/dev/wb-api-debugger.tsx`.
 - Покрыты тестами VoltFlow Mate parser, sanitizer, range estimate, trip filter, trip energy, telemetry history, app preferences и push thresholds.
@@ -521,7 +528,11 @@ OPENAI_API_KEY=your-openai-api-key
 NEXT_PUBLIC_VAPID_PUBLIC_KEY=your-vapid-public-key
 VAPID_PRIVATE_KEY=your-vapid-private-key
 VAPID_SUBJECT=mailto:your@email.com
+BYDMATE_LINK_CODE_PEPPER=random-long-secret
+BYDMATE_TELEMETRY_ENDPOINT_URL=https://your-production-domain.com/api/bydmate/telemetry
 ```
+
+`BYDMATE_LINK_CODE_PEPPER` — соль для хеширования кодов подключения и IP в rate limit (если не задан, используется service role key). `BYDMATE_TELEMETRY_ENDPOINT_URL` — URL телеметрии, который APK получает после успешного redeem.
 
 Клиентская часть использует anon key вместе с RLS. Service role key используется серверными admin-, search- и VoltFlow Mate-сценариями и не должен попадать в браузер. `OPENAI_API_KEY` включает семантический поиск. VAPID-ключи включают browser push-уведомления.
 
@@ -541,6 +552,7 @@ supabase/migrations/
 - `push_subscriptions`
 - CMS-таблицы базы знаний для разделов, статей, FAQ, аксессуаров, запчастей и семантического поиска
 - VoltFlow Mate telemetry snapshots, samples, trips и track points
+- `bydmate_link_codes` и `bydmate_link_redeem_attempts` для 6-значного подключения APK
 - RLS-политики через `auth.uid()`
 - триггер создания профиля
 - триггер `updated_at`

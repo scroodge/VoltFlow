@@ -23,7 +23,7 @@ X-Vehicle-Id: <vehicle_id>
 ## Device pairing (6-digit code)
 
 Preferred setup: user generates a short code in VoltFlow Settings (logged in),
-then enters it in BYDMate. The APK redeems the code once and stores the full
+then enters it in VoltFlow Mate on DiLink. The APK redeems the code once and stores the full
 `bydmate_cloud_api_key` locally. Existing installs that already pasted the API
 key keep working unchanged.
 
@@ -50,7 +50,7 @@ Success:
 - Creating a new code invalidates previous unused codes for that user.
 - Ensures `profiles.bydmate_cloud_api_key` exists (auto-generates if missing).
 
-### Redeem code (BYDMate APK, public)
+### Redeem code (VoltFlow Mate APK, public)
 
 ```http
 POST https://<voltflow-domain>/api/bydmate/link-code/redeem
@@ -83,7 +83,10 @@ Rate limit: failed redeems per client IP (hashed server-side), 10 failures per
 15 minutes. After success, use `api_key` as `X-API-Key` on the telemetry
 endpoint above.
 
-Manual API key paste remains supported in BYDMate Advanced settings.
+Manual API key paste remains supported in VoltFlow Mate **Advanced** (Gateway or Settings → Cloud Sync).
+
+**APK implementation:** `VoltflowLinkClient` derives redeem URL from the telemetry endpoint  
+(`…/api/bydmate/telemetry` → `…/api/bydmate/link-code/redeem`). See `docs/cloud-telemetry-contract-ru.md` in the Mate repo.
 
 ## Sample Shape
 
