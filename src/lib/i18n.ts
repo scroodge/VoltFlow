@@ -494,6 +494,8 @@ export const dictionaries = {
         anchorYear: "Year",
         socSwing: "SOC swing",
         summaryTitle: "Period summary",
+        summaryLoading: "Summarizing period…",
+        summaryLoadingHint: "Trips and telemetry for the selected range.",
         summary: {
           trips: "Trips",
           distance: "Distance",
@@ -1078,6 +1080,8 @@ export const dictionaries = {
         anchorYear: "Год",
         socSwing: "Размах SOC",
         summaryTitle: "Зводка за перыяд",
+        summaryLoading: "Фарміруем зводку…",
+        summaryLoadingHint: "Паездкі і тэлеметрыя за выбраны перыяд.",
         summary: {
           trips: "Паездкі",
           distance: "Прабег",
@@ -1661,6 +1665,8 @@ export const dictionaries = {
         anchorYear: "Год",
         socSwing: "Размах SOC",
         summaryTitle: "Сводка за период",
+        summaryLoading: "Формируем сводку…",
+        summaryLoadingHint: "Поездки и телеметрия за выбранный период.",
         summary: {
           trips: "Поездки",
           distance: "Пробег",

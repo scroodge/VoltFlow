@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { Maximize2 } from "lucide-react";
+import { Maximize2, Loader2 } from "lucide-react";
 
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -130,6 +130,39 @@ export function AnalyticsSummaryStats({
                 <span className="ml-1 text-[11px] font-semibold text-muted-foreground">{item.unit}</span>
               ) : null}
             </p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export function AnalyticsSummaryStatsLoading() {
+  const { t } = useTranslation();
+  const tx = t as Translator;
+
+  return (
+    <section className="mt-4" aria-label={tx("vehicle.analytics.summaryTitle")} aria-busy="true">
+      <p className="mb-2.5 text-xs font-medium text-muted-foreground">{tx("vehicle.analytics.summaryTitle")}</p>
+      <div
+        className="mb-3 flex items-start gap-3 rounded-2xl border border-border bg-white/[0.02] p-3"
+        role="status"
+        aria-live="polite"
+      >
+        <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-primary" aria-hidden />
+        <div>
+          <p className="text-sm font-medium">{tx("vehicle.analytics.summaryLoading")}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{tx("vehicle.analytics.summaryLoadingHint")}</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+        {Array.from({ length: 6 }, (_, index) => (
+          <div
+            key={index}
+            className="flex min-h-[4.75rem] min-w-0 flex-col justify-between rounded-2xl border border-border bg-white/[0.02] p-3"
+          >
+            <Skeleton className="h-3 w-16 rounded-md" />
+            <Skeleton className="mt-2 h-6 w-12 rounded-md" />
           </div>
         ))}
       </div>

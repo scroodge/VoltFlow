@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import {
   AnalyticsSummaryStats,
+  AnalyticsSummaryStatsLoading,
   PhantomDrainBarChart,
   TempConsumptionBarChart,
   useAnalyticsBarCharts,
@@ -327,8 +328,8 @@ export function VehicleAnalyticsPanels({ vehicleId }: { vehicleId: string }) {
           tx={tx}
         />
 
-        {periodTripsQuery.isLoading ? (
-          <Skeleton className="mt-4 h-36 rounded-2xl" />
+        {historyQuery.isLoading || periodTripsQuery.isLoading ? (
+          <AnalyticsSummaryStatsLoading />
         ) : (
           <AnalyticsSummaryStats summary={summary} />
         )}
