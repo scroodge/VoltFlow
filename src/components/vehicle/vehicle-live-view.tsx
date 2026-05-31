@@ -1727,16 +1727,16 @@ function TelemetryLineChart({ chart }: { chart: TelemetryChart }) {
       <svg className="mt-4 h-44 w-full overflow-visible" viewBox="0 0 340 158" role="img" aria-label={tx("vehicle.charts.chartAria", { title })}>
         <line x1="34" x2="318" y1="104" y2="104" stroke="currentColor" className="text-border" strokeWidth="1" />
         <line x1="34" x2="34" y1="16" y2="104" stroke="currentColor" className="text-border" strokeWidth="1" />
-        {yTicks.map((tick) => (
-          <g key={`${title}-y-${tick.label}`}>
+        {yTicks.map((tick, index) => (
+          <g key={`${title}-y-${index}`}>
             <line x1="34" x2="318" y1={y(tick.value)} y2={y(tick.value)} stroke="currentColor" className="text-border/60" strokeWidth="1" strokeDasharray="4 6" />
             <text x="29" y={y(tick.value) + 3} textAnchor="end" className="fill-muted-foreground text-[9px]">
               {tick.label}
             </text>
           </g>
         ))}
-        {xTicks.map((tick) => (
-          <g key={`${title}-x-${tick.label}`}>
+        {xTicks.map((tick, index) => (
+          <g key={`${title}-x-${index}`}>
             <line x1={x(tick.time)} x2={x(tick.time)} y1="104" y2="109" stroke="currentColor" className="text-border" strokeWidth="1" />
             <text x={x(tick.time)} y="124" textAnchor="middle" className="fill-muted-foreground text-[9px]">
               {tick.label}
