@@ -27,7 +27,7 @@ import { BrandBadge } from "@/components/brand/BrandBadge";
 import { LogoFull } from "@/components/brand/LogoFull";
 import { useVehicleDevSnapshotOverride } from "@/components/dev/vehicle-dev-snapshot-context";
 import { VehicleAnalyticsTeaser } from "@/components/vehicle/vehicle-analytics-teaser";
-import { TelemetryBarChart, type BarChartModel } from "@/components/vehicle/telemetry-analytics-charts";
+import { ChartSeriesLegend, TelemetryBarChart, type BarChartModel } from "@/components/vehicle/telemetry-analytics-charts";
 import { formatHistoryRangeSubtitle } from "@/lib/bydmate/telemetry-buckets";
 import type { TelemetryHistoryRange } from "@/lib/bydmate/telemetry-ranges";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1832,13 +1832,7 @@ function TelemetryLineChart({ chart }: { chart: TelemetryChart }) {
             {hasData ? `${fmt(minValue, valueDigits)}-${fmt(maxValue, valueDigits)} ${unit}` : tx("vehicle.charts.noValues")}
           </p>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          {series.map((item) => (
-            <span key={item.label} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="size-2 rounded-full" style={{ backgroundColor: item.color }} />
-              {item.label}
-            </span>
-          ))}
+        <div className="flex shrink-0 items-center">
           <IconButton label={tx("vehicle.charts.fullscreen")} onClick={() => setIsOpen(true)}>
             <Maximize2 className="size-4" aria-hidden />
           </IconButton>
@@ -1850,8 +1844,16 @@ function TelemetryLineChart({ chart }: { chart: TelemetryChart }) {
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] gap-3 p-3 sm:max-w-[calc(100vw-2rem)]">
           <DialogTitle className="sr-only">{title}</DialogTitle>
-          <h3 className="font-heading text-xl font-semibold tracking-tight">{title}</h3>
+          <div className="px-1">
+            <h3 className="font-heading text-xl font-semibold tracking-tight">{title}</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {hasData ? `${fmt(minValue, valueDigits)}-${fmt(maxValue, valueDigits)} ${unit}` : tx("vehicle.charts.noValues")}
+            </p>
+          </div>
           {plot("h-[60dvh]")}
+          <div className="px-1 pt-1">
+            <ChartSeriesLegend series={series} />
+          </div>
         </DialogContent>
       </Dialog>
     </article>

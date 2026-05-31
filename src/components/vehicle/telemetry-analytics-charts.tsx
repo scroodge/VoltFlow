@@ -144,6 +144,14 @@ type BarSeries = {
   values: number[];
 };
 
+type SecondaryAxis = {
+  label: string;
+  unit: string;
+  valueDigits: number;
+  color: string;
+  values: number[];
+};
+
 type BarChartModel = {
   title: string;
   unit: string;
@@ -152,6 +160,9 @@ type BarChartModel = {
   series: BarSeries[];
   bandMin?: number[];
   bandMax?: number[];
+  subtitle?: string;
+  referenceLine?: { value: number; label: string };
+  secondaryAxis?: SecondaryAxis;
 };
 
 function buildBarCharts(
@@ -214,6 +225,8 @@ function buildBarCharts(
   const granularity = range === "quarter" || range === "year" ? "week" : "day";
   const distanceByLabel = new Map<string, number>();
   const consumptionWeighted = new Map<string, { sum: number; weight: number }>();
+  let periodConsumptionSum = 0;
+  let periodConsumptionWeight = 0;
 
   for (const trip of trips) {
     const ms = Date.parse(trip.started_at);
@@ -231,12 +244,17 @@ function buildBarCharts(
     }
     distanceByLabel.set(key, (distanceByLabel.get(key) ?? 0) + (trip.distance_km ?? 0));
     if (trip.avg_consumption_kwh_100km != null && trip.distance_km != null && trip.distance_km > 0) {
+      periodConsumptionSum += trip.avg_consumption_kwh_100km * trip.distance_km;
+      periodConsumptionWeight += trip.distance_km;
       const row = consumptionWeighted.get(key) ?? { sum: 0, weight: 0 };
       row.sum += trip.avg_consumption_kwh_100km * trip.distance_km;
       row.weight += trip.distance_km;
       consumptionWeighted.set(key, row);
     }
   }
+
+  const periodAvgConsumption =
+    periodConsumptionWeight > 0 ? periodConsumptionSum / periodConsumptionWeight : null;
 
   charts.push({
     title: tx("vehicle.analytics.mileageTitle"),
@@ -255,14 +273,29 @@ function buildBarCharts(
     unit: "kWh/100",
     valueDigits: 1,
     labels,
+    subtitle:
+      periodAvgConsumption != null
+        ? tx("vehicle.analytics.efficiencySubtitle", { value: fmt(periodAvgConsumption, 1) })
+        : undefined,
+    referenceLine:
+      periodAvgConsumption != null
+        ? { value: periodAvgConsumption, label: tx("vehicle.analytics.periodAverage") }
+        : undefined,
     series: [{
-      label: tx("vehicle.trips.consumption"),
+      label: tx("vehicle.analytics.efficiencyBarLabel"),
       color: "#a78bfa",
       values: labels.map((label) => {
         const row = consumptionWeighted.get(label);
         return row && row.weight > 0 ? row.sum / row.weight : 0;
       }),
     }],
+    secondaryAxis: {
+      label: tx("vehicle.trips.distance"),
+      unit: "km",
+      valueDigits: 0,
+      color: "var(--voltflow-cyan)",
+      values: labels.map((label) => distanceByLabel.get(label) ?? 0),
+    },
   });
 
   return charts.filter((chart) => {
@@ -288,56 +321,179 @@ function IconButton({ label, onClick, disabled, children }: { label: string; onC
   );
 }
 
+export function ChartSeriesLegend({
+  series,
+  referenceLine,
+  secondaryAxis,
+  unit,
+  valueDigits = 1,
+}: {
+  series: { label: string; color: string }[];
+  referenceLine?: { value: number; label: string };
+  secondaryAxis?: { label: string; color: string };
+  unit?: string;
+  valueDigits?: number;
+}) {
+  if (series.length === 0 && !referenceLine && !secondaryAxis) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      {series.map((item) => (
+        <span key={item.label} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="size-2 rounded-full" style={{ backgroundColor: item.color }} />
+          {item.label}
+        </span>
+      ))}
+      {secondaryAxis ? (
+        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span
+            className="inline-block h-0 w-4 border-t-2"
+            style={{ borderColor: secondaryAxis.color }}
+            aria-hidden
+          />
+          {secondaryAxis.label}
+        </span>
+      ) : null}
+      {referenceLine ? (
+        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="inline-block h-0 w-4 border-t-2 border-dashed border-amber-300" aria-hidden />
+          {referenceLine.label}: {fmt(referenceLine.value, valueDigits)}
+          {unit ? ` ${unit}` : ""}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 export function TelemetryBarChart({ chart }: { chart: BarChartModel }) {
   const { t } = useTranslation();
   const tx = t as Translator;
   const [isOpen, setIsOpen] = useState(false);
 
-  const { title, unit, valueDigits, labels, series, bandMin, bandMax } = chart;
+  const { title, unit, valueDigits, labels, series, bandMin, bandMax, subtitle, referenceLine, secondaryAxis } = chart;
   const count = labels.length;
   const hasBand = bandMin != null && bandMax != null;
-  const allValues = [
-    ...(hasBand ? [...bandMin, ...bandMax] : []),
+
+  function buildScale(values: number[], digits: number, includeReference?: number | null) {
+    const allValues = [
+      ...values,
+      ...(includeReference != null && includeReference > 0 ? [includeReference] : []),
+    ].filter((v) => v > 0);
+    const minValue = allValues.length ? Math.min(...allValues) : 0;
+    const maxValue = allValues.length ? Math.max(...allValues) : 1;
+    const pad = Math.max((maxValue - minValue) * 0.12, maxValue === minValue ? 1 : 0);
+    const yMin = Math.max(0, minValue - pad);
+    const yMax = maxValue + pad;
+    const yScale = (value: number) => {
+      if (yMax === yMin) return 60;
+      return 104 - ((value - yMin) / (yMax - yMin)) * 88;
+    };
+    const yTicks = [
+      { label: fmt(yMax, digits), value: yMax },
+      { label: fmt((yMin + yMax) / 2, digits), value: (yMin + yMax) / 2 },
+      { label: fmt(yMin, digits), value: yMin },
+    ];
+    return { minValue, maxValue, yScale, yTicks };
+  }
+
+  const primaryValues = [
+    ...(hasBand ? [...(bandMin ?? []), ...(bandMax ?? [])] : []),
     ...series.flatMap((s) => s.values),
-  ].filter((v) => v > 0);
-  const minValue = allValues.length ? Math.min(...allValues) : 0;
-  const maxValue = allValues.length ? Math.max(...allValues) : 1;
-  const pad = Math.max((maxValue - minValue) * 0.12, maxValue === minValue ? 1 : 0);
-  const yMin = Math.max(0, minValue - pad);
-  const yMax = maxValue + pad;
-
-  const yScale = (value: number) => 104 - ((value - yMin) / (yMax - yMin)) * 88;
-  const yTicks = [
-    { label: fmt(yMax, valueDigits), value: yMax },
-    { label: fmt((yMin + yMax) / 2, valueDigits), value: (yMin + yMax) / 2 },
-    { label: fmt(yMin, valueDigits), value: yMin },
   ];
+  const compactScale = buildScale(primaryValues, valueDigits);
+  const fullScale = buildScale(
+    primaryValues,
+    valueDigits,
+    referenceLine?.value ?? null,
+  );
+  const secondaryScale = secondaryAxis
+    ? buildScale(secondaryAxis.values, secondaryAxis.valueDigits)
+    : null;
+  const rangeSubtitle = `${fmt(compactScale.minValue, valueDigits)}–${fmt(compactScale.maxValue, valueDigits)} ${unit}`;
 
-  const plot = (heightClass: string) => (
+  const slotCenter = (index: number) => {
+    const slotW = 284 / Math.max(count, 1);
+    return 34 + slotW * index + slotW / 2;
+  };
+
+  const plot = (
+    heightClass: string,
+    scale: ReturnType<typeof buildScale>,
+    showReference: boolean,
+  ) => (
     <svg className={`${heightClass} w-full overflow-visible`} viewBox="0 0 340 158" role="img" aria-label={title}>
       <line x1="34" x2="318" y1="104" y2="104" stroke="currentColor" className="text-border" strokeWidth="1" />
       <line x1="34" x2="34" y1="16" y2="104" stroke="currentColor" className="text-border" strokeWidth="1" />
-      {yTicks.map((tick, index) => (
+      {secondaryScale ? (
+        <line x1="318" x2="318" y1="16" y2="104" stroke="currentColor" className="text-border" strokeWidth="1" />
+      ) : null}
+      {scale.yTicks.map((tick, index) => (
         <g key={`${title}-y-${index}`}>
           <line
             x1="34"
             x2="318"
-            y1={yScale(tick.value)}
-            y2={yScale(tick.value)}
+            y1={scale.yScale(tick.value)}
+            y2={scale.yScale(tick.value)}
             stroke="currentColor"
             className="text-border/60"
             strokeWidth="1"
             strokeDasharray="4 6"
           />
-          <text x="29" y={yScale(tick.value) + 3} textAnchor="end" className="fill-muted-foreground text-[8px]">
+          <text x="29" y={scale.yScale(tick.value) + 3} textAnchor="end" className="fill-muted-foreground text-[8px]">
             {tick.label}
           </text>
         </g>
       ))}
+      {secondaryScale
+        ? secondaryScale.yTicks.map((tick, index) => (
+            <g key={`${title}-y2-${index}`}>
+              <text x="323" y={secondaryScale.yScale(tick.value) + 3} textAnchor="start" className="fill-muted-foreground text-[8px]">
+                {tick.label}
+              </text>
+            </g>
+          ))
+        : null}
+      {showReference && referenceLine && referenceLine.value > 0 ? (
+        <g>
+          <line
+            x1="34"
+            x2="318"
+            y1={scale.yScale(referenceLine.value)}
+            y2={scale.yScale(referenceLine.value)}
+            stroke="#fbbf24"
+            strokeWidth="1.5"
+            strokeDasharray="6 4"
+            opacity="0.9"
+          />
+        </g>
+      ) : null}
+      {secondaryAxis && secondaryScale
+        ? (() => {
+            const points = labels
+              .map((label, index) => {
+                const value = secondaryAxis.values[index] ?? 0;
+                if (value <= 0) return null;
+                return { x: slotCenter(index), y: secondaryScale.yScale(value), value, label };
+              })
+              .filter((p): p is NonNullable<typeof p> => p != null);
+            const d = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(" ");
+            return (
+              <g>
+                {points.length > 1 ? (
+                  <path d={d} fill="none" stroke={secondaryAxis.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
+                ) : null}
+                {points.map((p) => (
+                  <circle key={`${title}-dist-${p.label}`} cx={p.x} cy={p.y} r="3" fill={secondaryAxis.color} />
+                ))}
+              </g>
+            );
+          })()
+        : null}
       {labels.map((label, index) => {
-        const slotW = 284 / Math.max(count, 1);
-        const cx = 34 + slotW * index + slotW / 2;
-        const barW = Math.min(slotW * 0.55, 24);
+        const cx = slotCenter(index);
+        const barW = Math.min((284 / Math.max(count, 1)) * 0.55, 24);
+        const { yScale } = scale;
+        const distKm = secondaryAxis?.values[index] ?? 0;
 
         if (hasBand && bandMin && bandMax) {
           const minBand = bandMin[index] ?? 0;
@@ -362,6 +518,11 @@ export function TelemetryBarChart({ chart }: { chart: BarChartModel }) {
                 </text>
               ) : null}
               <text x={cx} y="124" textAnchor="middle" className="fill-muted-foreground text-[8px]">{label}</text>
+              {distKm > 0 ? (
+                <text x={cx} y="134" textAnchor="middle" className="fill-muted-foreground text-[7px] opacity-80">
+                  {fmt(distKm, 0)} km
+                </text>
+              ) : null}
             </g>
           );
         }
@@ -397,10 +558,20 @@ export function TelemetryBarChart({ chart }: { chart: BarChartModel }) {
               );
             })}
             <text x={cx} y="124" textAnchor="middle" className="fill-muted-foreground text-[8px]">{label}</text>
+            {distKm > 0 ? (
+              <text x={cx} y="134" textAnchor="middle" className="fill-muted-foreground text-[7px] opacity-80">
+                {fmt(distKm, 0)} km
+              </text>
+            ) : null}
           </g>
         );
       })}
       <text x="6" y="60" textAnchor="middle" transform="rotate(-90 6 60)" className="fill-muted-foreground text-[9px]">{unit}</text>
+      {secondaryAxis ? (
+        <text x="334" y="60" textAnchor="middle" transform="rotate(90 334 60)" className="fill-muted-foreground text-[9px]">
+          {secondaryAxis.unit}
+        </text>
+      ) : null}
     </svg>
   );
 
@@ -409,28 +580,38 @@ export function TelemetryBarChart({ chart }: { chart: BarChartModel }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-heading text-lg font-semibold tracking-tight">{title}</h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {fmt(minValue, valueDigits)}–{fmt(maxValue, valueDigits)} {unit}
-          </p>
+          <p className="mt-1 text-xs text-muted-foreground">{rangeSubtitle}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {series.map((item) => (
-            <span key={item.label} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="size-2 rounded-full" style={{ backgroundColor: item.color }} />
-              {item.label}
-            </span>
-          ))}
+        <div className="flex shrink-0 items-center">
           <IconButton label={tx("vehicle.charts.fullscreen")} onClick={() => setIsOpen(true)}>
             <Maximize2 className="size-4" aria-hidden />
           </IconButton>
         </div>
       </div>
-      <div className="mt-4">{plot("h-44")}</div>
+      <div className="mt-4">{plot("h-44", compactScale, false)}</div>
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] gap-3 p-3 sm:max-w-[calc(100vw-2rem)]">
           <DialogTitle className="sr-only">{title}</DialogTitle>
-          <h3 className="font-heading text-xl font-semibold tracking-tight">{title}</h3>
-          {plot("h-[60dvh]")}
+          <div className="px-1">
+            <h3 className="font-heading text-xl font-semibold tracking-tight">{title}</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {referenceLine && subtitle ? subtitle : rangeSubtitle}
+            </p>
+          </div>
+          {plot("h-[60dvh]", fullScale, Boolean(referenceLine))}
+          <div className="px-1 pt-1">
+            <ChartSeriesLegend
+              series={series}
+              secondaryAxis={
+                secondaryAxis
+                  ? { label: secondaryAxis.label, color: secondaryAxis.color }
+                  : undefined
+              }
+              referenceLine={referenceLine}
+              unit={unit}
+              valueDigits={valueDigits}
+            />
+          </div>
         </DialogContent>
       </Dialog>
     </article>
