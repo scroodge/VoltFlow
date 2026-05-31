@@ -13,6 +13,7 @@ These migrations are applied to the linked production project (`fgazcjtxbkiuimdo
 | `20260530121000_bydmate_energy_rollups_and_trip_columns.sql` | Trip energy columns; hourly regen/traction sums; SQL helpers |
 | `20260530122000_bydmate_ingest_energy_hooks.sql` | Ingest RPC updates hourly energy + finalizes trip energy on close |
 | `20260530123000_cars_home_charger_geofence.sql` | `home_charger_lat/lon/radius_m` on `cars` |
+| `20260530124000_bydmate_route_labels.sql` | User route names and park flags for route insights |
 
 **Note:** Remote migration `20260526000100` (`marketplace_persistence`) existed only on the
 linked DB, not in this repo. It was marked `reverted` in history so the CLI could

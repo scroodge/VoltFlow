@@ -279,10 +279,25 @@ New read/export endpoints (authenticated, RLS-scoped):
 | `GET /api/vehicle/analytics?type=monthly&month=&vehicle_id=` | Monthly distance, regen, charged kWh, cost, consumption |
 | `GET /api/vehicle/analytics?type=phantom&vehicle_id=&days=` | Parked SOC drain (idle heartbeats, 4+ h idle) |
 | `GET /api/vehicle/analytics?type=cost-per-km&from=&to=&vehicle_id=` | Charging cost divided by trip distance |
+| `GET /api/vehicle/analytics?type=period-trips&from=&to=&vehicle_id=` | Trips in a telemetry window with enriched outside-temp averages |
+| `GET /api/vehicle/analytics?type=route-insights&vehicle_id=&outside_temp=` | Repeat-route clusters (≥3 trips), consumption vs temp, parked-route list |
+| `PUT /api/vehicle/route-labels` | Save user route name and/or park flag (`bydmate_route_labels`) |
 | `GET /api/vehicle/lifetime-map?vehicle_id=` | Aggregated GPS track points for lifetime map |
 | `GET /api/vehicle/export?format=csv\|json&from=&to=&vehicle_id=` | User data export (sessions, trips, samples) |
 
-UI: **Vehicle** page → analytics panels below trip browser (`vehicle-analytics-panels.tsx`).
+UI: **History → Analytics** tab (`/history?tab=analytics`) hosts `vehicle-analytics-panels.tsx`. The Vehicle page shows a teaser linking here when VoltFlow Mate is connected; dev fixtures at `/dev/vehicle` render the panels inline.
+
+### `bydmate_route_labels`
+
+Migration `20260530124000` stores per-user route preferences for route insights:
+
+| Column | Purpose |
+| --- | --- |
+| `route_id` | Stable fingerprint id from route clustering |
+| `name` | Optional user label (1–80 chars) |
+| `is_park` | When true, route is treated as a parking spot and excluded from repeat-route clustering |
+
+RLS scopes rows by `auth.uid()`. At least one of `name` or `is_park` must be set on insert/update.
 
 ## Server-side ingest and read optimizations
 

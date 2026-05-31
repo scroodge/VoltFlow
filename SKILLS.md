@@ -94,6 +94,29 @@ node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types -
 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/bydmate/range-estimate.test.mjs
 ```
 
+### Vehicle Analytics Skill
+
+Know these files before changing History analytics or route insights:
+
+- `src/components/history/history-view.tsx` — History tabs including `?tab=analytics`
+- `src/components/vehicle/vehicle-analytics-panels.tsx` — analytics host (ranges, KPIs, charts, export)
+- `src/components/vehicle/telemetry-analytics-charts.tsx` — summary stats, bar charts, loading states
+- `src/components/vehicle/route-insights-section.tsx` — route cards, rename, park, map preview
+- `src/components/vehicle/vehicle-analytics-teaser.tsx` — Vehicle page link to History analytics
+- `src/lib/bydmate/telemetry-buckets.ts` — daily/weekly aggregation and period summary
+- `src/lib/bydmate/route-insights.ts` — GPS fingerprint clustering, park filter, API helpers
+- `src/lib/vehicle-analytics.ts` — monthly, phantom, cost-per-km queries
+- `src/app/api/vehicle/analytics/route.ts`
+- `src/app/api/vehicle/route-labels/route.ts`
+
+Preserve these behaviors:
+
+- Analytics primary UI lives under **History → Analytics**, not inline on the Vehicle page (teaser only).
+- Week+ ranges use client-side daily/weekly bucket aggregation and bar charts; day range keeps line charts.
+- Period summary waits for both telemetry history and period-trips queries before rendering KPIs.
+- Route insights exclude parked fingerprints and routes with fewer than three trips from the main list.
+- When VoltFlow Mate live SOC exists, do not auto-complete charging sessions from math (see Charging Skill).
+
 The full project test command is:
 
 ```bash
@@ -219,6 +242,7 @@ Do not accidentally regress:
 - Delayed VoltFlow Mate completion sample preservation.
 - Trip inference excluding charging samples.
 - Trip API endpoints returning list, samples, and GPS track for each trip.
+- History analytics tab, period summary KPIs, route insights clustering, and route label persistence.
 - Telegram knowledge home, categories, articles, FAQ, calculators, accessories, and spare parts.
 - Admin knowledge CMS forms.
 - Semantic search fallback behavior.

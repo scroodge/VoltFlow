@@ -50,7 +50,7 @@ VoltFlow helps EV drivers model and track AC charging sessions without talking d
 - **VoltFlow Mate live telemetry** ingestion for vehicle snapshots, history, and trip tracks.
 - **VoltFlow Mate charging history** with delayed completion sample preservation for SOC/cell-voltage tails.
 - **Trip history** with per-trip energy summary, sample timeline, and GPS track viewer.
-- **Vehicle analytics** — week/month/quarter/year telemetry charts, SOH trend, monthly stats, phantom drain, cost/km, lifetime map, CSV/JSON export.
+- **Vehicle analytics** — day/week/month/quarter/year telemetry charts with period KPI summary, bar charts for week+, mileage, efficiency, phantom drain, consumption vs outside temp, SOH trend, monthly stats, cost/km, lifetime map, route insights (repeat-trip clustering, maps, rename, parking spots), CSV/JSON export. Primary entry: **History → Analytics** (`/history?tab=analytics`); Vehicle page links via teaser when VoltFlow Mate is connected.
 - **Home charger geofence** — auto-apply home tariff when charging starts inside configured GPS radius.
 - **Charge finish projection** — estimated finish time and SOC-at-07:00 on the active charging screen.
 - **Knowledge search** standalone page at `/knowledge/search` for full-text article lookup.
@@ -83,6 +83,9 @@ This repository already contains the main production surface of VoltFlow. Future
 - Charging cockpit: active session screen, progress ring, stats, start/stop actions, charging delta card, deterministic wall-clock fallback calculations, and realtime session sync.
 - Charging history: session list, detail screen, and VoltFlow Mate session-sample charts through `/api/vehicle/charging-sessions/[sessionId]/samples`.
 - Trip history: trip list with energy summary via `/api/vehicle/trips`, per-trip sample timeline via `/api/vehicle/trips/[tripId]/samples`, and GPS track via `/api/vehicle/trips/[tripId]/track`.
+- **History analytics tab:** full telemetry analytics in `VehicleAnalyticsPanels` at `/history?tab=analytics` — range picker (day/week/month/quarter/year), period summary KPIs with loading states, line charts (day) and daily/weekly bar charts (week+), phantom drain, consumption vs outside temp, SOH, monthly stats, route insights, cost/km, lifetime map, and export.
+- **Route insights:** GPS track fingerprint clustering (`GET /api/vehicle/analytics?type=route-insights`), user route names and parking-spot flags in `bydmate_route_labels` (`PUT /api/vehicle/route-labels`), collapsible cards with map preview and per-route consumption vs temp stats.
+- Vehicle page: analytics teaser linking to History when Mate is connected; analytics panels also render on `/dev/vehicle` fixtures and remain accessible when live telemetry is stale.
 - Knowledge search: standalone page at `/knowledge/search` with full-text lookup backed by `GET /api/knowledge/search`.
 - Dashboard, settings, history, charging, and vehicle pages under the authenticated app layout.
 - Installable PWA behavior with manifest, service worker registration in production, branded SVG/PNG assets, and mobile safe-area navigation.
@@ -105,7 +108,7 @@ This repository already contains the main production surface of VoltFlow. Future
 - **90-day raw retention** and **3-year hourly retention** via `purge_old_bydmate_telemetry()` (pg_cron on Pro).
 - **Trip regen/traction persist** on `bydmate_trips` at trip close; hourly `regen_kwh_sum` / `traction_kwh_sum` rollups.
 - **Realtime live vehicle** via Supabase Realtime on `bydmate_live_snapshots` (replaces 5 s polling).
-- **Analytics APIs:** `GET /api/vehicle/telemetry`, `/api/vehicle/analytics`, `/api/vehicle/lifetime-map`, `/api/vehicle/export`.
+- **Analytics APIs:** `GET /api/vehicle/telemetry`, `/api/vehicle/analytics` (`monthly`, `phantom`, `cost-per-km`, `period-trips`, `route-insights`), `/api/vehicle/lifetime-map`, `/api/vehicle/export`; `PUT /api/vehicle/route-labels` for route names and park flags.
 - **VoltFlow Mate APK (2026-05-30):** 1 s active enqueue, 15 s flush, slim idle payloads, optional GPS privacy switch — see Mate `docs/cloud-telemetry-contract-ru.md`.
 
 #### Knowledge base and Telegram experience
@@ -389,7 +392,7 @@ VoltFlow помогает владельцам электромобилей мо
 - **VoltFlow Mate live telemetry** для live-снимков автомобиля, истории и треков поездок.
 - **История зарядки VoltFlow Mate** с сохранением отложенных completion-сэмплов для SOC и хвоста cell-voltage.
 - **История поездок** с energy summary, timeline сэмплов и просмотром GPS-трека.
-- **Аналитика автомобиля** — графики телеметрии за неделю/месяц/квартал/год, тренд SOH, месячная сводка, phantom drain, стоимость/км, карта поездок, экспорт CSV/JSON.
+- **Аналитика автомобиля** — графики телеметрии за день/неделю/месяц/квартал/год с KPI-сводкой за период, bar charts для week+, пробег, эффективность, phantom drain, расход vs внешняя температура, тренд SOH, месячная сводка, стоимость/км, карта поездок, route insights (кластеризация повторяющихся маршрутов, карты, переименование, парковки), экспорт CSV/JSON. Основной вход: **История → Аналитика** (`/history?tab=analytics`); со страницы автомобиля — teaser при подключённом VoltFlow Mate.
 - **Геозона домашней зарядки** — автоматический домашний тариф при старте зарядки внутри заданного GPS-радиуса.
 - **Прогноз окончания зарядки** — оценочное время завершения и SOC в 07:00 на экране активной сессии.
 - **Поиск по базе знаний** на отдельной странице `/knowledge/search`.
@@ -422,6 +425,9 @@ VoltFlow помогает владельцам электромобилей мо
 - Экран зарядки: активная сессия, progress ring, stats, start/stop actions, charging delta card, deterministic wall-clock fallback и realtime-синхронизация.
 - История зарядок: список, detail screen и графики VoltFlow Mate samples через `/api/vehicle/charging-sessions/[sessionId]/samples`.
 - История поездок: список с energy summary через `/api/vehicle/trips`, timeline сэмплов через `/api/vehicle/trips/[tripId]/samples`, GPS-трек через `/api/vehicle/trips/[tripId]/track`.
+- **Вкладка «Аналитика» в Истории:** полная аналитика в `VehicleAnalyticsPanels` на `/history?tab=analytics` — выбор периода, KPI-сводка с loading-состояниями, line/bar charts, phantom drain, расход vs температура, SOH, месячная сводка, route insights, стоимость/км, lifetime map и экспорт.
+- **Route insights:** кластеризация GPS-треков (`GET /api/vehicle/analytics?type=route-insights`), имена маршрутов и флаги парковок в `bydmate_route_labels` (`PUT /api/vehicle/route-labels`), карточки с картой и статистикой расхода vs температура.
+- Страница автомобиля: teaser со ссылкой на Историю; панели также на `/dev/vehicle` и доступны при stale live telemetry.
 - Поиск знаний: отдельная страница `/knowledge/search` с full-text поиском через `GET /api/knowledge/search`.
 - Dashboard, settings, history, charging и vehicle pages внутри authenticated app layout.
 - PWA: manifest, production service worker, бренд-ассеты, установка на home screen и safe-area navigation.
@@ -444,7 +450,7 @@ VoltFlow помогает владельцам электромобилей мо
 - **Retention 90 дней raw / 3 года hourly** через `purge_old_bydmate_telemetry()` (pg_cron на Pro).
 - **Regen/traction на поездке** сохраняются в `bydmate_trips` при закрытии; hourly `regen_kwh_sum` / `traction_kwh_sum`.
 - **Realtime live vehicle** через Supabase Realtime на `bydmate_live_snapshots` (вместо polling каждые 5 с).
-- **Analytics API:** `GET /api/vehicle/telemetry`, `/api/vehicle/analytics`, `/api/vehicle/lifetime-map`, `/api/vehicle/export`.
+- **Analytics API:** `GET /api/vehicle/telemetry`, `/api/vehicle/analytics` (`monthly`, `phantom`, `cost-per-km`, `period-trips`, `route-insights`), `/api/vehicle/lifetime-map`, `/api/vehicle/export`; `PUT /api/vehicle/route-labels`.
 - **VoltFlow Mate APK (2026-05-30):** enqueue 1 с в движении/зарядке, flush 15 с, slim idle payload, переключатель GPS privacy — см. `docs/cloud-telemetry-contract-ru.md` в репозитории Mate.
 
 #### База знаний и Telegram experience
