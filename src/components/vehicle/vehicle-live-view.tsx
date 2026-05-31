@@ -725,12 +725,13 @@ const DEFAULT_USABLE_BATTERY_KWH = 45.1;
 const DEFAULT_CONSUMPTION_KWH_100KM = 18.5;
 const MIN_FORECAST_CONSUMPTION_KWH_100KM = 8;
 const MAX_FORECAST_CONSUMPTION_KWH_100KM = 42;
+const ROUTE_LINE_COLOR = "#1e40af";
 const ROUTE_LAYER_OPTIONS: Array<{
   id: RouteLayer;
   label: string;
   color: string;
 }> = [
-  { id: "route", label: "Route", color: "var(--voltflow-cyan)" },
+  { id: "route", label: "Route", color: ROUTE_LINE_COLOR },
   { id: "regen", label: "Regen", color: "#34d399" },
   { id: "power", label: "Power", color: "#ef4444" },
   { id: "speed", label: "Speed", color: "#22c55e" },
@@ -2348,16 +2349,38 @@ function buildRouteSegments(
       path: `M ${mappedPrevious.x.toFixed(2)} ${mappedPrevious.y.toFixed(2)} L ${mappedPoint.x.toFixed(2)} ${mappedPoint.y.toFixed(2)}`,
       color:
         selectedLayer === "regen" && !hasRegen
-          ? "var(--voltflow-cyan)"
+          ? ROUTE_LINE_COLOR
           : routeLayerSegmentColor(selectedLayer, normalized),
       opacity:
-        selectedLayer === "regen"
-          ? hasRegen ? 1 : 0.22
-          : value == null ? 0.35 : 1,
+        selectedLayer === "route"
+          ? 1
+          : selectedLayer === "regen"
+            ? hasRegen
+              ? 1
+              : 0.22
+            : value == null
+              ? 0.35
+              : 1,
       title: `${formatClock(point.time)} · ${point.powerKw == null ? "—" : `${fmt(point.powerKw, 1)} kW`}`,
       dash: hasRegen ? "7 5" : undefined,
     };
   });
+}
+
+function buildSolidRoutePath(
+  route: ReturnType<typeof prepareRoute>,
+  routeMap: ReturnType<typeof prepareRouteMap>,
+) {
+  if (route.points.length < 2) return "";
+
+  const [first, ...rest] = route.points;
+  const mappedFirst = routeMap.mapPoint(first);
+  let path = `M ${mappedFirst.x.toFixed(2)} ${mappedFirst.y.toFixed(2)}`;
+  for (const point of rest) {
+    const mapped = routeMap.mapPoint(point);
+    path += ` L ${mapped.x.toFixed(2)} ${mapped.y.toFixed(2)}`;
+  }
+  return path;
 }
 
 export function RouteMap({
@@ -2384,7 +2407,7 @@ export function RouteMap({
   const [zoomOffset, setZoomOffset] = useState(0);
   const [pan, setPan] = useState<MapPan>({ x: 0, y: 0 });
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
-  const [selectedLayer, setSelectedLayer] = useState<RouteLayer>("regen");
+  const [selectedLayer, setSelectedLayer] = useState<RouteLayer>("route");
 
   const zoomIn = () => setZoomOffset((value) => Math.min(MAX_MAP_ZOOM_OFFSET, value + 1));
   const zoomOut = () => setZoomOffset((value) => Math.max(MIN_MAP_ZOOM_OFFSET, value - 1));
@@ -2502,7 +2525,7 @@ export function RouteMapPreview({
   const route = useMemo(() => prepareRouteFromTrack(trackPoints), [trackPoints]);
   const [zoomOffset, setZoomOffset] = useState(0);
   const [pan, setPan] = useState<MapPan>({ x: 0, y: 0 });
-  const [selectedLayer, setSelectedLayer] = useState<RouteLayer>("regen");
+  const [selectedLayer, setSelectedLayer] = useState<RouteLayer>("route");
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
 
   if (!isRouteTrackDisplayable(trackPoints) || route.totalPoints < 2) return null;
@@ -2605,6 +2628,10 @@ function InteractiveRouteCanvas({
   const routeSegments = useMemo(
     () => buildRouteSegments(route, routeMap, selectedLayer),
     [route, routeMap, selectedLayer],
+  );
+  const solidRoutePath = useMemo(
+    () => buildSolidRoutePath(route, routeMap),
+    [route, routeMap],
   );
   const mappedStart = route.start ? routeMap.mapPoint(route.start) : null;
   const mappedEnd = route.end ? routeMap.mapPoint(route.end) : null;
@@ -2733,34 +2760,54 @@ function InteractiveRouteCanvas({
           />
         ))}
         <rect width="320" height="180" fill="rgba(5,10,15,0.16)" />
-        {routeSegments.length > 0 ? (
-          routeSegments.map((segment) => (
-            <path
-              key={segment.key}
-              d={segment.path}
-              fill="none"
-              stroke={segment.color}
-              strokeWidth="4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeDasharray={segment.dash}
-              opacity={segment.opacity}
-              filter="url(#route-line-shadow)"
-            >
-              <title>{segment.title}</title>
-            </path>
-          ))
-        ) : route.points.length > 1 ? (
+        {solidRoutePath && (selectedLayer === "route" || selectedLayer === "regen") ? (
           <path
-            d={routeSegments.map((segment) => segment.path).join(" ")}
+            d={solidRoutePath}
             fill="none"
-            stroke={routeLayerColor(selectedLayer)}
+            stroke={ROUTE_LINE_COLOR}
             strokeWidth="4"
             strokeLinecap="round"
             strokeLinejoin="round"
+            opacity={selectedLayer === "route" ? 1 : 0.22}
             filter="url(#route-line-shadow)"
           />
         ) : null}
+        {selectedLayer === "regen"
+          ? routeSegments
+              .filter((segment) => segment.dash)
+              .map((segment) => (
+                <path
+                  key={segment.key}
+                  d={segment.path}
+                  fill="none"
+                  stroke={segment.color}
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeDasharray={segment.dash}
+                  filter="url(#route-line-shadow)"
+                >
+                  <title>{segment.title}</title>
+                </path>
+              ))
+          : selectedLayer !== "route"
+            ? routeSegments.map((segment) => (
+                <path
+                  key={segment.key}
+                  d={segment.path}
+                  fill="none"
+                  stroke={segment.color}
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeDasharray={segment.dash}
+                  opacity={segment.opacity}
+                  filter="url(#route-line-shadow)"
+                >
+                  <title>{segment.title}</title>
+                </path>
+              ))
+            : null}
         {mappedStart ? (
           <circle cx={mappedStart.x} cy={mappedStart.y} r="5" fill="#22c55e" stroke="rgba(0,0,0,0.55)" strokeWidth="2">
             <title>{tx("vehicle.route.start")}</title>
