@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import {
+  fetchPeriodTripsEnriched,
+  fetchRouteInsights,
+} from "@/lib/bydmate/route-insights";
+import {
   fetchCostPerKm,
   fetchMonthlyStats,
   fetchPhantomDrain,
@@ -51,6 +55,34 @@ export async function GET(request: NextRequest) {
         toDate,
       });
       return NextResponse.json(summary);
+    }
+
+    if (type === "period-trips") {
+      const from = params.get("from");
+      const to = params.get("to");
+      if (!from || !to) {
+        return NextResponse.json({ error: "Missing from/to" }, { status: 400 });
+      }
+      const trips = await fetchPeriodTripsEnriched({
+        supabase: access.supabase,
+        userId: access.userId,
+        vehicleId,
+        from,
+        to,
+      });
+      return NextResponse.json({ trips });
+    }
+
+    if (type === "route-insights") {
+      const outsideTemp = params.get("outside_temp");
+      const parsedTemp = outsideTemp != null ? Number(outsideTemp) : null;
+      const routes = await fetchRouteInsights({
+        supabase: access.supabase,
+        userId: access.userId,
+        vehicleId,
+        currentOutsideTempC: Number.isFinite(parsedTemp) ? parsedTemp : null,
+      });
+      return NextResponse.json({ routes });
     }
 
     return NextResponse.json({ error: "Unknown analytics type" }, { status: 400 });

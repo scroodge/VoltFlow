@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import { HistoryView } from "@/components/history/history-view";
 
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function HistoryPage() {
-  return <HistoryView />;
+  return (
+    <Suspense fallback={null}>
+      <HistoryView />
+    </Suspense>
+  );
 }

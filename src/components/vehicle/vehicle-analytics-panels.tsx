@@ -3,17 +3,32 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
+import {
+  AnalyticsSummaryStats,
+  PhantomDrainBarChart,
+  RouteInsightsSection,
+  TempConsumptionBarChart,
+  useAnalyticsBarCharts,
+} from "@/components/vehicle/telemetry-analytics-charts";
 import { TelemetryHistoryCharts, RouteMap } from "@/components/vehicle/vehicle-live-view";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useBydmateTelemetryHistoryQuery } from "@/hooks/use-bydmate-telemetry-history-query";
 import { useTranslation } from "@/hooks/use-translation";
+import { buildAnalyticsSummary, consumptionByOutsideTemp } from "@/lib/bydmate/telemetry-buckets";
+import { resolveTelemetryWindow, type TelemetryHistoryRange } from "@/lib/bydmate/telemetry-ranges";
+import type { RouteInsight } from "@/lib/bydmate/route-insights";
 import { devFetch, isDevAppRoute, withDevApiParams } from "@/lib/dev/dev-fetch";
-import type { TelemetryHistoryRange } from "@/lib/bydmate/telemetry-ranges";
-import type { BydmateTripTrackPointRow } from "@/types/database";
+import type { Locale, TranslationKey } from "@/lib/i18n";
+import type { BydmateTripRow, BydmateTripTrackPointRow } from "@/types/database";
 
 const HISTORY_RANGES: TelemetryHistoryRange[] = ["day", "week", "month", "quarter", "year"];
+
+type Translator = (key: TranslationKey, values?: Record<string, string | number>) => string;
+
+type PeriodTripRow = BydmateTripRow & { outside_temp_avg?: number | null };
 
 function fmt(value: number | null | undefined, digits = 1) {
   return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
@@ -28,7 +43,8 @@ async function fetchAnalytics<T>(path: string): Promise<T> {
 }
 
 export function VehicleAnalyticsPanels({ vehicleId }: { vehicleId: string }) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
+  const tx = t as Translator;
   const [historyRange, setHistoryRange] = useState<TelemetryHistoryRange>("week");
   const [anchorDate, setAnchorDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [monthKey, setMonthKey] = useState(() => new Date().toISOString().slice(0, 7));
@@ -37,11 +53,30 @@ export function VehicleAnalyticsPanels({ vehicleId }: { vehicleId: string }) {
   );
   const [costTo, setCostTo] = useState(() => new Date().toISOString().slice(0, 10));
 
+  const { data: liveRows = [] } = useBydmateLiveQuery();
+  const currentOutsideTemp =
+    liveRows.find((row) => row.vehicle_id === vehicleId)?.telemetry.outside_temp_c ?? null;
+
   const historyQuery = useBydmateTelemetryHistoryQuery({
     range: historyRange,
     anchorDate,
     vehicleId,
   });
+
+  const telemetryWindow = useMemo(
+    () => resolveTelemetryWindow(historyRange, anchorDate),
+    [historyRange, anchorDate],
+  );
+
+  const periodTripsQuery = useQuery({
+    queryKey: ["vehicle-analytics", "period-trips", historyRange, anchorDate, vehicleId],
+    queryFn: () =>
+      fetchAnalytics<{ trips: PeriodTripRow[] }>(
+        `/api/vehicle/analytics?type=period-trips&from=${encodeURIComponent(telemetryWindow.from)}&to=${encodeURIComponent(telemetryWindow.to)}&vehicle_id=${encodeURIComponent(vehicleId)}`,
+      ),
+  });
+
+  const periodTrips = periodTripsQuery.data?.trips ?? [];
 
   const sohQuery = useBydmateTelemetryHistoryQuery({
     range: "year",
@@ -79,6 +114,20 @@ export function VehicleAnalyticsPanels({ vehicleId }: { vehicleId: string }) {
       ),
   });
 
+  const routeInsightsQuery = useQuery({
+    queryKey: ["vehicle-analytics", "route-insights", vehicleId, currentOutsideTemp],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        type: "route-insights",
+        vehicle_id: vehicleId,
+      });
+      if (currentOutsideTemp != null) {
+        params.set("outside_temp", String(currentOutsideTemp));
+      }
+      return fetchAnalytics<{ routes: RouteInsight[] }>(`/api/vehicle/analytics?${params.toString()}`);
+    },
+  });
+
   const mapQuery = useQuery({
     queryKey: ["vehicle-analytics", "lifetime-map", vehicleId],
     queryFn: () =>
@@ -86,6 +135,30 @@ export function VehicleAnalyticsPanels({ vehicleId }: { vehicleId: string }) {
         `/api/vehicle/lifetime-map?vehicle_id=${encodeURIComponent(vehicleId)}`,
       ),
   });
+
+  const historyPoints = historyQuery.data ?? [];
+
+  const summary = useMemo(
+    () =>
+      buildAnalyticsSummary({
+        points: historyPoints,
+        trips: periodTrips,
+      }),
+    [historyPoints, periodTrips],
+  );
+
+  const barCharts = useAnalyticsBarCharts(
+    historyPoints,
+    periodTrips,
+    historyRange,
+    locale as Locale,
+    tx,
+  );
+
+  const tempConsumptionBuckets = useMemo(
+    () => consumptionByOutsideTemp(periodTrips),
+    [periodTrips],
+  );
 
   const sohPoints = useMemo(() => {
     return (sohQuery.data ?? [])
@@ -131,12 +204,23 @@ export function VehicleAnalyticsPanels({ vehicleId }: { vehicleId: string }) {
           {t("vehicle.trips.date")}
           <Input type="date" value={anchorDate} onChange={(event) => setAnchorDate(event.target.value)} className="w-44" />
         </label>
+
+        {periodTripsQuery.isLoading ? (
+          <Skeleton className="mt-4 h-20 rounded-2xl" />
+        ) : (
+          <AnalyticsSummaryStats summary={summary} />
+        )}
+
         <div className="mt-4">
           <TelemetryHistoryCharts
-            points={historyQuery.data ?? []}
+            points={historyPoints}
             isLoading={historyQuery.isLoading}
             hasError={Boolean(historyQuery.error)}
             embedded
+            chartMode="analytics"
+            historyRange={historyRange}
+            anchorDate={anchorDate}
+            barCharts={barCharts}
           />
         </div>
       </section>
@@ -150,6 +234,7 @@ export function VehicleAnalyticsPanels({ vehicleId }: { vehicleId: string }) {
             isLoading={sohQuery.isLoading}
             hasError={Boolean(sohQuery.error)}
             embedded
+            chartMode="soh"
           />
         </div>
       </section>
@@ -183,23 +268,35 @@ export function VehicleAnalyticsPanels({ vehicleId }: { vehicleId: string }) {
         <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.phantomTitle")}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.phantomSubtitle")}</p>
         {phantomQuery.isLoading ? (
-          <Skeleton className="mt-4 h-24 rounded-2xl" />
+          <Skeleton className="mt-4 h-52 rounded-2xl" />
         ) : (phantomQuery.data?.rows.length ?? 0) === 0 ? (
           <p className="mt-4 text-sm text-muted-foreground">{t("vehicle.analytics.phantomEmpty")}</p>
         ) : (
-          <div className="mt-4 grid gap-2">
-            {phantomQuery.data?.rows.slice(0, 7).map((row) => (
-              <div
-                key={row.date}
-                className="flex items-center justify-between rounded-2xl border border-border bg-white/[0.02] px-4 py-3 text-sm"
-              >
-                <span>{row.date}</span>
-                <span className="tabular-nums text-amber-200">-{fmt(row.drainPercent, 1)}%</span>
-                <span className="text-muted-foreground">{fmt(row.idleHours, 0)} h idle</span>
-              </div>
-            ))}
+          <div className="mt-4">
+            <PhantomDrainBarChart rows={phantomQuery.data?.rows ?? []} />
           </div>
         )}
+      </section>
+
+      {tempConsumptionBuckets.length >= 2 ? (
+        <section className="voltflow-card p-5">
+          <h2 className="font-heading text-2xl font-semibold tracking-tight">
+            {t("vehicle.analytics.consumptionVsTemp")}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.consumptionVsTempSubtitle")}</p>
+          <div className="mt-4">
+            <TempConsumptionBarChart buckets={tempConsumptionBuckets} />
+          </div>
+        </section>
+      ) : null}
+
+      <section className="voltflow-card p-5">
+        <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.routeInsightsTitle")}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.routeInsightsSubtitle")}</p>
+        <RouteInsightsSection
+          routes={routeInsightsQuery.data?.routes ?? []}
+          isLoading={routeInsightsQuery.isLoading}
+        />
       </section>
 
       <section className="voltflow-card p-5">

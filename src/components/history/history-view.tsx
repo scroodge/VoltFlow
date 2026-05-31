@@ -2,18 +2,25 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { BrandBadge } from "@/components/brand/BrandBadge";
 import { LogoFull } from "@/components/brand/LogoFull";
+import { VehicleAnalyticsPanels } from "@/components/vehicle/vehicle-analytics-panels";
 import { TripDetailPanel } from "@/components/vehicle/TripDetailPanel";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDuration } from "@/lib/charging-math";
 import { useAppPath } from "@/lib/dev/dev-path";
+import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useSessionsQuery } from "@/hooks/use-sessions-query";
 import { useLatestBydmateTripsQuery } from "@/hooks/use-bydmate-trips-query";
+import { useTranslation } from "@/hooks/use-translation";
+import type { TranslationKey } from "@/lib/i18n";
 import type { BydmateTripRow, ChargingSessionRow } from "@/types/database";
+
+type HistoryTranslator = (key: TranslationKey, values?: Record<string, string | number>) => string;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -59,7 +66,12 @@ function tripDuration(trip: BydmateTripRow) {
 
 // ─── Tab selector ─────────────────────────────────────────────────────────────
 
-type HistoryTab = "charging" | "trips";
+type HistoryTab = "charging" | "trips" | "analytics";
+
+function parseHistoryTab(value: string | null): HistoryTab {
+  if (value === "trips" || value === "analytics") return value;
+  return "charging";
+}
 
 function TabToggle({
   active,
@@ -68,21 +80,30 @@ function TabToggle({
   active: HistoryTab;
   onChange: (tab: HistoryTab) => void;
 }) {
+  const { t } = useTranslation();
+  const tx = t as HistoryTranslator;
+
+  const tabs: { id: HistoryTab; label: string }[] = [
+    { id: "charging", label: tx("history.tab.charging") },
+    { id: "trips", label: tx("history.tab.trips") },
+    { id: "analytics", label: tx("history.tab.analytics") },
+  ];
+
   return (
     <div className="flex rounded-full border border-border bg-white/[0.03] p-1">
-      {(["charging", "trips"] as HistoryTab[]).map((tab) => (
+      {tabs.map((tab) => (
         <button
-          key={tab}
+          key={tab.id}
           type="button"
-          onClick={() => onChange(tab)}
+          onClick={() => onChange(tab.id)}
           className={[
-            "flex-1 rounded-full py-1.5 font-heading text-sm font-semibold capitalize transition",
-            active === tab
+            "flex-1 rounded-full py-1.5 font-heading text-sm font-semibold transition",
+            active === tab.id
               ? "bg-primary text-[#06110B]"
               : "text-muted-foreground hover:text-foreground",
           ].join(" ")}
         >
-          {tab}
+          {tab.label}
         </button>
       ))}
     </div>
@@ -720,11 +741,31 @@ function LoadingSkeleton() {
 // ─── Main export ─────────────────────────────────────────────────────────────
 
 export function HistoryView() {
-  const [tab, setTab] = useState<HistoryTab>("charging");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const appPath = useAppPath();
+  const initialTab = parseHistoryTab(searchParams.get("tab"));
+  const [tab, setTab] = useState<HistoryTab>(initialTab);
   const { data: sessions = [], isLoading: sessionsLoading } = useSessionsQuery();
   const { data: trips = [], isLoading: tripsLoading } = useLatestBydmateTripsQuery(null, 100);
+  const { data: liveRows = [], isLoading: liveLoading } = useBydmateLiveQuery();
 
-  if (sessionsLoading && tripsLoading) {
+  const vehicleId = useMemo(() => {
+    const fromLive = liveRows[0]?.vehicle_id;
+    if (fromLive) return fromLive;
+    return trips[0]?.vehicle_id ?? null;
+  }, [liveRows, trips]);
+
+  useEffect(() => {
+    setTab(parseHistoryTab(searchParams.get("tab")));
+  }, [searchParams]);
+
+  const handleTabChange = (nextTab: HistoryTab) => {
+    setTab(nextTab);
+    router.replace(appPath(`/history?tab=${nextTab}`), { scroll: false });
+  };
+
+  if (sessionsLoading && tripsLoading && tab !== "analytics") {
     return <LoadingSkeleton />;
   }
 
@@ -735,9 +776,23 @@ export function HistoryView() {
         <BrandBadge className="hidden min-[380px]:inline-flex">History</BrandBadge>
       </header>
 
-      <TabToggle active={tab} onChange={setTab} />
+      <TabToggle active={tab} onChange={handleTabChange} />
 
-      {tab === "charging" ? (
+      {tab === "analytics" ? (
+        liveLoading && !vehicleId ? (
+          <div className="flex flex-col gap-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-52 rounded-2xl" />
+            ))}
+          </div>
+        ) : !vehicleId ? (
+          <p className="rounded-2xl border border-border bg-white/[0.02] p-6 text-center text-sm text-muted-foreground">
+            Connect VoltFlow Mate to unlock analytics.
+          </p>
+        ) : (
+          <VehicleAnalyticsPanels vehicleId={vehicleId} />
+        )
+      ) : tab === "charging" ? (
         sessionsLoading ? (
           <div className="flex flex-col gap-3">
             <Skeleton className="h-52 rounded-2xl" />

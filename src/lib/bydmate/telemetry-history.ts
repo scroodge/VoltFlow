@@ -37,6 +37,10 @@ export type TelemetryHistoryPoint = {
   diplus_cell_delta_v?: number | null;
   regen_kwh_sum?: number | null;
   traction_kwh_sum?: number | null;
+  hourly?: {
+    soc_min: number | null;
+    soc_max: number | null;
+  };
 };
 
 function hourlyToSample(row: HourlyRow): TelemetryHistoryPoint {
@@ -52,6 +56,10 @@ function hourlyToSample(row: HourlyRow): TelemetryHistoryPoint {
     },
     regen_kwh_sum: row.regen_kwh_sum,
     traction_kwh_sum: row.traction_kwh_sum,
+    hourly: {
+      soc_min: row.soc_min,
+      soc_max: row.soc_max,
+    },
   };
 }
 
