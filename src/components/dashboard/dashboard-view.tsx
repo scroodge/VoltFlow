@@ -41,17 +41,14 @@ import { usePageVisible } from "@/hooks/use-page-visible";
 import { fetchSessions } from "@/hooks/use-sessions-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
-import {
-  deriveChargingState,
-  formatDuration,
-  type ChargingParams,
-} from "@/lib/charging-math";
+import { formatDuration } from "@/lib/charging-math";
 import { estimateRangeFromSoc, estimateVehicleRangeKm } from "@/lib/bydmate/range-estimate";
 import {
-  deriveLiveChargingState,
-  findFreshChargingSnapshot,
-  snapshotSoc,
-} from "@/lib/charging-live";
+  chargingParamsFromSession,
+  deriveChargingSessionLiveBundle,
+  filterLiveSnapshotsForVehicle,
+} from "@/lib/charging-session-sync";
+import { snapshotSoc } from "@/lib/charging-live";
 import { useAppPath } from "@/lib/dev/dev-path";
 import { currencySymbols } from "@/lib/i18n";
 import { parseDecimalInput } from "@/lib/number-input";
@@ -364,31 +361,21 @@ export function DashboardView() {
     }
   }, [cars, preferredCarId, selectedCarId, setSelectedCarId]);
 
-  const liveChargingSnapshot = useMemo(
-    () => findFreshChargingSnapshot(bydmateLive, nowMs),
-    [bydmateLive, nowMs],
+  const scopedLiveSnapshots = useMemo(
+    () => filterLiveSnapshotsForVehicle(bydmateLive, scopedVehicleId),
+    [bydmateLive, scopedVehicleId],
   );
 
   const liveActive = useMemo(() => {
     if (!activeSession?.started_at) return null;
-    const params: ChargingParams = {
-      startPercent: activeSession.start_percent,
-      targetPercent: activeSession.target_percent,
-      batteryCapacityKwh: activeSession.battery_capacity_kwh,
-      chargerPowerKw: activeSession.charger_power_kw,
-      efficiencyPercent: activeSession.efficiency_percent,
-      pricePerKwh: activeSession.price_per_kwh,
-    };
     const startedAtMs = Date.parse(activeSession.started_at);
-    return (
-      deriveLiveChargingState({
-        snapshot: liveChargingSnapshot,
-        params,
-        startedAtMs,
-        nowMs,
-      }) ?? deriveChargingState(params, startedAtMs, nowMs)
-    );
-  }, [activeSession, liveChargingSnapshot, nowMs]);
+    return deriveChargingSessionLiveBundle({
+      snapshots: scopedLiveSnapshots,
+      params: chargingParamsFromSession(activeSession),
+      startedAtMs,
+      nowMs,
+    }).display;
+  }, [activeSession, scopedLiveSnapshots, nowMs]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [startPct, setStartPct] = useState("42");

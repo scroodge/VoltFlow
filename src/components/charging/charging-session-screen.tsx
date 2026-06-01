@@ -3,10 +3,9 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 
-import { sendChargeCompletedPush } from "@/actions/push";
 import { ChargingDeltaCard } from "@/components/charging/charging-delta-card";
 import {
   useChargingDevLiveOverride,
@@ -30,71 +29,23 @@ import { isDevMockChargingSessionId } from "@/lib/dev/build-mock-charging-sessio
 import { createClient } from "@/lib/supabase/client";
 import { mapChargingSession } from "@/lib/db-map";
 import { queryKeys } from "@/lib/query-keys";
-import { fetchSessionById, useSessionQuery } from "@/hooks/use-session-query";
+import { useChargingSessionLiveSync } from "@/hooks/use-charging-session-live-sync";
+import { useSessionQuery } from "@/hooks/use-session-query";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
 import {
-  deriveLiveChargingState,
-  findFreshChargingSnapshot,
-  findFreshSocSnapshot,
-  snapshotSoc,
-} from "@/lib/charging-live";
+  chargingParamsFromSession,
+  deriveChargingSessionLiveBundle,
+  staticDerivedFromSession,
+} from "@/lib/charging-session-sync";
+import { deriveLiveChargingState, findFreshChargingSnapshot } from "@/lib/charging-live";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import { useAppPath } from "@/lib/dev/dev-path";
 import { useChargingUi } from "@/stores/use-charging-ui";
 import type { ChargingSessionRow } from "@/types/database";
 
-function toParams(row: ChargingSessionRow): ChargingParams {
-  return {
-    startPercent: row.start_percent,
-    targetPercent: row.target_percent,
-    batteryCapacityKwh: row.battery_capacity_kwh,
-    chargerPowerKw: row.charger_power_kw,
-    efficiencyPercent: row.efficiency_percent,
-    pricePerKwh: row.price_per_kwh,
-  };
-}
-
-async function notifyChargeCompleted(sessionId: string, body: string) {
-  if (typeof window === "undefined" || !("Notification" in window)) return;
-
-  if (Notification.permission === "default") {
-    try {
-      await Notification.requestPermission();
-    } catch {
-      return;
-    }
-  }
-
-  if (Notification.permission !== "granted") return;
-
-  const title = "Charge complete";
-  const data = { sessionId, url: `/history/${sessionId}` };
-
-  if ("serviceWorker" in navigator) {
-    try {
-      const registration = await navigator.serviceWorker.ready;
-      await registration.showNotification(title, {
-        body,
-        tag: `charge-complete:${sessionId}`,
-        data,
-      });
-      return;
-    } catch {
-      /* fallback to in-page notification */
-    }
-  }
-
-  const notification = new Notification(title, {
-    body,
-    tag: `charge-complete:${sessionId}`,
-  });
-  notification.onclick = () => {
-    window.focus();
-    window.location.href = `/history/${sessionId}`;
-  };
-}
+const toParams = chargingParamsFromSession;
 
 type ChargingSessionScreenMode = "charging" | "history";
 
@@ -117,12 +68,26 @@ export function ChargingSessionScreen({
   const { data: bydmateLive = [] } = useBydmateLiveQuery();
   const devSource = useChargingDevSource();
   const devOverrideActive = devSource?.isOverrideActive ?? false;
-  const completingRef = useRef(false);
-  const completionNoticeRef = useRef(false);
 
   const clockActive = session?.status === "charging";
   const nowMs = useTickingClock(clockActive);
   const effectiveBydmateLive = useChargingDevLiveOverride(bydmateLive, session, nowMs);
+  const onLiveDerived = useCallback(
+    (derived: ReturnType<typeof staticDerivedFromSession> | null) => {
+      setLiveDerived(derived);
+    },
+    [setLiveDerived],
+  );
+
+  useChargingSessionLiveSync({
+    session,
+    sessionId,
+    liveSnapshots: bydmateLive,
+    enabled: Boolean(session),
+    skipPersist: true,
+    resolveLiveSnapshots: devSource?.resolveLiveSnapshots,
+    onDerived: onLiveDerived,
+  });
 
   useEffect(() => {
     if (isDevAppRoute()) return;
@@ -154,180 +119,19 @@ export function ChargingSessionScreen({
     };
   }, [qc, sessionId, supabase]);
 
-  useEffect(() => {
-    if (!session) {
-      setLiveDerived(null);
-      completingRef.current = false;
-      completionNoticeRef.current = false;
-      return;
-    }
-
-    if (session.status !== "charging" || !session.started_at) {
-      setLiveDerived({
-        currentPercent: session.current_percent,
-        chargedEnergyKwh: session.charged_energy_kwh,
-        estimatedCost: session.estimated_cost,
-        elapsedSeconds: session.started_at
-          ? (Date.now() - Date.parse(session.started_at)) / 1000
-          : 0,
-        remainingSeconds: 0,
-        isComplete: session.status === "completed",
-      });
-      completingRef.current = false;
-      completionNoticeRef.current = session.status === "completed";
-      return;
-    }
-
-    let lastPush = 0;
-    completingRef.current = false;
-
-    const tick = async () => {
-      const now = Date.now();
-      let row = qc.getQueryData<ChargingSessionRow>(
-        queryKeys.session(sessionId),
-      );
-      if (!row?.started_at) {
-        row = await fetchSessionById(sessionId);
-        qc.setQueryData(queryKeys.session(sessionId), row);
-      }
-      if (!row || row.status !== "charging" || !row.started_at) return;
-
-      const params = toParams(row);
-      const startedAtMs = Date.parse(row.started_at);
-      const liveSnapshots = devSource?.resolveLiveSnapshots
-        ? devSource.resolveLiveSnapshots(bydmateLive, row, now)
-        : bydmateLive;
-      const hasLiveSocSource = liveSnapshots.some((snapshot) => snapshotSoc(snapshot) != null);
-      const liveChargingState =
-        deriveLiveChargingState({
-          snapshot: findFreshChargingSnapshot(liveSnapshots, now),
-          params,
-          startedAtMs,
-          nowMs: now,
-        });
-      const liveCompletionState = hasLiveSocSource
-        ? deriveLiveChargingState({
-            snapshot: findFreshSocSnapshot(liveSnapshots, now),
-            params,
-            startedAtMs,
-            nowMs: now,
-            requireCharging: false,
-          })
-        : null;
-      const mathState = deriveChargingState(params, startedAtMs, now);
-      const d = liveChargingState ?? liveCompletionState ?? mathState;
-      setLiveDerived(d);
-
-      if (devOverrideActive) return;
-
-      const completionState = hasLiveSocSource ? liveCompletionState : d;
-      if (completionState?.isComplete && !completingRef.current) {
-        completingRef.current = true;
-        const stoppedAt = new Date().toISOString();
-        const { error: upErr } = await supabase
-          .from("charging_sessions")
-          .update({
-            current_percent: completionState.currentPercent,
-            charged_energy_kwh: completionState.chargedEnergyKwh,
-            estimated_cost: completionState.estimatedCost,
-            status: "completed",
-            stopped_at: stoppedAt,
-          })
-          .eq("id", sessionId);
-
-        if (upErr) {
-          completingRef.current = false;
-          toast.error(upErr.message);
-          return;
-        }
-
-        qc.setQueryData(
-          queryKeys.session(sessionId),
-          (old) =>
-            old
-              ? {
-                  ...old,
-                  current_percent: completionState.currentPercent,
-                  charged_energy_kwh: completionState.chargedEnergyKwh,
-                  estimated_cost: completionState.estimatedCost,
-                  status: "completed",
-                  stopped_at: stoppedAt,
-                }
-              : old,
-        );
-
-        qc.invalidateQueries({ queryKey: queryKeys.sessions });
-        toast.success(t("charging.targetReached") as string);
-        if (!completionNoticeRef.current) {
-          completionNoticeRef.current = true;
-          void notifyChargeCompleted(sessionId, t("charging.targetReached") as string);
-          void sendChargeCompletedPush(sessionId);
-        }
-        return;
-      }
-
-      if (now - lastPush >= 950) {
-        lastPush = now;
-        const stateToPersist = liveChargingState ?? liveCompletionState ?? (!hasLiveSocSource ? d : null);
-        if (!stateToPersist) return;
-        await supabase
-          .from("charging_sessions")
-          .update({
-            current_percent: stateToPersist.currentPercent,
-            charged_energy_kwh: stateToPersist.chargedEnergyKwh,
-            estimated_cost: stateToPersist.estimatedCost,
-          })
-          .eq("id", sessionId);
-      }
-    };
-
-    void tick();
-    const interval = window.setInterval(() => void tick(), 1000);
-    return () => window.clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- interval reads fresh rows from React Query; full `session` would thrash the timer on every write
-  }, [
-    qc,
-    session?.id,
-    session?.status,
-    session?.started_at,
-    sessionId,
-    setLiveDerived,
-    supabase,
-    bydmateLive,
-    devOverrideActive,
-    devSource,
-    t,
-  ]);
-
   const derived: DerivedChargingState | null = useMemo(() => {
     if (!session) return null;
     if (session.status === "charging" && liveDerived) return liveDerived;
     if (session.status === "charging" && session.started_at) {
-      const params = toParams(session);
       const startedAtMs = Date.parse(session.started_at);
-      return (
-        deriveLiveChargingState({
-          snapshot: findFreshChargingSnapshot(effectiveBydmateLive, nowMs),
-          params,
-          startedAtMs,
-          nowMs,
-        }) ?? deriveChargingState(params, startedAtMs, nowMs)
-      );
+      return deriveChargingSessionLiveBundle({
+        snapshots: effectiveBydmateLive,
+        params: toParams(session),
+        startedAtMs,
+        nowMs,
+      }).display;
     }
-    const startedMs = session.started_at ? Date.parse(session.started_at) : null;
-    const stoppedMs = session.stopped_at ? Date.parse(session.stopped_at) : null;
-    const elapsedSeconds =
-      startedMs != null && stoppedMs != null
-        ? (stoppedMs - startedMs) / 1000
-        : 0;
-    return {
-      currentPercent: session.current_percent,
-      chargedEnergyKwh: session.charged_energy_kwh,
-      estimatedCost: session.estimated_cost,
-      elapsedSeconds,
-      remainingSeconds: 0,
-      isComplete: session.status === "completed",
-    } satisfies DerivedChargingState;
+    return staticDerivedFromSession(session);
   }, [session, liveDerived, nowMs, effectiveBydmateLive]);
 
   const displayUsesLiveSoc = useMemo(() => {
