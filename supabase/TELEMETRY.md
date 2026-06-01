@@ -77,8 +77,9 @@ Important compatibility rules:
   numeric strings. `is_charging` may arrive as a boolean or `"true"`/`"false"`.
 - Batch payloads are capped at 300 samples.
 
-Current VoltFlow Mate Android APK generation (updated 2026-05-30):
+Current VoltFlow Mate Android APK generation (v0.3.2, updated 2026-06-01):
 
+- **In-app updates:** optional check on launch against `scroodge/BYDMate-own` GitHub Releases; user confirms download/install from the gateway screen.
 - **Active cadence:** 1 s enqueue while moving or charging; 15 s HTTP flush with batches up to 15 samples.
 - **Idle cadence:** 5 min heartbeats; up to 2 consecutive unchanged idle samples may be skipped (SOC/charging/power unchanged).
 - **Payload tiers:** idle samples are slim (mostly `soc` + `is_charging`); moving/charging include `power_kw`; null fields are omitted.

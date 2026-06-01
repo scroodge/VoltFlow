@@ -29,9 +29,13 @@ Know these files before changing charging behavior:
 
 - `src/lib/charging-math.ts`
 - `src/lib/charging-live.ts`
+- `src/lib/charging-session-sync.ts` — `deriveChargingSessionLiveBundle`, fresh-vs-math persist rules
+- `src/hooks/use-charging-session-live-sync.ts` — ~1s DB persist + auto-complete
+- `src/components/charging/charging-session-background-sync.tsx` — mounted from `MobileShell`
 - `src/actions/sessions.ts`
 - `src/components/charging/charging-session-screen.tsx`
 - `src/components/charging/charging-hub-view.tsx`
+- `src/components/dashboard/dashboard-view.tsx`
 - `src/app/(app)/charging/page.tsx`
 - `src/app/(app)/charging/[id]/page.tsx`
 - `src/app/(app)/history/page.tsx`
@@ -41,13 +45,17 @@ Preserve these behaviors:
 
 - Wall-clock math can calculate current display state, delivered kWh, cost, ETA, and remaining time.
 - Persisted session data keeps refreshes and PWA restores consistent.
-- Realtime updates on `charging_sessions` keep active screens in sync.
-- If VoltFlow Mate live SOC exists, session completion must wait for fresh live SOC and must not be forced by mathematical time estimates.
+- While `status = 'charging'`, `ChargingSessionBackgroundSync` persists `current_percent` / energy / cost to Postgres from any authenticated route (not only `/charging/[id]`). Telemetry ingest does not update `charging_sessions`.
+- `deriveChargingSessionLiveBundle` prefers fresh Mate snapshots (`received_at` within 90s), uses math for persist when Mate is offline, and scopes live rows by `vehicle_alias` when the car has one.
+- `ChargingSessionScreen` drives UI via `onDerived` with `skipPersist: true` so background sync remains the single writer.
+- Supabase Realtime on `charging_sessions` keeps open screens in sync after writes.
+- If fresh VoltFlow Mate live SOC exists, session completion must wait for fresh live SOC and must not be forced by mathematical time estimates.
 
 When debugging history:
 
 - Compare `charging_sessions.started_at`, `charging_sessions.stopped_at`, `charging_sessions.current_percent`, and `charging_sessions.target_percent`.
 - Compare them with `bydmate_telemetry_samples.device_time` and delayed samples around the stop time.
+- If `current_percent` lags telemetry but samples are current, the PWA was likely closed — not a Mate ingest bug.
 - Check whether VoltFlow Mate reports target SOC a few minutes after VoltFlow marks the session `completed`.
 - Preserve samples that contain the 100% SOC and cell-voltage tail.
 
@@ -123,7 +131,7 @@ Preserve these behaviors:
 - Trip charts: Speed & power on one dual-axis card; regen as distance/time bar chart, not cumulative line.
 - Route map zoom anchors to **viewport center** after pan; OSM zoom limits only (z2–z19).
 - Chart hover tooltips and crosshair are **fullscreen dialog only** — do not add heavy hover to compact card previews without an explicit UX request.
-- When VoltFlow Mate live SOC exists, do not auto-complete charging sessions from math (see Charging Skill).
+- When fresh VoltFlow Mate live SOC exists, do not auto-complete charging sessions from math (see Charging Skill). Session row persist is client-side via `ChargingSessionBackgroundSync`.
 
 The full project test command is:
 

@@ -1,13 +1,14 @@
 # VoltFlow Mate APK API Contract
 
-Last updated: 2026-05-31
+Last updated: 2026-06-01
 
 This file is the handoff contract for the Android APK. Keep it in sync with
 `src/lib/bydmate/ingest-payload.ts` and `src/app/api/bydmate/telemetry/route.ts`.
 
 **Cadence, payload tiers, GPS privacy:** see VoltFlow Mate Android repo
-`docs/cloud-telemetry-contract-ru.md` (updated 2026-05-30: 1 s active enqueue,
-15 s flush, slim idle payloads, `cloud_sync_omit_gps`).
+`docs/cloud-telemetry-contract-ru.md` (v0.3.2: GitHub auto-update on gateway;
+6-digit link code; 1 s active enqueue, 15 s flush, slim idle payloads,
+`cloud_sync_omit_gps`).
 
 ## Endpoint
 

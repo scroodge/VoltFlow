@@ -41,7 +41,7 @@ VoltFlow helps EV drivers model and track AC charging sessions without talking d
 - **Vehicle profiles** for usable battery capacity, wallbox power, and AC efficiency.
 - **Tariff-aware estimates** with local currency preferences: EUR, USD, BYN, and RUB.
 - **Supabase Auth + RLS** so users only read and update their own vehicles and sessions.
-- **Realtime session sync** through Supabase updates on `charging_sessions`.
+- **Active session sync** — while charging, the PWA writes live SOC progress to `charging_sessions` about once per second from any app screen (background sync in `MobileShell`), with Supabase Realtime for multi-tab UI.
 - **Installable PWA** with app manifest, service worker, icons, and iOS home-screen support.
 - **Mobile-first shell** optimized for thumb-friendly controls and safe-area navigation.
 - **Internationalization** for English, Belarusian, and Russian.
@@ -80,7 +80,7 @@ This repository already contains the main production surface of VoltFlow. Future
 - Public/marketing entry point and authenticated mobile app shell.
 - Supabase authentication flows: login, forgot password, reset password, auth callback, and protected app routes.
 - Vehicle profile management: create and edit cars with battery, wallbox, efficiency, tariff, and currency preferences.
-- Charging cockpit: active session screen, progress ring, stats, start/stop actions, charging delta card, deterministic wall-clock fallback calculations, and realtime session sync.
+- Charging cockpit: active session screen, progress ring, stats, start/stop actions, charging delta card, deterministic wall-clock fallback calculations, background `charging_sessions` persist from any route, and Supabase Realtime for open screens.
 - Charging history: session list, detail screen, and VoltFlow Mate session-sample charts through `/api/vehicle/charging-sessions/[sessionId]/samples`.
 - Trip history: trip list with energy summary via `/api/vehicle/trips` (optional `?month=YYYY-MM` for calendar dates), per-trip sample timeline via `/api/vehicle/trips/[tripId]/samples`, and GPS track via `/api/vehicle/trips/[tripId]/track`.
 - **Per-trip charts** (`TelemetryHistoryCharts` in trip detail): SOC line; **Speed & power** dual-axis line (km/h + kW); **Recovered energy** bar chart (incremental regen per interval, X-axis prefers trip distance in km when available, else time); temperature and cell-delta lines. **Fullscreen only:** crosshair + tooltip on hover for all line and bar charts.
@@ -112,7 +112,7 @@ This repository already contains the main production surface of VoltFlow. Future
 - **Trip regen/traction persist** on `bydmate_trips` at trip close; hourly `regen_kwh_sum` / `traction_kwh_sum` rollups.
 - **Realtime live vehicle** via Supabase Realtime on `bydmate_live_snapshots` (replaces 5 s polling).
 - **Analytics APIs:** `GET /api/vehicle/telemetry`, `/api/vehicle/analytics` (`monthly`, `phantom`, `cost-per-km`, `period-trips`, `route-insights`), `/api/vehicle/lifetime-map`, `/api/vehicle/export`; `PUT /api/vehicle/route-labels` for route names and park flags.
-- **VoltFlow Mate APK (2026-05-30):** 1 s active enqueue, 15 s flush, slim idle payloads, optional GPS privacy switch — see Mate `docs/cloud-telemetry-contract-ru.md`.
+- **VoltFlow Mate APK (v0.3.2, 2026-06-01):** GitHub auto-update on launch (optional); 6-digit VoltFlow link code on gateway; 1 s active enqueue, 15 s flush, slim idle payloads, optional GPS privacy — see Mate `docs/cloud-telemetry-contract-ru.md`.
 
 #### Knowledge base and Telegram experience
 
@@ -138,6 +138,7 @@ Before adding features or fixing bugs, read [AGENTS.md](AGENTS.md). The short ve
 - Do not assume charging-history data is lost when a chart stops below target SOC. Compare `charging_sessions.started_at`, `charging_sessions.stopped_at`, `charging_sessions.current_percent`, `charging_sessions.target_percent`, `bydmate_telemetry_samples.device_time`, and delayed samples around the stop time.
 - Preserve delayed VoltFlow Mate completion samples because target SOC may arrive minutes after VoltFlow marks a session `completed`.
 - When fresh VoltFlow Mate live SOC exists, never auto-complete a charging session from mathematical time estimates. Math is display fallback only; completion must wait for live SOC so the 100% cell-voltage tail is captured.
+- `charging_sessions.current_percent` is updated by the web client (`ChargingSessionBackgroundSync` / `useChargingSessionLiveSync`), not by telemetry ingest. If the DB row is frozen but `bydmate_telemetry_samples` is current, the user likely closed the PWA; reopen any VoltFlow screen while charging to resume writes.
 - Keep existing working features untouched unless the task explicitly requires changing them. Prefer narrow, tested edits over broad refactors.
 
 ### Getting Started
@@ -353,8 +354,8 @@ src/app/                 Routes, layouts, manifest, auth callback
 src/app/api/             VoltFlow Mate, vehicle telemetry, push, knowledge, and dev APIs
 src/actions/             Server actions for cars and sessions
 src/components/          UI, brand, dashboard, charging, history, telegram, admin, settings
-src/hooks/               Query hooks, VoltFlow Mate hooks, session, translation, ticking clock
-src/lib/                 Charging math, VoltFlow Mate logic, i18n, Supabase clients, utilities
+src/hooks/               Query hooks, VoltFlow Mate hooks, charging session live sync, translation
+src/lib/                 Charging math, charging-session-sync, VoltFlow Mate logic, i18n, Supabase
 src/stores/              Local UI and preference stores
 src/types/               Database types
 supabase/migrations/     Database schema, RLS, triggers, Realtime setup
@@ -391,7 +392,7 @@ VoltFlow помогает владельцам электромобилей мо
 - **Профили автомобилей** с полезной емкостью батареи, мощностью wallbox и эффективностью AC-зарядки.
 - **Расчет стоимости по тарифу** с локальными валютами: EUR, USD, BYN и RUB.
 - **Supabase Auth + RLS**, чтобы пользователь видел и менял только свои автомобили и сессии.
-- **Realtime-синхронизация** через обновления таблицы `charging_sessions`.
+- **Синхронизация активной сессии** — во время зарядки PWA пишет live SOC в `charging_sessions` ~раз в секунду с любого экрана (фоновый sync в `MobileShell`), плюс Supabase Realtime для открытых вкладок.
 - **Устанавливаемая PWA** с manifest, service worker, иконками и поддержкой iOS Home Screen.
 - **Mobile-first интерфейс** с крупными touch-контролами и safe-area навигацией.
 - **Локализация** на английский, белорусский и русский языки.
@@ -431,7 +432,7 @@ VoltFlow помогает владельцам электромобилей мо
 - Public/marketing entry point и защищенная mobile-first оболочка приложения.
 - Supabase auth: login, forgot password, reset password, auth callback и protected routes.
 - Профили автомобилей: создание и редактирование машины с батареей, wallbox, эффективностью AC-зарядки, тарифом и валютой.
-- Экран зарядки: активная сессия, progress ring, stats, start/stop actions, charging delta card, deterministic wall-clock fallback и realtime-синхронизация.
+- Экран зарядки: активная сессия, progress ring, stats, start/stop actions, charging delta card, deterministic wall-clock fallback, фоновая запись `charging_sessions` с любого маршрута и Supabase Realtime для открытых экранов.
 - История зарядок: список, detail screen и графики VoltFlow Mate samples через `/api/vehicle/charging-sessions/[sessionId]/samples`.
 - История поездок: список через `/api/vehicle/trips` (опционально `?month=YYYY-MM` для календаря), timeline через `/api/vehicle/trips/[tripId]/samples`, GPS-трек через `/api/vehicle/trips/[tripId]/track`.
 - **Графики поездки:** SOC; **Speed & power** (две оси); **Recovered energy** — bar chart по интервалам regen (ось X — км поездки, если есть, иначе время); температуры и cell delta. **Только fullscreen:** crosshair + tooltip при наведении.
@@ -463,7 +464,7 @@ VoltFlow помогает владельцам электромобилей мо
 - **Regen/traction на поездке** сохраняются в `bydmate_trips` при закрытии; hourly `regen_kwh_sum` / `traction_kwh_sum`.
 - **Realtime live vehicle** через Supabase Realtime на `bydmate_live_snapshots` (вместо polling каждые 5 с).
 - **Analytics API:** `GET /api/vehicle/telemetry`, `/api/vehicle/analytics` (`monthly`, `phantom`, `cost-per-km`, `period-trips`, `route-insights`), `/api/vehicle/lifetime-map`, `/api/vehicle/export`; `PUT /api/vehicle/route-labels`.
-- **VoltFlow Mate APK (2026-05-30):** enqueue 1 с в движении/зарядке, flush 15 с, slim idle payload, переключатель GPS privacy — см. `docs/cloud-telemetry-contract-ru.md` в репозитории Mate.
+- **VoltFlow Mate APK (v0.3.2, 2026-06-01):** автообновление с GitHub (опционально); 6-значный код VoltFlow на шлюзе; enqueue 1 с в движении/зарядке, flush 15 с, slim idle payload, переключатель GPS privacy — см. `docs/cloud-telemetry-contract-ru.md` в репозитории Mate.
 
 #### База знаний и Telegram experience
 
@@ -489,6 +490,7 @@ VoltFlow помогает владельцам электромобилей мо
 - Если график истории зарядки остановился ниже target SOC, не считать данные потерянными. Сначала сравнить `charging_sessions.started_at`, `charging_sessions.stopped_at`, `charging_sessions.current_percent`, `charging_sessions.target_percent`, `bydmate_telemetry_samples.device_time` и delayed samples вокруг stop time.
 - Сохранять отложенные VoltFlow Mate completion samples: target SOC может прийти через несколько минут после того, как VoltFlow отметил сессию `completed`.
 - Если есть свежий VoltFlow Mate live SOC, не auto-complete зарядную сессию по математической оценке времени. Математика может быть только display fallback; завершение должно ждать live SOC, чтобы сохранить 100% cell-voltage tail.
+- `charging_sessions.current_percent` обновляет веб-клиент (`ChargingSessionBackgroundSync` / `useChargingSessionLiveSync`), а не ingest телеметрии. Если строка в БД «застыла», а `bydmate_telemetry_samples` идут — пользователь, скорее всего, закрыл PWA; открыть любой экран VoltFlow во время зарядки, чтобы запись возобновилась.
 - Не трогать уже рабочие сценарии без прямой необходимости. Предпочитать узкие изменения с тестами вместо широких рефакторингов.
 
 ### Быстрый старт
@@ -648,8 +650,8 @@ src/app/                 Роуты, layout-файлы, manifest, auth callback
 src/app/api/             VoltFlow Mate, vehicle telemetry, push, knowledge и dev APIs
 src/actions/             Server actions для автомобилей и сессий
 src/components/          UI, бренд, dashboard, charging, history, telegram, admin, settings
-src/hooks/               Query hooks, VoltFlow Mate hooks, session, translation, ticking clock
-src/lib/                 Charging math, VoltFlow Mate logic, i18n, Supabase clients, utilities
+src/hooks/               Query hooks, VoltFlow Mate hooks, charging session live sync, translation
+src/lib/                 Charging math, charging-session-sync, VoltFlow Mate logic, i18n, Supabase
 src/stores/              Локальные UI и preference stores
 src/types/               Типы базы данных
 supabase/migrations/     Схема БД, RLS, triggers, Realtime

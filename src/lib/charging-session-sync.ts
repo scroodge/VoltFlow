@@ -1,3 +1,7 @@
+/**
+ * Live vs wall-clock charging state for active sessions.
+ * See AGENTS.md (Active charging session sync) and SKILLS.md (Charging Skill).
+ */
 import {
   deriveChargingState,
   type ChargingParams,
