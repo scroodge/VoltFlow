@@ -2,6 +2,12 @@
 
 Date: 2026-05-30
 
+## Applied 2026-06-02 (Mate auto charging sessions)
+
+| Migration | Purpose |
+| --- | --- |
+| `20260602120000_bydmate_auto_charging_session_state.sql` | State for consecutive charging/unplug samples used by ingest auto start/stop of `charging_sessions` |
+
 ## Applied 2026-06-02 (charging history correction)
 
 Applied migration:

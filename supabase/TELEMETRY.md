@@ -366,6 +366,21 @@ Applied in app code and migrations `20260530120000`–`20260530123000`:
 
 Tests: `src/lib/bydmate/trip-energy.test.mjs`.
 
+## Auto charging sessions from Mate ingest
+
+After each successful ingest batch, `processBydmateAutoChargingSessions`
+(`src/lib/bydmate/charging-auto-session.ts`) may create or stop `charging_sessions`
+rows for cars with matching `cars.vehicle_alias`.
+
+| Event | Rule |
+| --- | --- |
+| Auto-start | Two consecutive samples with `is_charging` or `charge_power_kw > 0.1`; start SOC from telemetry; `charger_power_kw` from telemetry; target 100% |
+| Auto-stop | Two consecutive unplug samples, or immediate stop when `speed_kmh > 5` during an open session |
+| State | `bydmate_auto_charging_session_state` stores consecutive sample counters per `(user_id, vehicle_id)` |
+
+Requires Mate to keep sending ingest while charging. Progress after start is still
+updated by the PWA via `ChargingSessionBackgroundSync`.
+
 ## Charging session UX additions
 
 Active charging screen (`charging-session-screen.tsx`):

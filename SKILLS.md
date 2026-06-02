@@ -30,6 +30,8 @@ Know these files before changing charging behavior:
 - `src/lib/charging-math.ts`
 - `src/lib/charging-live.ts`
 - `src/lib/charging-session-sync.ts` — `deriveChargingSessionLiveBundle`, fresh-vs-math persist rules
+- `src/lib/bydmate/charging-auto-session.ts` — Mate ingest auto start/stop of `charging_sessions`
+- `src/lib/bydmate/telemetry-charging.ts` — shared `is_charging` / `charge_power_kw` detection
 - `src/lib/charging-session-vehicle.ts` — `resolveChargingSessionVehicleId` for history delta charts (no global `"way"` default)
 - `src/hooks/use-charging-session-live-sync.ts` — ~1s DB persist + auto-complete
 - `src/components/charging/charging-session-background-sync.tsx` — mounted from `MobileShell`
@@ -46,7 +48,8 @@ Preserve these behaviors:
 
 - Wall-clock math can calculate current display state, delivered kWh, cost, ETA, and remaining time.
 - Persisted session data keeps refreshes and PWA restores consistent.
-- While `status = 'charging'`, `ChargingSessionBackgroundSync` persists `current_percent` / energy / cost to Postgres from any authenticated route (not only `/charging/[id]`). Telemetry ingest does not update `charging_sessions`.
+- While `status = 'charging'`, `ChargingSessionBackgroundSync` persists `current_percent` / energy / cost to Postgres from any authenticated route (not only `/charging/[id]`). Mate ingest can create/stop sessions but does not stream per-second progress.
+- `processBydmateAutoChargingSessions` in `src/app/api/bydmate/telemetry/route.ts` starts a session after two consecutive charging samples for `cars.vehicle_alias`, using live SOC and `charge_power_kw`, and stops on unplug or drive-away.
 - `deriveChargingSessionLiveBundle` prefers fresh Mate snapshots (`received_at` within 90s), uses math for persist when Mate is offline, and scopes live rows by `vehicle_alias` when the car has one.
 - `ChargingSessionScreen` drives UI via `onDerived` with `skipPersist: true` so background sync remains the single writer.
 - Supabase Realtime on `charging_sessions` keeps open screens in sync after writes.
@@ -68,7 +71,7 @@ When debugging history:
 
 Know these files before changing VoltFlow Mate ingest or history:
 
-- `src/app/api/bydmate/telemetry/route.ts`
+- `src/app/api/bydmate/telemetry/route.ts` (ingest + charge notifications + auto charging sessions)
 - `src/lib/bydmate/ingest-payload.ts`
 - `src/lib/bydmate/telemetry-sanitizer.ts`
 - `src/lib/bydmate/telemetry-history.ts`
@@ -105,6 +108,7 @@ node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types -
 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/bydmate/trip-filter.test.mjs
 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/bydmate/trip-energy.test.mjs
 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/bydmate/range-estimate.test.mjs
+node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/bydmate/charging-auto-session.test.mjs
 ```
 
 ### Vehicle Analytics Skill

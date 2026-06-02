@@ -1,3 +1,4 @@
+import { processBydmateAutoChargingSessions } from "@/lib/bydmate/charging-auto-session";
 import { normalizePayloads } from "@/lib/bydmate/ingest-payload";
 import { processBydmateChargeNotifications } from "@/lib/push/charge-notifications";
 import {
@@ -317,6 +318,17 @@ export async function POST(request: Request) {
       chargeNotifications = { sent: 0, thresholds: [] };
     }
 
+    let autoChargingSessions = { started: 0, stopped: 0, sessionIds: [] as string[] };
+    try {
+      autoChargingSessions = await processBydmateAutoChargingSessions({
+        supabase,
+        userId: profile.id,
+        samples,
+      });
+    } catch {
+      autoChargingSessions = { started: 0, stopped: 0, sessionIds: [] };
+    }
+
     return Response.json({
       ok: true,
       persisted,
@@ -326,6 +338,7 @@ export async function POST(request: Request) {
       dropped_location_count: droppedLocations,
       dropped_telemetry_field_count: droppedTelemetryFields,
       charge_notifications: chargeNotifications,
+      auto_charging_sessions: autoChargingSessions,
       received_at: receivedAt,
       ingest: ingestResult,
     });

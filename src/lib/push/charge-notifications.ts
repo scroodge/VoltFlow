@@ -3,6 +3,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AcceptedTelemetry } from "@/lib/bydmate/telemetry-sanitizer";
 import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
 import {
+  finiteTelemetryNumber,
+  isTelemetryCharging,
+} from "@/lib/bydmate/telemetry-charging";
+import {
   nextChargeNotificationState,
   type ChargeNotificationState,
 } from "@/lib/push/charge-thresholds";
@@ -18,25 +22,10 @@ type ChargeNotificationStateRow = {
   notified_thresholds: number[] | null;
 };
 
-function finiteNumber(value: unknown) {
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value === "string" && value.trim() !== "") {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : null;
-  }
-  return null;
-}
-
-function isTelemetryCharging(sample: TelemetryPayload) {
-  if (sample.telemetry.is_charging === true) return true;
-  const chargePowerKw = finiteNumber(sample.telemetry.charge_power_kw);
-  return chargePowerKw != null && chargePowerKw > 0;
-}
-
 function stateFromRow(row: ChargeNotificationStateRow): ChargeNotificationState {
   return {
     chargeStartedAt: row.charge_started_at,
-    lastSoc: finiteNumber(row.last_soc),
+    lastSoc: finiteTelemetryNumber(row.last_soc),
     lastIsCharging: row.last_is_charging === true,
     notifiedThresholds: Array.isArray(row.notified_thresholds) ? row.notified_thresholds : [],
   };
@@ -112,8 +101,8 @@ export async function processBydmateChargeNotifications({
     const previousState = states.get(sample.vehicle_id) ?? null;
     const result = nextChargeNotificationState({
       previousState,
-      currentSoc: finiteNumber(sample.telemetry.soc),
-      isCharging: isTelemetryCharging(sample),
+      currentSoc: finiteTelemetryNumber(sample.telemetry.soc),
+      isCharging: isTelemetryCharging(sample.telemetry),
       deviceTime: sample.device_time,
       previousSoc: previousTelemetry.get(sample.vehicle_id)?.telemetry.soc,
     });
