@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
-import { deriveChargingState } from "@/lib/charging-math";
+import { resolveStopProgressForSession } from "@/lib/charging-session-finalize";
 import { isAtHomeCharger } from "@/lib/home-charger-geofence";
 import type { SessionStatus } from "@/types/database";
 
@@ -126,25 +126,19 @@ export async function stopChargingSession(sessionId: string) {
   }
 
   const now = new Date();
-  const derived = deriveChargingState(
-    {
-      startPercent: session.start_percent,
-      targetPercent: session.target_percent,
-      batteryCapacityKwh: session.battery_capacity_kwh,
-      chargerPowerKw: session.charger_power_kw,
-      efficiencyPercent: session.efficiency_percent,
-      pricePerKwh: session.price_per_kwh,
-    },
-    Date.parse(session.started_at),
+  const progress = await resolveStopProgressForSession(
+    supabase,
+    user.id,
+    session,
     now.getTime(),
   );
 
   const { error: updateError } = await supabase
     .from("charging_sessions")
     .update({
-      current_percent: derived.currentPercent,
-      charged_energy_kwh: derived.chargedEnergyKwh,
-      estimated_cost: derived.estimatedCost,
+      current_percent: progress.currentPercent,
+      charged_energy_kwh: progress.chargedEnergyKwh,
+      estimated_cost: progress.estimatedCost,
       status: "stopped" as SessionStatus,
       stopped_at: now.toISOString(),
     })

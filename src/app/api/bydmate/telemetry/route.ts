@@ -318,15 +318,23 @@ export async function POST(request: Request) {
       chargeNotifications = { sent: 0, thresholds: [] };
     }
 
-    let autoChargingSessions = { started: 0, stopped: 0, sessionIds: [] as string[] };
+    let autoChargingSessions: {
+      started: number;
+      stopped: number;
+      sessionIds: string[];
+      error?: string;
+    } = { started: 0, stopped: 0, sessionIds: [] };
     try {
       autoChargingSessions = await processBydmateAutoChargingSessions({
         supabase,
         userId: profile.id,
         samples,
       });
-    } catch {
-      autoChargingSessions = { started: 0, stopped: 0, sessionIds: [] };
+    } catch (autoSessionError) {
+      const message =
+        autoSessionError instanceof Error ? autoSessionError.message : "Auto session failed";
+      console.error("bydmate auto charging session:", message);
+      autoChargingSessions = { started: 0, stopped: 0, sessionIds: [], error: message };
     }
 
     return Response.json({

@@ -35,7 +35,8 @@ Know these files before changing charging behavior:
 - `src/lib/charging-session-vehicle.ts` — `resolveChargingSessionVehicleId` for history delta charts (no global `"way"` default)
 - `src/hooks/use-charging-session-live-sync.ts` — ~1s DB persist + auto-complete
 - `src/components/charging/charging-session-background-sync.tsx` — mounted from `MobileShell`
-- `src/actions/sessions.ts`
+- `src/actions/sessions.ts` — manual stop uses `resolveStopProgressForSession` (live → telemetry → math)
+- `src/lib/charging-session-finalize.ts`
 - `src/components/charging/charging-session-screen.tsx`
 - `src/components/charging/charging-hub-view.tsx`
 - `src/components/dashboard/dashboard-view.tsx`

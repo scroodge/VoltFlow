@@ -14,6 +14,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 - Mate ingest may **auto-start** a `charging_sessions` row when telemetry shows sustained charging (`is_charging` or `charge_power_kw`) for a car with matching `cars.vehicle_alias`, after two consecutive charging samples. Start SOC and charger power come from live telemetry; target defaults to 100%.
 - Mate ingest may **auto-stop** an open session after two consecutive unplug samples, or immediately on drive-away (`speed_kmh > 5`).
+- Manual `stopChargingSession` prefers fresh live SOC, then latest in-session telemetry, then wall-clock math only as fallback.
 - Telemetry ingest writes `bydmate_telemetry_samples` and `bydmate_live_snapshots` only. It does **not** update `charging_sessions.current_percent` (except via the auto start/stop hooks above).
 - While `status = 'charging'`, the web app persists progress about once per second via `ChargingSessionBackgroundSync` in `MobileShell` (`useChargingSessionLiveSync`). This runs on dashboard, vehicle, charging, and other authenticated routes — not only on `/charging/[id]`.
 - Shared logic lives in `src/lib/charging-session-sync.ts` (`deriveChargingSessionLiveBundle`): prefer fresh Mate charging/SOC snapshots (received within 90s), fall back to wall-clock math for **persist** when Mate is offline; filter live rows by `cars.vehicle_alias` when set.

@@ -1,10 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import {
-  costFromGridEnergy,
-  energyFromGridKwh,
-  energyNeededKwh,
-} from "@/lib/charging-math";
+import { deriveSessionProgressFromSoc } from "@/lib/charging-math";
 import { isAtHomeCharger } from "@/lib/home-charger-geofence";
 import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
 import {
@@ -54,25 +50,6 @@ function stateToRow(
     last_is_charging: state.lastIsCharging,
     last_device_time: deviceTime,
   };
-}
-
-function sessionPercentFromSoc(soc: number, startPercent: number, targetPercent: number) {
-  return Math.min(targetPercent, Math.max(startPercent, soc));
-}
-
-function sessionEnergyAndCost(
-  car: Pick<Car, "battery_capacity_kwh" | "efficiency_percent" | "price_per_kwh">,
-  startPercent: number,
-  currentPercent: number,
-) {
-  const batteryEnergyKwh = energyNeededKwh(
-    car.battery_capacity_kwh,
-    startPercent,
-    currentPercent,
-  );
-  const chargedEnergyKwh = energyFromGridKwh(batteryEnergyKwh, car.efficiency_percent);
-  const estimatedCost = costFromGridEnergy(chargedEnergyKwh, car.price_per_kwh);
-  return { chargedEnergyKwh, estimatedCost };
 }
 
 async function resolvePricePerKwh(
@@ -158,23 +135,24 @@ async function stopSessionFromTelemetry({
   currentPercent: number;
   stoppedAt: string;
 }) {
-  const percent = sessionPercentFromSoc(
+  const progress = deriveSessionProgressFromSoc(
+    {
+      startPercent: session.start_percent,
+      targetPercent: session.target_percent,
+      batteryCapacityKwh: car.battery_capacity_kwh,
+      chargerPowerKw: session.charger_power_kw,
+      efficiencyPercent: car.default_efficiency_percent,
+      pricePerKwh: session.price_per_kwh,
+    },
     currentPercent,
-    session.start_percent,
-    session.target_percent,
-  );
-  const { chargedEnergyKwh, estimatedCost } = sessionEnergyAndCost(
-    car,
-    session.start_percent,
-    percent,
   );
 
   const { error } = await supabase
     .from("charging_sessions")
     .update({
-      current_percent: percent,
-      charged_energy_kwh: chargedEnergyKwh,
-      estimated_cost: estimatedCost,
+      current_percent: progress.currentPercent,
+      charged_energy_kwh: progress.chargedEnergyKwh,
+      estimated_cost: progress.estimatedCost,
       status: "stopped",
       stopped_at: stoppedAt,
     })

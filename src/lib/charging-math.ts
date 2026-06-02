@@ -69,6 +69,25 @@ export type DerivedChargingState = {
   isComplete: boolean;
 };
 
+/** Final session progress from a measured SOC (live/telemetry), not wall-clock math. */
+export function deriveSessionProgressFromSoc(
+  params: ChargingParams,
+  soc: number,
+): Pick<DerivedChargingState, "currentPercent" | "chargedEnergyKwh" | "estimatedCost"> {
+  const currentPercent = Math.min(
+    params.targetPercent,
+    Math.max(params.startPercent, soc),
+  );
+  const batteryEnergyKwh = energyNeededKwh(
+    params.batteryCapacityKwh,
+    params.startPercent,
+    currentPercent,
+  );
+  const chargedEnergyKwh = energyFromGridKwh(batteryEnergyKwh, params.efficiencyPercent);
+  const estimatedCost = costFromGridEnergy(chargedEnergyKwh, params.pricePerKwh);
+  return { currentPercent, chargedEnergyKwh, estimatedCost };
+}
+
 export function deriveChargingState(
   params: ChargingParams,
   startedAtMs: number,
