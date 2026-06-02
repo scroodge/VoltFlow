@@ -51,6 +51,9 @@ Preserve these behaviors:
 - `ChargingSessionScreen` drives UI via `onDerived` with `skipPersist: true` so background sync remains the single writer.
 - Supabase Realtime on `charging_sessions` keeps open screens in sync after writes.
 - If fresh VoltFlow Mate live SOC exists, session completion must wait for fresh live SOC and must not be forced by mathematical time estimates.
+- Auto-complete must be blocked when fresh live data shows driving (`speed_kmh > 5`) or not-charging state.
+- When driving is detected during an active charging session, prefer closing as `stopped` with live-derived percent/energy/cost.
+- When fresh live SOC reappears after offline math fallback, reconcile persisted progress toward live SOC when drift is material.
 
 When debugging history:
 

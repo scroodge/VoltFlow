@@ -2,6 +2,29 @@
 
 Date: 2026-05-30
 
+## Applied 2026-06-02 (charging history correction)
+
+Applied migration:
+
+| Migration | Purpose |
+| --- | --- |
+| `20260602103500_fix_false_completed_charging_sessions.sql` | Backfill false `completed` charging sessions to `stopped` when telemetry max SOC stayed below target and movement was present in-session; recompute percent/energy/cost from last SOC |
+
+Execution notes:
+
+- `--target=linked` failed in temporary workdir mode (`Cannot find project ref`).
+- Applied successfully via pooler URL:
+
+```sh
+npm run db:migrations:up -- --db-url-from-pooler --password-env=SUPABASE_POSTGRESS_PASSWORD --yes
+```
+
+- Verified no pending migrations:
+
+```sh
+npm run db:migrations:plan -- --db-url-from-pooler --password-env=SUPABASE_POSTGRESS_PASSWORD
+```
+
 ## Applied 2026-05-30 (database architecture review)
 
 These migrations are applied to the linked production project (`fgazcjtxbkiuimdoyelh`):

@@ -15,6 +15,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - Telemetry ingest writes `bydmate_telemetry_samples` and `bydmate_live_snapshots` only. It does **not** update `charging_sessions.current_percent`.
 - While `status = 'charging'`, the web app persists progress about once per second via `ChargingSessionBackgroundSync` in `MobileShell` (`useChargingSessionLiveSync`). This runs on dashboard, vehicle, charging, and other authenticated routes — not only on `/charging/[id]`.
 - Shared logic lives in `src/lib/charging-session-sync.ts` (`deriveChargingSessionLiveBundle`): prefer fresh Mate charging/SOC snapshots (received within 90s), fall back to wall-clock math for **persist** when Mate is offline; filter live rows by `cars.vehicle_alias` when set.
+- Auto-complete guard: `completed` is allowed only when fresh live SOC confirms target and live state is still charging. Never complete from math-only progress.
+- Drive-away guard: if fresh live telemetry shows movement after unplug/charging stop, close the session as `stopped` using live-derived SOC/energy/cost.
+- Wake reconcile: when the car wakes and fresh SOC materially diverges from math/persisted progress, prefer live SOC for persisted `current_percent`.
 - `ChargingSessionScreen` uses the same bundle for UI (`onDerived` → `useChargingUi`) with `skipPersist: true` so background sync is the single writer.
 - If `current_percent` is stale in Postgres but telemetry is current, check whether the VoltFlow PWA/tab was open; history charts still use `bydmate_telemetry_samples`.
 - Charging session charts (`/api/vehicle/charging-sessions/[sessionId]/samples`) resolve `vehicle_id` from `cars.vehicle_alias` → latest live snapshot → all user telemetry in the session window. Do **not** default to `DEV_WAY_VEHICLE_ID` (`"way"`) in production code.
