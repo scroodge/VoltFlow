@@ -30,6 +30,7 @@ import { createClient } from "@/lib/supabase/client";
 import { mapChargingSession } from "@/lib/db-map";
 import { queryKeys } from "@/lib/query-keys";
 import { useChargingSessionLiveSync } from "@/hooks/use-charging-session-live-sync";
+import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useSessionQuery } from "@/hooks/use-session-query";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
@@ -65,9 +66,17 @@ export function ChargingSessionScreen({
   const { locale, t } = useTranslation();
 
   const { data: session, error, isLoading } = useSessionQuery(sessionId);
+  const { data: carsResult } = useCarsQuery();
   const { data: bydmateLive = [] } = useBydmateLiveQuery();
   const devSource = useChargingDevSource();
   const devOverrideActive = devSource?.isOverrideActive ?? false;
+  const sessionVehicleId = useMemo(
+    () =>
+      session
+        ? (carsResult?.cars?.find((car) => car.id === session.car_id)?.vehicle_alias ?? null)
+        : null,
+    [carsResult?.cars, session],
+  );
 
   const clockActive = session?.status === "charging";
   const nowMs = useTickingClock(clockActive);
@@ -413,7 +422,7 @@ export function ChargingSessionScreen({
         ) : null}
       </div>
 
-      <ChargingDeltaCard session={session} />
+      <ChargingDeltaCard session={session} vehicleId={sessionVehicleId ?? undefined} />
 
       {!historyMode && (
         <div className="mt-auto space-y-3">
