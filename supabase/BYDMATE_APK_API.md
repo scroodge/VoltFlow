@@ -21,6 +21,8 @@ X-Vehicle-Id: <vehicle_id>
 
 `X-Vehicle-Id` must match every sample `vehicle_id`.
 
+`vehicle_id` is the per-car alias configured in VoltFlow (`cars.vehicle_alias`), e.g. `way`, `cl`, or any string the user sets. JSON examples below use `"way"` only as a sample value — production charts and session APIs resolve the alias from the car/session, not from a global default.
+
 ## Device pairing (6-digit code)
 
 Preferred setup: user generates a short code in VoltFlow Settings (logged in),
