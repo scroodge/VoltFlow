@@ -12,8 +12,14 @@ import {
   chargingParamsFromSession,
   deriveChargingSessionLiveBundle,
   filterLiveSnapshotsForVehicle,
+  resolveStateToPersist,
   staticDerivedFromSession,
 } from "@/lib/charging-session-sync";
+import {
+  findFreshSocSnapshot,
+  shouldAutoStopOnDriveAway,
+  shouldBlockAutoComplete,
+} from "@/lib/charging-live";
 import { createClient } from "@/lib/supabase/client";
 import { queryKeys } from "@/lib/query-keys";
 import type { DerivedChargingState } from "@/lib/charging-math";
@@ -103,8 +109,15 @@ export function useChargingSessionLiveSync({
 
       if (skipPersist) return;
 
-      const { completionState, stateToPersist } = bundle;
-      if (completionState?.isComplete && !completingRef.current) {
+      const freshSocSnapshot = findFreshSocSnapshot(snapshots, now);
+      const stateToPersist = resolveStateToPersist(bundle);
+      const { completionState } = bundle;
+
+      if (
+        completionState?.isComplete &&
+        !completingRef.current &&
+        !shouldBlockAutoComplete(freshSocSnapshot, now)
+      ) {
         completingRef.current = true;
         const stoppedAt = new Date().toISOString();
         const { error: upErr } = await supabase
@@ -143,6 +156,47 @@ export function useChargingSessionLiveSync({
           void notifyChargeCompleted(sessionId, t("charging.targetReached") as string);
           void sendChargeCompletedPush(sessionId);
         }
+        return;
+      }
+
+      const interruptState = bundle.liveCompletionState ?? bundle.liveChargingState;
+      if (
+        shouldAutoStopOnDriveAway(freshSocSnapshot, now) &&
+        interruptState &&
+        !completingRef.current
+      ) {
+        completingRef.current = true;
+        const stoppedAt = new Date().toISOString();
+        const { error: upErr } = await supabase
+          .from("charging_sessions")
+          .update({
+            current_percent: interruptState.currentPercent,
+            charged_energy_kwh: interruptState.chargedEnergyKwh,
+            estimated_cost: interruptState.estimatedCost,
+            status: "stopped",
+            stopped_at: stoppedAt,
+          })
+          .eq("id", sessionId);
+
+        if (upErr) {
+          completingRef.current = false;
+          toast.error(upErr.message);
+          return;
+        }
+
+        qc.setQueryData(queryKeys.session(sessionId), (old) =>
+          old
+            ? {
+                ...old,
+                current_percent: interruptState.currentPercent,
+                charged_energy_kwh: interruptState.chargedEnergyKwh,
+                estimated_cost: interruptState.estimatedCost,
+                status: "stopped",
+                stopped_at: stoppedAt,
+              }
+            : old,
+        );
+        qc.invalidateQueries({ queryKey: queryKeys.sessions });
         return;
       }
 

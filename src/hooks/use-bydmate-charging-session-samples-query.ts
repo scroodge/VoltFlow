@@ -17,12 +17,13 @@ export type ChargingSessionTelemetrySample = {
 
 async function fetchChargingSessionSamples(
   sessionId: string,
-  vehicleId: string,
+  vehicleId?: string | null,
 ): Promise<ChargingSessionTelemetrySample[]> {
-  const params = new URLSearchParams({
-    vehicle_id: vehicleId,
-    t: String(Date.now()),
-  });
+  const params = new URLSearchParams({ t: String(Date.now()) });
+  const normalizedVehicleId = vehicleId?.trim();
+  if (normalizedVehicleId) {
+    params.set("vehicle_id", normalizedVehicleId);
+  }
   const response = await fetch(
     `/api/vehicle/charging-sessions/${sessionId}/samples?${params.toString()}`,
     { cache: "no-store" },
@@ -35,13 +36,14 @@ async function fetchChargingSessionSamples(
 
 export function useBydmateChargingSessionSamplesQuery(
   sessionId: string,
-  vehicleId = "way",
+  vehicleId?: string | null,
   sessionStatus?: SessionStatus,
 ) {
   const isActiveChargingSession = sessionStatus === "charging";
+  const vehicleKey = vehicleId?.trim() || "auto";
 
   return useQuery({
-    queryKey: queryKeys.bydmateChargingSessionSamples(sessionId, vehicleId),
+    queryKey: queryKeys.bydmateChargingSessionSamples(sessionId, vehicleKey),
     queryFn: () => fetchChargingSessionSamples(sessionId, vehicleId),
     enabled: Boolean(sessionId) && !isDevMockChargingSessionId(sessionId),
     staleTime: isActiveChargingSession ? 10_000 : 60_000,

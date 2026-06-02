@@ -17,3 +17,4 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - Shared logic lives in `src/lib/charging-session-sync.ts` (`deriveChargingSessionLiveBundle`): prefer fresh Mate charging/SOC snapshots (received within 90s), fall back to wall-clock math for **persist** when Mate is offline; filter live rows by `cars.vehicle_alias` when set.
 - `ChargingSessionScreen` uses the same bundle for UI (`onDerived` → `useChargingUi`) with `skipPersist: true` so background sync is the single writer.
 - If `current_percent` is stale in Postgres but telemetry is current, check whether the VoltFlow PWA/tab was open; history charts still use `bydmate_telemetry_samples`.
+- Charging session charts (`/api/vehicle/charging-sessions/[sessionId]/samples`) resolve `vehicle_id` from `cars.vehicle_alias` → latest live snapshot → all user telemetry in the session window. Do **not** default to `DEV_WAY_VEHICLE_ID` (`"way"`) in production code.

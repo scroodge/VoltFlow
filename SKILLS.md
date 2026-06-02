@@ -30,6 +30,7 @@ Know these files before changing charging behavior:
 - `src/lib/charging-math.ts`
 - `src/lib/charging-live.ts`
 - `src/lib/charging-session-sync.ts` — `deriveChargingSessionLiveBundle`, fresh-vs-math persist rules
+- `src/lib/charging-session-vehicle.ts` — `resolveChargingSessionVehicleId` for history delta charts (no global `"way"` default)
 - `src/hooks/use-charging-session-live-sync.ts` — ~1s DB persist + auto-complete
 - `src/components/charging/charging-session-background-sync.tsx` — mounted from `MobileShell`
 - `src/actions/sessions.ts`
@@ -56,6 +57,7 @@ When debugging history:
 - Compare `charging_sessions.started_at`, `charging_sessions.stopped_at`, `charging_sessions.current_percent`, and `charging_sessions.target_percent`.
 - Compare them with `bydmate_telemetry_samples.device_time` and delayed samples around the stop time.
 - If `current_percent` lags telemetry but samples are current, the PWA was likely closed — not a Mate ingest bug.
+- If Delta by SOC shows `0 pts` but telemetry exists, check API `vehicleId` in the samples response: it must match `cars.vehicle_alias`, not dev default `"way"`.
 - Check whether VoltFlow Mate reports target SOC a few minutes after VoltFlow marks the session `completed`.
 - Preserve samples that contain the 100% SOC and cell-voltage tail.
 

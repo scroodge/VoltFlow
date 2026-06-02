@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-/** BYDMate vehicle_id / cars.vehicle_alias used across dev routes. */
+/**
+ * Default BYDMate vehicle_id for local `/dev/*` mirrors and tests only.
+ * Production routes must resolve per-user alias via `resolveChargingSessionVehicleId`
+ * (`src/lib/charging-session-vehicle.ts`), never assume this value.
+ */
 export const DEV_WAY_VEHICLE_ID = "way";
 
 /** VoltFlow account impersonated in local /dev/* mirrors. */

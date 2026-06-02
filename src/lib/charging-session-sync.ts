@@ -11,6 +11,7 @@ import {
   deriveLiveChargingState,
   findFreshChargingSnapshot,
   findFreshSocSnapshot,
+  LIVE_SOC_RECONCILE_TOLERANCE_PERCENT,
 } from "@/lib/charging-live";
 import type { BydmateLiveSnapshotRow, ChargingSessionRow } from "@/types/database";
 
@@ -75,7 +76,10 @@ export function deriveChargingSessionLiveBundle({
     : null;
   const mathState = deriveChargingState(params, startedAtMs, nowMs);
   const display = liveChargingState ?? liveCompletionState ?? mathState;
-  const completionState = hasFreshLiveSocSource ? liveCompletionState : display;
+  const completionState =
+    hasFreshLiveSocSource && liveCompletionState?.isComplete
+      ? liveCompletionState
+      : null;
   const stateToPersist = liveChargingState ?? liveCompletionState ?? mathState;
 
   return {
@@ -87,6 +91,20 @@ export function deriveChargingSessionLiveBundle({
     completionState,
     stateToPersist,
   };
+}
+/** Prefer live SOC over math when Mate wakes up with a material drift. */
+export function resolveStateToPersist(bundle: ChargingSessionLiveBundle): DerivedChargingState {
+  const liveSoc = bundle.liveCompletionState;
+  if (!bundle.hasFreshLiveSocSource || !liveSoc) {
+    return bundle.stateToPersist;
+  }
+  if (
+    Math.abs(liveSoc.currentPercent - bundle.stateToPersist.currentPercent) >
+    LIVE_SOC_RECONCILE_TOLERANCE_PERCENT
+  ) {
+    return liveSoc;
+  }
+  return bundle.stateToPersist;
 }
 
 export function staticDerivedFromSession(

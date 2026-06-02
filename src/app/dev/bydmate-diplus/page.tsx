@@ -7,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { DEV_WAY_VEHICLE_ID } from "@/lib/dev/way-context";
 import { createServiceClient } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +41,8 @@ type TripWindowRow = {
   sample_count: number;
 };
 
-const DEFAULT_VEHICLE_ID = "way";
+/** Dev fixture default only — not used in production charging/history routes. */
+const DEFAULT_VEHICLE_ID = DEV_WAY_VEHICLE_ID;
 const SAMPLE_LIMIT = 60;
 const DELTA_BY_SOC_LIMIT = 60;
 const CHARGING_DELTA_LIMIT = 140;

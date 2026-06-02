@@ -244,7 +244,7 @@ async function fetchChargingTelemetrySamplePages({
 }: {
   supabase: SupabaseClient;
   userId: string;
-  vehicleId: string;
+  vehicleId: string | null;
   from: string;
   to: string;
 }) {
@@ -261,12 +261,12 @@ export async function fetchChargingSessionSamples({
   supabase,
   userId,
   sessionId,
-  vehicleId = "way",
+  vehicleId,
 }: {
   supabase: SupabaseClient;
   userId: string;
   sessionId: string;
-  vehicleId?: string;
+  vehicleId: string | null;
 }): Promise<TelemetryHistoryPoint[]> {
   const { data: session, error: sessionError } = await supabase
     .from("charging_sessions")

@@ -102,7 +102,7 @@ export function ChargingDeltaCard({
   session: ChargingSessionRow;
   vehicleId?: string | null;
 }) {
-  const resolvedVehicleId = vehicleId?.trim() || "way";
+  const resolvedVehicleId = vehicleId?.trim() || null;
   const { data = [], isLoading, error } = useBydmateChargingSessionSamplesQuery(
     session.id,
     resolvedVehicleId,
@@ -120,7 +120,7 @@ export function ChargingDeltaCard({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="font-heading text-lg font-semibold tracking-tight">Delta by SOC</h2>
-            <p className="mt-1 text-xs text-muted-foreground">{resolvedVehicleId} · charge path 0-100% SOC</p>
+            <p className="mt-1 text-xs text-muted-foreground">{resolvedVehicleId ?? "auto"} · charge path 0-100% SOC</p>
           </div>
           <span className="rounded-full border border-border bg-white/[0.03] px-3 py-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">
             0 pts
@@ -133,7 +133,7 @@ export function ChargingDeltaCard({
     );
   }
 
-  return <DeltaPlot points={points} vehicleId={resolvedVehicleId} />;
+  return <DeltaPlot points={points} vehicleId={resolvedVehicleId ?? "auto"} />;
 }
 
 function DeltaPlot({

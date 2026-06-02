@@ -8,6 +8,10 @@ import {
 import type { BydmateLiveSnapshotRow } from "@/types/database";
 
 export const LIVE_CHARGING_STALE_MS = 90_000;
+/** Speed above this (km/h) treats the vehicle as driving, not finishing a charge. */
+export const CHARGING_DRIVE_SPEED_KMH = 5;
+/** When live SOC diverges from math/persisted progress beyond this, prefer live on persist. */
+export const LIVE_SOC_RECONCILE_TOLERANCE_PERCENT = 1;
 
 function finiteNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -16,6 +20,11 @@ function finiteNumber(value: unknown): number | null {
 export function snapshotSoc(snapshot: BydmateLiveSnapshotRow | null | undefined) {
   const soc = finiteNumber(snapshot?.telemetry?.soc) ?? finiteNumber(snapshot?.diplus?.soc);
   return soc != null && soc >= 0 && soc <= 100 ? soc : null;
+}
+
+export function snapshotSpeedKmh(snapshot: BydmateLiveSnapshotRow | null | undefined) {
+  const speed = finiteNumber(snapshot?.telemetry?.speed_kmh);
+  return speed != null && speed >= 0 ? speed : null;
 }
 
 export function snapshotChargePowerKw(snapshot: BydmateLiveSnapshotRow | null | undefined) {
@@ -110,4 +119,34 @@ export function deriveLiveChargingState({
         : 0,
     isComplete,
   };
+}
+
+export function isFreshSnapshotDriving(
+  snapshot: BydmateLiveSnapshotRow | null | undefined,
+  nowMs: number,
+  speedThresholdKmh = CHARGING_DRIVE_SPEED_KMH,
+) {
+  if (!isFreshLiveSnapshot(snapshot, nowMs)) return false;
+  const speed = snapshotSpeedKmh(snapshot);
+  return speed != null && speed > speedThresholdKmh;
+}
+
+/** Block auto-complete when the car is moving or no longer on the charger. */
+export function shouldBlockAutoComplete(
+  snapshot: BydmateLiveSnapshotRow | null | undefined,
+  nowMs: number,
+) {
+  if (!isFreshLiveSnapshot(snapshot, nowMs)) return true;
+  if (isFreshSnapshotDriving(snapshot, nowMs)) return true;
+  const charging =
+    snapshot?.telemetry?.is_charging === true || snapshotChargePowerKw(snapshot) != null;
+  return !charging;
+}
+
+/** Auto-stop when fresh telemetry shows the vehicle left the charger while driving. */
+export function shouldAutoStopOnDriveAway(
+  snapshot: BydmateLiveSnapshotRow | null | undefined,
+  nowMs: number,
+) {
+  return isFreshSnapshotDriving(snapshot, nowMs);
 }
