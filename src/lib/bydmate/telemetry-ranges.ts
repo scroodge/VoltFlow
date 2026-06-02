@@ -17,7 +17,45 @@ export function parseTelemetryRange(value: string | null): TelemetryHistoryRange
   return "day";
 }
 
+/** Default range for History → Analytics tab is week. */
+export function parseAnalyticsRange(value: string | null): TelemetryHistoryRange {
+  if (
+    value === "day" ||
+    value === "week" ||
+    value === "month" ||
+    value === "quarter" ||
+    value === "year"
+  ) {
+    return value;
+  }
+  return "week";
+}
+
+/** Local calendar day [start, end] for YYYY-MM-DD (matches Trips tab semantics). */
+export function resolveLocalCalendarDayWindow(dateStr: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+  const now = new Date();
+  const year = match ? Number(match[1]) : now.getFullYear();
+  const month = match ? Number(match[2]) : now.getMonth() + 1;
+  const day = match ? Number(match[3]) : now.getDate();
+  const from = new Date(year, month - 1, day, 0, 0, 0, 0);
+  const to = new Date(year, month - 1, day, 23, 59, 59, 999);
+  return {
+    from: from.toISOString(),
+    to: to.toISOString(),
+  };
+}
+
 export function resolveTelemetryWindow(range: TelemetryHistoryRange, anchorDate: string) {
+  if (range === "day") {
+    const day = resolveLocalCalendarDayWindow(anchorDate);
+    return {
+      ...day,
+      useHourly: false,
+      rawSampleDays: 1,
+    };
+  }
+
   const anchor = /^\d{4}-\d{2}-\d{2}$/.test(anchorDate)
     ? new Date(`${anchorDate}T23:59:59.999Z`)
     : new Date();
@@ -27,8 +65,8 @@ export function resolveTelemetryWindow(range: TelemetryHistoryRange, anchorDate:
   return {
     from: new Date(fromMs).toISOString(),
     to: new Date(toMs).toISOString(),
-    useHourly: range !== "day",
-    rawSampleDays: range === "week" ? 3 : range === "day" ? 1 : 0,
+    useHourly: true,
+    rawSampleDays: range === "week" ? 3 : 0,
   };
 }
 

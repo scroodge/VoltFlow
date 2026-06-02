@@ -5,6 +5,7 @@ import {
   fetchRouteInsights,
 } from "@/lib/bydmate/route-insights";
 import {
+  fetchConsumptionBaseline,
   fetchCostPerKm,
   fetchMonthlyStats,
   fetchPhantomDrain,
@@ -63,14 +64,27 @@ export async function GET(request: NextRequest) {
       if (!from || !to) {
         return NextResponse.json({ error: "Missing from/to" }, { status: 400 });
       }
+      const overlapWindow = params.get("overlap") === "1";
       const trips = await fetchPeriodTripsEnriched({
         supabase: access.supabase,
         userId: access.userId,
         vehicleId,
         from,
         to,
+        overlapWindow,
       });
       return NextResponse.json({ trips });
+    }
+
+    if (type === "baseline") {
+      const days = Number(params.get("days") ?? "30");
+      const baseline = await fetchConsumptionBaseline({
+        supabase: access.supabase,
+        userId: access.userId,
+        vehicleId,
+        days: Number.isFinite(days) ? days : 30,
+      });
+      return NextResponse.json(baseline);
     }
 
     if (type === "route-insights") {

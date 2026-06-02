@@ -492,6 +492,31 @@ export const dictionaries = {
       analytics: {
         historyTitle: "Telemetry history",
         historySubtitle: "Week, month, quarter, and year views use hourly rollups plus recent raw samples.",
+        daySubtitle:
+          "Day view: compare to your norm, review each trip, and optionally open the full-day timeline.",
+        dayTripsTitle: "Trips this day",
+        dayTripsSubtitle: "Day average {value} kWh/100 · sorted by consumption",
+        dayTripsEmpty: "No trips on this date.",
+        dayShowFullTimeline: "Show full-day timeline (advanced)",
+        dayHideFullTimeline: "Hide full-day timeline",
+        dayTrip: {
+          viewDetail: "Charts & route",
+          hideDetail: "Hide charts",
+          belowNorm: "Below norm",
+          aboveNorm: "Above norm",
+        },
+        dayInsight: {
+          baselineBetter:
+            "{day} kWh/100 today — {percent}% better than your 30-day median ({baseline} kWh/100).",
+          baselineWorse:
+            "{day} kWh/100 today — {percent}% above your 30-day median ({baseline} kWh/100).",
+          tripBest: "Most efficient: {time} · {value} kWh/100 · {km} km",
+          tripWorst: "Highest consumption: {time} · {value} kWh/100 · {km} km",
+          regenShare: "Regen recovered {regen} kWh — {percent}% of traction energy",
+          regenCompare:
+            "Trips with more regen averaged {high} kWh/100 vs {low} on others ({highCount} vs {lowCount} trips)",
+          regenInsufficient: "Not enough trips today to compare regen and consumption.",
+        },
         telemetryChartsTitle: "Telemetry charts",
         teaserTitle: "Analytics & trends",
         teaserSubtitle: "Weekly bars, phantom drain, route insights, and exports live in History.",
@@ -1094,6 +1119,31 @@ export const dictionaries = {
       analytics: {
         historyTitle: "Гісторыя тэлеметрыі",
         historySubtitle: "Тыдзень, месяц, квартал і год — гадzinnyя зводкі плюс нядаўнія сырыя выбіркі.",
+        daySubtitle:
+          "Дзень: параўнанне з нормай, разбор паездак і опцыянальны графік за ўвесь дзень.",
+        dayTripsTitle: "Паездкі за дзень",
+        dayTripsSubtitle: "Сярэдняе за дзень {value} kWh/100 · сартаванне па расходе",
+        dayTripsEmpty: "Няма паездак на гэту дату.",
+        dayShowFullTimeline: "Паказаць графік за ўвесь дзень",
+        dayHideFullTimeline: "Схаваць графік за ўвесь дзень",
+        dayTrip: {
+          viewDetail: "Графікі і маршрут",
+          hideDetail: "Схаваць графікі",
+          belowNorm: "Ніжэй нормы",
+          aboveNorm: "Выша нормы",
+        },
+        dayInsight: {
+          baselineBetter:
+            "Сёння {day} kWh/100 — на {percent}% лепш за медыяну за 30 дзён ({baseline} kWh/100).",
+          baselineWorse:
+            "Сёння {day} kWh/100 — на {percent}% вышэй за медыяну за 30 дзён ({baseline} kWh/100).",
+          tripBest: "Найэканомічней: {time} · {value} kWh/100 · {km} км",
+          tripWorst: "Найбольшы расход: {time} · {value} kWh/100 · {km} км",
+          regenShare: "Рэкуперацыя {regen} kWh — {percent}% ад энергіі на цяг",
+          regenCompare:
+            "Паездкі з больш рэкуп.: у сярэннім {high} kWh/100, іншыя — {low} ({highCount} vs {lowCount})",
+          regenInsufficient: "Замала паездак, каб параўнаць рэкуперацыю і расход.",
+        },
         telemetryChartsTitle: "Графікі тэлеметрыі",
         teaserTitle: "Аналітыка і тренды",
         teaserSubtitle: "Тыднёвыя слупкі, фантомны расход, маршруты і экспарт — у Гісторыі.",
@@ -1696,6 +1746,31 @@ export const dictionaries = {
       analytics: {
         historyTitle: "История телеметрии",
         historySubtitle: "Неделя, месяц, квартал и год — почасовые сводки плюс свежие сырые выборки.",
+        daySubtitle:
+          "День: сравнение с нормой, разбор поездок и опционально график за весь день.",
+        dayTripsTitle: "Поездки за день",
+        dayTripsSubtitle: "Среднее за день {value} kWh/100 · сортировка по расходу",
+        dayTripsEmpty: "Нет поездок на эту дату.",
+        dayShowFullTimeline: "Показать график за весь день",
+        dayHideFullTimeline: "Скрыть график за весь день",
+        dayTrip: {
+          viewDetail: "Графики и маршрут",
+          hideDetail: "Скрыть графики",
+          belowNorm: "Ниже нормы",
+          aboveNorm: "Выше нормы",
+        },
+        dayInsight: {
+          baselineBetter:
+            "Сегодня {day} kWh/100 — на {percent}% лучше медианы за 30 дней ({baseline} kWh/100).",
+          baselineWorse:
+            "Сегодня {day} kWh/100 — на {percent}% выше медианы за 30 дней ({baseline} kWh/100).",
+          tripBest: "Самая экономичная: {time} · {value} kWh/100 · {km} км",
+          tripWorst: "Самый высокий расход: {time} · {value} kWh/100 · {km} км",
+          regenShare: "Рекуперация {regen} kWh — {percent}% от энергии на тягу",
+          regenCompare:
+            "Поездки с большим regen в среднем {high} kWh/100, остальные — {low} ({highCount} vs {lowCount})",
+          regenInsufficient: "Мало поездок, чтобы сравнить рекуперацию и расход.",
+        },
         telemetryChartsTitle: "Графики телеметрии",
         teaserTitle: "Аналитика и тренды",
         teaserSubtitle: "Недельные столбцы, фантомный разряд, маршруты и экспорт — в Истории.",

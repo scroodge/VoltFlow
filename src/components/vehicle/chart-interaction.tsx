@@ -23,6 +23,29 @@ export const DELTA_SOC_CHART = {
 /** Break line charts when telemetry gaps exceed this (missing Cloud Sync batches). */
 export const CHART_LINE_GAP_MS = 5_000;
 
+/** Gap threshold for line segments — scales up for downsampled day timelines. */
+export function chartLineGapMs(
+  medianGapSeconds: number | null,
+  minTime?: number,
+  maxTime?: number,
+  pointCount?: number,
+): number {
+  if (medianGapSeconds != null && medianGapSeconds > 0) {
+    return Math.max(CHART_LINE_GAP_MS, medianGapSeconds * 1000 * 1.5);
+  }
+  if (
+    minTime != null &&
+    maxTime != null &&
+    pointCount != null &&
+    pointCount > 1 &&
+    maxTime > minTime
+  ) {
+    const avgGapMs = (maxTime - minTime) / (pointCount - 1);
+    return Math.max(CHART_LINE_GAP_MS, avgGapMs * 1.5);
+  }
+  return CHART_LINE_GAP_MS;
+}
+
 export function splitByTimeGap<T extends { time: number }>(
   points: T[],
   maxGapMs = CHART_LINE_GAP_MS,

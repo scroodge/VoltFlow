@@ -8,6 +8,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { BrandBadge } from "@/components/brand/BrandBadge";
 import { LogoFull } from "@/components/brand/LogoFull";
 import { VehicleAnalyticsPanels } from "@/components/vehicle/vehicle-analytics-panels";
+import { parseAnalyticsRange, type TelemetryHistoryRange } from "@/lib/bydmate/telemetry-ranges";
 import { TripDetailPanel } from "@/components/vehicle/TripDetailPanel";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -776,9 +777,40 @@ export function HistoryView() {
     setTab(parseHistoryTab(searchParams.get("tab")));
   }, [searchParams]);
 
+  const analyticsRange = parseAnalyticsRange(searchParams.get("range"));
+  const analyticsDate =
+    searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
+
+  const buildHistoryUrl = (
+    nextTab: HistoryTab,
+    range?: TelemetryHistoryRange,
+    date?: string,
+  ) => {
+    const params = new URLSearchParams({ tab: nextTab });
+    if (nextTab === "analytics" && range) {
+      params.set("range", range);
+      if (date) params.set("date", date);
+    }
+    return appPath(`/history?${params.toString()}`);
+  };
+
   const handleTabChange = (nextTab: HistoryTab) => {
     setTab(nextTab);
-    router.replace(appPath(`/history?tab=${nextTab}`), { scroll: false });
+    router.replace(
+      nextTab === "analytics"
+        ? buildHistoryUrl(nextTab, analyticsRange, analyticsDate)
+        : buildHistoryUrl(nextTab),
+      { scroll: false },
+    );
+  };
+
+  const handleAnalyticsStateChange = (state: {
+    range: TelemetryHistoryRange;
+    date: string;
+  }) => {
+    router.replace(buildHistoryUrl("analytics", state.range, state.date), {
+      scroll: false,
+    });
   };
 
   if (sessionsLoading && tab === "charging") {
@@ -806,7 +838,12 @@ export function HistoryView() {
             Connect VoltFlow Mate to unlock analytics.
           </p>
         ) : (
-          <VehicleAnalyticsPanels vehicleId={vehicleId} />
+          <VehicleAnalyticsPanels
+            vehicleId={vehicleId}
+            initialRange={analyticsRange}
+            initialDate={analyticsDate}
+            onAnalyticsStateChange={handleAnalyticsStateChange}
+          />
         )
       ) : tab === "charging" ? (
         sessionsLoading ? (

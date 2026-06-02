@@ -254,3 +254,55 @@ export async function fetchLifetimeTrackPoints({
   if (error) throw error;
   return (data ?? []).reverse();
 }
+
+export type ConsumptionBaselineResult = {
+  medianKwh100: number | null;
+  sampleTripCount: number;
+  days: number;
+};
+
+export async function fetchConsumptionBaseline({
+  supabase,
+  userId,
+  vehicleId,
+  days = 30,
+}: {
+  supabase: SupabaseClient;
+  userId: string;
+  vehicleId: string;
+  days?: number;
+}): Promise<ConsumptionBaselineResult> {
+  const to = new Date();
+  const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
+
+  const { data, error } = await supabase
+    .from("bydmate_trips")
+    .select("avg_consumption_kwh_100km, distance_km")
+    .eq("user_id", userId)
+    .eq("vehicle_id", vehicleId)
+    .gte("started_at", from.toISOString())
+    .lte("started_at", to.toISOString());
+
+  if (error) throw error;
+
+  const consumptions = ((data ?? []) as Pick<BydmateTripRow, "avg_consumption_kwh_100km" | "distance_km">[])
+    .filter(
+      (trip) =>
+        (trip.distance_km ?? 0) >= 2 &&
+        trip.avg_consumption_kwh_100km != null &&
+        trip.avg_consumption_kwh_100km > 0,
+    )
+    .map((trip) => trip.avg_consumption_kwh_100km as number)
+    .sort((a, b) => a - b);
+
+  const medianKwh100 =
+    consumptions.length > 0
+      ? consumptions[Math.floor(consumptions.length / 2)] ?? null
+      : null;
+
+  return {
+    medianKwh100,
+    sampleTripCount: consumptions.length,
+    days,
+  };
+}

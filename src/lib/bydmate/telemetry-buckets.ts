@@ -185,7 +185,11 @@ export function formatHistoryRangeSubtitle(
   const from = new Date(window.from);
   const to = new Date(window.to);
   if (range === "day") {
-    return `${from.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })} – ${to.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}`;
+    return from.toLocaleDateString(locale, {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
   }
   return `${from.toLocaleDateString(locale, { month: "short", day: "numeric", year: "numeric" })} – ${to.toLocaleDateString(locale, { month: "short", day: "numeric", year: "numeric" })}`;
 }

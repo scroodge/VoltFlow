@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
+import { AnalyticsDayView } from "@/components/vehicle/analytics-day-view";
 import {
   AnalyticsSummaryStats,
   AnalyticsSummaryStatsLoading,
@@ -19,7 +20,20 @@ import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useBydmateTelemetryHistoryQuery } from "@/hooks/use-bydmate-telemetry-history-query";
 import { useTranslation } from "@/hooks/use-translation";
 import { buildAnalyticsSummary, consumptionByOutsideTemp } from "@/lib/bydmate/telemetry-buckets";
-import { resolveTelemetryWindow, snapAnchorDateForRange, isoWeekValueFromDate, isoWeekValueToAnchorDate, monthValueFromDate, monthValueToAnchorDate, quarterValueFromDate, quarterValueToAnchorDate, yearValueFromDate, yearValueToAnchorDate, type TelemetryHistoryRange } from "@/lib/bydmate/telemetry-ranges";
+import {
+  parseAnalyticsRange,
+  resolveTelemetryWindow,
+  snapAnchorDateForRange,
+  isoWeekValueFromDate,
+  isoWeekValueToAnchorDate,
+  monthValueFromDate,
+  monthValueToAnchorDate,
+  quarterValueFromDate,
+  quarterValueToAnchorDate,
+  yearValueFromDate,
+  yearValueToAnchorDate,
+  type TelemetryHistoryRange,
+} from "@/lib/bydmate/telemetry-ranges";
 import type { RouteInsightsResult } from "@/lib/bydmate/route-insights";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import { devFetch, isDevAppRoute, withDevApiParams } from "@/lib/dev/dev-fetch";
@@ -34,6 +48,13 @@ type PeriodTripRow = BydmateTripRow & { outside_temp_avg?: number | null };
 
 function fmt(value: number | null | undefined, digits = 1) {
   return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
+}
+
+function parseInitialAnchorDate(range: TelemetryHistoryRange, dateParam: string | null) {
+  if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+    return snapAnchorDateForRange(range, dateParam);
+  }
+  return snapAnchorDateForRange(range, new Date().toISOString().slice(0, 10));
 }
 
 async function fetchAnalytics<T>(path: string): Promise<T> {
@@ -147,7 +168,17 @@ function AnalyticsRangeAnchorPicker({
   );
 }
 
-export function VehicleAnalyticsPanels({ vehicleId }: { vehicleId: string }) {
+export function VehicleAnalyticsPanels({
+  vehicleId,
+  initialRange = null,
+  initialDate = null,
+  onAnalyticsStateChange,
+}: {
+  vehicleId: string;
+  initialRange?: TelemetryHistoryRange | null;
+  initialDate?: string | null;
+  onAnalyticsStateChange?: (state: { range: TelemetryHistoryRange; date: string }) => void;
+}) {
   const { locale, t } = useTranslation();
   const tx = t as Translator;
   const currency = useAppPreferences((state) => state.currency);
@@ -159,15 +190,35 @@ export function VehicleAnalyticsPanels({ vehicleId }: { vehicleId: string }) {
       maximumFractionDigits: digits,
     });
   };
-  const [historyRange, setHistoryRange] = useState<TelemetryHistoryRange>("week");
+
+  const [historyRange, setHistoryRange] = useState<TelemetryHistoryRange>(() =>
+    initialRange ? parseAnalyticsRange(initialRange) : "week",
+  );
   const [anchorDate, setAnchorDate] = useState(() =>
-    snapAnchorDateForRange("week", new Date().toISOString().slice(0, 10)),
+    parseInitialAnchorDate(
+      initialRange ? parseAnalyticsRange(initialRange) : "week",
+      initialDate,
+    ),
   );
   const [monthKey, setMonthKey] = useState(() => new Date().toISOString().slice(0, 7));
   const [costFrom, setCostFrom] = useState(() =>
     new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10),
   );
   const [costTo, setCostTo] = useState(() => new Date().toISOString().slice(0, 10));
+
+  useEffect(() => {
+    if (initialRange == null && initialDate == null) return;
+    const range = parseAnalyticsRange(initialRange);
+    setHistoryRange(range);
+    setAnchorDate(parseInitialAnchorDate(range, initialDate));
+  }, [initialRange, initialDate]);
+
+  const notifyState = useCallback(
+    (range: TelemetryHistoryRange, date: string) => {
+      onAnalyticsStateChange?.({ range, date });
+    },
+    [onAnalyticsStateChange],
+  );
 
   const { data: liveRows = [] } = useBydmateLiveQuery();
   const currentOutsideTemp =
@@ -184,12 +235,29 @@ export function VehicleAnalyticsPanels({ vehicleId }: { vehicleId: string }) {
     [historyRange, anchorDate],
   );
 
+  const isDayRange = historyRange === "day";
+
   const periodTripsQuery = useQuery({
     queryKey: ["vehicle-analytics", "period-trips", historyRange, anchorDate, vehicleId],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        type: "period-trips",
+        from: telemetryWindow.from,
+        to: telemetryWindow.to,
+        vehicle_id: vehicleId,
+      });
+      if (isDayRange) params.set("overlap", "1");
+      return fetchAnalytics<{ trips: PeriodTripRow[] }>(`/api/vehicle/analytics?${params.toString()}`);
+    },
+  });
+
+  const baselineQuery = useQuery({
+    queryKey: ["vehicle-analytics", "baseline", vehicleId],
     queryFn: () =>
-      fetchAnalytics<{ trips: PeriodTripRow[] }>(
-        `/api/vehicle/analytics?type=period-trips&from=${encodeURIComponent(telemetryWindow.from)}&to=${encodeURIComponent(telemetryWindow.to)}&vehicle_id=${encodeURIComponent(vehicleId)}`,
+      fetchAnalytics<{ medianKwh100: number | null; sampleTripCount: number }>(
+        `/api/vehicle/analytics?type=baseline&vehicle_id=${encodeURIComponent(vehicleId)}&days=30`,
       ),
+    enabled: isDayRange,
   });
 
   const periodTrips = periodTripsQuery.data?.trips ?? [];
@@ -272,8 +340,15 @@ export function VehicleAnalyticsPanels({ vehicleId }: { vehicleId: string }) {
   );
 
   const handleRangeChange = (range: TelemetryHistoryRange) => {
+    const nextDate = snapAnchorDateForRange(range, anchorDate);
     setHistoryRange(range);
-    setAnchorDate((current) => snapAnchorDateForRange(range, current));
+    setAnchorDate(nextDate);
+    notifyState(range, nextDate);
+  };
+
+  const handleAnchorDateChange = (date: string) => {
+    setAnchorDate(date);
+    notifyState(historyRange, date);
   };
 
   const tempConsumptionBuckets = useMemo(
@@ -293,6 +368,18 @@ export function VehicleAnalyticsPanels({ vehicleId }: { vehicleId: string }) {
   const exportBase = `/api/vehicle/export?format=csv&vehicle_id=${encodeURIComponent(vehicleId)}&from=${costFrom}T00:00:00.000Z&to=${costTo}T23:59:59.999Z`;
   const exportUrl = isDevAppRoute() ? withDevApiParams(exportBase) : exportBase;
 
+  const historySubtitle =
+    historyRange === "day"
+      ? t("vehicle.analytics.daySubtitle")
+      : t("vehicle.analytics.historySubtitle");
+
+  const baseline = baselineQuery.data
+    ? {
+        medianKwh100: baselineQuery.data.medianKwh100,
+        sampleTripCount: baselineQuery.data.sampleTripCount,
+      }
+    : null;
+
   return (
     <div className="grid gap-3">
       <section className="voltflow-card p-5">
@@ -301,7 +388,9 @@ export function VehicleAnalyticsPanels({ vehicleId }: { vehicleId: string }) {
             <h2 className="font-heading text-2xl font-semibold tracking-tight">
               {t("vehicle.analytics.historyTitle")}
             </h2>
-            <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.historySubtitle")}</p>
+            {!isDayRange ? (
+              <p className="mt-1 text-sm text-muted-foreground">{historySubtitle}</p>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
             {HISTORY_RANGES.map((range) => (
@@ -324,28 +413,45 @@ export function VehicleAnalyticsPanels({ vehicleId }: { vehicleId: string }) {
         <AnalyticsRangeAnchorPicker
           range={historyRange}
           anchorDate={anchorDate}
-          onAnchorDateChange={setAnchorDate}
+          onAnchorDateChange={handleAnchorDateChange}
           tx={tx}
         />
 
-        {historyQuery.isLoading || periodTripsQuery.isLoading ? (
-          <AnalyticsSummaryStatsLoading />
-        ) : (
-          <AnalyticsSummaryStats summary={summary} />
-        )}
-
-        <div className="mt-4">
-          <TelemetryHistoryCharts
-            points={historyPoints}
-            isLoading={historyQuery.isLoading}
-            hasError={Boolean(historyQuery.error)}
-            embedded
-            chartMode="analytics"
-            historyRange={historyRange}
+        {isDayRange ? (
+          <AnalyticsDayView
+            summary={summary}
+            trips={periodTrips}
+            baseline={baseline}
+            historyPoints={historyPoints}
             anchorDate={anchorDate}
-            barCharts={barCharts}
+            isLoading={historyQuery.isLoading || periodTripsQuery.isLoading}
+            hasSummaryError={Boolean(historyQuery.error || periodTripsQuery.error)}
+            hasTripsError={Boolean(periodTripsQuery.error)}
+            historyLoading={historyQuery.isLoading}
+            historyError={Boolean(historyQuery.error)}
           />
-        </div>
+        ) : (
+          <>
+            {historyQuery.isLoading || periodTripsQuery.isLoading ? (
+              <AnalyticsSummaryStatsLoading />
+            ) : (
+              <AnalyticsSummaryStats summary={summary} />
+            )}
+
+            <div className="mt-4">
+              <TelemetryHistoryCharts
+                points={historyPoints}
+                isLoading={historyQuery.isLoading}
+                hasError={Boolean(historyQuery.error)}
+                embedded
+                chartMode="analytics"
+                historyRange={historyRange}
+                anchorDate={anchorDate}
+                barCharts={barCharts}
+              />
+            </div>
+          </>
+        )}
       </section>
 
       <section className="voltflow-card p-5">

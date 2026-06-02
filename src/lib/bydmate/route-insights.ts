@@ -477,21 +477,29 @@ export async function fetchPeriodTrips({
   vehicleId,
   from,
   to,
+  overlapWindow = false,
 }: {
   supabase: SupabaseClient;
   userId: string;
   vehicleId: string;
   from: string;
   to: string;
+  /** Include trips that overlap [from, to], not only those starting inside it. */
+  overlapWindow?: boolean;
 }): Promise<BydmateTripRow[]> {
-  const { data, error } = await supabase
+  let query = supabase
     .from("bydmate_trips")
     .select("*")
     .eq("user_id", userId)
-    .eq("vehicle_id", vehicleId)
-    .gte("started_at", from)
-    .lte("started_at", to)
-    .order("started_at", { ascending: false });
+    .eq("vehicle_id", vehicleId);
+
+  if (overlapWindow) {
+    query = query.lte("started_at", to).or(`ended_at.is.null,ended_at.gte.${from}`);
+  } else {
+    query = query.gte("started_at", from).lte("started_at", to);
+  }
+
+  const { data, error } = await query.order("started_at", { ascending: false });
 
   if (error) throw error;
   return (data ?? []) as BydmateTripRow[];
@@ -504,6 +512,7 @@ export async function fetchPeriodTripsEnriched({
   from,
   to,
   enrichLimit = 40,
+  overlapWindow = false,
 }: {
   supabase: SupabaseClient;
   userId: string;
@@ -511,8 +520,16 @@ export async function fetchPeriodTripsEnriched({
   from: string;
   to: string;
   enrichLimit?: number;
+  overlapWindow?: boolean;
 }): Promise<(BydmateTripRow & { outside_temp_avg?: number | null })[]> {
-  const trips = await fetchPeriodTrips({ supabase, userId, vehicleId, from, to });
+  const trips = await fetchPeriodTrips({
+    supabase,
+    userId,
+    vehicleId,
+    from,
+    to,
+    overlapWindow,
+  });
   const withEnergy = await enrichTripsWithEnergy({
     supabase,
     userId,

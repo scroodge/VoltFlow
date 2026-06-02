@@ -30,11 +30,13 @@ import { VehicleAnalyticsTeaser } from "@/components/vehicle/vehicle-analytics-t
 import { ChartSeriesLegend, TelemetryBarChart, type BarChartModel } from "@/components/vehicle/telemetry-analytics-charts";
 import {
   ChartDataTooltip,
+  CHART_LINE_GAP_MS,
   ChartHoverCrosshair,
   InteractiveChartShell,
   STD_CHART,
   DELTA_SOC_CHART,
   buildBrokenLinePaths,
+  chartLineGapMs,
   clientToSvg,
   nearestIndexByX,
   nearestPointByTime,
@@ -1641,11 +1643,24 @@ function prepareTelemetryHistory(
     finalizeChart(chart, maxChartPoints),
   );
 
+  let minTime = Infinity;
+  let maxTime = -Infinity;
+  let hasData = false;
+  for (const chart of charts) {
+    if (!chart.hasData) continue;
+    hasData = true;
+    minTime = Math.min(minTime, chart.minTime);
+    maxTime = Math.max(maxTime, chart.maxTime);
+  }
+
   return {
     visiblePointCount,
     medianGapSeconds: medianSampleGapSeconds(deviceTimes),
     start,
     end,
+    minTime: hasData ? minTime : 0,
+    maxTime: hasData ? maxTime : 1,
+    hasData,
     charts,
     regenRecoveryChart,
     deltaBySoc: includeCellDelta ? prepareDeltaBySoc(deltaBySocPoints, "discharge") : { points: [], minSoc: 0, maxSoc: 100, minDelta: 0, maxDelta: 0, latest: null, socDirection: "discharge" as const },
@@ -1673,12 +1688,23 @@ export function TelemetryHistoryCharts({
 }) {
   const { locale, t } = useTranslation();
   const tx = t as Translator;
-  const includeCellDelta =
-    chartMode === "trip" || (chartMode === "analytics" && historyRange === "day");
-  const maxChartPoints = chartMode === "trip" ? MAX_TRIP_CHART_POINTS : MAX_CHART_POINTS;
+  const includeCellDelta = chartMode === "trip";
+  const isAnalyticsDay = chartMode === "analytics" && historyRange === "day";
+  const maxChartPoints =
+    chartMode === "trip" || isAnalyticsDay ? MAX_TRIP_CHART_POINTS : MAX_CHART_POINTS;
   const history = useMemo(
     () => prepareTelemetryHistory(points, tx, { includeCellDelta, maxChartPoints }),
     [points, tx, includeCellDelta, maxChartPoints],
+  );
+  const lineGapMs = useMemo(
+    () =>
+      chartLineGapMs(
+        history.medianGapSeconds,
+        history.hasData ? history.minTime : undefined,
+        history.hasData ? history.maxTime : undefined,
+        history.visiblePointCount,
+      ),
+    [history.medianGapSeconds, history.minTime, history.maxTime, history.visiblePointCount, history.hasData],
   );
   const showLineCharts =
     chartMode === "trip" ||
@@ -1756,6 +1782,7 @@ export function TelemetryHistoryCharts({
                   <TelemetryLineChart
                     key={chart.title}
                     chart={chart}
+                    lineGapMs={lineGapMs}
                   />
                 ))}
                 {history.regenRecoveryChart.hasData ? (
@@ -1765,10 +1792,13 @@ export function TelemetryHistoryCharts({
                   <TelemetryLineChart
                     key={chart.title}
                     chart={chart}
+                    lineGapMs={lineGapMs}
                   />
                 ))}
               </div>
-              {includeCellDelta ? <DeltaBySocChart chart={history.deltaBySoc} /> : null}
+              {includeCellDelta ? (
+                <DeltaBySocChart chart={history.deltaBySoc} lineGapMs={lineGapMs} />
+              ) : null}
             </>
           ) : null}
           {showBarCharts ? (
@@ -2046,7 +2076,13 @@ function RegenRecoveryChart({ chart }: { chart: RegenRecoveryChartModel }) {
   );
 }
 
-function TelemetryLineChart({ chart }: { chart: TelemetryChart }) {
+function TelemetryLineChart({
+  chart,
+  lineGapMs = CHART_LINE_GAP_MS,
+}: {
+  chart: TelemetryChart;
+  lineGapMs?: number;
+}) {
   const { t } = useTranslation();
   const tx = t as Translator;
   const [isOpen, setIsOpen] = useState(false);
@@ -2200,10 +2236,14 @@ function TelemetryLineChart({ chart }: { chart: TelemetryChart }) {
         </text>
       )}
       {series.map((item, seriesIndex) => {
-        const pathSegments = buildBrokenLinePaths(item.points, (point) => ({
-          x: x(point.time),
-          y: y(seriesIndex, point.value),
-        }));
+        const pathSegments = buildBrokenLinePaths(
+          item.points,
+          (point) => ({
+            x: x(point.time),
+            y: y(seriesIndex, point.value),
+          }),
+          lineGapMs,
+        );
         const markers = item.points.length <= MAX_CHART_MARKERS ? item.points : [];
         return (
           <g key={item.label}>
@@ -2325,7 +2365,13 @@ function TelemetryLineChart({ chart }: { chart: TelemetryChart }) {
   );
 }
 
-function DeltaBySocChart({ chart }: { chart: DeltaBySocChartModel }) {
+function DeltaBySocChart({
+  chart,
+  lineGapMs = CHART_LINE_GAP_MS,
+}: {
+  chart: DeltaBySocChartModel;
+  lineGapMs?: number;
+}) {
   const { t } = useTranslation();
   const tx = t as Translator;
   const [isOpen, setIsOpen] = useState(false);
@@ -2358,7 +2404,7 @@ function DeltaBySocChart({ chart }: { chart: DeltaBySocChartModel }) {
       </div>
 
       <div className="mt-4">
-        <DeltaBySocPlot chart={chart} zoom={0} heightClassName="h-44" />
+        <DeltaBySocPlot chart={chart} zoom={0} heightClassName="h-44" lineGapMs={lineGapMs} />
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <DeltaBySocStat compact label={tx("vehicle.charts.points")} value={points.length.toString()} />
@@ -2415,7 +2461,13 @@ function DeltaBySocChart({ chart }: { chart: DeltaBySocChartModel }) {
             </div>
           </div>
           <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[1fr_15rem]">
-            <DeltaBySocPlot chart={chart} zoom={zoom} heightClassName="h-full min-h-[22rem]" interactive />
+            <DeltaBySocPlot
+              chart={chart}
+              zoom={zoom}
+              heightClassName="h-full min-h-[22rem]"
+              interactive
+              lineGapMs={lineGapMs}
+            />
             <div className="grid content-start gap-3 sm:grid-cols-2 lg:grid-cols-1">
               <DeltaBySocStat label={tx("vehicle.charts.points")} value={points.length.toString()} />
               <DeltaBySocStat label={tx("vehicle.charts.socRange")} value={`${fmt(chart.minSoc, 0)}-${fmt(chart.maxSoc, 0)}%`} />
@@ -2436,11 +2488,13 @@ function DeltaBySocPlot({
   chart,
   heightClassName,
   interactive = false,
+  lineGapMs = CHART_LINE_GAP_MS,
 }: {
   chart: DeltaBySocChartModel;
   zoom?: number;
   heightClassName: string;
   interactive?: boolean;
+  lineGapMs?: number;
 }) {
   const { t } = useTranslation();
   const tx = t as Translator;
@@ -2469,14 +2523,22 @@ function DeltaBySocPlot({
     if (maxSoc === minSoc) return 72;
     return 110 - ((soc - minSoc) / (maxSoc - minSoc)) * 92;
   };
-  const linePaths = buildBrokenLinePaths(points, (point) => ({
-    x: x(point.time),
-    y: y(point.delta),
-  }));
-  const socPaths = buildBrokenLinePaths(points, (point) => ({
-    x: x(point.time),
-    y: socY(point.soc),
-  }));
+  const linePaths = buildBrokenLinePaths(
+    points,
+    (point) => ({
+      x: x(point.time),
+      y: y(point.delta),
+    }),
+    lineGapMs,
+  );
+  const socPaths = buildBrokenLinePaths(
+    points,
+    (point) => ({
+      x: x(point.time),
+      y: socY(point.soc),
+    }),
+    lineGapMs,
+  );
   const markerPoints = points.length <= MAX_CHART_MARKERS ? points : [];
   const hoveredPoint = hoverIndex == null ? null : points[hoverIndex] ?? null;
 
