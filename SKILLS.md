@@ -67,6 +67,7 @@ When debugging history:
 - If Delta by SOC shows `0 pts` but telemetry exists, check API `vehicleId` in the samples response: it must match `cars.vehicle_alias`, not dev default `"way"`.
 - Check whether VoltFlow Mate reports target SOC a few minutes after VoltFlow marks the session `completed`.
 - Preserve samples that contain the 100% SOC and cell-voltage tail.
+- False `completed` at 100% with drive-away below target: check in-session `speed_kmh > 5` and max SOC vs target; server auto-stop needs deployed ingest + `bydmate_auto_charging_session_state`; inspect ingest JSON `auto_charging_sessions.error`.
 
 ### VoltFlow Mate Ingest Skill
 
@@ -148,6 +149,17 @@ The full project test command is:
 ```bash
 npm run test
 ```
+
+Charging auto-session tests are not in the default glob; run explicitly after ingest/session changes:
+
+```bash
+node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/bydmate/charging-auto-session.test.mjs
+```
+
+### Build Skill
+
+- Root `npm run build` type-checks the main VoltFlow app only; `screenshots/` is excluded in `tsconfig.json` (separate Next project for App Store capture).
+- After charging or finalize changes, run `npm run build` before deploy — TypeScript must pass on `charging-session-finalize.ts`, `charging-session-sync.ts`, and related hooks.
 
 ### Supabase Skill
 
@@ -261,7 +273,7 @@ Do not accidentally regress:
 
 - Auth pages and callback flow.
 - Vehicle creation/editing.
-- Active charging start/stop flow.
+- Active charging start/stop flow (manual, PWA background sync, Mate ingest auto start/stop).
 - Charging progress, ETA, kWh, cost, and tariff calculations.
 - Charging history list and detail.
 - VoltFlow Mate cloud ingest compatibility with the current Android APK.

@@ -13,13 +13,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## Active charging session sync (`charging_sessions`)
 
 - Mate ingest may **auto-start** a `charging_sessions` row when telemetry shows sustained charging (`is_charging` or `charge_power_kw`) for a car with matching `cars.vehicle_alias`, after two consecutive charging samples. Start SOC and charger power come from live telemetry; target defaults to 100%.
-- Mate ingest may **auto-stop** an open session after two consecutive unplug samples, or immediately on drive-away (`speed_kmh > 5`).
-- Manual `stopChargingSession` prefers fresh live SOC, then latest in-session telemetry, then wall-clock math only as fallback.
-- Telemetry ingest writes `bydmate_telemetry_samples` and `bydmate_live_snapshots` only. It does **not** update `charging_sessions.current_percent` (except via the auto start/stop hooks above).
+- Mate ingest may **auto-stop** an open session after two consecutive unplug samples, or immediately on drive-away (`speed_kmh > 5`, see `CHARGING_DRIVE_SPEED_KMH` in `charging-live.ts`).
+- Server auto start/stop runs in `processBydmateAutoChargingSessions` on each successful ingest batch and needs **both** migration `20260602120000_bydmate_auto_charging_session_state.sql` and a **deployed** API build. If `bydmate_auto_charging_session_state` stays empty while charging, check production version and ingest JSON `auto_charging_sessions` (including `error`).
+- Manual `stopChargingSession` uses `resolveStopProgressForSession` (`charging-session-finalize.ts`): fresh live SOC → latest in-session `bydmate_telemetry_samples` → wall-clock math only as fallback. Never persist math-only 100% when telemetry shows unplug or drive-away below target.
+- Telemetry ingest writes `bydmate_telemetry_samples` and `bydmate_live_snapshots` only. It does **not** stream per-second `charging_sessions.current_percent` (auto hooks only create/stop rows and set stop-time fields).
 - While `status = 'charging'`, the web app persists progress about once per second via `ChargingSessionBackgroundSync` in `MobileShell` (`useChargingSessionLiveSync`). This runs on dashboard, vehicle, charging, and other authenticated routes — not only on `/charging/[id]`.
 - Shared logic lives in `src/lib/charging-session-sync.ts` (`deriveChargingSessionLiveBundle`): prefer fresh Mate charging/SOC snapshots (received within 90s), fall back to wall-clock math for **persist** when Mate is offline; filter live rows by `cars.vehicle_alias` when set.
-- Auto-complete guard: `completed` is allowed only when fresh live SOC confirms target and live state is still charging. Never complete from math-only progress.
-- Drive-away guard: if fresh live telemetry shows movement after unplug/charging stop, close the session as `stopped` using live-derived SOC/energy/cost.
+- Auto-complete guard: `deriveChargingSessionLiveBundle` sets `completionState` only when `hasFreshLiveSocSource` and live completion confirms target while still charging (`shouldBlockAutoComplete` blocks driving or not-charging live). Never set `status = completed` from math-only `display` progress.
+- Drive-away guard: if fresh live telemetry shows movement during an open session, `useChargingSessionLiveSync` closes as `stopped` with live-derived SOC/energy/cost (`shouldAutoStopOnDriveAway`).
 - Wake reconcile: when the car wakes and fresh SOC materially diverges from math/persisted progress, prefer live SOC for persisted `current_percent`.
 - `ChargingSessionScreen` uses the same bundle for UI (`onDerived` → `useChargingUi`) with `skipPersist: true` so background sync is the single writer.
 - If `current_percent` is stale in Postgres but telemetry is current, check whether the VoltFlow PWA/tab was open; history charts still use `bydmate_telemetry_samples`.

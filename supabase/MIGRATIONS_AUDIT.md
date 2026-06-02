@@ -2,21 +2,16 @@
 
 Date: 2026-05-30
 
-## Applied 2026-06-02 (Mate auto charging sessions)
+## Applied 2026-06-02 (charging sessions)
 
 | Migration | Purpose |
 | --- | --- |
-| `20260602120000_bydmate_auto_charging_session_state.sql` | State for consecutive charging/unplug samples used by ingest auto start/stop of `charging_sessions` |
+| `20260602103500_fix_false_completed_charging_sessions.sql` | One-time backfill: `completed` at target but in-session telemetry `max(soc) < target` and `speed_kmh > 5` → `stopped`, percent/energy/cost from last telemetry SOC |
+| `20260602120000_bydmate_auto_charging_session_state.sql` | Per-vehicle counters for ingest auto start/stop (`processBydmateAutoChargingSessions`) |
 
-## Applied 2026-06-02 (charging history correction)
+**App deploy:** Migrations alone do not enable auto start/stop. Production must run the API build that calls `processBydmateAutoChargingSessions` in `POST /api/bydmate/telemetry`. Verify with ingest response `auto_charging_sessions` and rows in `bydmate_auto_charging_session_state`.
 
-Applied migration:
-
-| Migration | Purpose |
-| --- | --- |
-| `20260602103500_fix_false_completed_charging_sessions.sql` | Backfill false `completed` charging sessions to `stopped` when telemetry max SOC stayed below target and movement was present in-session; recompute percent/energy/cost from last SOC |
-
-Execution notes:
+Execution notes (both migrations):
 
 - `--target=linked` failed in temporary workdir mode (`Cannot find project ref`).
 - Applied successfully via pooler URL:

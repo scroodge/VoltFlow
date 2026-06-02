@@ -309,12 +309,21 @@ type Diplus = {
     "sent": 0,
     "thresholds": []
   },
+  "auto_charging_sessions": {
+    "started": 0,
+    "stopped": 0,
+    "sessionIds": []
+  },
   "received_at": "2026-05-26T10:30:01.000Z",
   "ingest": {
     "duplicate": false
   }
 }
 ```
+
+`auto_charging_sessions` is server-side only (VoltFlow web app auto start/stop of
+`charging_sessions` when `cars.vehicle_alias` matches `X-Vehicle-Id`). The APK does
+not need to read it. On failure inside the hook, `error` is set and counts stay zero.
 
 The exact `ingest` object may include fields such as `duplicate`, `charging`,
 `trip_id`, `closed_trip_id`, `sample_count`, `track_point_count`,

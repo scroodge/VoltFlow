@@ -381,6 +381,38 @@ rows for cars with matching `cars.vehicle_alias`.
 Requires Mate to keep sending ingest while charging. Progress after start is still
 updated by the PWA via `ChargingSessionBackgroundSync`.
 
+Ingest success JSON includes:
+
+```json
+"auto_charging_sessions": {
+  "started": 0,
+  "stopped": 1,
+  "sessionIds": ["…"],
+  "error": "optional message when auto hook failed"
+}
+```
+
+APK clients can ignore this block; it is for server/debug verification after deploy.
+
+## Charging session integrity (client + manual stop)
+
+These rules complement ingest auto start/stop and prevent false `completed` rows when the user drives away or stops without opening the charging screen.
+
+| Layer | Behavior |
+| --- | --- |
+| Live bundle | `deriveChargingSessionLiveBundle` — math for display/persist when Mate is stale; `completionState` only with fresh live SOC at target while still charging |
+| Background sync | `useChargingSessionLiveSync` — ~1 Hz persist; blocks auto-complete when `shouldBlockAutoComplete`; auto-`stopped` on drive-away via `shouldAutoStopOnDriveAway` |
+| Manual stop | `resolveStopProgressForSession` — live snapshot (90s) → last in-session telemetry SOC → math |
+| Reconcile | `resolveStateToPersist` — when car wakes, prefer live SOC if drift exceeds `LIVE_SOC_RECONCILE_TOLERANCE_PERCENT` (1%) |
+
+### Debugging false `completed` or frozen percent
+
+1. Compare `charging_sessions` times/percent with `bydmate_telemetry_samples` for `cars.vehicle_alias` as `vehicle_id`.
+2. Check movement: any `speed_kmh > 5` in-session implies `stopped`, not `completed`, if SOC never reached target.
+3. If telemetry is current but `current_percent` is stale, the PWA was likely closed — not an ingest bug.
+4. For server auto stop: confirm production deploy, row in `bydmate_auto_charging_session_state`, and ingest response `auto_charging_sessions`.
+5. Historical false `completed` rows (max SOC below target with in-session movement) were corrected by migration `20260602103500_fix_false_completed_charging_sessions.sql`.
+
 ## Charging session UX additions
 
 Active charging screen (`charging-session-screen.tsx`):

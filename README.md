@@ -42,6 +42,8 @@ VoltFlow helps EV drivers model and track AC charging sessions without talking d
 - **Tariff-aware estimates** with local currency preferences: EUR, USD, BYN, and RUB.
 - **Supabase Auth + RLS** so users only read and update their own vehicles and sessions.
 - **Active session sync** — while charging, the PWA writes live SOC progress to `charging_sessions` about once per second from any app screen (background sync in `MobileShell`), with Supabase Realtime for multi-tab UI.
+- **Mate auto sessions** — ingest can auto-start/stop `charging_sessions` when `cars.vehicle_alias` matches Mate `vehicle_id` (no PWA required for open/close; progress still needs PWA or stop-time telemetry).
+- **Charging integrity** — no math-only `completed`; drive-away closes as `stopped`; manual stop prefers live SOC, then session telemetry, then math.
 - **Installable PWA** with app manifest, service worker, icons, and iOS home-screen support.
 - **Mobile-first shell** optimized for thumb-friendly controls and safe-area navigation.
 - **Internationalization** for English, Belarusian, and Russian.
@@ -80,7 +82,7 @@ This repository already contains the main production surface of VoltFlow. Future
 - Public/marketing entry point and authenticated mobile app shell.
 - Supabase authentication flows: login, forgot password, reset password, auth callback, and protected app routes.
 - Vehicle profile management: create and edit cars with battery, wallbox, efficiency, tariff, and currency preferences.
-- Charging cockpit: active session screen, progress ring, stats, start/stop actions, charging delta card, deterministic wall-clock fallback calculations, background `charging_sessions` persist from any route, and Supabase Realtime for open screens.
+- Charging cockpit: active session screen, progress ring, stats, start/stop actions, charging delta card, deterministic wall-clock fallback calculations, background `charging_sessions` persist from any route, Supabase Realtime for open screens, live-SOC completion guards, and drive-away auto-stop when Mate is fresh.
 - Charging history: session list, detail screen, and VoltFlow Mate session-sample charts through `/api/vehicle/charging-sessions/[sessionId]/samples`.
 - Trip history: trip list with energy summary via `/api/vehicle/trips` (optional `?month=YYYY-MM` for calendar dates), per-trip sample timeline via `/api/vehicle/trips/[tripId]/samples`, and GPS track via `/api/vehicle/trips/[tripId]/track`.
 - **Per-trip charts** (`TelemetryHistoryCharts` in trip detail): SOC line; **Speed & power** dual-axis line (km/h + kW); **Recovered energy** bar chart (incremental regen per interval, X-axis prefers trip distance in km when available, else time); temperature and cell-delta lines. **Fullscreen only:** crosshair + tooltip on hover for all line and bar charts.
@@ -106,6 +108,7 @@ This repository already contains the main production surface of VoltFlow. Future
 - Server-side trip inference in `bydmate_trips` and GPS track persistence in `bydmate_trip_track_points`.
 - Trip API endpoints: `GET /api/vehicle/trips`, `GET /api/vehicle/trips/[tripId]/samples`, `GET /api/vehicle/trips/[tripId]/track`.
 - Charging samples are intentionally kept in live/history telemetry but excluded from driving-trip extension.
+- **Auto charging sessions:** after ingest, server may start/stop `charging_sessions` for alias-matched cars; state in `bydmate_auto_charging_session_state`; response field `auto_charging_sessions` (see `supabase/TELEMETRY.md`).
 - GPS sanity filtering and suspicious point dropping before track persistence.
 - Di+ raw payload storage plus materialized columns for SOC, speed, power, cell voltages, temperatures, doors, windows, tires, lights, HVAC, drive state, and diagnostics.
 - **90-day raw retention** and **3-year hourly retention** via `purge_old_bydmate_telemetry()` (pg_cron on Pro).
@@ -138,7 +141,8 @@ Before adding features or fixing bugs, read [AGENTS.md](AGENTS.md). The short ve
 - Do not assume charging-history data is lost when a chart stops below target SOC. Compare `charging_sessions.started_at`, `charging_sessions.stopped_at`, `charging_sessions.current_percent`, `charging_sessions.target_percent`, `bydmate_telemetry_samples.device_time`, and delayed samples around the stop time.
 - Preserve delayed VoltFlow Mate completion samples because target SOC may arrive minutes after VoltFlow marks a session `completed`.
 - When fresh VoltFlow Mate live SOC exists, never auto-complete a charging session from mathematical time estimates. Math is display fallback only; completion must wait for live SOC so the 100% cell-voltage tail is captured.
-- `charging_sessions.current_percent` is updated by the web client (`ChargingSessionBackgroundSync` / `useChargingSessionLiveSync`), not by telemetry ingest. If the DB row is frozen but `bydmate_telemetry_samples` is current, the user likely closed the PWA; reopen any VoltFlow screen while charging to resume writes.
+- `charging_sessions.current_percent` is updated by the web client (`ChargingSessionBackgroundSync` / `useChargingSessionLiveSync`), not by per-sample ingest. Mate ingest may auto-start/stop sessions and set stop-time fields; manual stop uses live → telemetry → math (`charging-session-finalize.ts`).
+- If the DB row is frozen but `bydmate_telemetry_samples` is current, the user likely closed the PWA; reopen any VoltFlow screen while charging to resume writes. If the session never auto-stopped after drive-away, check production deploy and `auto_charging_sessions` in ingest responses.
 - Keep existing working features untouched unless the task explicitly requires changing them. Prefer narrow, tested edits over broad refactors.
 
 ### Getting Started
@@ -229,8 +233,13 @@ Open [http://localhost:3000](http://localhost:3000).
 npm run dev       # Start Next.js dev server
 npm run build     # Create production build
 npm run start     # Start production server
-npm run test      # Run Node test suite for VoltFlow Mate, app preferences, and push logic
+npm run test      # Run Node test suite (*.test.mjs under src/); charging-auto-session test is run explicitly — see SKILLS.md
 npm run lint      # Run ESLint
+```
+
+The root `tsconfig.json` excludes the `screenshots/` subproject (separate Next app for App Store assets). Build screenshots with `cd screenshots && pnpm install && pnpm build`.
+
+```bash
 npm run db:migrations:status
 npm run db:migrations:plan
 npm run db:migrations:up
@@ -393,6 +402,8 @@ VoltFlow помогает владельцам электромобилей мо
 - **Расчет стоимости по тарифу** с локальными валютами: EUR, USD, BYN и RUB.
 - **Supabase Auth + RLS**, чтобы пользователь видел и менял только свои автомобили и сессии.
 - **Синхронизация активной сессии** — во время зарядки PWA пишет live SOC в `charging_sessions` ~раз в секунду с любого экрана (фоновый sync в `MobileShell`), плюс Supabase Realtime для открытых вкладок.
+- **Авто-сессии Mate** — ingest может открыть/закрыть `charging_sessions` при совпадении `cars.vehicle_alias` и `vehicle_id` Mate (PWA для старта/стопа не обязателен; прогресс по-прежнему нужен PWA или телеметрия на стопе).
+- **Целостность зарядки** — без math-only `completed`; отъезд закрывает `stopped`; ручной стоп: live SOC → телеметрия сессии → математика.
 - **Устанавливаемая PWA** с manifest, service worker, иконками и поддержкой iOS Home Screen.
 - **Mobile-first интерфейс** с крупными touch-контролами и safe-area навигацией.
 - **Локализация** на английский, белорусский и русский языки.
@@ -432,7 +443,7 @@ VoltFlow помогает владельцам электромобилей мо
 - Public/marketing entry point и защищенная mobile-first оболочка приложения.
 - Supabase auth: login, forgot password, reset password, auth callback и protected routes.
 - Профили автомобилей: создание и редактирование машины с батареей, wallbox, эффективностью AC-зарядки, тарифом и валютой.
-- Экран зарядки: активная сессия, progress ring, stats, start/stop actions, charging delta card, deterministic wall-clock fallback, фоновая запись `charging_sessions` с любого маршрута и Supabase Realtime для открытых экранов.
+- Экран зарядки: активная сессия, progress ring, stats, start/stop actions, charging delta card, deterministic wall-clock fallback, фоновая запись `charging_sessions` с любого маршрута, Supabase Realtime, защита от ложного `completed` по математике и auto-stop при отъезде при свежем Mate.
 - История зарядок: список, detail screen и графики VoltFlow Mate samples через `/api/vehicle/charging-sessions/[sessionId]/samples`.
 - История поездок: список через `/api/vehicle/trips` (опционально `?month=YYYY-MM` для календаря), timeline через `/api/vehicle/trips/[tripId]/samples`, GPS-трек через `/api/vehicle/trips/[tripId]/track`.
 - **Графики поездки:** SOC; **Speed & power** (две оси); **Recovered energy** — bar chart по интервалам regen (ось X — км поездки, если есть, иначе время); температуры и cell delta. **Только fullscreen:** crosshair + tooltip при наведении.
@@ -458,6 +469,7 @@ VoltFlow помогает владельцам электромобилей мо
 - Trips строятся сервером в `bydmate_trips`, GPS track points сохраняются в `bydmate_trip_track_points`.
 - Trip API: `GET /api/vehicle/trips`, `GET /api/vehicle/trips/[tripId]/samples`, `GET /api/vehicle/trips/[tripId]/track`.
 - Charging samples сохраняются в live/history telemetry, но не создают и не продлевают driving trips.
+- **Авто-сессии зарядки:** после ingest сервер может стартовать/останавливать `charging_sessions` для машин с alias; состояние в `bydmate_auto_charging_session_state`; в ответе ingest — `auto_charging_sessions` (см. `supabase/TELEMETRY.md`).
 - До сохранения треков применяется фильтрация подозрительных GPS-точек.
 - Di+ сохраняется raw JSON и частично материализуется в колонки для SOC, speed, power, cell voltages, temperatures, doors, windows, tires, lights, HVAC и diagnostics.
 - **Retention 90 дней raw / 3 года hourly** через `purge_old_bydmate_telemetry()` (pg_cron на Pro).
@@ -490,7 +502,8 @@ VoltFlow помогает владельцам электромобилей мо
 - Если график истории зарядки остановился ниже target SOC, не считать данные потерянными. Сначала сравнить `charging_sessions.started_at`, `charging_sessions.stopped_at`, `charging_sessions.current_percent`, `charging_sessions.target_percent`, `bydmate_telemetry_samples.device_time` и delayed samples вокруг stop time.
 - Сохранять отложенные VoltFlow Mate completion samples: target SOC может прийти через несколько минут после того, как VoltFlow отметил сессию `completed`.
 - Если есть свежий VoltFlow Mate live SOC, не auto-complete зарядную сессию по математической оценке времени. Математика может быть только display fallback; завершение должно ждать live SOC, чтобы сохранить 100% cell-voltage tail.
-- `charging_sessions.current_percent` обновляет веб-клиент (`ChargingSessionBackgroundSync` / `useChargingSessionLiveSync`), а не ingest телеметрии. Если строка в БД «застыла», а `bydmate_telemetry_samples` идут — пользователь, скорее всего, закрыл PWA; открыть любой экран VoltFlow во время зарядки, чтобы запись возобновилась.
+- `charging_sessions.current_percent` обновляет веб-клиент (`ChargingSessionBackgroundSync` / `useChargingSessionLiveSync`), а не каждый сэмпл ingest. Ingest может auto-start/stop и поля на стопе; ручной стоп — live → телеметрия → math (`charging-session-finalize.ts`).
+- Если строка в БД «застыла», а `bydmate_telemetry_samples` идут — пользователь, скорее всего, закрыл PWA. Если сессия не закрылась после отъезда — проверить деплой и `auto_charging_sessions` в ответе ingest.
 - Не трогать уже рабочие сценарии без прямой необходимости. Предпочитать узкие изменения с тестами вместо широких рефакторингов.
 
 ### Быстрый старт
@@ -581,8 +594,13 @@ npm run dev
 npm run dev       # Запуск Next.js dev server
 npm run build     # Production build
 npm run start     # Production server
-npm run test      # Node test suite для VoltFlow Mate, app preferences и push logic
+npm run test      # Node test suite (*.test.mjs); charging-auto-session — см. SKILLS.md
 npm run lint      # ESLint
+```
+
+Корневой `tsconfig.json` исключает подпроект `screenshots/` (отдельное Next-приложение для App Store). Сборка: `cd screenshots && pnpm install && pnpm build`.
+
+```bash
 npm run db:migrations:status
 npm run db:migrations:plan
 npm run db:migrations:up
