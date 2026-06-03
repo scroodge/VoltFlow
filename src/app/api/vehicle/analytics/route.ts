@@ -8,8 +8,10 @@ import {
   fetchConsumptionBaseline,
   fetchCostPerKm,
   fetchMonthlyStats,
+  fetchPeriodChargingSessions,
   fetchPhantomDrain,
 } from "@/lib/vehicle-analytics";
+import { mapChargingSession } from "@/lib/db-map";
 import { devVehicleId, resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
 
 export async function GET(request: NextRequest) {
@@ -74,6 +76,23 @@ export async function GET(request: NextRequest) {
         overlapWindow,
       });
       return NextResponse.json({ trips });
+    }
+
+    if (type === "period-sessions") {
+      const from = params.get("from");
+      const to = params.get("to");
+      if (!from || !to) {
+        return NextResponse.json({ error: "Missing from/to" }, { status: 400 });
+      }
+      const rows = await fetchPeriodChargingSessions({
+        supabase: access.supabase,
+        userId: access.userId,
+        from,
+        to,
+      });
+      return NextResponse.json({
+        sessions: rows.map((row) => mapChargingSession(row as Record<string, unknown>)),
+      });
     }
 
     if (type === "baseline") {

@@ -2,24 +2,26 @@
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDuration } from "@/lib/charging-math";
-import type { HistoryDaySummary } from "@/lib/history-day-summary";
+import type { HistoryDaySummary, HistorySummaryScope } from "@/lib/history-day-summary";
 import { formatCurrencyAmount, type Currency, type Locale, type TranslationKey } from "@/lib/i18n";
 import { useTranslation } from "@/hooks/use-translation";
 import { cn } from "@/lib/utils";
 
 type Translator = (key: TranslationKey, values?: Record<string, string | number>) => string;
 
+const TITLE_KEYS: Record<HistorySummaryScope, TranslationKey> = {
+  day: "history.daySummary.title",
+  week: "history.periodSummary.titleWeek",
+  month: "history.periodSummary.titleMonth",
+  quarter: "history.periodSummary.titleQuarter",
+  year: "history.periodSummary.titleYear",
+};
+
 function fmt(value: number, digits = 1) {
   return value.toFixed(digits);
 }
 
-function CompactStat({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function CompactStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 px-2 py-2 text-center">
       <p className="truncate text-[9px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
@@ -79,11 +81,16 @@ export function HistoryDaySummaryCard({
   loading,
   locale,
   currency,
+  scope = "day",
+  requireCharging = true,
 }: {
   summary: HistoryDaySummary | null;
   loading?: boolean;
   locale: Locale;
   currency: Currency;
+  scope?: HistorySummaryScope;
+  /** Charging tab: only when sessions exist. Analytics: trips-only days still show. */
+  requireCharging?: boolean;
 }) {
   const { t } = useTranslation();
   const tx = t as Translator;
@@ -103,17 +110,30 @@ export function HistoryDaySummaryCard({
     );
   }
 
-  if (!summary || !summary.hasCharging) return null;
+  if (!summary) return null;
+  if (requireCharging && !summary.hasCharging) return null;
+  if (!requireCharging && !summary.hasCharging && !summary.hasTrips) return null;
 
   const deltaAbs = Math.abs(summary.deltaKwh);
-  const showBalance = summary.hasTrips && summary.driveKwh > 0;
+  const showBalance = summary.hasTrips && summary.driveKwh > 0 && summary.hasCharging;
   const tone = verdictTone(summary.verdict);
+  const isDay = scope === "day";
+  const balanceTitleKey = isDay
+    ? "history.daySummary.balanceTitle"
+    : "history.periodSummary.balanceTitle";
   const explainKey =
     summary.verdict === "surplus"
-      ? "history.daySummary.balanceExplainSurplus"
+      ? isDay
+        ? "history.daySummary.balanceExplainSurplus"
+        : "history.periodSummary.balanceExplainSurplus"
       : summary.verdict === "deficit"
-        ? "history.daySummary.balanceExplainDeficit"
-        : "history.daySummary.balanceExplainBalanced";
+        ? isDay
+          ? "history.daySummary.balanceExplainDeficit"
+          : "history.periodSummary.balanceExplainDeficit"
+        : isDay
+          ? "history.daySummary.balanceExplainBalanced"
+          : "history.periodSummary.balanceExplainBalanced";
+  const noTripsKey = isDay ? "history.daySummary.noTrips" : "history.periodSummary.noTrips";
 
   const costValue = summary.hasPricedSessions
     ? formatCurrencyAmount(currency, summary.chargingCost, locale)
@@ -127,11 +147,11 @@ export function HistoryDaySummaryCard({
   return (
     <section
       className="overflow-hidden rounded-2xl border border-border bg-white/[0.02] shadow-[inset_0_1px_0_rgb(255_255_255/0.04)]"
-      aria-label={tx("history.daySummary.title")}
+      aria-label={tx(TITLE_KEYS[scope])}
     >
       <header className="border-b border-border px-2.5 py-2">
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-          {tx("history.daySummary.title")}
+          {tx(TITLE_KEYS[scope])}
         </p>
       </header>
 
@@ -148,12 +168,12 @@ export function HistoryDaySummaryCard({
 
       {!summary.hasTrips ? (
         <p className="border-b border-border px-2.5 py-2 text-center text-[11px] text-muted-foreground">
-          {tx("history.daySummary.noTrips")}
+          {tx(noTripsKey)}
         </p>
       ) : showBalance ? (
         <div className={cn("border-b border-border px-2.5 py-2.5 text-center", tone.panel)}>
           <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-            {tx("history.daySummary.balanceTitle")}
+            {tx(balanceTitleKey)}
           </p>
           <p className={cn("mt-1.5 font-heading text-xl font-bold tabular-nums leading-none", tone.delta)}>
             {deltaSign(summary.verdict, deltaAbs)}

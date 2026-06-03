@@ -20,7 +20,7 @@ import { useLatestBydmateTripsQuery, useBydmateTripsQuery, useTripMonthDatesQuer
 import { useTranslation } from "@/hooks/use-translation";
 import { HistoryDaySummaryCard } from "@/components/history/history-day-summary-card";
 import { computeHistoryDaySummary } from "@/lib/history-day-summary";
-import { formatCurrencyAmount, type Locale, type TranslationKey } from "@/lib/i18n";
+import { formatCurrencyAmount, type Currency, type Locale, type TranslationKey } from "@/lib/i18n";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import type { BydmateTripRow, ChargingSessionRow } from "@/types/database";
 
@@ -147,7 +147,7 @@ function TabToggle({
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status, compact }: { status: string; compact?: boolean }) {
   const { t } = useTranslation();
   const tx = t as HistoryTranslator;
   const tone =
@@ -160,7 +160,13 @@ function StatusBadge({ status }: { status: string }) {
           : "border-border bg-white/[0.03] text-muted-foreground";
   return (
     <span
-      className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] ${tone}`}
+      className={[
+        "shrink-0 rounded-full border font-semibold uppercase",
+        compact
+          ? "px-2 py-0.5 text-[9px] tracking-[0.14em]"
+          : "px-2.5 py-0.5 text-[10px] tracking-[0.18em]",
+        tone,
+      ].join(" ")}
     >
       {sessionStatusLabel(tx, status)}
     </span>
@@ -305,11 +311,75 @@ function MiniCalendar({
 
 // ─── Shared stat components ───────────────────────────────────────────────────
 
-function StatRow({ label, value }: { label: string; value: string }) {
+function CompactStatRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between py-2">
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="font-heading text-sm font-semibold tabular-nums">{value}</dd>
+    <div className="flex items-center justify-between gap-2 px-2.5 py-1.5">
+      <dt className="min-w-0 truncate text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+        {label}
+      </dt>
+      <dd className="shrink-0 font-heading text-xs font-semibold tabular-nums text-foreground">
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function SessionStatsBlock({
+  session,
+  tx,
+  currency,
+  locale,
+}: {
+  session: ChargingSessionRow;
+  tx: HistoryTranslator;
+  currency: Currency;
+  locale: Locale;
+}) {
+  return (
+    <dl className="divide-y divide-border border-b border-border">
+      <CompactStatRow
+        label={tx("history.charging.startTarget")}
+        value={`${fmt(session.start_percent)}% → ${fmt(session.target_percent)}%`}
+      />
+      <CompactStatRow
+        label={tx("history.energy")}
+        value={`${fmt(session.charged_energy_kwh, 2)} kWh`}
+      />
+      {session.price_per_kwh > 0 ? (
+        <CompactStatRow
+          label={tx("history.cost")}
+          value={formatCurrencyAmount(currency, session.estimated_cost, locale)}
+        />
+      ) : null}
+      <CompactStatRow label={tx("history.duration")} value={sessionDuration(session)} />
+    </dl>
+  );
+}
+
+function SessionCardHeader({
+  session,
+  locale,
+  tx,
+}: {
+  session: ChargingSessionRow;
+  locale: Locale;
+  tx: HistoryTranslator;
+}) {
+  const started = session.started_at;
+  return (
+    <div className="flex items-center justify-between gap-2 border-b border-border px-2.5 py-2">
+      <div className="min-w-0">
+        <p className="truncate text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+          {started
+            ? `${formatShortDate(started, locale)} · ${formatClock(started)}`
+            : tx("history.queued")}
+        </p>
+        <p className="mt-0.5 font-heading text-2xl font-bold leading-none tabular-nums">
+          {fmt(session.current_percent, 1)}
+          <span className="text-base font-semibold text-muted-foreground">%</span>
+        </p>
+      </div>
+      <StatusBadge status={session.status} compact />
     </div>
   );
 }
@@ -334,47 +404,20 @@ function SessionCard({ session }: { session: ChargingSessionRow }) {
   const { locale, t } = useTranslation();
   const currency = useAppPreferences((s) => s.currency);
   const tx = t as HistoryTranslator;
-  const started = session.started_at;
   return (
-    <div className="voltflow-card p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
-            {started
-              ? `${formatShortDate(started, locale)} · ${formatClock(started)}`
-              : tx("history.queued")}
-          </p>
-          <p className="mt-1.5 font-heading text-3xl font-bold tabular-nums">
-            {fmt(session.current_percent, 1)}
-            <span className="text-lg text-muted-foreground">%</span>
-          </p>
-        </div>
-        <StatusBadge status={session.status} />
+    <article className="overflow-hidden rounded-2xl border border-border bg-white/[0.02] shadow-[inset_0_1px_0_rgb(255_255_255/0.04)]">
+      <SessionCardHeader session={session} locale={locale} tx={tx} />
+      <SessionStatsBlock session={session} tx={tx} currency={currency} locale={locale} />
+      <div className="p-2">
+        <Button
+          asChild
+          size="sm"
+          className="h-8 w-full rounded-full font-heading text-xs font-semibold"
+        >
+          <Link href={appPath(`/history/${session.id}`)}>{tx("history.charging.viewDetail")}</Link>
+        </Button>
       </div>
-
-      <dl className="mt-3 divide-y divide-border rounded-xl border border-border bg-white/[0.02] px-3">
-        <StatRow
-          label={tx("history.charging.startTarget")}
-          value={`${fmt(session.start_percent)}% → ${fmt(session.target_percent)}%`}
-        />
-        <StatRow label={tx("history.energy")} value={`${fmt(session.charged_energy_kwh, 2)} kWh`} />
-        {session.price_per_kwh > 0 && (
-          <StatRow
-            label={tx("history.cost")}
-            value={formatCurrencyAmount(currency, session.estimated_cost, locale)}
-          />
-        )}
-        <StatRow label={tx("history.duration")} value={sessionDuration(session)} />
-      </dl>
-
-      <Button
-        asChild
-        size="sm"
-        className="mt-3 h-9 w-full rounded-full font-heading font-semibold"
-      >
-        <Link href={appPath(`/history/${session.id}`)}>{tx("history.charging.viewDetail")}</Link>
-      </Button>
-    </div>
+    </article>
   );
 }
 
@@ -410,41 +453,30 @@ function SessionAccordionItem({
             {formatShortDate(started, locale)} · {formatClock(started)}
           </p>
         </div>
-        <StatusBadge status={session.status} />
+        <StatusBadge status={session.status} compact />
         <span className="font-heading text-sm font-bold tabular-nums">
           {fmt(session.current_percent, 1)}%
         </span>
-        <span className="hidden text-xs text-muted-foreground sm:inline">
+        <span className="hidden max-w-[4.5rem] truncate text-[10px] text-muted-foreground min-[360px]:inline">
           {sessionDuration(session)}
         </span>
       </button>
 
       {expanded && (
-        <div className="border-t border-border px-3 pb-3 pt-2.5">
-          <dl className="divide-y divide-border rounded-xl border border-border bg-white/[0.02] px-3">
-            <StatRow
-              label={tx("history.charging.startTarget")}
-              value={`${fmt(session.start_percent)}% → ${fmt(session.target_percent)}%`}
-            />
-            <StatRow label={tx("history.energy")} value={`${fmt(session.charged_energy_kwh, 2)} kWh`} />
-            {session.price_per_kwh > 0 && (
-              <StatRow
-                label={tx("history.cost")}
-                value={formatCurrencyAmount(currency, session.estimated_cost, locale)}
-              />
-            )}
-            <StatRow label={tx("history.duration")} value={sessionDuration(session)} />
-          </dl>
-          <Button
-            asChild
-            variant="outline"
-            size="sm"
-            className="mt-2.5 h-8 w-full rounded-full border-border font-heading text-xs font-semibold"
-          >
-            <Link href={appPath(`/history/${session.id}`)}>
-              {tx("history.charging.viewDetailArrow")}
-            </Link>
-          </Button>
+        <div className="border-t border-border">
+          <SessionStatsBlock session={session} tx={tx} currency={currency} locale={locale} />
+          <div className="p-2">
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="h-8 w-full rounded-full border-border font-heading text-xs font-semibold"
+            >
+              <Link href={appPath(`/history/${session.id}`)}>
+                {tx("history.charging.viewDetail")}
+              </Link>
+            </Button>
+          </div>
         </div>
       )}
     </div>

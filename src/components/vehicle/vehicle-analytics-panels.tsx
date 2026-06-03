@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { AnalyticsDayView } from "@/components/vehicle/analytics-day-view";
+import { HistoryDaySummaryCard } from "@/components/history/history-day-summary-card";
 import {
   AnalyticsSummaryStats,
   AnalyticsSummaryStatsLoading,
@@ -20,6 +21,7 @@ import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useBydmateTelemetryHistoryQuery } from "@/hooks/use-bydmate-telemetry-history-query";
 import { useTranslation } from "@/hooks/use-translation";
 import { buildAnalyticsSummary, consumptionByOutsideTemp } from "@/lib/bydmate/telemetry-buckets";
+import { computeHistoryPeriodSummary } from "@/lib/history-day-summary";
 import {
   parseAnalyticsRange,
   resolveTelemetryWindow,
@@ -38,7 +40,7 @@ import type { RouteInsightsResult } from "@/lib/bydmate/route-insights";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import { devFetch, isDevAppRoute, withDevApiParams } from "@/lib/dev/dev-fetch";
 import { formatCurrencyAmount, type Locale, type TranslationKey } from "@/lib/i18n";
-import type { BydmateTripRow, BydmateTripTrackPointRow } from "@/types/database";
+import type { BydmateTripRow, BydmateTripTrackPointRow, ChargingSessionRow } from "@/types/database";
 
 const HISTORY_RANGES: TelemetryHistoryRange[] = ["day", "week", "month", "quarter", "year"];
 
@@ -251,6 +253,20 @@ export function VehicleAnalyticsPanels({
     },
   });
 
+  const periodSessionsQuery = useQuery({
+    queryKey: ["vehicle-analytics", "period-sessions", historyRange, anchorDate, vehicleId],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        type: "period-sessions",
+        from: telemetryWindow.from,
+        to: telemetryWindow.to,
+      });
+      return fetchAnalytics<{ sessions: ChargingSessionRow[] }>(
+        `/api/vehicle/analytics?${params.toString()}`,
+      );
+    },
+  });
+
   const baselineQuery = useQuery({
     queryKey: ["vehicle-analytics", "baseline", vehicleId],
     queryFn: () =>
@@ -261,6 +277,20 @@ export function VehicleAnalyticsPanels({
   });
 
   const periodTrips = periodTripsQuery.data?.trips ?? [];
+  const periodSessions = periodSessionsQuery.data?.sessions ?? [];
+
+  const periodSummary = useMemo(
+    () =>
+      computeHistoryPeriodSummary(
+        periodSessions,
+        periodTrips,
+        telemetryWindow.from,
+        telemetryWindow.to,
+      ),
+    [periodSessions, periodTrips, telemetryWindow.from, telemetryWindow.to],
+  );
+
+  const periodSummaryLoading = periodTripsQuery.isLoading || periodSessionsQuery.isLoading;
 
   const sohQuery = useBydmateTelemetryHistoryQuery({
     range: "year",
@@ -416,6 +446,17 @@ export function VehicleAnalyticsPanels({
           onAnchorDateChange={handleAnchorDateChange}
           tx={tx}
         />
+
+        <div className="mt-4">
+          <HistoryDaySummaryCard
+            summary={periodSummary}
+            loading={periodSummaryLoading}
+            locale={locale as Locale}
+            currency={currency}
+            scope={historyRange}
+            requireCharging={false}
+          />
+        </div>
 
         {isDayRange ? (
           <AnalyticsDayView

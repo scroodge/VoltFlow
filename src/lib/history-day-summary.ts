@@ -1,6 +1,9 @@
+import { resolveLocalCalendarDayWindow } from "@/lib/bydmate/telemetry-ranges";
 import type { BydmateTripRow, ChargingSessionRow } from "@/types/database";
 
 const BALANCE_THRESHOLD_KWH = 0.5;
+
+export type HistorySummaryScope = "day" | "week" | "month" | "quarter" | "year";
 
 export type HistoryDayVerdict = "surplus" | "deficit" | "balanced";
 
@@ -29,12 +32,9 @@ export function localDateKeyFromIso(isoStr: string) {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
-function sessionOnDate(session: ChargingSessionRow, dateKey: string) {
-  return Boolean(session.started_at && localDateKeyFromIso(session.started_at) === dateKey);
-}
-
-function tripOnDate(trip: BydmateTripRow, dateKey: string) {
-  return localDateKeyFromIso(trip.started_at) === dateKey;
+function inIsoWindow(iso: string, fromMs: number, toMs: number) {
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) && ms >= fromMs && ms <= toMs;
 }
 
 function sessionDurationSec(session: ChargingSessionRow) {
@@ -69,15 +69,11 @@ function verdictFromDelta(deltaKwh: number): HistoryDayVerdict {
   return "balanced";
 }
 
-export function computeHistoryDaySummary(
-  sessions: ChargingSessionRow[],
-  trips: BydmateTripRow[],
-  dateKey: string,
+function aggregateHistorySummary(
+  periodSessions: ChargingSessionRow[],
+  periodTrips: BydmateTripRow[],
 ): HistoryDaySummary {
-  const daySessions = sessions.filter((s) => sessionOnDate(s, dateKey));
-  const dayTrips = trips.filter((t) => tripOnDate(t, dateKey));
-
-  const finishedSessions = daySessions.filter(
+  const finishedSessions = periodSessions.filter(
     (s) => s.status === "completed" || s.status === "stopped",
   );
 
@@ -86,7 +82,7 @@ export function computeHistoryDaySummary(
   let chargedKwh = 0;
   let hasPricedSessions = false;
 
-  for (const session of daySessions) {
+  for (const session of periodSessions) {
     chargingDurationSec += sessionDurationSec(session);
     if (session.price_per_kwh > 0) {
       hasPricedSessions = true;
@@ -102,7 +98,7 @@ export function computeHistoryDaySummary(
   let driveKwh = 0;
   let regenKwh = 0;
 
-  for (const trip of dayTrips) {
+  for (const trip of periodTrips) {
     distanceKm += trip.distance_km ?? 0;
     driveKwh += tripDriveKwh(trip);
     regenKwh += trip.regen_energy_kwh ?? 0;
@@ -117,12 +113,36 @@ export function computeHistoryDaySummary(
     distanceKm,
     driveKwh,
     regenKwh,
-    sessionCount: daySessions.length,
-    tripCount: dayTrips.length,
+    sessionCount: periodSessions.length,
+    tripCount: periodTrips.length,
     deltaKwh,
     verdict: verdictFromDelta(deltaKwh),
-    hasCharging: daySessions.length > 0,
-    hasTrips: dayTrips.length > 0,
+    hasCharging: periodSessions.length > 0,
+    hasTrips: periodTrips.length > 0,
     hasPricedSessions,
   };
+}
+
+export function computeHistoryPeriodSummary(
+  sessions: ChargingSessionRow[],
+  trips: BydmateTripRow[],
+  fromIso: string,
+  toIso: string,
+): HistoryDaySummary {
+  const fromMs = Date.parse(fromIso);
+  const toMs = Date.parse(toIso);
+  const periodSessions = sessions.filter(
+    (s) => s.started_at && inIsoWindow(s.started_at, fromMs, toMs),
+  );
+  const periodTrips = trips.filter((t) => inIsoWindow(t.started_at, fromMs, toMs));
+  return aggregateHistorySummary(periodSessions, periodTrips);
+}
+
+export function computeHistoryDaySummary(
+  sessions: ChargingSessionRow[],
+  trips: BydmateTripRow[],
+  dateKey: string,
+): HistoryDaySummary {
+  const { from, to } = resolveLocalCalendarDayWindow(dateKey);
+  return computeHistoryPeriodSummary(sessions, trips, from, to);
 }

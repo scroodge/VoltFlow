@@ -104,6 +104,29 @@ export async function fetchMonthlyStats({
   };
 }
 
+export async function fetchPeriodChargingSessions({
+  supabase,
+  userId,
+  from,
+  to,
+}: {
+  supabase: SupabaseClient;
+  userId: string;
+  from: string;
+  to: string;
+}): Promise<ChargingSessionRow[]> {
+  const { data, error } = await supabase
+    .from("charging_sessions")
+    .select("*")
+    .eq("user_id", userId)
+    .gte("started_at", from)
+    .lte("started_at", to)
+    .order("started_at", { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []) as ChargingSessionRow[];
+}
+
 export async function fetchPhantomDrain({
   supabase,
   userId,
