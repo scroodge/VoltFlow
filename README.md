@@ -16,7 +16,8 @@ License
 ## Project docs / Документация проекта
 
 - [AGENTS.md](AGENTS.md) — required instructions for AI/coding agents, especially Next.js 16 and VoltFlow Mate charging-history rules.
-- [SKILLS.md](SKILLS.md) — current project skills, safe-change workflow, and feature roadmap discipline.
+- [docs/CHARGING_SESSIONS.md](docs/CHARGING_SESSIONS.md) — charging session sync, Mate auto start/stop, reconcile, 2026-06 fixes, cleanup script / зарядные сессии, ingest, reconcile.
+- [SKILLS.md](SKILLS.md) — current project skills, safe-change workflow, git branches for new features / навыки и ветки для новых фич.
 - [INSTALL.md](INSTALL.md) — user-facing PWA install guide for iPhone, iPad, and Android.
 - [supabase/TELEMETRY.md](supabase/TELEMETRY.md) — VoltFlow Mate telemetry storage model, retention, analytics APIs, and ingest compatibility notes.
 - [supabase/BYDMATE_APK_API.md](supabase/BYDMATE_APK_API.md) — Android APK cloud ingest contract.

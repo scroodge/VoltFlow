@@ -374,8 +374,9 @@ rows for cars with matching `cars.vehicle_alias`.
 
 | Event | Rule |
 | --- | --- |
-| Auto-start | Two consecutive samples with `is_charging` or `charge_power_kw > 0.1`; start SOC from telemetry; `charger_power_kw` from telemetry; target 100% |
-| Auto-stop | Two consecutive unplug samples, or immediate stop when `speed_kmh > 5` during an open session |
+| Auto-start | `isMateAutoSessionCharging`: only `charge_power_kw` (never `power_kw`), parked `speed_kmh ≤ 5`, not 100% tail; **4** consecutive samples; sample within **3 min** of batch end; see [docs/CHARGING_SESSIONS.md](../docs/CHARGING_SESSIONS.md) |
+| Auto-stop | **2** consecutive unplug samples, or immediate stop when `speed_kmh > 5`; ignore samples before session `started_at` |
+| Reconcile | `charging_session_reconcile` after ingest; repairs bad `stopped_at`, zero kWh, SOC vs telemetry |
 | State | `bydmate_auto_charging_session_state` stores consecutive sample counters per `(user_id, vehicle_id)` |
 
 Requires Mate to keep sending ingest while charging. Progress after start is still
@@ -400,10 +401,10 @@ These rules complement ingest auto start/stop and prevent false `completed` rows
 
 | Layer | Behavior |
 | --- | --- |
-| Live bundle | `deriveChargingSessionLiveBundle` — math for display/persist when Mate is stale; `completionState` only with fresh live SOC at target while still charging |
-| Background sync | `useChargingSessionLiveSync` — ~1 Hz persist; blocks auto-complete when `shouldBlockAutoComplete`; auto-`stopped` on drive-away via `shouldAutoStopOnDriveAway` |
+| Live bundle | `deriveChargingSessionLiveBundle` — `completionSource: live` or `math`; never math-complete while fresh live SOC is available |
+| Background sync | `useChargingSessionLiveSync` — ~1 Hz persist; live/math complete; drive-away → `stopped` |
 | Manual stop | `resolveStopProgressForSession` — live snapshot (90s) → last in-session telemetry SOC → math |
-| Reconcile | `resolveStateToPersist` — when car wakes, prefer live SOC if drift exceeds `LIVE_SOC_RECONCILE_TOLERANCE_PERCENT` (1%) |
+| Reconcile (server) | `reconcileChargingSessionsForUser` on ingest + sessions API; `resolveStateToPersist` for open sessions when Mate wakes |
 
 ### Debugging false `completed` or frozen percent
 

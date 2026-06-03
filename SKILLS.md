@@ -25,13 +25,16 @@ Before changing application code, read [AGENTS.md](AGENTS.md). It contains two h
 
 ### Charging Skill
 
+Full architecture, 2026-06 incident notes, cleanup script, and tests: **[docs/CHARGING_SESSIONS.md](docs/CHARGING_SESSIONS.md)**.
+
 Know these files before changing charging behavior:
 
 - `src/lib/charging-math.ts`
 - `src/lib/charging-live.ts`
 - `src/lib/charging-session-sync.ts` — `deriveChargingSessionLiveBundle`, fresh-vs-math persist rules
 - `src/lib/bydmate/charging-auto-session.ts` — Mate ingest auto start/stop of `charging_sessions`
-- `src/lib/bydmate/telemetry-charging.ts` — shared `is_charging` / `charge_power_kw` detection
+- `src/lib/bydmate/telemetry-charging.ts` — `isMateAutoSessionCharging` (never traction `power_kw`)
+- `src/lib/charging-session-reconcile.ts` — post-ingest / sessions-list repair of bad rows
 - `src/lib/charging-session-vehicle.ts` — `resolveChargingSessionVehicleId` for history delta charts (no global `"way"` default)
 - `src/hooks/use-charging-session-live-sync.ts` — ~1s DB persist + auto-complete
 - `src/components/charging/charging-session-background-sync.tsx` — mounted from `MobileShell`
@@ -255,6 +258,17 @@ Run:
 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/push/charge-thresholds.test.mjs
 ```
 
+## Git branches for new work
+
+After the 2026-06 charging-session work, **use a new branch per feature or fix** (not more drive-by changes on the same large branch):
+
+```bash
+git checkout main && git pull
+git checkout -b feature/my-feature
+```
+
+Open a PR for review before merging. Charging/ingest behavior is documented in [docs/CHARGING_SESSIONS.md](docs/CHARGING_SESSIONS.md) — update that file when those rules change.
+
 ## Safe Feature Workflow
 
 Use this sequence for new features:
@@ -300,3 +314,4 @@ When the project changes, update the relevant document:
 - `supabase/TELEMETRY.md` for telemetry schema/storage behavior.
 - `supabase/BYDMATE_APK_API.md` for APK ingest contract changes.
 - `supabase/MIGRATIONS_AUDIT.md` for migration-chain and squash/reset notes.
+- `docs/CHARGING_SESSIONS.md` for charging sync, Mate auto sessions, reconcile, and ops scripts.

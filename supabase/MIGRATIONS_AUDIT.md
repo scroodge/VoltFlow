@@ -11,6 +11,8 @@ Date: 2026-05-30
 
 **App deploy:** Migrations alone do not enable auto start/stop. Production must run the API build that calls `processBydmateAutoChargingSessions` in `POST /api/bydmate/telemetry`. Verify with ingest response `auto_charging_sessions` and rows in `bydmate_auto_charging_session_state`.
 
+**Post-deploy data cleanup (2026-06-03 phantom sessions, vehicle `way`):** after the `isMateAutoSessionCharging` API fix is live, run `scripts/cleanup-way-phantom-sessions-2026-06-03.mjs` (`--dry-run` then `--yes`). Documented in [docs/CHARGING_SESSIONS.md](../docs/CHARGING_SESSIONS.md).
+
 Execution notes (both migrations):
 
 - `--target=linked` failed in temporary workdir mode (`Cannot find project ref`).
