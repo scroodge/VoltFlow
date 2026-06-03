@@ -9,9 +9,12 @@ import {
 } from "@/lib/bydmate/charging-auto-session-step";
 import {
   finiteTelemetryNumber,
-  isAcWallboxCharging,
+  isMateAutoSessionCharging,
   telemetrySpeedKmh,
 } from "@/lib/bydmate/telemetry-charging";
+
+/** Auto-start only from recent samples in a batch (avoids replaying old driving buffers). */
+const AUTO_START_MAX_SAMPLE_AGE_MS = 3 * 60_000;
 import type { Car, ChargingSessionRow } from "@/types/database";
 
 const DEFAULT_TARGET_PERCENT = 100;
@@ -227,14 +230,17 @@ export async function processBydmateAutoChargingSessions({
   let started = 0;
   let stopped = 0;
   const sessionIds: string[] = [];
+  const newestSampleMs = Math.max(
+    ...orderedSamples.map((sample) => Date.parse(sample.device_time)),
+  );
 
   for (const sample of orderedSamples) {
     const car = carsByVehicleId.get(sample.vehicle_id);
     if (!car) continue;
 
-    const isCharging = isAcWallboxCharging(sample.telemetry);
-    const soc = finiteTelemetryNumber(sample.telemetry.soc);
     const speedKmh = telemetrySpeedKmh(sample.telemetry);
+    const isCharging = isMateAutoSessionCharging(sample.telemetry, speedKmh);
+    const soc = finiteTelemetryNumber(sample.telemetry.soc);
     const chargePowerKw = finiteTelemetryNumber(sample.telemetry.charge_power_kw);
     const activeSession = activeByCarId.get(car.id) ?? null;
 
@@ -254,6 +260,13 @@ export async function processBydmateAutoChargingSessions({
     states.set(sample.vehicle_id, step.state);
 
     if (step.action.type === "start") {
+      const sampleMs = Date.parse(sample.device_time);
+      if (
+        !Number.isFinite(sampleMs) ||
+        newestSampleMs - sampleMs > AUTO_START_MAX_SAMPLE_AGE_MS
+      ) {
+        continue;
+      }
       const sessionId = await startSessionFromTelemetry({
         supabase,
         userId,

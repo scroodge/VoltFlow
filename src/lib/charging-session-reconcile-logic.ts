@@ -77,8 +77,10 @@ export function sessionNeedsReconcile(session: ReconcileChargingSession, nowMs: 
 
   if (session.status === "charging") return false;
 
+  // Re-verify completed rows only when energy looks wrong (avoid re-running every ingest).
   if (
     session.status === "completed" &&
+    session.charged_energy_kwh <= 0 &&
     session.current_percent + TELEMETRY_SOC_TOLERANCE >= session.target_percent
   ) {
     return true;

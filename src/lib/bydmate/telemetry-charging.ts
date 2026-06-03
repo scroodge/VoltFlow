@@ -19,19 +19,39 @@ export function isTelemetryCharging(telemetry: Pick<BydmateTelemetry, "is_chargi
   return chargePowerKw != null && chargePowerKw > TELEMETRY_CHARGE_POWER_THRESHOLD_KW;
 }
 
-/** AC wallbox charging for auto session start/stop — excludes 100% SOC balance tail (is_charging + 0 kW). */
-export function isAcWallboxCharging(
-  telemetry: Pick<BydmateTelemetry, "is_charging" | "charge_power_kw" | "soc" | "power_kw">,
+/** Parked or unknown speed — not driving away. */
+export function isVehicleParkedForCharging(speedKmh: number | null | undefined) {
+  return speedKmh == null || speedKmh <= AUTO_CHARGING_DRIVE_STOP_SPEED_KMH;
+}
+
+/**
+ * Mate ingest auto session start/stop only.
+ * Uses charge_power_kw (never traction power_kw). Requires vehicle parked.
+ * Excludes 100% SOC balance tail (is_charging + ~0 kW).
+ */
+export function isMateAutoSessionCharging(
+  telemetry: Pick<BydmateTelemetry, "is_charging" | "charge_power_kw" | "soc">,
+  speedKmh: number | null | undefined,
 ) {
-  const chargePowerKw =
-    finiteTelemetryNumber(telemetry.charge_power_kw) ?? finiteTelemetryNumber(telemetry.power_kw);
+  if (!isVehicleParkedForCharging(speedKmh)) return false;
+
+  const chargePowerKw = finiteTelemetryNumber(telemetry.charge_power_kw);
   if (chargePowerKw != null && chargePowerKw > TELEMETRY_CHARGE_POWER_THRESHOLD_KW) {
     return true;
   }
+
   if (telemetry.is_charging !== true) return false;
   const soc = finiteTelemetryNumber(telemetry.soc);
   if (soc != null && soc >= 100) return false;
   return chargePowerKw != null && chargePowerKw > TELEMETRY_CHARGE_POWER_THRESHOLD_KW;
+}
+
+/** @deprecated Use isMateAutoSessionCharging — kept so call sites can migrate. */
+export function isAcWallboxCharging(
+  telemetry: Pick<BydmateTelemetry, "is_charging" | "charge_power_kw" | "soc" | "power_kw">,
+  speedKmh?: number | null,
+) {
+  return isMateAutoSessionCharging(telemetry, speedKmh ?? null);
 }
 
 export function telemetrySpeedKmh(telemetry: Pick<BydmateTelemetry, "speed_kmh">) {

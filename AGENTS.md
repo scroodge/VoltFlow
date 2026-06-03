@@ -12,7 +12,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Active charging session sync (`charging_sessions`)
 
-- Mate ingest may **auto-start** a `charging_sessions` row when telemetry shows sustained charging (`is_charging` or `charge_power_kw`) for a car with matching `cars.vehicle_alias`, after two consecutive charging samples. Start SOC and charger power come from live telemetry; target defaults to 100%.
+- Mate ingest may **auto-start** a `charging_sessions` row via `isMateAutoSessionCharging` (only `charge_power_kw`, never traction `power_kw`; vehicle parked `speed_kmh ≤ 5`; not 100% balance tail) after **four** consecutive samples within the last **3 minutes** of the ingest batch. Start SOC and charger power come from telemetry; target defaults to 100%.
 - Mate ingest may **auto-stop** an open session after two consecutive unplug samples, or immediately on drive-away (`speed_kmh > 5`, see `CHARGING_DRIVE_SPEED_KMH` in `charging-live.ts`).
 - Server auto start/stop runs in `processBydmateAutoChargingSessions` on each successful ingest batch and needs **both** migration `20260602120000_bydmate_auto_charging_session_state.sql` and a **deployed** API build. If `bydmate_auto_charging_session_state` stays empty while charging, check production version and ingest JSON `auto_charging_sessions` (including `error`).
 - Manual `stopChargingSession` uses `resolveStopProgressForSession` (`charging-session-finalize.ts`): fresh live SOC → latest in-session `bydmate_telemetry_samples` → wall-clock math only as fallback. Never persist math-only 100% when telemetry shows unplug or drive-away below target.

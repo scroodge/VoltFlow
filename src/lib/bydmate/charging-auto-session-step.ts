@@ -1,4 +1,9 @@
-export const AUTO_CHARGING_MIN_CONSECUTIVE_SAMPLES = 2;
+/** Consecutive parked charging samples before auto-start (≈4s at 1 Hz ingest). */
+export const AUTO_CHARGING_MIN_CONSECUTIVE_START_SAMPLES = 4;
+/** Consecutive unplug samples before auto-stop while parked. */
+export const AUTO_CHARGING_MIN_CONSECUTIVE_UNPLUG_SAMPLES = 2;
+/** @deprecated Use START/UNPLUG-specific constants. */
+export const AUTO_CHARGING_MIN_CONSECUTIVE_SAMPLES = AUTO_CHARGING_MIN_CONSECUTIVE_START_SAMPLES;
 export const AUTO_CHARGING_DRIVE_STOP_SPEED_KMH = 5;
 export const AUTO_CHARGING_DEFAULT_TARGET_PERCENT = 100;
 
@@ -44,7 +49,7 @@ export function nextAutoChargingSessionStep({
       const consecutiveUnplugSamples = prev.consecutiveUnplugSamples + 1;
       const shouldStop =
         drivingAway ||
-        consecutiveUnplugSamples >= AUTO_CHARGING_MIN_CONSECUTIVE_SAMPLES;
+        consecutiveUnplugSamples >= AUTO_CHARGING_MIN_CONSECUTIVE_UNPLUG_SAMPLES;
       if (shouldStop && soc != null) {
         return {
           state: {
@@ -75,7 +80,8 @@ export function nextAutoChargingSessionStep({
     };
   }
 
-  if (!isCharging) {
+  const drivingAway = speedKmh != null && speedKmh > AUTO_CHARGING_DRIVE_STOP_SPEED_KMH;
+  if (!isCharging || drivingAway) {
     return {
       state: {
         consecutiveChargingSamples: 0,
@@ -88,7 +94,7 @@ export function nextAutoChargingSessionStep({
 
   const consecutiveChargingSamples = prev.consecutiveChargingSamples + 1;
   if (
-    consecutiveChargingSamples >= AUTO_CHARGING_MIN_CONSECUTIVE_SAMPLES &&
+    consecutiveChargingSamples >= AUTO_CHARGING_MIN_CONSECUTIVE_START_SAMPLES &&
     soc != null &&
     soc < AUTO_CHARGING_DEFAULT_TARGET_PERCENT
   ) {

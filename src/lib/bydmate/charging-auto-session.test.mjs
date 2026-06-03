@@ -3,29 +3,43 @@ import assert from "node:assert/strict";
 
 import { nextAutoChargingSessionStep } from "./charging-auto-session-step.ts";
 
-test("starts after two consecutive charging samples without an active session", () => {
-  const first = nextAutoChargingSessionStep({
-    state: null,
+test("starts after four consecutive parked charging samples", () => {
+  let state = null;
+  for (let i = 0; i < 3; i += 1) {
+    const step = nextAutoChargingSessionStep({
+      state,
+      isCharging: true,
+      soc: 54 + i,
+      speedKmh: 0,
+      hasActiveSession: false,
+      chargerPowerKw: 4,
+    });
+    assert.equal(step.action.type, "none");
+    state = step.state;
+  }
+  const fourth = nextAutoChargingSessionStep({
+    state,
     isCharging: true,
-    soc: 54,
+    soc: 57,
     speedKmh: 0,
     hasActiveSession: false,
     chargerPowerKw: 4,
   });
-  assert.equal(first.action.type, "none");
-  assert.equal(first.state.consecutiveChargingSamples, 1);
+  assert.equal(fourth.action.type, "start");
+  assert.equal(fourth.action.startPercent, 57);
+});
 
-  const second = nextAutoChargingSessionStep({
-    state: first.state,
-    isCharging: true,
-    soc: 55,
-    speedKmh: 0,
+test("driving resets charging sample counter before start", () => {
+  const moving = nextAutoChargingSessionStep({
+    state: { consecutiveChargingSamples: 3, consecutiveUnplugSamples: 0, lastIsCharging: true },
+    isCharging: false,
+    soc: 84,
+    speedKmh: 40,
     hasActiveSession: false,
-    chargerPowerKw: 4,
+    chargerPowerKw: null,
   });
-  assert.equal(second.action.type, "start");
-  assert.equal(second.action.startPercent, 55);
-  assert.equal(second.action.chargerPowerKw, 4);
+  assert.equal(moving.state.consecutiveChargingSamples, 0);
+  assert.equal(moving.action.type, "none");
 });
 
 test("stops active session after two consecutive unplug samples", () => {
