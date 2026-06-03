@@ -17,6 +17,7 @@ import {
 } from "@/lib/charging-session-sync";
 import {
   findFreshSocSnapshot,
+  shouldAllowMathAutoComplete,
   shouldAutoStopOnDriveAway,
   shouldBlockAutoComplete,
 } from "@/lib/charging-live";
@@ -111,13 +112,17 @@ export function useChargingSessionLiveSync({
 
       const freshSocSnapshot = findFreshSocSnapshot(snapshots, now);
       const stateToPersist = resolveStateToPersist(bundle);
-      const { completionState } = bundle;
+      const { completionState, completionSource } = bundle;
 
-      if (
+      const mayComplete =
         completionState?.isComplete &&
         !completingRef.current &&
-        !shouldBlockAutoComplete(freshSocSnapshot, now)
-      ) {
+        ((completionSource === "live" &&
+          !shouldBlockAutoComplete(freshSocSnapshot, now)) ||
+          (completionSource === "math" &&
+            shouldAllowMathAutoComplete(freshSocSnapshot, now)));
+
+      if (mayComplete && completionState) {
         completingRef.current = true;
         const stoppedAt = new Date().toISOString();
         const { error: upErr } = await supabase

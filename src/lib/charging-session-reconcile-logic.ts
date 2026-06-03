@@ -77,6 +77,13 @@ export function sessionNeedsReconcile(session: ReconcileChargingSession, nowMs: 
 
   if (session.status === "charging") return false;
 
+  if (
+    session.status === "completed" &&
+    session.current_percent + TELEMETRY_SOC_TOLERANCE >= session.target_percent
+  ) {
+    return true;
+  }
+
   const noEnergy =
     session.charged_energy_kwh <= 0 &&
     session.current_percent <= session.start_percent + TELEMETRY_SOC_TOLERANCE;

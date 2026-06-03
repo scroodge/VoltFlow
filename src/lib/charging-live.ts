@@ -131,7 +131,7 @@ export function isFreshSnapshotDriving(
   return speed != null && speed > speedThresholdKmh;
 }
 
-/** Block auto-complete when the car is moving or no longer on the charger. */
+/** Block live-based auto-complete when the car is moving or no longer on the charger. */
 export function shouldBlockAutoComplete(
   snapshot: BydmateLiveSnapshotRow | null | undefined,
   nowMs: number,
@@ -141,6 +141,14 @@ export function shouldBlockAutoComplete(
   const charging =
     snapshot?.telemetry?.is_charging === true || snapshotChargePowerKw(snapshot) != null;
   return !charging;
+}
+
+/** Allow math-based auto-complete only while Mate live SOC is stale (>90s) or absent. */
+export function shouldAllowMathAutoComplete(
+  snapshot: BydmateLiveSnapshotRow | null | undefined,
+  nowMs: number,
+) {
+  return !isFreshLiveSnapshot(snapshot, nowMs);
 }
 
 /** Auto-stop when fresh telemetry shows the vehicle left the charger while driving. */

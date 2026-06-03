@@ -35,14 +35,17 @@ export function filterLiveSnapshotsForVehicle(
   return scoped.length > 0 ? scoped : snapshots;
 }
 
+export type ChargingSessionCompletionSource = "live" | "math" | null;
+
 export type ChargingSessionLiveBundle = {
   display: DerivedChargingState;
   liveChargingState: DerivedChargingState | null;
   liveCompletionState: DerivedChargingState | null;
   mathState: DerivedChargingState;
   hasFreshLiveSocSource: boolean;
-  /** Auto-complete only from fresh live SOC when Mate is available. */
+  /** Live SOC at target, or wall-clock math at target when Mate is stale/offline. */
   completionState: DerivedChargingState | null;
+  completionSource: ChargingSessionCompletionSource;
   /** Progress written to charging_sessions (prefers live, falls back to math). */
   stateToPersist: DerivedChargingState;
 };
@@ -76,9 +79,18 @@ export function deriveChargingSessionLiveBundle({
     : null;
   const mathState = deriveChargingState(params, startedAtMs, nowMs);
   const display = liveChargingState ?? liveCompletionState ?? mathState;
-  const completionState =
-    hasFreshLiveSocSource && liveCompletionState?.isComplete
-      ? liveCompletionState
+  const liveComplete =
+    hasFreshLiveSocSource && liveCompletionState?.isComplete === true;
+  const mathComplete = !hasFreshLiveSocSource && mathState.isComplete;
+  const completionState = liveComplete
+    ? liveCompletionState
+    : mathComplete
+      ? mathState
+      : null;
+  const completionSource: ChargingSessionCompletionSource = liveComplete
+    ? "live"
+    : mathComplete
+      ? "math"
       : null;
   const stateToPersist = liveChargingState ?? liveCompletionState ?? mathState;
 
@@ -89,6 +101,7 @@ export function deriveChargingSessionLiveBundle({
     mathState,
     hasFreshLiveSocSource,
     completionState,
+    completionSource,
     stateToPersist,
   };
 }
