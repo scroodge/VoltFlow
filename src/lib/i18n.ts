@@ -626,6 +626,8 @@ export const dictionaries = {
         clear: "Clear · show all",
       },
       charging: {
+        startEnd: "Start → End",
+        target: "Target",
         startTarget: "Start → Target",
         viewDetail: "View Detail",
         viewDetailArrow: "View Detail →",
@@ -1303,6 +1305,8 @@ export const dictionaries = {
         clear: "Скінуць · паказаць усё",
       },
       charging: {
+        startEnd: "Старт → Канец",
+        target: "Мэта",
         startTarget: "Старт → Фініш",
         viewDetail: "Падрабязна",
         viewDetailArrow: "Падрабязна →",
@@ -1980,6 +1984,8 @@ export const dictionaries = {
         clear: "Сбросить · показать всё",
       },
       charging: {
+        startEnd: "Старт → Итог",
+        target: "Цель",
         startTarget: "Старт → Финиш",
         viewDetail: "Подробнее",
         viewDetailArrow: "Подробнее →",

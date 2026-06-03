@@ -9,7 +9,7 @@ import {
 } from "@/lib/bydmate/charging-auto-session-step";
 import {
   finiteTelemetryNumber,
-  isTelemetryCharging,
+  isAcWallboxCharging,
   telemetrySpeedKmh,
 } from "@/lib/bydmate/telemetry-charging";
 import type { Car, ChargingSessionRow } from "@/types/database";
@@ -122,6 +122,13 @@ async function startSessionFromTelemetry({
   return session?.id ?? null;
 }
 
+function sampleIsAfterSessionStart(sampleDeviceTime: string, session: ChargingSessionRow) {
+  if (!session.started_at) return true;
+  const sampleMs = Date.parse(sampleDeviceTime);
+  const startMs = Date.parse(session.started_at);
+  return Number.isFinite(sampleMs) && Number.isFinite(startMs) && sampleMs >= startMs;
+}
+
 async function stopSessionFromTelemetry({
   supabase,
   session,
@@ -135,6 +142,10 @@ async function stopSessionFromTelemetry({
   currentPercent: number;
   stoppedAt: string;
 }) {
+  const startMs = session.started_at ? Date.parse(session.started_at) : Date.parse(stoppedAt);
+  const stoppedMs = Math.max(startMs, Date.parse(stoppedAt));
+  const stoppedAtIso = new Date(stoppedMs).toISOString();
+
   const progress = deriveSessionProgressFromSoc(
     {
       startPercent: session.start_percent,
@@ -154,7 +165,7 @@ async function stopSessionFromTelemetry({
       charged_energy_kwh: progress.chargedEnergyKwh,
       estimated_cost: progress.estimatedCost,
       status: "stopped",
-      stopped_at: stoppedAt,
+      stopped_at: stoppedAtIso,
     })
     .eq("id", session.id);
 
@@ -221,11 +232,15 @@ export async function processBydmateAutoChargingSessions({
     const car = carsByVehicleId.get(sample.vehicle_id);
     if (!car) continue;
 
-    const isCharging = isTelemetryCharging(sample.telemetry);
+    const isCharging = isAcWallboxCharging(sample.telemetry);
     const soc = finiteTelemetryNumber(sample.telemetry.soc);
     const speedKmh = telemetrySpeedKmh(sample.telemetry);
     const chargePowerKw = finiteTelemetryNumber(sample.telemetry.charge_power_kw);
     const activeSession = activeByCarId.get(car.id) ?? null;
+
+    if (activeSession && !sampleIsAfterSessionStart(sample.device_time, activeSession)) {
+      continue;
+    }
 
     const step = nextAutoChargingSessionStep({
       state: states.get(sample.vehicle_id) ?? null,

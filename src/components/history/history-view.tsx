@@ -362,9 +362,15 @@ function SessionStatsBlock({
   return (
     <dl className="divide-y divide-border border-b border-border">
       <CompactStatRow
-        label={tx("history.charging.startTarget")}
-        value={`${fmt(session.start_percent)}% → ${fmt(session.target_percent)}%`}
+        label={tx("history.charging.startEnd")}
+        value={`${fmt(session.start_percent)}% → ${fmt(session.current_percent)}%`}
       />
+      {session.current_percent + 0.5 < session.target_percent ? (
+        <CompactStatRow
+          label={tx("history.charging.target")}
+          value={`${fmt(session.target_percent)}%`}
+        />
+      ) : null}
       <CompactStatRow
         label={tx("history.energy")}
         value={`${fmt(session.charged_energy_kwh, 2)} kWh`}

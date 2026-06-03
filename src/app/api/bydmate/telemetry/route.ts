@@ -1,4 +1,5 @@
 import { processBydmateAutoChargingSessions } from "@/lib/bydmate/charging-auto-session";
+import { reconcileChargingSessionsForUser } from "@/lib/charging-session-reconcile";
 import { normalizePayloads } from "@/lib/bydmate/ingest-payload";
 import { processBydmateChargeNotifications } from "@/lib/push/charge-notifications";
 import {
@@ -337,6 +338,19 @@ export async function POST(request: Request) {
       autoChargingSessions = { started: 0, stopped: 0, sessionIds: [], error: message };
     }
 
+    let chargingSessionReconcile = { reconciled: 0, sessionIds: [] as string[] };
+    try {
+      chargingSessionReconcile = await reconcileChargingSessionsForUser({
+        supabase,
+        userId: profile.id,
+        vehicleIds: [headerVehicleId],
+      });
+    } catch (reconcileError) {
+      const message =
+        reconcileError instanceof Error ? reconcileError.message : "Reconcile failed";
+      console.error("charging session reconcile:", message);
+    }
+
     return Response.json({
       ok: true,
       persisted,
@@ -347,6 +361,7 @@ export async function POST(request: Request) {
       dropped_telemetry_field_count: droppedTelemetryFields,
       charge_notifications: chargeNotifications,
       auto_charging_sessions: autoChargingSessions,
+      charging_session_reconcile: chargingSessionReconcile,
       received_at: receivedAt,
       ingest: ingestResult,
     });
