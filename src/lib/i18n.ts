@@ -620,6 +620,27 @@ export const dictionaries = {
         stopped: "STOPPED",
         charging: "CHARGING",
       },
+      calendar: {
+        prevMonth: "Previous month",
+        nextMonth: "Next month",
+        clear: "Clear · show all",
+      },
+      charging: {
+        startTarget: "Start → Target",
+        viewDetail: "View Detail",
+        viewDetailArrow: "View Detail →",
+        empty: "No charging sessions yet.",
+        emptyFiltered:
+          "No sessions on this date. Pick a highlighted day on the calendar.",
+      },
+      trips: {
+        viewDetail: "View Detail",
+        hideDetail: "Hide Detail",
+        latestHint: "Showing {count} latest · Select a day to filter",
+      },
+      analytics: {
+        mateRequired: "Connect VoltFlow Mate to unlock analytics.",
+      },
     },
     settings: {
       eyebrow: "Settings",
@@ -1247,6 +1268,27 @@ export const dictionaries = {
         stopped: "СПЫНЕНА",
         charging: "ЗАРАДКА",
       },
+      calendar: {
+        prevMonth: "Папярэдні месяц",
+        nextMonth: "Наступны месяц",
+        clear: "Скінуць · паказаць усё",
+      },
+      charging: {
+        startTarget: "Старт → Фініш",
+        viewDetail: "Падрабязна",
+        viewDetailArrow: "Падрабязна →",
+        empty: "Зарадных сесій пакуль няма.",
+        emptyFiltered:
+          "Няма сесій на гэту дату. Выберыце адзначаны дзень у каляндары.",
+      },
+      trips: {
+        viewDetail: "Падрабязна",
+        hideDetail: "Схаваць",
+        latestHint: "Паказана {count} апошніх · Выберыце дзень для фільтра",
+      },
+      analytics: {
+        mateRequired: "Падключыце VoltFlow Mate, каб адкрыць аналітыку.",
+      },
     },
     settings: {
       eyebrow: "Налады",
@@ -1873,6 +1915,27 @@ export const dictionaries = {
         completed: "ЗАВЕРШЕНО",
         stopped: "ОСТАНОВЛЕНО",
         charging: "ЗАРЯДКА",
+      },
+      calendar: {
+        prevMonth: "Предыдущий месяц",
+        nextMonth: "Следующий месяц",
+        clear: "Сбросить · показать всё",
+      },
+      charging: {
+        startTarget: "Старт → Финиш",
+        viewDetail: "Подробнее",
+        viewDetailArrow: "Подробнее →",
+        empty: "Зарядных сессий пока нет.",
+        emptyFiltered:
+          "Нет сессий на эту дату. Выберите отмеченный день в календаре.",
+      },
+      trips: {
+        viewDetail: "Подробнее",
+        hideDetail: "Скрыть",
+        latestHint: "Показано {count} последних · Выберите день для фильтра",
+      },
+      analytics: {
+        mateRequired: "Подключите VoltFlow Mate, чтобы открыть аналитику.",
       },
     },
     settings: {

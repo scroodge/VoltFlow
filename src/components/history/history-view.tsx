@@ -18,10 +18,39 @@ import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useSessionsQuery } from "@/hooks/use-sessions-query";
 import { useLatestBydmateTripsQuery, useBydmateTripsQuery, useTripMonthDatesQuery } from "@/hooks/use-bydmate-trips-query";
 import { useTranslation } from "@/hooks/use-translation";
-import type { TranslationKey } from "@/lib/i18n";
+import { formatCurrencyAmount, type Locale, type TranslationKey } from "@/lib/i18n";
+import { useAppPreferences } from "@/stores/use-app-preferences";
 import type { BydmateTripRow, ChargingSessionRow } from "@/types/database";
 
 type HistoryTranslator = (key: TranslationKey, values?: Record<string, string | number>) => string;
+
+function localeCode(locale: Locale) {
+  return locale === "be" ? "be-BY" : locale === "ru" ? "ru-RU" : "en-US";
+}
+
+function calendarMonthLabel(year: number, month: number, locale: Locale) {
+  return new Date(year, month, 1).toLocaleDateString(localeCode(locale), {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function calendarWeekdayLabels(locale: Locale) {
+  const formatter = new Intl.DateTimeFormat(localeCode(locale), { weekday: "short" });
+  const monday = new Date(2024, 0, 1);
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + index);
+    return formatter.format(date);
+  });
+}
+
+function sessionStatusLabel(t: HistoryTranslator, status: string) {
+  if (status === "completed") return t("history.status.completed");
+  if (status === "stopped") return t("history.status.stopped");
+  if (status === "charging") return t("history.status.charging");
+  return status;
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -44,9 +73,12 @@ function formatClock(isoStr: string | null | undefined) {
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
-function formatShortDate(isoStr: string | null | undefined) {
+function formatShortDate(
+  isoStr: string | null | undefined,
+  locale: Locale,
+) {
   if (!isoStr) return "—";
-  return new Date(isoStr).toLocaleDateString(undefined, {
+  return new Date(isoStr).toLocaleDateString(localeCode(locale), {
     day: "numeric",
     month: "short",
   });
@@ -114,6 +146,8 @@ function TabToggle({
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: string }) {
+  const { t } = useTranslation();
+  const tx = t as HistoryTranslator;
   const tone =
     status === "completed"
       ? "border-teal-400/30 bg-teal-400/10 text-teal-200"
@@ -126,18 +160,12 @@ function StatusBadge({ status }: { status: string }) {
     <span
       className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] ${tone}`}
     >
-      {status}
+      {sessionStatusLabel(tx, status)}
     </span>
   );
 }
 
 // ─── Mini Calendar ─────────────────────────────────────────────────────────────
-
-const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-const DAY_LABELS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
 function toCalKey(year: number, month: number, day: number) {
   return `${year}-${pad2(month + 1)}-${pad2(day)}`;
@@ -183,21 +211,24 @@ function MiniCalendar({
   onNext: () => void;
   onSelect: (date: string | null) => void;
 }) {
+  const { locale, t } = useTranslation();
+  const tx = t as HistoryTranslator;
   const today = localTodayKey();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const offset = (new Date(year, month, 1).getDay() + 6) % 7;
+  const dayLabels = useMemo(() => calendarWeekdayLabels(locale), [locale]);
 
   return (
     <div className="voltflow-card p-3">
       <div className="mb-3 flex items-center justify-between">
         <span className="font-heading text-base font-bold">
-          {MONTH_NAMES[month]} {year}
+          {calendarMonthLabel(year, month, locale)}
         </span>
         <div className="flex gap-1">
           <button
             type="button"
             onClick={onPrev}
-            aria-label="Previous month"
+            aria-label={tx("history.calendar.prevMonth")}
             className="flex size-7 items-center justify-center rounded-full border border-border bg-white/[0.03] text-sm text-muted-foreground transition hover:border-primary/50 hover:text-foreground"
           >
             ‹
@@ -205,7 +236,7 @@ function MiniCalendar({
           <button
             type="button"
             onClick={onNext}
-            aria-label="Next month"
+            aria-label={tx("history.calendar.nextMonth")}
             className="flex size-7 items-center justify-center rounded-full border border-border bg-white/[0.03] text-sm text-muted-foreground transition hover:border-primary/50 hover:text-foreground"
           >
             ›
@@ -214,7 +245,7 @@ function MiniCalendar({
       </div>
 
       <div className="grid grid-cols-7 gap-0.5">
-        {DAY_LABELS.map((d) => (
+        {dayLabels.map((d) => (
           <div
             key={d}
             className="py-0.5 text-center text-[10px] uppercase tracking-wider text-muted-foreground"
@@ -263,7 +294,7 @@ function MiniCalendar({
           onClick={() => onSelect(null)}
           className="mt-2 w-full text-center text-xs text-muted-foreground transition hover:text-foreground"
         >
-          Clear · show all
+          {tx("history.calendar.clear")}
         </button>
       )}
     </div>
@@ -298,6 +329,9 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 
 function SessionCard({ session }: { session: ChargingSessionRow }) {
   const appPath = useAppPath();
+  const { locale, t } = useTranslation();
+  const currency = useAppPreferences((s) => s.currency);
+  const tx = t as HistoryTranslator;
   const started = session.started_at;
   return (
     <div className="voltflow-card p-3">
@@ -305,8 +339,8 @@ function SessionCard({ session }: { session: ChargingSessionRow }) {
         <div className="min-w-0">
           <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
             {started
-              ? `${formatShortDate(started)} · ${formatClock(started)}`
-              : "Queued"}
+              ? `${formatShortDate(started, locale)} · ${formatClock(started)}`
+              : tx("history.queued")}
           </p>
           <p className="mt-1.5 font-heading text-3xl font-bold tabular-nums">
             {fmt(session.current_percent, 1)}
@@ -318,14 +352,17 @@ function SessionCard({ session }: { session: ChargingSessionRow }) {
 
       <dl className="mt-3 divide-y divide-border rounded-xl border border-border bg-white/[0.02] px-3">
         <StatRow
-          label="Start → Target"
+          label={tx("history.charging.startTarget")}
           value={`${fmt(session.start_percent)}% → ${fmt(session.target_percent)}%`}
         />
-        <StatRow label="Energy" value={`${fmt(session.charged_energy_kwh, 2)} kWh`} />
+        <StatRow label={tx("history.energy")} value={`${fmt(session.charged_energy_kwh, 2)} kWh`} />
         {session.price_per_kwh > 0 && (
-          <StatRow label="Cost" value={fmt(session.estimated_cost, 2)} />
+          <StatRow
+            label={tx("history.cost")}
+            value={formatCurrencyAmount(currency, session.estimated_cost, locale)}
+          />
         )}
-        <StatRow label="Duration" value={sessionDuration(session)} />
+        <StatRow label={tx("history.duration")} value={sessionDuration(session)} />
       </dl>
 
       <Button
@@ -333,7 +370,7 @@ function SessionCard({ session }: { session: ChargingSessionRow }) {
         size="sm"
         className="mt-3 h-9 w-full rounded-full font-heading font-semibold"
       >
-        <Link href={appPath(`/history/${session.id}`)}>View Detail</Link>
+        <Link href={appPath(`/history/${session.id}`)}>{tx("history.charging.viewDetail")}</Link>
       </Button>
     </div>
   );
@@ -349,6 +386,9 @@ function SessionAccordionItem({
   onToggle: () => void;
 }) {
   const appPath = useAppPath();
+  const { locale, t } = useTranslation();
+  const currency = useAppPreferences((s) => s.currency);
+  const tx = t as HistoryTranslator;
   const started = session.started_at;
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-white/[0.02]">
@@ -365,7 +405,7 @@ function SessionAccordionItem({
         )}
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm text-muted-foreground">
-            {formatShortDate(started)} · {formatClock(started)}
+            {formatShortDate(started, locale)} · {formatClock(started)}
           </p>
         </div>
         <StatusBadge status={session.status} />
@@ -381,14 +421,17 @@ function SessionAccordionItem({
         <div className="border-t border-border px-3 pb-3 pt-2.5">
           <dl className="divide-y divide-border rounded-xl border border-border bg-white/[0.02] px-3">
             <StatRow
-              label="Start → Target"
+              label={tx("history.charging.startTarget")}
               value={`${fmt(session.start_percent)}% → ${fmt(session.target_percent)}%`}
             />
-            <StatRow label="Energy" value={`${fmt(session.charged_energy_kwh, 2)} kWh`} />
+            <StatRow label={tx("history.energy")} value={`${fmt(session.charged_energy_kwh, 2)} kWh`} />
             {session.price_per_kwh > 0 && (
-              <StatRow label="Cost" value={fmt(session.estimated_cost, 2)} />
+              <StatRow
+                label={tx("history.cost")}
+                value={formatCurrencyAmount(currency, session.estimated_cost, locale)}
+              />
             )}
-            <StatRow label="Duration" value={sessionDuration(session)} />
+            <StatRow label={tx("history.duration")} value={sessionDuration(session)} />
           </dl>
           <Button
             asChild
@@ -396,7 +439,9 @@ function SessionAccordionItem({
             size="sm"
             className="mt-2.5 h-8 w-full rounded-full border-border font-heading text-xs font-semibold"
           >
-            <Link href={appPath(`/history/${session.id}`)}>View Detail →</Link>
+            <Link href={appPath(`/history/${session.id}`)}>
+              {tx("history.charging.viewDetailArrow")}
+            </Link>
           </Button>
         </div>
       )}
@@ -405,6 +450,8 @@ function SessionAccordionItem({
 }
 
 function ChargingTab({ sessions }: { sessions: ChargingSessionRow[] }) {
+  const { t } = useTranslation();
+  const tx = t as HistoryTranslator;
   const now = new Date();
   const [calYear, setCalYear] = useState(now.getFullYear());
   const [calMonth, setCalMonth] = useState(now.getMonth());
@@ -463,8 +510,8 @@ function ChargingTab({ sessions }: { sessions: ChargingSessionRow[] }) {
       {filteredSessions.length === 0 ? (
         <p className="rounded-2xl border border-border bg-white/[0.02] p-4 text-center text-sm text-muted-foreground">
           {sessions.length === 0
-            ? "No charging sessions yet."
-            : "No sessions on this date. Pick a highlighted day on the calendar."}
+            ? tx("history.charging.empty")
+            : tx("history.charging.emptyFiltered")}
         </p>
       ) : (
         <div className="flex flex-col gap-2.5">
@@ -488,6 +535,8 @@ function ChargingTab({ sessions }: { sessions: ChargingSessionRow[] }) {
 // ─── Trips tab ────────────────────────────────────────────────────────────────
 
 function TripCard({ trip, label }: { trip: BydmateTripRow; label: string }) {
+  const { t } = useTranslation();
+  const tx = t as HistoryTranslator;
   const [showDetail, setShowDetail] = useState(false);
 
   return (
@@ -519,14 +568,17 @@ function TripCard({ trip, label }: { trip: BydmateTripRow; label: string }) {
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 min-[360px]:grid-cols-3">
-          <MiniStat label="Max speed" value={`${fmt(trip.max_speed_kmh)} km/h`} />
-          <MiniStat label="Avg speed" value={`${fmt(trip.avg_speed_kmh, 1)} km/h`} />
+          <MiniStat label={tx("vehicle.trips.maxSpeed")} value={`${fmt(trip.max_speed_kmh)} km/h`} />
+          <MiniStat label={tx("vehicle.trips.avgSpeed")} value={`${fmt(trip.avg_speed_kmh, 1)} km/h`} />
           <MiniStat
-            label="Consumption"
+            label={tx("vehicle.trips.consumption")}
             value={`${fmt(trip.avg_consumption_kwh_100km, 1)} kWh/100`}
           />
-          <MiniStat label="Regen" value={`${fmt(trip.regen_energy_kwh, 2)} kWh`} />
-          <MiniStat label="Samples" value={String(trip.sample_count)} />
+          <MiniStat label={tx("vehicle.trips.regen")} value={`${fmt(trip.regen_energy_kwh, 2)} kWh`} />
+          <MiniStat
+            label={tx("vehicle.analytics.summary.telemetry")}
+            value={String(trip.sample_count)}
+          />
         </div>
 
         <Button
@@ -535,7 +587,7 @@ function TripCard({ trip, label }: { trip: BydmateTripRow; label: string }) {
           onClick={() => setShowDetail((v) => !v)}
           className="mt-3 h-8 w-full rounded-full border-border font-heading text-xs font-semibold"
         >
-          {showDetail ? "Hide Detail" : "View Detail"}
+          {showDetail ? tx("history.trips.hideDetail") : tx("history.trips.viewDetail")}
         </Button>
       </div>
 
@@ -555,6 +607,8 @@ function TripAccordionItem({
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const { t } = useTranslation();
+  const tx = t as HistoryTranslator;
   const [showDetail, setShowDetail] = useState(false);
 
   return (
@@ -590,20 +644,20 @@ function TripAccordionItem({
           <div className="border-t border-border px-3 pb-3 pt-2.5">
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 min-[360px]:grid-cols-3">
               <MiniStat
-                label="SOC"
+                label={tx("vehicle.charts.soc")}
                 value={`${fmt(trip.soc_start)}→${fmt(trip.soc_end)}%`}
               />
-              <MiniStat label="Max speed" value={`${fmt(trip.max_speed_kmh)} km/h`} />
+              <MiniStat label={tx("vehicle.trips.maxSpeed")} value={`${fmt(trip.max_speed_kmh)} km/h`} />
               <MiniStat
-                label="Avg speed"
+                label={tx("vehicle.trips.avgSpeed")}
                 value={`${fmt(trip.avg_speed_kmh, 1)} km/h`}
               />
               <MiniStat
-                label="Consumption"
+                label={tx("vehicle.trips.consumption")}
                 value={`${fmt(trip.avg_consumption_kwh_100km, 1)} kWh/100`}
               />
               <MiniStat
-                label="Regen"
+                label={tx("vehicle.trips.regen")}
                 value={`${fmt(trip.regen_energy_kwh, 2)} kWh`}
               />
             </div>
@@ -613,7 +667,7 @@ function TripAccordionItem({
               onClick={() => setShowDetail((v) => !v)}
               className="mt-2.5 h-8 w-full rounded-full border-border font-heading text-xs font-semibold"
             >
-              {showDetail ? "Hide Detail" : "View Detail"}
+              {showDetail ? tx("history.trips.hideDetail") : tx("history.trips.viewDetail")}
             </Button>
           </div>
         )}
@@ -625,6 +679,8 @@ function TripAccordionItem({
 }
 
 function TripsTab({ vehicleId }: { vehicleId: string | null }) {
+  const { t } = useTranslation();
+  const tx = t as HistoryTranslator;
   const now = new Date();
   const [calYear, setCalYear] = useState(now.getFullYear());
   const [calMonth, setCalMonth] = useState(now.getMonth());
@@ -694,7 +750,7 @@ function TripsTab({ vehicleId }: { vehicleId: string | null }) {
 
       {!selectedDate && (
         <p className="text-center text-xs text-muted-foreground">
-          Showing {filteredTrips.length} latest · Select a day to filter
+          {tx("history.trips.latestHint", { count: filteredTrips.length })}
         </p>
       )}
 
@@ -706,15 +762,20 @@ function TripsTab({ vehicleId }: { vehicleId: string | null }) {
         </div>
       ) : filteredTrips.length === 0 ? (
         <p className="rounded-2xl border border-border bg-white/[0.02] p-4 text-center text-sm text-muted-foreground">
-          No trips on this date.
+          {tx("vehicle.analytics.dayTripsEmpty")}
         </p>
       ) : (
         <div className="flex flex-col gap-2.5">
           {latestTrip && (
-            <TripCard trip={latestTrip} label={`Trip ${filteredTrips.length}`} />
+            <TripCard
+              trip={latestTrip}
+              label={tx("vehicle.trips.tripLabel", { value: filteredTrips.length })}
+            />
           )}
           {olderTrips.map((trip, index) => {
-            const label = `Trip ${filteredTrips.length - 1 - index}`;
+            const label = tx("vehicle.trips.tripLabel", {
+              value: filteredTrips.length - 1 - index,
+            });
             const isExpanded = expandedTripId === trip.id;
             return (
               <TripAccordionItem
@@ -740,11 +801,12 @@ function TripsTab({ vehicleId }: { vehicleId: string | null }) {
 // ─── Loading skeleton ─────────────────────────────────────────────────────────
 
 function LoadingSkeleton() {
+  const { t } = useTranslation();
   return (
     <div className="safe-bottom flex flex-col gap-3 px-4 pb-6 pt-4">
       <header className="flex items-center justify-between gap-4">
         <LogoFull />
-        <BrandBadge className="hidden min-[380px]:inline-flex">History</BrandBadge>
+        <BrandBadge className="hidden min-[380px]:inline-flex">{t("nav.history")}</BrandBadge>
       </header>
       <Skeleton className="h-10 rounded-full" />
       <Skeleton className="h-52 rounded-2xl" />
@@ -763,6 +825,8 @@ export function HistoryView() {
   const appPath = useAppPath();
   const initialTab = parseHistoryTab(searchParams.get("tab"));
   const [tab, setTab] = useState<HistoryTab>(initialTab);
+  const { t } = useTranslation();
+  const tx = t as HistoryTranslator;
   const { data: sessions = [], isLoading: sessionsLoading } = useSessionsQuery();
   const { data: liveRows = [], isLoading: liveLoading } = useBydmateLiveQuery();
   const tripVehicleId = liveRows[0]?.vehicle_id ?? null;
@@ -821,7 +885,7 @@ export function HistoryView() {
     <div className="safe-bottom flex flex-col gap-3 px-4 pb-6 pt-4">
       <header className="flex items-center justify-between gap-4">
         <LogoFull />
-        <BrandBadge className="hidden min-[380px]:inline-flex">History</BrandBadge>
+        <BrandBadge className="hidden min-[380px]:inline-flex">{t("nav.history")}</BrandBadge>
       </header>
 
       <TabToggle active={tab} onChange={handleTabChange} />
@@ -835,7 +899,7 @@ export function HistoryView() {
           </div>
         ) : !vehicleId ? (
           <p className="rounded-2xl border border-border bg-white/[0.02] p-6 text-center text-sm text-muted-foreground">
-            Connect VoltFlow Mate to unlock analytics.
+            {tx("history.analytics.mateRequired")}
           </p>
         ) : (
           <VehicleAnalyticsPanels
@@ -855,7 +919,7 @@ export function HistoryView() {
           </div>
         ) : sessions.length === 0 ? (
           <p className="rounded-2xl border border-border bg-white/[0.02] p-6 text-center text-sm text-muted-foreground">
-            No charging sessions yet.
+            {tx("history.charging.empty")}
           </p>
         ) : (
           <ChargingTab sessions={sessions} />
