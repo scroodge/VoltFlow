@@ -18,6 +18,8 @@ import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useSessionsQuery } from "@/hooks/use-sessions-query";
 import { useLatestBydmateTripsQuery, useBydmateTripsQuery, useTripMonthDatesQuery } from "@/hooks/use-bydmate-trips-query";
 import { useTranslation } from "@/hooks/use-translation";
+import { HistoryDaySummaryCard } from "@/components/history/history-day-summary-card";
+import { computeHistoryDaySummary } from "@/lib/history-day-summary";
 import { formatCurrencyAmount, type Locale, type TranslationKey } from "@/lib/i18n";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import type { BydmateTripRow, ChargingSessionRow } from "@/types/database";
@@ -449,8 +451,15 @@ function SessionAccordionItem({
   );
 }
 
-function ChargingTab({ sessions }: { sessions: ChargingSessionRow[] }) {
-  const { t } = useTranslation();
+function ChargingTab({
+  sessions,
+  vehicleId,
+}: {
+  sessions: ChargingSessionRow[];
+  vehicleId: string | null;
+}) {
+  const { locale, t } = useTranslation();
+  const currency = useAppPreferences((s) => s.currency);
   const tx = t as HistoryTranslator;
   const now = new Date();
   const [calYear, setCalYear] = useState(now.getFullYear());
@@ -486,6 +495,17 @@ function ChargingTab({ sessions }: { sessions: ChargingSessionRow[] }) {
 
   const [latestSession, ...olderSessions] = filteredSessions;
 
+  const { data: dayTrips = [], isLoading: dayTripsLoading } = useBydmateTripsQuery(
+    selectedDate ?? "",
+    vehicleId,
+    Boolean(selectedDate && vehicleId),
+  );
+
+  const daySummary = useMemo(() => {
+    if (!selectedDate) return null;
+    return computeHistoryDaySummary(sessions, dayTrips, selectedDate);
+  }, [sessions, dayTrips, selectedDate]);
+
   const prevMonth = () => {
     if (calMonth === 0) { setCalYear((y) => y - 1); setCalMonth(11); }
     else setCalMonth((m) => m - 1);
@@ -506,6 +526,15 @@ function ChargingTab({ sessions }: { sessions: ChargingSessionRow[] }) {
         onNext={nextMonth}
         onSelect={setSelectedDate}
       />
+
+      {selectedDate ? (
+        <HistoryDaySummaryCard
+          summary={daySummary}
+          loading={Boolean(vehicleId) && dayTripsLoading}
+          locale={locale}
+          currency={currency}
+        />
+      ) : null}
 
       {filteredSessions.length === 0 ? (
         <p className="rounded-2xl border border-border bg-white/[0.02] p-4 text-center text-sm text-muted-foreground">
@@ -922,7 +951,7 @@ export function HistoryView() {
             {tx("history.charging.empty")}
           </p>
         ) : (
-          <ChargingTab sessions={sessions} />
+          <ChargingTab sessions={sessions} vehicleId={vehicleId} />
         )
       ) : (
         <TripsTab vehicleId={tripVehicleId ?? trips[0]?.vehicle_id ?? null} />
