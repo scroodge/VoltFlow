@@ -99,6 +99,30 @@ function tripDuration(trip: BydmateTripRow) {
   return formatDuration((endMs - startMs) / 1000);
 }
 
+function tripTractionKwh(trip: BydmateTripRow) {
+  const traction = trip.traction_energy_kwh;
+  if (typeof traction === "number" && Number.isFinite(traction)) return traction;
+
+  const distance = trip.distance_km;
+  const consumption = trip.avg_consumption_kwh_100km;
+  if (
+    typeof distance === "number" &&
+    Number.isFinite(distance) &&
+    distance > 0 &&
+    typeof consumption === "number" &&
+    Number.isFinite(consumption)
+  ) {
+    return (distance * consumption) / 100;
+  }
+
+  return null;
+}
+
+function formatTripTractionKwh(trip: BydmateTripRow, digits = 2) {
+  const kwh = tripTractionKwh(trip);
+  return kwh != null ? `${fmt(kwh, digits)} kWh` : "—";
+}
+
 // ─── Tab selector ─────────────────────────────────────────────────────────────
 
 type HistoryTab = "charging" | "trips" | "analytics";
@@ -595,146 +619,157 @@ function ChargingTab({
 
 // ─── Trips tab ────────────────────────────────────────────────────────────────
 
-function TripCard({ trip, label }: { trip: BydmateTripRow; label: string }) {
-  const { t } = useTranslation();
-  const tx = t as HistoryTranslator;
-  const [showDetail, setShowDetail] = useState(false);
-
+function TripStatsGrid({ trip, tx }: { trip: BydmateTripRow; tx: HistoryTranslator }) {
   return (
-    <div className="flex flex-col gap-2.5">
-      <div className="voltflow-card p-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
-              {label}
-            </p>
-            <p className="mt-1 font-heading text-xl font-bold">
-              {formatClock(trip.started_at)}
-              <span className="text-muted-foreground"> – </span>
-              {formatClock(trip.ended_at ?? trip.last_device_time)}
-              <span className="ml-1.5 text-sm font-normal text-muted-foreground">
-                {tripDuration(trip)}
-              </span>
-            </p>
-          </div>
-          <div className="shrink-0 text-right">
-            <p className="font-heading text-2xl font-bold tabular-nums text-emerald-300">
-              {fmt(trip.distance_km, 1)}
-              <span className="text-sm font-normal text-muted-foreground"> km</span>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {fmt(trip.soc_start)}% → {fmt(trip.soc_end)}%
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 min-[360px]:grid-cols-3">
-          <MiniStat label={tx("vehicle.trips.maxSpeed")} value={`${fmt(trip.max_speed_kmh)} km/h`} />
-          <MiniStat label={tx("vehicle.trips.avgSpeed")} value={`${fmt(trip.avg_speed_kmh, 1)} km/h`} />
-          <MiniStat
-            label={tx("vehicle.trips.consumption")}
-            value={`${fmt(trip.avg_consumption_kwh_100km, 1)} kWh/100`}
-          />
-          <MiniStat label={tx("vehicle.trips.regen")} value={`${fmt(trip.regen_energy_kwh, 2)} kWh`} />
-          <MiniStat
-            label={tx("vehicle.analytics.summary.telemetry")}
-            value={String(trip.sample_count)}
-          />
-        </div>
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShowDetail((v) => !v)}
-          className="mt-3 h-8 w-full rounded-full border-border font-heading text-xs font-semibold"
-        >
-          {showDetail ? tx("history.trips.hideDetail") : tx("history.trips.viewDetail")}
-        </Button>
-      </div>
-
-      {showDetail && <TripDetailPanel tripId={trip.id} />}
+    <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 border-t border-border px-2.5 py-2.5 min-[360px]:grid-cols-3">
+      <MiniStat label={tx("vehicle.trips.maxSpeed")} value={`${fmt(trip.max_speed_kmh)} km/h`} />
+      <MiniStat label={tx("vehicle.trips.avgSpeed")} value={`${fmt(trip.avg_speed_kmh, 1)} km/h`} />
+      <MiniStat
+        label={tx("vehicle.trips.consumption")}
+        value={`${fmt(trip.avg_consumption_kwh_100km, 1)} kWh/100`}
+      />
+      <MiniStat label={tx("vehicle.trips.regen")} value={`${fmt(trip.regen_energy_kwh, 2)} kWh`} />
+      <MiniStat label={tx("vehicle.trips.traction")} value={formatTripTractionKwh(trip)} />
+      <MiniStat
+        label={tx("vehicle.analytics.summary.telemetry")}
+        value={String(trip.sample_count)}
+      />
     </div>
   );
 }
 
-function TripAccordionItem({
+function TripCardHeader({
   trip,
   label,
+  tx,
+  collapsible,
   expanded,
   onToggle,
 }: {
   trip: BydmateTripRow;
   label: string;
-  expanded: boolean;
-  onToggle: () => void;
+  tx: HistoryTranslator;
+  collapsible?: boolean;
+  expanded?: boolean;
+  onToggle?: () => void;
 }) {
-  const { t } = useTranslation();
-  const tx = t as HistoryTranslator;
-  const [showDetail, setShowDetail] = useState(false);
-
   return (
-    <div className="flex flex-col gap-2.5">
-      <div className="overflow-hidden rounded-2xl border border-border bg-white/[0.02]">
+    <div className="flex items-center gap-2 px-2.5 py-2">
+      {collapsible && onToggle ? (
         <button
           type="button"
           onClick={onToggle}
           aria-expanded={expanded}
-          className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition hover:bg-white/[0.03]"
+          className="shrink-0 rounded-md p-0.5 text-muted-foreground transition hover:bg-white/[0.04] hover:text-foreground"
         >
           {expanded ? (
-            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+            <ChevronDown className="size-3.5" aria-hidden />
           ) : (
-            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+            <ChevronRight className="size-3.5" aria-hidden />
           )}
-          <div className="min-w-0 flex-1">
-            <p className="font-heading text-sm font-semibold">{label}</p>
-            <p className="truncate text-xs text-muted-foreground">
-              {formatClock(trip.started_at)} –{" "}
-              {formatClock(trip.ended_at ?? trip.last_device_time)} · {tripDuration(trip)}
-            </p>
-          </div>
-          <span className="shrink-0 text-xs text-emerald-300 tabular-nums">
-            {fmt(trip.regen_energy_kwh, 2)} kWh↩
-          </span>
-          <span className="shrink-0 font-heading text-sm font-semibold tabular-nums">
-            {fmt(trip.distance_km, 1)} km
-          </span>
         </button>
-
-        {expanded && (
-          <div className="border-t border-border px-3 pb-3 pt-2.5">
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3 min-[360px]:grid-cols-3">
-              <MiniStat
-                label={tx("vehicle.charts.soc")}
-                value={`${fmt(trip.soc_start)}→${fmt(trip.soc_end)}%`}
-              />
-              <MiniStat label={tx("vehicle.trips.maxSpeed")} value={`${fmt(trip.max_speed_kmh)} km/h`} />
-              <MiniStat
-                label={tx("vehicle.trips.avgSpeed")}
-                value={`${fmt(trip.avg_speed_kmh, 1)} km/h`}
-              />
-              <MiniStat
-                label={tx("vehicle.trips.consumption")}
-                value={`${fmt(trip.avg_consumption_kwh_100km, 1)} kWh/100`}
-              />
-              <MiniStat
-                label={tx("vehicle.trips.regen")}
-                value={`${fmt(trip.regen_energy_kwh, 2)} kWh`}
-              />
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowDetail((v) => !v)}
-              className="mt-2.5 h-8 w-full rounded-full border-border font-heading text-xs font-semibold"
-            >
-              {showDetail ? tx("history.trips.hideDetail") : tx("history.trips.viewDetail")}
-            </Button>
-          </div>
-        )}
+      ) : null}
+      <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+          {label}
+        </p>
+        <p className="mt-0.5 font-heading text-lg font-bold leading-tight">
+          {formatClock(trip.started_at)}
+          <span className="text-muted-foreground"> – </span>
+          {formatClock(trip.ended_at ?? trip.last_device_time)}
+          <span className="ml-1.5 text-sm font-normal text-muted-foreground">
+            {tripDuration(trip)}
+          </span>
+        </p>
       </div>
+      <div className="shrink-0 text-right">
+        <p className="font-heading text-xl font-bold tabular-nums text-emerald-300">
+          {fmt(trip.distance_km, 1)}
+          <span className="text-sm font-normal text-muted-foreground"> km</span>
+        </p>
+        <p className="text-xs tabular-nums text-muted-foreground">
+          {fmt(trip.soc_start)}% → {fmt(trip.soc_end)}%
+        </p>
+      </div>
+      </div>
+    </div>
+  );
+}
 
-      {expanded && showDetail && <TripDetailPanel tripId={trip.id} />}
+function HistoryTripCard({
+  trip,
+  label,
+  featured,
+  expanded,
+  onToggle,
+}: {
+  trip: BydmateTripRow;
+  label: string;
+  featured?: boolean;
+  expanded?: boolean;
+  onToggle?: () => void;
+}) {
+  const { t } = useTranslation();
+  const tx = t as HistoryTranslator;
+  const [showDetail, setShowDetail] = useState(false);
+  const isOpen = featured || Boolean(expanded);
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <article className="overflow-hidden rounded-2xl border border-border bg-white/[0.02] shadow-[inset_0_1px_0_rgb(255_255_255/0.04)]">
+        {!isOpen && !featured && onToggle ? (
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={false}
+            className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left transition hover:bg-white/[0.03]"
+          >
+            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                {label}
+              </p>
+              <p className="truncate font-heading text-sm font-semibold">
+                {formatClock(trip.started_at)} – {formatClock(trip.ended_at ?? trip.last_device_time)}
+                <span className="ml-1 font-normal text-muted-foreground">{tripDuration(trip)}</span>
+              </p>
+            </div>
+            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+              {fmt(trip.soc_start)}→{fmt(trip.soc_end)}%
+            </span>
+            <span className="shrink-0 font-heading text-sm font-semibold tabular-nums text-emerald-300">
+              {fmt(trip.distance_km, 1)} km
+            </span>
+          </button>
+        ) : null}
+
+        {isOpen ? (
+          <>
+            <TripCardHeader
+              trip={trip}
+              label={label}
+              tx={tx}
+              collapsible={!featured}
+              expanded={isOpen}
+              onToggle={onToggle}
+            />
+            <TripStatsGrid trip={trip} tx={tx} />
+            <div className="border-t border-border p-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowDetail((v) => !v)}
+                className="h-8 w-full rounded-full border-border font-heading text-xs font-semibold"
+              >
+                {showDetail ? tx("history.trips.hideDetail") : tx("history.trips.viewDetail")}
+              </Button>
+            </div>
+          </>
+        ) : null}
+      </article>
+
+      {isOpen && showDetail ? <TripDetailPanel tripId={trip.id} /> : null}
     </div>
   );
 }
@@ -792,8 +827,6 @@ function TripsTab({ vehicleId }: { vehicleId: string | null }) {
     else setCalMonth((m) => m + 1);
   };
 
-  const [latestTrip, ...olderTrips] = filteredTrips;
-
   return (
     <div className="flex flex-col gap-3">
       <MiniCalendar
@@ -827,28 +860,27 @@ function TripsTab({ vehicleId }: { vehicleId: string | null }) {
         </p>
       ) : (
         <div className="flex flex-col gap-2.5">
-          {latestTrip && (
-            <TripCard
-              trip={latestTrip}
-              label={tx("vehicle.trips.tripLabel", { value: filteredTrips.length })}
-            />
-          )}
-          {olderTrips.map((trip, index) => {
+          {filteredTrips.map((trip, index) => {
             const label = tx("vehicle.trips.tripLabel", {
-              value: filteredTrips.length - 1 - index,
+              value: filteredTrips.length - index,
             });
+            const featured = index === 0;
             const isExpanded = expandedTripId === trip.id;
             return (
-              <TripAccordionItem
+              <HistoryTripCard
                 key={trip.id}
                 trip={trip}
                 label={label}
+                featured={featured}
                 expanded={isExpanded}
-                onToggle={() =>
-                  setSelectedTripId((curr) => {
-                    const currExpanded = curr === undefined ? defaultTripId : curr;
-                    return currExpanded === trip.id ? null : trip.id;
-                  })
+                onToggle={
+                  featured
+                    ? undefined
+                    : () =>
+                        setSelectedTripId((curr) => {
+                          const currExpanded = curr === undefined ? defaultTripId : curr;
+                          return currExpanded === trip.id ? null : trip.id;
+                        })
                 }
               />
             );
