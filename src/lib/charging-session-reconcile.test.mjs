@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   buildReconciledSessionPatch,
+  measuredSocFromMate,
   sessionNeedsReconcile,
   summarizeSessionTelemetry,
 } from "./charging-session-reconcile-logic.ts";
@@ -66,4 +67,55 @@ test("buildReconciledSessionPatch completes session to 100% from telemetry", () 
   assert.equal(patch.current_percent, 100);
   assert.ok(patch.charged_energy_kwh > 12);
   assert.equal(Date.parse(patch.stopped_at) >= Date.parse(baseSession.started_at), true);
+});
+
+test("buildReconciledSessionPatch lowers inflated math SOC and cost", () => {
+  const inflated = {
+    ...baseSession,
+    start_percent: 11,
+    current_percent: 90,
+    charged_energy_kwh: 39.59,
+    estimated_cost: 21.38,
+    stopped_at: "2026-06-01T06:51:27.141+00:00",
+    started_at: "2026-06-01T04:46:59.117+00:00",
+  };
+  const summary = summarizeSessionTelemetry(
+    [
+      { device_time: "2026-06-01T05:00:00+00:00", telemetry: { soc: 12, charge_power_kw: 7 } },
+      { device_time: "2026-06-01T06:50:00+00:00", telemetry: { soc: 41, charge_power_kw: 7 } },
+    ],
+    inflated,
+  );
+  const patch = buildReconciledSessionPatch({
+    session: inflated,
+    summary,
+    liveSoc: null,
+    nowMs: Date.parse("2026-06-01T12:00:00Z"),
+  });
+  assert.ok(patch);
+  assert.equal(patch.current_percent, 41);
+  assert.ok(patch.charged_energy_kwh < 20);
+  assert.ok(patch.estimated_cost < 12);
+});
+
+test("measuredSocFromMate ignores inflated persisted current_percent", () => {
+  const summary = { maxSoc: 41 };
+  assert.equal(
+    measuredSocFromMate({ start_percent: 11, target_percent: 100 }, summary, null),
+    41,
+  );
+});
+
+test("sessionNeedsReconcile detects completed session with math-only grid energy", () => {
+  const completed = {
+    ...baseSession,
+    status: "completed",
+    start_percent: 68,
+    current_percent: 100,
+    target_percent: 100,
+    efficiency_percent: 90,
+    charged_energy_kwh: 14.432,
+    estimated_cost: 7.79,
+  };
+  assert.equal(sessionNeedsReconcile(completed, Date.parse("2026-06-04T12:00:00Z")), true);
 });

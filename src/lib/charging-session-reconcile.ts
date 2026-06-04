@@ -21,6 +21,8 @@ export {
   summarizeSessionTelemetry,
 } from "@/lib/charging-session-reconcile-logic";
 
+const TELEMETRY_PAGE_SIZE = 1000;
+
 async function loadSessionTelemetry(
   supabase: SupabaseClient,
   userId: string,
@@ -30,19 +32,29 @@ async function loadSessionTelemetry(
 ) {
   const startMs = Date.parse(session.started_at!);
   const from = new Date(startMs - 5 * 60_000).toISOString();
-  const to = new Date(nowMs + 60_000).toISOString();
+  const stoppedMs = session.stopped_at ? Date.parse(session.stopped_at) : NaN;
+  const endMs =
+    Number.isFinite(stoppedMs) && stoppedMs >= startMs ? stoppedMs + 5 * 60_000 : nowMs + 60_000;
+  const to = new Date(endMs).toISOString();
 
-  const { data, error } = await supabase
-    .from("bydmate_telemetry_samples")
-    .select("device_time, telemetry")
-    .eq("user_id", userId)
-    .eq("vehicle_id", vehicleId)
-    .gte("device_time", from)
-    .lte("device_time", to)
-    .order("device_time", { ascending: true });
+  const rows: TelemetrySampleRow[] = [];
+  for (let offset = 0; ; offset += TELEMETRY_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("bydmate_telemetry_samples")
+      .select("device_time, telemetry")
+      .eq("user_id", userId)
+      .eq("vehicle_id", vehicleId)
+      .gte("device_time", from)
+      .lte("device_time", to)
+      .order("device_time", { ascending: true })
+      .range(offset, offset + TELEMETRY_PAGE_SIZE - 1);
 
-  if (error) throw new Error(error.message);
-  return (data ?? []) as TelemetrySampleRow[];
+    if (error) throw new Error(error.message);
+    const page = (data ?? []) as TelemetrySampleRow[];
+    rows.push(...page);
+    if (page.length < TELEMETRY_PAGE_SIZE) break;
+  }
+  return rows;
 }
 
 async function reconcileOneSession({

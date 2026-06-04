@@ -13,11 +13,20 @@ See also [AGENTS.md](../AGENTS.md), [SKILLS.md](../SKILLS.md) (Charging Skill), 
 
 Telemetry history (`bydmate_telemetry_samples`) is always append-only from ingest. Charts and reconcile read from it.
 
+## Mate vs math (priority)
+
+| Source | Role |
+| --- | --- |
+| **Mate** (live snapshots + `bydmate_telemetry_samples`) | Source of truth for SOC, energy, and cost |
+| **Math** (wall-clock from charger power / elapsed time) | Display and persist **fallback only** when Mate live is stale or absent (&gt;90s) |
+
+Never let math overwrite fresh Mate: PWA persist uses Mate first; reconcile derives SOC from telemetry/live only (not persisted `current_percent`).
+
 ## PWA live sync (`useChargingSessionLiveSync`)
 
 - Bundle: `deriveChargingSessionLiveBundle` in `src/lib/charging-session-sync.ts`.
 - **Display:** fresh charging snapshot → fresh SOC snapshot → wall-clock math.
-- **Persist (~1 Hz):** same preference; `resolveStateToPersist` pulls live SOC when Mate wakes and drift &gt; 1%.
+- **Persist (~1 Hz):** fresh Mate charging/SOC snapshot always wins over wall-clock math (`resolveStateToPersist`).
 - **Complete session:**
   - `completionSource: live` — fresh Mate SOC (≤90s) at target, still charging, not driving (`shouldBlockAutoComplete`).
   - `completionSource: math` — Mate live stale/absent and wall-clock math at target (`shouldAllowMathAutoComplete`). Never math-complete while fresh live SOC is available.
@@ -58,8 +67,10 @@ Runs after each Mate ingest (per vehicle) and on `GET /api/vehicle/sessions`.
 Repairs last **14 days**, non-`charging` rows when:
 
 - `stopped_at` &lt; `started_at`
-- `charged_energy_kwh = 0` or SOC below target while telemetry/live shows higher SOC
-- `completed` with 0 kWh at target (verify against telemetry)
+- `charged_energy_kwh = 0` or stored kWh/cost disagree with SOC-based grid math
+- Mate max SOC (telemetry + fresh live) differs from inflated wall-clock persist
+
+Patch SOC/energy/cost from **Mate only** (`measuredSocFromMate`); paginated telemetry per session window.
 
 Logic: `src/lib/charging-session-reconcile-logic.ts` (pure), `src/lib/charging-session-reconcile.ts` (Supabase).
 

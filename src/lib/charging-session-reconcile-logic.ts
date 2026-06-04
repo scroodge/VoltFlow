@@ -34,6 +34,27 @@ const TELEMETRY_SOC_TOLERANCE = 0.5;
 
 export { RECONCILE_LOOKBACK_DAYS, TELEMETRY_SOC_TOLERANCE };
 
+/** Mate telemetry/live SOC is truth; persisted wall-clock fields are not used here. */
+export function measuredSocFromMate(
+  session: Pick<ReconcileChargingSession, "start_percent" | "target_percent">,
+  summary: Pick<ReturnType<typeof summarizeSessionTelemetry>, "maxSoc">,
+  liveSoc: number | null,
+): number {
+  return Math.max(session.start_percent, liveSoc ?? 0, summary.maxSoc);
+}
+
+function storedProgressMismatch(session: ReconcileChargingSession): boolean {
+  const soc = Math.min(
+    session.target_percent,
+    Math.max(session.start_percent, session.current_percent),
+  );
+  const expected = deriveSessionProgressFromSoc(chargingParamsFromSession(session), soc);
+  return (
+    Math.abs(session.charged_energy_kwh - expected.chargedEnergyKwh) > 0.05 ||
+    Math.abs(session.estimated_cost - expected.estimatedCost) > 0.05
+  );
+}
+
 export type TelemetrySampleRow = {
   device_time: string;
   telemetry: Record<string, unknown> | null;
@@ -77,13 +98,14 @@ export function sessionNeedsReconcile(session: ReconcileChargingSession, nowMs: 
 
   if (session.status === "charging") return false;
 
-  // Re-verify completed rows only when energy looks wrong (avoid re-running every ingest).
+  if (session.charged_energy_kwh <= 0) return true;
+  if (storedProgressMismatch(session)) return true;
+
   if (
     session.status === "completed" &&
-    session.charged_energy_kwh <= 0 &&
     session.current_percent + TELEMETRY_SOC_TOLERANCE >= session.target_percent
   ) {
-    return true;
+    return false;
   }
 
   const noEnergy =
@@ -143,23 +165,29 @@ export function buildReconciledSessionPatch({
   nowMs: number;
 }) {
   const startMs = Date.parse(session.started_at!);
-  const measuredSoc = Math.max(session.start_percent, liveSoc ?? 0, summary.maxSoc);
+  const measuredSoc = measuredSocFromMate(session, summary, liveSoc);
   const reachedTarget = measuredSoc + TELEMETRY_SOC_TOLERANCE >= session.target_percent;
   const finalSoc = reachedTarget
     ? session.target_percent
     : Math.min(session.target_percent, measuredSoc);
 
+  const params = chargingParamsFromSession(session);
+  const progress = deriveSessionProgressFromSoc(params, finalSoc);
+
+  const socMatches =
+    Math.abs(session.current_percent - progress.currentPercent) <= TELEMETRY_SOC_TOLERANCE;
+  const energyMatches = Math.abs(session.charged_energy_kwh - progress.chargedEnergyKwh) <= 0.05;
+  const costMatches = Math.abs(session.estimated_cost - progress.estimatedCost) <= 0.05;
+
   if (
-    finalSoc <= session.current_percent + TELEMETRY_SOC_TOLERANCE &&
-    session.charged_energy_kwh > 0 &&
+    socMatches &&
+    energyMatches &&
+    costMatches &&
     session.stopped_at &&
     Date.parse(session.stopped_at) >= startMs
   ) {
     return null;
   }
-
-  const params = chargingParamsFromSession(session);
-  const progress = deriveSessionProgressFromSoc(params, finalSoc);
 
   const stopCandidates = [
     summary.firstTargetSocAt,
