@@ -683,9 +683,17 @@ export const dictionaries = {
       cloud: {
         name: "VoltFlow Mate",
         description:
-          "Link BYDMate on your car tablet with a short code — no need to copy a long API key.",
+          "Gateway app on the BYD head unit — sends live car data to VoltFlow. Install on DiLink first, then link your account.",
+        installTitle: "Install on the car tablet",
+        installSteps: [
+          "Install BYDMATE on the DiLink head unit and finish its setup (VoltFlow Mate reads live data from it).",
+          "Download the latest VoltFlow-Mate APK from GitHub Releases and install it on the same tablet (allow unknown sources if asked).",
+          "Open VoltFlow Mate, grant location and storage permissions, and in DiLink turn off background restriction: Settings → General → Disable background Apps → VoltFlow Mate = OFF.",
+          "Tap Link BYDMate below, enter the 6-digit code in the app under VoltFlow sync → Connect, then match vehicle name, Send test, Save, and enable sync.",
+        ],
+        downloadApk: "Download APK (GitHub)",
         linkBydmate: "Link BYDMate",
-        linkCodeHint: "Enter this 6-digit code in BYDMate → VoltFlow sync, then tap Connect.",
+        linkCodeHint: "Enter this 6-digit code in VoltFlow Mate → VoltFlow sync, then tap Connect.",
         linkCodeExpires: "Code expires in {time}",
         linkCodeExpired: "Code expired — generate a new one.",
         linkCodeCreating: "Creating code…",
@@ -1367,10 +1375,18 @@ export const dictionaries = {
       cloud: {
         name: "VoltFlow Mate",
         description:
-          "Злучыце BYDMate на планшэце аўто кароткім кодам — не трэба капіяваць доўгі API-ключ.",
+          "Шлюз для галоўнага экрана BYD — перадае даныя аўто ў VoltFlow у рэальным часе. Спачатку ўсталюйце на DiLink, затым злучыце акаўнт.",
+        installTitle: "Усталёўка на планшэце аўто",
+        installSteps: [
+          "Спачатку ўсталюйце BYDMATE на планшэце DiLink і завершыце наладу — VoltFlow Mate бярэ з яго даныя аўта.",
+          "Спампуйце апошні VoltFlow-Mate APK з рэлізаў GitHub і ўсталюйце на тым жа планшэце (дазвольце ўстаноўку з невядомых крыніц, калі сістэма запытае).",
+          "Запусціце VoltFlow Mate і дайце дазволы на геалакацыю і сховішча. У меню DiLink адключіце фонавую працу: Settings → General → Disable background Apps → VoltFlow Mate = OFF.",
+          "Націсніце «Злучыць BYDMate» ніжэй, увядзіце 6-значны код у VoltFlow Mate (сінхранізацыя VoltFlow → Злучыць), падайце імя аўто як у VoltFlow, зрабіце тэставую адправку, захавайце налады і ўключыце сінхранізацыю.",
+        ],
+        downloadApk: "Спампаваць APK (GitHub)",
         linkBydmate: "Злучыць BYDMate",
         linkCodeHint:
-          "Увядзіце гэты 6-значны код у BYDMate → сінхранізацыя VoltFlow і націсніце «Злучыць».",
+          "Увядзіце гэты 6-значны код у VoltFlow Mate → сінхранізацыя VoltFlow і націсніце «Злучыць».",
         linkCodeExpires: "Код састанецца праз {time}",
         linkCodeExpired: "Тэрмін кода скончыўся — згенеруйце новы.",
         linkCodeCreating: "Стварэнне кода…",
@@ -2051,10 +2067,18 @@ export const dictionaries = {
       cloud: {
         name: "VoltFlow Mate",
         description:
-          "Подключите BYDMate на планшете авто коротким кодом — не нужно копировать длинный API-ключ.",
+          "Шлюз для головного устройства BYD — передаёт данные авто в VoltFlow в реальном времени. Сначала установите на DiLink, затем подключите аккаунт.",
+        installTitle: "Установка на планшете авто",
+        installSteps: [
+          "Сначала установите BYDMATE на планшете DiLink и завершите настройку — VoltFlow Mate берёт из него данные авто.",
+          "Скачайте последний VoltFlow-Mate APK из релизов GitHub и установите на том же планшете (разрешите установку из неизвестных источников, если система спросит).",
+          "Запустите VoltFlow Mate и выдайте разрешения на геолокацию и хранилище. В меню DiLink отключите фоновую работу: Settings → General → Disable background Apps → VoltFlow Mate = OFF.",
+          "Нажмите «Подключить BYDMate» ниже, введите 6-значный код в VoltFlow Mate (синхронизация VoltFlow → Подключить), укажите имя авто как в VoltFlow, отправьте тест, сохраните настройки и включите синхронизацию.",
+        ],
+        downloadApk: "Скачать APK (GitHub)",
         linkBydmate: "Подключить BYDMate",
         linkCodeHint:
-          "Введите этот 6-значный код в BYDMate → синхронизация VoltFlow и нажмите «Подключить».",
+          "Введите этот 6-значный код в VoltFlow Mate → синхронизация VoltFlow и нажмите «Подключить».",
         linkCodeExpires: "Код истекает через {time}",
         linkCodeExpired: "Срок кода истёк — создайте новый.",
         linkCodeCreating: "Создание кода…",

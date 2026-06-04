@@ -437,6 +437,32 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             {t("settings.cloud.description")}
           </p>
 
+          <div className="space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
+            <p className="text-sm font-semibold tracking-tight">{t("settings.cloud.installTitle")}</p>
+            <ol className="text-muted-foreground list-decimal space-y-3 pl-5 text-sm leading-relaxed">
+              {(t("settings.cloud.installSteps") as readonly string[]).map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+            <Button
+              asChild
+              variant="outline"
+              size="lg"
+              className="h-[48px] w-full rounded-full"
+            >
+              <a
+                href="https://github.com/scroodge/BYDMate-own/releases/latest"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <span className="inline-flex items-center gap-2">
+                  {t("settings.cloud.downloadApk")}
+                  <ExternalLink className="size-4" aria-hidden />
+                </span>
+              </a>
+            </Button>
+          </div>
+
           {linkCode && linkCountdownSec != null && linkCountdownSec > 0 ? (
             <div className="space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
               <p className="text-center font-mono text-5xl font-semibold tracking-[0.35em] tabular-nums">
