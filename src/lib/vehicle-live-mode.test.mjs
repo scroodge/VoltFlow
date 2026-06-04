@@ -5,6 +5,7 @@ import {
   canStartChargingSession,
   deriveDashboardVehicleMode,
   isDrivingTelemetry,
+  isParkedTelemetry,
 } from "./vehicle-live-mode.ts";
 
 const NOW = Date.UTC(2026, 4, 30, 12, 0, 0);
@@ -44,6 +45,33 @@ test("parked-idle → parked", () => {
   });
   assert.equal(mode, "parked");
   assert.equal(canStartChargingSession(mode), true);
+});
+
+test("gear P at zero speed → parked", () => {
+  const snap = snapshot({
+    diplus: { gear: 1 },
+    telemetry: { soc: 60, speed_kmh: 0, is_charging: false },
+  });
+  assert.equal(isParkedTelemetry(snap), true);
+  assert.equal(isDrivingTelemetry(snap), false);
+  assert.equal(
+    deriveDashboardVehicleMode({ snapshot: snap, nowMs: NOW, hasActiveSession: false }),
+    "parked",
+  );
+});
+
+test("gear D at zero speed → driving", () => {
+  const snap = snapshot({
+    diplus: { gear: 4 },
+    telemetry: { soc: 60, speed_kmh: 0, is_charging: false },
+  });
+  assert.equal(isParkedTelemetry(snap), false);
+  assert.equal(isDrivingTelemetry(snap), true);
+});
+
+test("speed above 5 km/h → driving without gear", () => {
+  const snap = snapshot({ telemetry: { soc: 60, speed_kmh: 6, is_charging: false } });
+  assert.equal(isDrivingTelemetry(snap), true);
 });
 
 test("stationary-charging → live_charging", () => {

@@ -191,6 +191,7 @@ export const dictionaries = {
       statusCharging: "Charging",
       statusCompleted: "Completed",
       statusIdle: "Idle",
+      statusOnline: "Online",
       statusDriving: "Driving",
       statusLive: "Live",
       statusStale: "Last seen",
@@ -291,6 +292,8 @@ export const dictionaries = {
       idle: "Idle · no live session",
       idleBody:
         "Start from home to mint a deterministic session — wall clock math keeps ETA honest even if LTE drops.",
+      hubMateLive: "Vehicle online · Mate telemetry active",
+      hubNoMate: "No fresh vehicle data",
       refreshing: "Refreshing history…",
       syncHint: "Pull to sync or jump back whenever.",
       checkAgain: "Check again",
@@ -338,6 +341,8 @@ export const dictionaries = {
       timeAgoMinutes: "{value}m ago",
       timeAgoHours: "{value}h ago",
       status: {
+        online: "online",
+        driving: "driving",
         live: "live",
         stale: "stale",
         charging: "charging",
@@ -870,6 +875,7 @@ export const dictionaries = {
       statusCharging: "Зарадка",
       statusCompleted: "Завершана",
       statusIdle: "Чаканне",
+      statusOnline: "На сувязі",
       statusDriving: "Рух",
       statusLive: "Live",
       statusStale: "Без сувязі",
@@ -970,6 +976,8 @@ export const dictionaries = {
       idle: "Ціха · няма жывой сесіі",
       idleBody:
         "Пачніце з галоўнай, каб стварыць сесію — разлік па гадзінніку трымае ETA сумленным нават без LTE.",
+      hubMateLive: "Аўто на сувязі · даныя Mate актуальныя",
+      hubNoMate: "Няма свежых даных",
       refreshing: "Абнаўляем гісторыю…",
       syncHint: "Сінхранізуйце або вярніцеся назад у любы момант.",
       checkAgain: "Праверыць яшчэ",
@@ -1017,6 +1025,8 @@ export const dictionaries = {
       timeAgoMinutes: "{value} хв таму",
       timeAgoHours: "{value} г таму",
       status: {
+        online: "на сувязі",
+        driving: "рух",
         live: "жыва",
         stale: "састарэла",
         charging: "зарадка",
@@ -1549,6 +1559,7 @@ export const dictionaries = {
       statusCharging: "Зарядка",
       statusCompleted: "Завершено",
       statusIdle: "Ожидание",
+      statusOnline: "На связи",
       statusDriving: "В движении",
       statusLive: "Live",
       statusStale: "Давно не обновлялось",
@@ -1649,6 +1660,8 @@ export const dictionaries = {
       idle: "Пауза · нет живой сессии",
       idleBody:
         "Начните с главной, чтобы создать сессию — расчет по часам держит ETA честным даже без LTE.",
+      hubMateLive: "Авто на связи · телеметрия Mate активна",
+      hubNoMate: "Нет свежих данных ",
       refreshing: "Обновляем историю…",
       syncHint: "Синхронизируйте или вернитесь назад в любой момент.",
       checkAgain: "Проверить еще",
@@ -1696,6 +1709,8 @@ export const dictionaries = {
       timeAgoMinutes: "{value} мин назад",
       timeAgoHours: "{value} ч назад",
       status: {
+        online: "на связи",
+        driving: "в движении",
         live: "онлайн",
         stale: "устарело",
         charging: "зарядка",

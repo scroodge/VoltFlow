@@ -59,6 +59,11 @@ import { useAppPath } from "@/lib/dev/dev-path";
 import { calculateRegenRecoverySegments, calculateTripEnergy, prepareRegenRecoveryBars } from "@/lib/bydmate/trip-energy";
 import { isRouteTrackDisplayable } from "@/lib/bydmate/route-insights";
 import type { Locale, TranslationKey } from "@/lib/i18n";
+import {
+  deriveDashboardVehicleMode,
+  type DashboardVehicleMode,
+  vehicleStatusLabelKey,
+} from "@/lib/vehicle-live-mode";
 import type {
   BydmateLiveSnapshotRow,
   BydmateDiplus,
@@ -201,8 +206,14 @@ function VehicleLiveContent({
     );
     return car?.name ?? snapshot.vehicle_id;
   }, [carsData?.cars, snapshot.vehicle_id]);
-  const isCharging = isChargingTelemetry(snapshot.telemetry);
-  const isStale = nowMs - Date.parse(snapshot.received_at) > 90_000;
+  const vehicleMode = deriveDashboardVehicleMode({
+    snapshot,
+    nowMs,
+    hasActiveSession: false,
+  });
+  const isCharging =
+    vehicleMode === "live_charging" || vehicleMode === "app_charging";
+  const isStale = vehicleMode === "stale";
   const [fallbackDate] = useState(() => localDateKey(Date.now()));
   const [selectedDateOverride, setSelectedDateOverride] = useState<string | null>(null);
   const fixtureDateKeys = useMemo(() => {
@@ -248,6 +259,7 @@ function VehicleLiveContent({
       <Hero
         snapshot={snapshot}
         nowMs={nowMs}
+        vehicleMode={vehicleMode}
         isStale={isStale}
         isCharging={isCharging}
         forecastTrips={forecastTrips}
@@ -313,9 +325,24 @@ function Header() {
   );
 }
 
+function heroStatusBadgeClass(mode: DashboardVehicleMode) {
+  switch (mode) {
+    case "stale":
+      return "border-yellow-300/25 bg-yellow-300/10 text-yellow-200";
+    case "live_charging":
+    case "app_charging":
+      return "border-cyan-300/25 bg-cyan-300/10 text-cyan-100";
+    case "driving":
+      return "border-cyan-300/25 bg-cyan-300/10 text-cyan-100";
+    default:
+      return "border-primary/25 bg-primary/10 text-primary";
+  }
+}
+
 function Hero({
   snapshot,
   nowMs,
+  vehicleMode,
   isStale,
   isCharging,
   forecastTrips,
@@ -324,6 +351,7 @@ function Hero({
 }: {
   snapshot: BydmateLiveSnapshotRow;
   nowMs: number;
+  vehicleMode: DashboardVehicleMode;
   isStale: boolean;
   isCharging: boolean;
   forecastTrips: BydmateTripRow[];
@@ -355,14 +383,10 @@ function Hero({
         <span
           className={
             "shrink-0 rounded-full border px-3 py-1.5 font-heading text-[10px] font-semibold uppercase tracking-[0.16em] " +
-            (isStale
-              ? "border-yellow-300/25 bg-yellow-300/10 text-yellow-200"
-              : isCharging
-                ? "border-cyan-300/25 bg-cyan-300/10 text-cyan-100"
-              : "border-primary/25 bg-primary/10 text-primary")
+            heroStatusBadgeClass(vehicleMode)
           }
         >
-          {isStale ? t("vehicle.status.stale") : isCharging ? t("vehicle.status.charging") : t("vehicle.status.live")}
+          {t(vehicleStatusLabelKey(vehicleMode))}
         </span>
       </div>
 

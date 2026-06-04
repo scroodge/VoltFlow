@@ -57,6 +57,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 import {
   canStartChargingSession,
+  dashboardVehicleStatusLabelKey,
   deriveDashboardVehicleMode,
   resolveLiveSnapshotForVehicle,
   type DashboardVehicleMode,
@@ -393,20 +394,7 @@ export function DashboardView() {
   const latestBydmateSoc = snapshotSoc(latestBydmateSnapshot);
   const liveStartPct = liveStartPercent(latestBydmateSnapshot);
 
-  const statusLabel = (() => {
-    switch (vehicleMode) {
-      case "app_charging":
-        return t("dashboard.statusCharging") as string;
-      case "live_charging":
-        return t("dashboard.statusLiveCharging") as string;
-      case "driving":
-        return t("dashboard.statusLive") as string;
-      case "stale":
-        return t("dashboard.statusStale") as string;
-      default:
-        return t("dashboard.statusIdle") as string;
-    }
-  })();
+  const statusLabel = t(dashboardVehicleStatusLabelKey(vehicleMode)) as string;
 
   const actionButtonStatus =
     vehicleMode === "app_charging"

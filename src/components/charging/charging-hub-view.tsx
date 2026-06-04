@@ -4,13 +4,20 @@ import { useQuery } from "@tanstack/react-query";
 import { BatteryCharging } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChargingSessionScreen } from "@/components/charging/charging-session-screen";
+import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
+import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useTranslation } from "@/hooks/use-translation";
 import { fetchSessions } from "@/hooks/use-sessions-query";
+import {
+  deriveDashboardVehicleMode,
+  resolveLiveSnapshotForVehicle,
+} from "@/lib/vehicle-live-mode";
+import { useAppPreferences } from "@/stores/use-app-preferences";
 import { DEV_MOCK_CHARGING_SESSION_ID } from "@/lib/dev/build-mock-charging-session";
 import { isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { useAppPath } from "@/lib/dev/dev-path";
@@ -42,6 +49,31 @@ export function ChargingHubView() {
     queryFn: fetchSessions,
     refetchInterval: 5000,
   });
+  const { data: liveRows = [] } = useBydmateLiveQuery();
+  const { data: carsResult } = useCarsQuery();
+  const selectedCarId = useAppPreferences((s) => s.selectedCarId);
+  const nowMs = useSyncExternalStore(
+    () => () => {},
+    () => Date.now(),
+    () => 0,
+  );
+  const scopedVehicleId = useMemo(() => {
+    const cars = carsResult?.cars;
+    const car =
+      cars?.find((c) => c.id === selectedCarId) ??
+      cars?.find((c) => c.id === carsResult?.preferredCarId) ??
+      cars?.[0] ??
+      null;
+    return car?.vehicle_alias ?? null;
+  }, [carsResult, selectedCarId]);
+  const mateVehicleMode = useMemo(() => {
+    const snapshot = resolveLiveSnapshotForVehicle(liveRows, scopedVehicleId);
+    return deriveDashboardVehicleMode({
+      snapshot,
+      nowMs,
+      hasActiveSession: false,
+    });
+  }, [liveRows, scopedVehicleId, nowMs]);
 
   const active = useMemo(
     () => sessions?.find((s) => s.status === "charging"),
@@ -97,6 +129,11 @@ export function ChargingHubView() {
           {t("nav.charge")}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">{t("charging.idle")}</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {mateVehicleMode === "stale"
+            ? (t("charging.hubNoMate") as string)
+            : (t("charging.hubMateLive") as string)}
+        </p>
       </div>
 
       {/* Latest session card or empty-state hint */}
