@@ -41,7 +41,7 @@ import { usePageVisible } from "@/hooks/use-page-visible";
 import { fetchSessions } from "@/hooks/use-sessions-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
-import { formatDuration } from "@/lib/charging-math";
+import { availableBatteryKwh, formatDuration } from "@/lib/charging-math";
 import { estimateRangeFromSoc, estimateVehicleRangeKm } from "@/lib/bydmate/range-estimate";
 import {
   chargingParamsFromSession,
@@ -50,7 +50,7 @@ import {
 } from "@/lib/charging-session-sync";
 import { snapshotSoc } from "@/lib/charging-live";
 import { useAppPath } from "@/lib/dev/dev-path";
-import { currencySymbols } from "@/lib/i18n";
+import { currencySymbols, type TranslationKey } from "@/lib/i18n";
 import { parseDecimalInput } from "@/lib/number-input";
 import { ensureNotificationsPermission, ensurePushSubscription } from "@/lib/push/client";
 import { queryKeys } from "@/lib/query-keys";
@@ -178,6 +178,38 @@ function drivingStatParts(
 ): { value: string; unit?: string } {
   if (value == null || !Number.isFinite(value)) return { value: "—" };
   return { value: fmt(value, digits), unit };
+}
+
+function liveVehicleSummaryTitle(
+  snapshot: BydmateLiveSnapshotRow | null,
+  mode: DashboardVehicleMode,
+  statusLabel: string,
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string,
+  formatNumber: (value: number | null | undefined, digits?: number) => string,
+) {
+  if (!snapshot) return t("dashboard.noLiveData");
+
+  const telemetry = snapshot.telemetry;
+  if (mode === "app_charging" || mode === "live_charging") {
+    const chargePower =
+      typeof telemetry.charge_power_kw === "number" &&
+      Number.isFinite(telemetry.charge_power_kw)
+        ? telemetry.charge_power_kw
+        : telemetry.power_kw;
+    return t("dashboard.liveVehicleCharging", {
+      power: formatNumber(chargePower, 1),
+    });
+  }
+  if (mode === "driving") {
+    return t("dashboard.liveVehicleSpeed", {
+      speed: formatNumber(telemetry.speed_kmh, 0),
+    });
+  }
+  if (mode === "stale") return statusLabel;
+
+  return t("dashboard.liveVehicleSpeed", {
+    speed: formatNumber(telemetry.speed_kmh, 0),
+  });
 }
 
 function statusBadgeClass(mode: DashboardVehicleMode) {
@@ -378,6 +410,7 @@ export function DashboardView() {
     }).display;
   }, [activeSession, scopedLiveSnapshots, nowMs]);
 
+  const [ringDisplay, setRingDisplay] = useState<"percent" | "energy">("percent");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [startPct, setStartPct] = useState("42");
   const [targetPct, setTargetPct] = useState("100");
@@ -394,7 +427,7 @@ export function DashboardView() {
   const latestBydmateSoc = snapshotSoc(latestBydmateSnapshot);
   const liveStartPct = liveStartPercent(latestBydmateSnapshot);
 
-  const statusLabel = t(dashboardVehicleStatusLabelKey(vehicleMode)) as string;
+  const statusLabel = String(t(dashboardVehicleStatusLabelKey(vehicleMode)));
 
   const actionButtonStatus =
     vehicleMode === "app_charging"
@@ -415,6 +448,30 @@ export function DashboardView() {
     latestBydmateSoc ??
     latestSession?.current_percent ??
     Number(startPct);
+
+  const packCapacityKwh = selectedCar?.battery_capacity_kwh;
+  const availableKwh = availableBatteryKwh(packCapacityKwh, currentPercent);
+  const packTileValue =
+    packCapacityKwh != null
+      ? `${fmt(availableKwh, 1)} / ${fmt(packCapacityKwh, 0)} kWh`
+      : "-- kWh";
+
+  const ringToggleAriaLabel =
+    ringDisplay === "percent"
+      ? (t("dashboard.ringToggleEnergy") as string)
+      : (t("dashboard.ringTogglePercent") as string);
+
+  const liveVehicleTitle = liveVehicleSummaryTitle(
+    latestBydmateSnapshot,
+    vehicleMode,
+    statusLabel,
+    (key, params) => String(t(key, params)),
+    fmt,
+  );
+
+  useEffect(() => {
+    setRingDisplay("percent");
+  }, [selectedCar?.id]);
 
   const rangeEstimate = latestBydmateSnapshot
     ? estimateVehicleRangeKm(latestBydmateSnapshot, latestTrips)
@@ -594,6 +651,12 @@ export function DashboardView() {
                     vehicleMode === "app_charging" || vehicleMode === "live_charging"
                   }
                   size="compact"
+                  displayMode={ringDisplay}
+                  energyKwh={availableKwh}
+                  toggleAriaLabel={ringToggleAriaLabel}
+                  onToggleDisplay={() =>
+                    setRingDisplay((mode) => (mode === "percent" ? "energy" : "percent"))
+                  }
                 />
                 <RangeBadge value={rangeDetail} />
               </div>
@@ -656,11 +719,11 @@ export function DashboardView() {
                     <div className="grid grid-cols-2 gap-2">
                       <DashboardStatTile
                         label={t("dashboard.packShort") as string}
-                        value={`${selectedCar?.battery_capacity_kwh ?? "--"} kWh`}
+                        value={packTileValue}
                       />
                       <DashboardStatTile
                         label={t("dashboard.chargerShort") as string}
-                        value={`${selectedCar?.default_charger_power_kw ?? "--"} kW`}
+                        value={`${fmt(selectedCar?.default_charger_power_kw, 1)} kW`}
                       />
                     </div>
                   )}
@@ -756,11 +819,7 @@ export function DashboardView() {
               href={appPath("/vehicle")}
               icon={<CarFront className="size-5" aria-hidden />}
               label={t("dashboard.liveVehicle") as string}
-              title={
-                latestBydmateSoc != null
-                  ? `${fmt(latestBydmateSoc)}% SOC`
-                  : (t("dashboard.noLiveData") as string)
-              }
+              title={liveVehicleTitle}
               body={
                 latestBydmateSnapshot
                   ? formatClockRange(latestBydmateSnapshot.device_time, null, locale)

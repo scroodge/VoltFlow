@@ -1,6 +1,7 @@
 import { processBydmateAutoChargingSessions } from "@/lib/bydmate/charging-auto-session";
 import { reconcileChargingSessionsForUser } from "@/lib/charging-session-reconcile";
 import { normalizePayloads } from "@/lib/bydmate/ingest-payload";
+import { parseIngestStats } from "@/lib/bydmate/ingest-stats";
 import { processBydmateChargeNotifications } from "@/lib/push/charge-notifications";
 import {
   acceptedLocationFromSnapshot,
@@ -132,33 +133,6 @@ function persistenceError(
   if (missingCellVoltage) return "cell voltage missing after persist";
 
   return null;
-}
-
-function parseIngestStats(result: unknown, payloadCount: number) {
-  if (!result || typeof result !== "object") {
-    return {
-      inserted_count: payloadCount,
-      skipped_stale_count: 0,
-      duplicate_count: 0,
-    };
-  }
-
-  const record = result as Record<string, unknown>;
-  const inserted =
-    typeof record.sample_count === "number"
-      ? record.sample_count
-      : record.duplicate === true
-        ? 0
-        : 1;
-  const skippedStale =
-    typeof record.skipped_stale_count === "number" ? record.skipped_stale_count : 0;
-  const duplicate = Math.max(0, payloadCount - inserted - skippedStale);
-
-  return {
-    inserted_count: inserted,
-    skipped_stale_count: skippedStale,
-    duplicate_count: duplicate,
-  };
 }
 
 export async function POST(request: Request) {

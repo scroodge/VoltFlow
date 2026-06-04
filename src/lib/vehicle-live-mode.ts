@@ -1,3 +1,4 @@
+import type { TranslationKey } from "@/lib/i18n";
 import type { BydmateLiveSnapshotRow } from "@/types/database";
 
 type NormalizedDiplusGear = "P" | "R" | "N" | "D" | null;
@@ -104,7 +105,7 @@ export function deriveDashboardVehicleMode({
   return "parked";
 }
 
-export function dashboardVehicleStatusLabelKey(mode: DashboardVehicleMode): string {
+export function dashboardVehicleStatusLabelKey(mode: DashboardVehicleMode): TranslationKey {
   switch (mode) {
     case "app_charging":
       return "dashboard.statusCharging";
@@ -120,7 +121,7 @@ export function dashboardVehicleStatusLabelKey(mode: DashboardVehicleMode): stri
   }
 }
 
-export function vehicleStatusLabelKey(mode: DashboardVehicleMode): string {
+export function vehicleStatusLabelKey(mode: DashboardVehicleMode): TranslationKey {
   switch (mode) {
     case "stale":
       return "vehicle.status.stale";

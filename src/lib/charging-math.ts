@@ -28,6 +28,22 @@ export function energyNeededKwh(
   return (batteryCapacityKwh * (toPercent - fromPercent)) / 100;
 }
 
+export function availableBatteryKwh(
+  batteryCapacityKwh: number | null | undefined,
+  socPercent: number,
+): number | null {
+  if (
+    typeof batteryCapacityKwh !== "number" ||
+    !Number.isFinite(batteryCapacityKwh) ||
+    batteryCapacityKwh <= 0
+  ) {
+    return null;
+  }
+  const soc = Math.min(100, Math.max(0, socPercent));
+  if (!Number.isFinite(soc)) return null;
+  return (batteryCapacityKwh * soc) / 100;
+}
+
 export function energyFromGridKwh(
   energyNeededKwh: number,
   efficiencyPercent: number,

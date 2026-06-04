@@ -4,6 +4,10 @@ import { motion } from "framer-motion";
 
 import { cn } from "@/lib/utils";
 
+function formatEnergyKwh(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(1) : "—";
+}
+
 export function BatteryRing({
   percent,
   status,
@@ -11,6 +15,10 @@ export function BatteryRing({
   charging = false,
   size = "default",
   className,
+  displayMode = "percent",
+  energyKwh,
+  toggleAriaLabel,
+  onToggleDisplay,
 }: {
   percent: number;
   status: string;
@@ -18,11 +26,64 @@ export function BatteryRing({
   charging?: boolean;
   size?: "default" | "compact";
   className?: string;
+  displayMode?: "percent" | "energy";
+  energyKwh?: number | null;
+  toggleAriaLabel?: string;
+  onToggleDisplay?: () => void;
 }) {
   const value = Math.max(0, Math.min(100, percent));
   const radius = 92;
   const circumference = 2 * Math.PI * radius;
   const compact = size === "compact";
+  const showEnergy = displayMode === "energy";
+  const interactive = Boolean(onToggleDisplay);
+
+  const centerContent = (
+    <>
+      {showEnergy ? (
+        <p
+          className={cn(
+            "font-heading font-bold leading-none tracking-normal text-foreground tabular-nums",
+            compact ? "text-3xl" : "text-5xl",
+          )}
+        >
+          {formatEnergyKwh(energyKwh)}
+          <span className={cn("text-muted-foreground", compact ? "text-sm" : "text-xl")}>
+            {" "}
+            kWh
+          </span>
+        </p>
+      ) : (
+        <p
+          className={cn(
+            "font-heading font-bold leading-none tracking-normal text-foreground tabular-nums",
+            compact ? "text-4xl" : "text-6xl",
+          )}
+        >
+          {Math.round(value)}
+          <span className={cn("text-muted-foreground", compact ? "text-base" : "text-2xl")}>%</span>
+        </p>
+      )}
+      <p
+        className={cn(
+          "font-semibold uppercase text-muted-foreground",
+          compact ? "mt-1 text-[9px] tracking-[0.18em]" : "mt-2 text-xs tracking-[0.24em]",
+        )}
+      >
+        {status}
+      </p>
+      {detail ? (
+        <p
+          className={cn(
+            "font-heading font-semibold tracking-normal text-[var(--voltflow-cyan)] tabular-nums",
+            compact ? "mt-1 text-sm" : "mt-2 text-lg",
+          )}
+        >
+          {detail}
+        </p>
+      ) : null}
+    </>
+  );
 
   return (
     <div
@@ -81,35 +142,23 @@ export function BatteryRing({
           charging && "shadow-[0_0_52px_rgba(0,209,255,0.25)]",
         )}
       />
-      <div className="relative text-center">
-        <p
+      {interactive ? (
+        <button
+          type="button"
           className={cn(
-            "font-heading font-bold leading-none tracking-normal text-foreground tabular-nums",
-            compact ? "text-4xl" : "text-6xl",
+            "relative z-10 rounded-full text-center outline-none transition",
+            "focus-visible:ring-2 focus-visible:ring-[var(--voltflow-cyan)]/60",
+            "active:scale-[0.98]",
           )}
+          aria-label={toggleAriaLabel}
+          aria-pressed={showEnergy}
+          onClick={onToggleDisplay}
         >
-          {Math.round(value)}
-          <span className={cn("text-muted-foreground", compact ? "text-base" : "text-2xl")}>%</span>
-        </p>
-        <p
-          className={cn(
-            "font-semibold uppercase text-muted-foreground",
-            compact ? "mt-1 text-[9px] tracking-[0.18em]" : "mt-2 text-xs tracking-[0.24em]",
-          )}
-        >
-          {status}
-        </p>
-        {detail ? (
-          <p
-            className={cn(
-              "font-heading font-semibold tracking-normal text-[var(--voltflow-cyan)] tabular-nums",
-              compact ? "mt-1 text-sm" : "mt-2 text-lg",
-            )}
-          >
-            {detail}
-          </p>
-        ) : null}
-      </div>
+          {centerContent}
+        </button>
+      ) : (
+        <div className="relative text-center">{centerContent}</div>
+      )}
     </div>
   );
 }

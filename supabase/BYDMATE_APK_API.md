@@ -303,6 +303,9 @@ type Diplus = {
   },
   "vehicle_id": "way",
   "sample_count": 1,
+  "inserted_count": 1,
+  "duplicate_count": 0,
+  "skipped_stale_count": 0,
   "dropped_location_count": 0,
   "dropped_telemetry_field_count": 0,
   "charge_notifications": {
@@ -326,8 +329,24 @@ type Diplus = {
 not need to read it. On failure inside the hook, `error` is set and counts stay zero.
 
 The exact `ingest` object may include fields such as `duplicate`, `charging`,
-`trip_id`, `closed_trip_id`, `sample_count`, `track_point_count`,
-`skipped_stale_count`, `vehicle_id`, and `last_device_time`.
+`trip_id`, `closed_trip_id`, `sample_count`, `inserted_count`, `duplicate_count`,
+`track_point_count`, `skipped_stale_count`, `vehicle_id`, and `last_device_time`.
+
+### Delivery acknowledgment (APK queue)
+
+VoltFlow Mate must **not** dequeue a batch on HTTP `2xx` alone. Treat a batch as
+delivered only when:
+
+- `ok` is `true`, and
+- `skipped_stale_count` is `0`, and
+- `inserted_count + duplicate_count >=` the number of samples in the POST body.
+
+Batch ingest always attempts to persist historical samples into
+`bydmate_telemetry_samples` (live snapshot monotonicity is enforced separately).
+`skipped_stale_count` should normally be `0`; a non-zero value means the server
+rejected part of the batch and the APK should retry.
+
+Persist `cloud_sync_last_ack` for diagnostics, e.g. `15 sent, 12 ins, 3 dup, 0 skip`.
 
 ## Error Responses
 
