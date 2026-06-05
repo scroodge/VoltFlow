@@ -99,19 +99,43 @@ test("stale-driving → stale", () => {
   assert.equal(canStartChargingSession(mode), true);
 });
 
-test("app-session-wins over driving telemetry", () => {
+test("fresh driving telemetry wins over open app session", () => {
   const mode = deriveDashboardVehicleMode({
     snapshot: snapshot({ telemetry: { soc: 73, speed_kmh: 38, is_charging: false } }),
+    nowMs: NOW,
+    hasActiveSession: true,
+  });
+  assert.equal(mode, "driving");
+});
+
+test("open app session wins when live telemetry is stale", () => {
+  const mode = deriveDashboardVehicleMode({
+    snapshot: snapshot({
+      received_at: new Date(NOW - 120_000).toISOString(),
+      telemetry: { soc: 73, speed_kmh: 38, is_charging: false },
+    }),
     nowMs: NOW,
     hasActiveSession: true,
   });
   assert.equal(mode, "app_charging");
 });
 
-test("isDrivingTelemetry respects charging flag", () => {
+test("traction power_kw while driving → driving, not live_charging", () => {
+  const mode = deriveDashboardVehicleMode({
+    snapshot: snapshot({
+      diplus: { gear: 4 },
+      telemetry: { soc: 65, speed_kmh: 42, is_charging: false, power_kw: 28, charge_power_kw: 0 },
+    }),
+    nowMs: NOW,
+    hasActiveSession: false,
+  });
+  assert.equal(mode, "driving");
+});
+
+test("parked AC charging blocks driving mode", () => {
   assert.equal(
     isDrivingTelemetry(
-      snapshot({ telemetry: { speed_kmh: 40, is_charging: true, charge_power_kw: 7 } }),
+      snapshot({ telemetry: { speed_kmh: 0, is_charging: true, charge_power_kw: 7 } }),
     ),
     false,
   );

@@ -191,13 +191,8 @@ function liveVehicleSummaryTitle(
 
   const telemetry = snapshot.telemetry;
   if (mode === "app_charging" || mode === "live_charging") {
-    const chargePower =
-      typeof telemetry.charge_power_kw === "number" &&
-      Number.isFinite(telemetry.charge_power_kw)
-        ? telemetry.charge_power_kw
-        : telemetry.power_kw;
     return t("dashboard.liveVehicleCharging", {
-      power: formatNumber(chargePower, 1),
+      power: formatNumber(telemetry.charge_power_kw, 1),
     });
   }
   if (mode === "driving") {

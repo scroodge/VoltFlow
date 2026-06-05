@@ -1,3 +1,4 @@
+import { isTelemetryCharging } from "./bydmate/telemetry-charging.ts";
 import {
   costFromGridEnergy,
   energyFromGridKwh,
@@ -28,9 +29,7 @@ export function snapshotSpeedKmh(snapshot: BydmateLiveSnapshotRow | null | undef
 }
 
 export function snapshotChargePowerKw(snapshot: BydmateLiveSnapshotRow | null | undefined) {
-  const power =
-    finiteNumber(snapshot?.telemetry?.charge_power_kw) ??
-    finiteNumber(snapshot?.telemetry?.power_kw);
+  const power = finiteNumber(snapshot?.telemetry?.charge_power_kw);
   return power != null && power > 0 ? power : null;
 }
 
@@ -41,7 +40,8 @@ export function isFreshChargingSnapshot(
 ) {
   if (!snapshot) return false;
   if (!isFreshLiveSnapshot(snapshot, nowMs, staleMs)) return false;
-  return snapshot.telemetry?.is_charging === true || snapshotChargePowerKw(snapshot) != null;
+  if (isFreshSnapshotDriving(snapshot, nowMs)) return false;
+  return isTelemetryCharging(snapshot.telemetry);
 }
 
 export function isFreshLiveSnapshot(
@@ -138,9 +138,7 @@ export function shouldBlockAutoComplete(
 ) {
   if (!isFreshLiveSnapshot(snapshot, nowMs)) return true;
   if (isFreshSnapshotDriving(snapshot, nowMs)) return true;
-  const charging =
-    snapshot?.telemetry?.is_charging === true || snapshotChargePowerKw(snapshot) != null;
-  return !charging;
+  return !isTelemetryCharging(snapshot?.telemetry ?? {});
 }
 
 /** Allow math-based auto-complete only while Mate live SOC is stale (>90s) or absent. */

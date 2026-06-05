@@ -1,3 +1,4 @@
+import { isTelemetryCharging } from "./bydmate/telemetry-charging.ts";
 import type { TranslationKey } from "@/lib/i18n";
 import type { BydmateLiveSnapshotRow } from "@/types/database";
 
@@ -29,7 +30,6 @@ function normalizeDiplusGear(value: string | number | null | undefined): Normali
 export const LIVE_SNAPSHOT_STALE_MS = 90_000;
 /** Align with Mate ingest / charging-live drive-away threshold. */
 export const DRIVING_SPEED_THRESHOLD_KMH = 5;
-const CHARGE_POWER_THRESHOLD_KW = 0.1;
 
 export type DashboardVehicleMode =
   | "app_charging"
@@ -42,11 +42,15 @@ function finiteNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function snapshotChargePowerKw(snapshot: BydmateLiveSnapshotRow | null | undefined) {
-  const power =
-    finiteNumber(snapshot?.telemetry?.charge_power_kw) ??
-    finiteNumber(snapshot?.telemetry?.power_kw);
-  return power != null && power > 0 ? power : null;
+/** D/R/N in drive, or speed above threshold — never treat as charging. */
+export function isRawDrivingTelemetry(snapshot: BydmateLiveSnapshotRow | null | undefined) {
+  if (!snapshot) return false;
+
+  const gear = normalizeDiplusGear(snapshot.diplus?.gear);
+  if (gear === "D" || gear === "R" || gear === "N") return true;
+
+  const speedKmh = finiteNumber(snapshot.telemetry.speed_kmh);
+  return speedKmh != null && speedKmh > DRIVING_SPEED_THRESHOLD_KMH;
 }
 
 export function isFreshLiveSnapshot(
@@ -60,14 +64,8 @@ export function isFreshLiveSnapshot(
 }
 
 export function isChargingTelemetry(snapshot: BydmateLiveSnapshotRow | null | undefined) {
-  if (!snapshot) return false;
-  const telemetry = snapshot.telemetry;
-  const chargePowerKw = finiteNumber(telemetry.charge_power_kw);
-  return (
-    telemetry.is_charging === true ||
-    (chargePowerKw != null && chargePowerKw > CHARGE_POWER_THRESHOLD_KW) ||
-    snapshotChargePowerKw(snapshot) != null
-  );
+  if (!snapshot || isRawDrivingTelemetry(snapshot)) return false;
+  return isTelemetryCharging(snapshot.telemetry);
 }
 
 export function isParkedTelemetry(snapshot: BydmateLiveSnapshotRow | null | undefined) {
@@ -97,9 +95,11 @@ export function deriveDashboardVehicleMode({
   hasActiveSession: boolean;
   staleMs?: number;
 }): DashboardVehicleMode {
+  if (!snapshot) return hasActiveSession ? "app_charging" : "stale";
+  const fresh = isFreshLiveSnapshot(snapshot, nowMs, staleMs);
+  if (fresh && isRawDrivingTelemetry(snapshot)) return "driving";
   if (hasActiveSession) return "app_charging";
-  if (!snapshot) return "stale";
-  if (!isFreshLiveSnapshot(snapshot, nowMs, staleMs)) return "stale";
+  if (!fresh) return "stale";
   if (isChargingTelemetry(snapshot)) return "live_charging";
   if (isDrivingTelemetry(snapshot)) return "driving";
   return "parked";
