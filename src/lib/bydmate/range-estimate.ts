@@ -28,18 +28,39 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+function resolveUsableBatteryKwh(
+  batteryCapacityKwh: number | null | undefined,
+  sohPercent: number | null | undefined,
+): number | null {
+  const capacity = validNumber(batteryCapacityKwh) ?? DEFAULT_USABLE_BATTERY_KWH;
+  const soh = validNumber(sohPercent);
+  return capacity * (soh != null ? clamp(soh, 70, 105) / 100 : 1);
+}
+
+export type VehicleRangeEstimateOptions = {
+  batteryCapacityKwh?: number | null;
+};
+
 export function estimateVehicleRangeKm(
   snapshot: BydmateLiveSnapshotRow,
   recentTrips: BydmateTripRow[],
+  options: VehicleRangeEstimateOptions = {},
 ): RangeEstimate {
   const telemetry = snapshot.telemetry;
   const soc = validNumber(telemetry.soc);
   if (soc == null) return { estimatedRangeKm: null, consumptionKwh100Km: null };
 
-  const soh = validNumber(telemetry.soh_percent);
-  const usableBatteryKwh = DEFAULT_USABLE_BATTERY_KWH * (soh != null ? clamp(soh, 70, 105) / 100 : 1);
+  const usableBatteryKwh = resolveUsableBatteryKwh(
+    options.batteryCapacityKwh,
+    telemetry.soh_percent,
+  );
+  if (usableBatteryKwh == null || usableBatteryKwh <= 0) {
+    return { estimatedRangeKm: null, consumptionKwh100Km: null };
+  }
   const usableEnergyKwh = usableBatteryKwh * (clamp(soc, 0, 100) / 100);
-  const consumptionKwh100Km = estimateConsumptionKwh100Km(snapshot, recentTrips);
+  const consumptionKwh100Km = estimateConsumptionKwh100Km(snapshot, recentTrips, {
+    batteryCapacityKwh: options.batteryCapacityKwh,
+  });
 
   if (consumptionKwh100Km == null || consumptionKwh100Km <= 0) {
     return { estimatedRangeKm: null, consumptionKwh100Km: null };
@@ -90,7 +111,9 @@ export function estimateRangeFromSoc({
 function estimateConsumptionKwh100Km(
   snapshot: BydmateLiveSnapshotRow,
   recentTrips: BydmateTripRow[],
+  options: VehicleRangeEstimateOptions = {},
 ) {
+  const usableBatteryKwh = validNumber(options.batteryCapacityKwh) ?? DEFAULT_USABLE_BATTERY_KWH;
   const telemetry = snapshot.telemetry;
   const estimates: WeightedConsumption[] = [
     { value: DEFAULT_CONSUMPTION_KWH_100KM, weight: 0.8 },
@@ -139,7 +162,7 @@ function estimateConsumptionKwh100Km(
   const reportedRangeKm = validNumber(telemetry.range_est_km);
   const soc = validNumber(telemetry.soc);
   if (reportedRangeKm != null && reportedRangeKm > 10 && soc != null && soc > 2) {
-    const reportedConsumption = ((DEFAULT_USABLE_BATTERY_KWH * (soc / 100)) / reportedRangeKm) * 100;
+    const reportedConsumption = ((usableBatteryKwh * (soc / 100)) / reportedRangeKm) * 100;
     if (
       reportedConsumption >= MIN_FORECAST_CONSUMPTION_KWH_100KM &&
       reportedConsumption <= MAX_FORECAST_CONSUMPTION_KWH_100KM

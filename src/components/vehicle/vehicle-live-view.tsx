@@ -49,6 +49,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
+import { useVehicleRangeEstimate } from "@/hooks/use-vehicle-range-estimate";
 import { useBydmateTripSamplesQuery } from "@/hooks/use-bydmate-trip-samples-query";
 import { useBydmateTripTrackQuery } from "@/hooks/use-bydmate-trip-track-query";
 import { useBydmateTripsQuery, useLatestBydmateTripsQuery } from "@/hooks/use-bydmate-trips-query";
@@ -56,14 +57,17 @@ import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
 import { useAppPath } from "@/lib/dev/dev-path";
+import { averageTripConsumption } from "@/lib/bydmate/range-estimate";
 import { calculateRegenRecoverySegments, calculateTripEnergy, prepareRegenRecoveryBars } from "@/lib/bydmate/trip-energy";
 import { isRouteTrackDisplayable } from "@/lib/bydmate/route-insights";
 import type { Locale, TranslationKey } from "@/lib/i18n";
 import {
   deriveDashboardVehicleMode,
+  resolveLiveSnapshotForVehicle,
   type DashboardVehicleMode,
   vehicleStatusLabelKey,
 } from "@/lib/vehicle-live-mode";
+import { useAppPreferences } from "@/stores/use-app-preferences";
 import type {
   BydmateLiveSnapshotRow,
   BydmateDiplus,
@@ -128,8 +132,19 @@ export function VehicleLiveView() {
   const searchParams = useSearchParams();
   const initialTripId = searchParams.get("trip");
   const { data, isLoading, error } = useBydmateLiveQuery();
+  const { data: carsResult } = useCarsQuery();
+  const selectedCarId = useAppPreferences((state) => state.selectedCarId);
   const nowMs = useTickingClock(true);
-  const baseSnapshot = data?.[0] ?? null;
+  const scopedVehicleId = useMemo(() => {
+    const cars = carsResult?.cars;
+    const selectedCar =
+      cars?.find((car) => car.id === selectedCarId) ?? cars?.[0] ?? null;
+    return selectedCar?.vehicle_alias ?? null;
+  }, [carsResult?.cars, selectedCarId]);
+  const baseSnapshot = useMemo(
+    () => resolveLiveSnapshotForVehicle(data ?? [], scopedVehicleId),
+    [data, scopedVehicleId],
+  );
   const snapshot = useVehicleDevSnapshotOverride(baseSnapshot);
   const hasMounted = useClientMounted();
 
@@ -167,6 +182,8 @@ export function VehicleLiveView() {
   return (
     <VehicleLiveContent
       snapshot={snapshot}
+      rangeBaseSnapshot={baseSnapshot}
+      scopedVehicleId={scopedVehicleId}
       nowMs={nowMs}
       initialTripId={initialTripId}
       hasMounted={hasMounted}
@@ -183,29 +200,46 @@ export function VehicleLiveFixtureView({
 }) {
   const nowMs = useTickingClock(true);
 
-  return <VehicleLiveContent snapshot={snapshot} nowMs={nowMs} fixturePoints={points} hasMounted />;
+  return (
+    <VehicleLiveContent
+      snapshot={snapshot}
+      rangeBaseSnapshot={snapshot}
+      scopedVehicleId={snapshot.vehicle_id}
+      nowMs={nowMs}
+      fixturePoints={points}
+      hasMounted
+    />
+  );
 }
 
 function VehicleLiveContent({
   snapshot,
+  rangeBaseSnapshot,
+  scopedVehicleId,
   nowMs,
   fixturePoints,
   initialTripId = null,
   hasMounted = true,
 }: {
   snapshot: BydmateLiveSnapshotRow;
+  rangeBaseSnapshot: BydmateLiveSnapshotRow | null;
+  scopedVehicleId: string | null;
   nowMs: number;
   fixturePoints?: BydmateTelemetryPointRow[];
   initialTripId?: string | null;
   hasMounted?: boolean;
 }) {
   const { data: carsData } = useCarsQuery();
-  const vehicleLabel = useMemo(() => {
-    const car = carsData?.cars.find(
-      (item) => item.vehicle_alias === snapshot.vehicle_id,
-    );
-    return car?.name ?? snapshot.vehicle_id;
-  }, [carsData?.cars, snapshot.vehicle_id]);
+  const selectedCarId = useAppPreferences((state) => state.selectedCarId);
+  const matchedCar = useMemo(() => {
+    const cars = carsData?.cars;
+    if (!cars?.length) return null;
+    const selected = cars.find((car) => car.id === selectedCarId) ?? cars[0] ?? null;
+    if (selected?.vehicle_alias === snapshot.vehicle_id) return selected;
+    return cars.find((car) => car.vehicle_alias === snapshot.vehicle_id) ?? selected;
+  }, [carsData?.cars, selectedCarId, snapshot.vehicle_id]);
+  const vehicleLabel = matchedCar?.name ?? snapshot.vehicle_id;
+  const batteryCapacityKwh = matchedCar?.battery_capacity_kwh ?? null;
   const vehicleMode = deriveDashboardVehicleMode({
     snapshot,
     nowMs,
@@ -240,11 +274,18 @@ function VehicleLiveContent({
     isLoading: isTripsLoading,
     error: tripsError,
   } = useBydmateTripsQuery(selectedDate, snapshot.vehicle_id, !fixturePoints && !isCharging && !isStale);
-  const {
-    data: forecastApiTrips = [],
-  } = useBydmateTripsQuery(fallbackDate, snapshot.vehicle_id, !fixturePoints && !isCharging && !isStale && selectedDate !== fallbackDate);
   const trips = fixtureTrips ?? apiTrips;
-  const forecastTrips = fixtureTrips ?? (selectedDate === fallbackDate ? apiTrips : forecastApiTrips);
+  const rangeEstimate = useVehicleRangeEstimate({
+    baseSnapshot: rangeBaseSnapshot,
+    scopedVehicleId,
+    batteryCapacityKwh,
+    recentTripsOverride: fixtureTrips ?? undefined,
+    enabled: !fixturePoints,
+  });
+  const rangeLabel =
+    rangeEstimate.estimatedRangeKm != null
+      ? `≈ ${fmt(rangeEstimate.estimatedRangeKm, 0)} km`
+      : "—";
   const [selectedTripId, setSelectedTripId] = useState<string | null | undefined>(
     initialTripId ?? undefined,
   );
@@ -262,7 +303,7 @@ function VehicleLiveContent({
         vehicleMode={vehicleMode}
         isStale={isStale}
         isCharging={isCharging}
-        forecastTrips={forecastTrips}
+        rangeLabel={rangeLabel}
         vehicleLabel={vehicleLabel}
         hasMounted={hasMounted}
       />
@@ -345,7 +386,7 @@ function Hero({
   vehicleMode,
   isStale,
   isCharging,
-  forecastTrips,
+  rangeLabel,
   vehicleLabel,
   hasMounted,
 }: {
@@ -354,14 +395,13 @@ function Hero({
   vehicleMode: DashboardVehicleMode;
   isStale: boolean;
   isCharging: boolean;
-  forecastTrips: BydmateTripRow[];
+  rangeLabel: string;
   vehicleLabel: string;
   hasMounted: boolean;
 }) {
   const { t: translate } = useTranslation();
   const t = translate as Translator;
   const telemetry = snapshot.telemetry;
-  const rangeEstimate = estimateVehicleRangeKm(snapshot, forecastTrips);
 
   return (
     <section className="voltflow-card overflow-hidden p-4">
@@ -391,10 +431,10 @@ function Hero({
       </div>
 
       {isStale ? (
-        <div className="mt-4 grid grid-cols-3 gap-2">
-          <HeroMetric icon={BatteryCharging} label={t("vehicle.metrics.soc")} value={`${fmt(telemetry.soc, 0)}%`} />
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          {/* <HeroMetric icon={BatteryCharging} label={t("vehicle.metrics.soc")} value={`${fmt(telemetry.soc, 0)}%`} /> */}
           <HeroMetric icon={Activity} label={t("vehicle.metrics.soh")} value={`${fmt(telemetry.soh_percent, 1)}%`} />
-          <HeroMetric icon={Route} label={t("vehicle.metrics.range")} value={`${fmt(rangeEstimate.estimatedRangeKm, 0)} km`} />
+          <HeroMetric icon={Route} label={t("vehicle.metrics.range")} value={rangeLabel} />
         </div>
       ) : (
         <div className="mt-4 grid grid-cols-3 gap-2">
@@ -409,7 +449,7 @@ function Hero({
               <HeroMetric icon={Zap} label={t("vehicle.metrics.power")} value={`${fmt(telemetry.power_kw, 1)} kW`} />
             </>
           )}
-          <HeroMetric icon={Route} label={t("vehicle.metrics.range")} value={`${fmt(rangeEstimate.estimatedRangeKm, 0)} km`} />
+          <HeroMetric icon={Route} label={t("vehicle.metrics.range")} value={rangeLabel} />
         </div>
       )}
     </section>
@@ -764,10 +804,6 @@ const MAX_MAP_ZOOM = 19;
 const MIN_MAP_ZOOM = 2;
 const DEFAULT_MAP_ZOOM = 15;
 const WEB_MERCATOR_MAX_LAT = 85.05112878;
-const DEFAULT_USABLE_BATTERY_KWH = 45.1;
-const DEFAULT_CONSUMPTION_KWH_100KM = 18.5;
-const MIN_FORECAST_CONSUMPTION_KWH_100KM = 8;
-const MAX_FORECAST_CONSUMPTION_KWH_100KM = 42;
 const ROUTE_LINE_COLOR = "#1e40af";
 const ROUTE_STROKE_WIDTH = 4;
 const ROUTE_HIT_RADIUS = 10;
@@ -800,162 +836,6 @@ function clamp(value: number, min: number, max: number) {
 function validTempNumber(value: number | null | undefined) {
   const n = validNumber(value);
   return n != null && n >= -50 && n <= 90 ? n : null;
-}
-
-type WeightedConsumption = {
-  value: number;
-  weight: number;
-};
-
-type RangeEstimate = {
-  estimatedRangeKm: number | null;
-  consumptionKwh100Km: number | null;
-};
-
-function estimateVehicleRangeKm(
-  snapshot: BydmateLiveSnapshotRow,
-  recentTrips: BydmateTripRow[],
-): RangeEstimate {
-  const telemetry = snapshot.telemetry;
-  const soc = validNumber(telemetry.soc);
-  if (soc == null) return { estimatedRangeKm: null, consumptionKwh100Km: null };
-
-  const soh = validNumber(telemetry.soh_percent);
-  const usableBatteryKwh = DEFAULT_USABLE_BATTERY_KWH * (soh != null ? clamp(soh, 70, 105) / 100 : 1);
-  const usableEnergyKwh = usableBatteryKwh * (clamp(soc, 0, 100) / 100);
-  const consumptionKwh100Km = estimateConsumptionKwh100Km(snapshot, recentTrips);
-
-  if (consumptionKwh100Km == null || consumptionKwh100Km <= 0) {
-    return { estimatedRangeKm: null, consumptionKwh100Km: null };
-  }
-
-  return {
-    estimatedRangeKm: (usableEnergyKwh / consumptionKwh100Km) * 100,
-    consumptionKwh100Km,
-  };
-}
-
-function estimateConsumptionKwh100Km(
-  snapshot: BydmateLiveSnapshotRow,
-  recentTrips: BydmateTripRow[],
-) {
-  const telemetry = snapshot.telemetry;
-  const estimates: WeightedConsumption[] = [];
-
-  const currentTripConsumption = validNumber(telemetry.current_trip_consumption_kwh_100km);
-  const currentTripDistance = validNumber(telemetry.current_trip_distance_km);
-  if (
-    !isChargingTelemetry(telemetry) &&
-    currentTripConsumption != null &&
-    currentTripConsumption >= MIN_FORECAST_CONSUMPTION_KWH_100KM &&
-    currentTripConsumption <= MAX_FORECAST_CONSUMPTION_KWH_100KM
-  ) {
-    estimates.push({
-      value: currentTripConsumption,
-      weight: currentTripDistance != null ? clamp(currentTripDistance / 12, 0.25, 1.8) : 0.7,
-    });
-  }
-
-  const tripAverage = averageTripConsumption(
-    recentTrips.filter((trip) => {
-      const consumption = validNumber(trip.avg_consumption_kwh_100km);
-      const distance = validNumber(trip.distance_km);
-      return (
-        consumption != null &&
-        consumption >= MIN_FORECAST_CONSUMPTION_KWH_100KM &&
-        consumption <= MAX_FORECAST_CONSUMPTION_KWH_100KM &&
-        distance != null &&
-        distance >= 1 &&
-        trip.sample_count >= 3
-      );
-    }),
-  );
-  if (tripAverage != null) {
-    estimates.push({ value: tripAverage, weight: 1.2 });
-  }
-
-  const speedKmh = validNumber(telemetry.speed_kmh);
-  const powerKw = validNumber(telemetry.power_kw);
-  if (speedKmh != null && speedKmh >= 12 && powerKw != null && powerKw > 0) {
-    estimates.push({
-      value: clamp((powerKw / speedKmh) * 100, MIN_FORECAST_CONSUMPTION_KWH_100KM, MAX_FORECAST_CONSUMPTION_KWH_100KM),
-      weight: speedKmh >= 35 ? 0.9 : 0.45,
-    });
-  }
-
-  const reportedRangeKm = validNumber(telemetry.range_est_km);
-  const soc = validNumber(telemetry.soc);
-  if (reportedRangeKm != null && reportedRangeKm > 10 && soc != null && soc > 2) {
-    const reportedConsumption = ((DEFAULT_USABLE_BATTERY_KWH * (soc / 100)) / reportedRangeKm) * 100;
-    if (
-      reportedConsumption >= MIN_FORECAST_CONSUMPTION_KWH_100KM &&
-      reportedConsumption <= MAX_FORECAST_CONSUMPTION_KWH_100KM
-    ) {
-      estimates.push({ value: reportedConsumption, weight: 0.35 });
-    }
-  }
-
-  if (estimates.length === 0) {
-    estimates.push({ value: DEFAULT_CONSUMPTION_KWH_100KM, weight: 1 });
-  }
-
-  const weightedConsumption =
-    estimates.reduce((sum, estimate) => sum + estimate.value * estimate.weight, 0) /
-    estimates.reduce((sum, estimate) => sum + estimate.weight, 0);
-
-  return clamp(
-    weightedConsumption * environmentConsumptionFactor(snapshot),
-    MIN_FORECAST_CONSUMPTION_KWH_100KM,
-    MAX_FORECAST_CONSUMPTION_KWH_100KM,
-  );
-}
-
-function environmentConsumptionFactor(snapshot: BydmateLiveSnapshotRow) {
-  const telemetry = snapshot.telemetry;
-  let factor = 1;
-
-  const outsideTemp = validTempNumber(telemetry.outside_temp_c);
-  const batteryTemp =
-    validTempNumber(telemetry.battery_temp_c) ?? validTempNumber(snapshot.diplus?.avg_battery_temp_c);
-  const speedKmh = validNumber(telemetry.speed_kmh);
-
-  if (outsideTemp != null) {
-    if (outsideTemp < -10) factor += 0.28;
-    else if (outsideTemp < 0) factor += 0.18;
-    else if (outsideTemp < 8) factor += 0.08;
-    else if (outsideTemp > 30) factor += 0.05;
-  }
-
-  if (batteryTemp != null) {
-    if (batteryTemp < 5) factor += 0.12;
-    else if (batteryTemp < 12) factor += 0.05;
-    else if (batteryTemp > 42) factor += 0.04;
-  }
-
-  if (speedKmh != null) {
-    if (speedKmh > 115) factor += 0.16;
-    else if (speedKmh > 95) factor += 0.08;
-    else if (speedKmh > 75) factor += 0.03;
-  }
-
-  if (snapshot.diplus?.ac_status === 1 || snapshot.diplus?.ac_status === true) {
-    factor += outsideTemp != null && (outsideTemp < 8 || outsideTemp > 27) ? 0.08 : 0.03;
-  }
-
-  const tirePressures = [
-    snapshot.diplus?.tire_press_fl_kpa,
-    snapshot.diplus?.tire_press_fr_kpa,
-    snapshot.diplus?.tire_press_rl_kpa,
-    snapshot.diplus?.tire_press_rr_kpa,
-  ]
-    .map(validNumber)
-    .filter((value): value is number => value != null && value > 100);
-  if (tirePressures.length > 0) {
-    const avgPressure = tirePressures.reduce((sum, value) => sum + value, 0) / tirePressures.length;
-    if (avgPressure < 220) factor += 0.05;
-  }
-
-  return clamp(factor, 0.9, 1.45);
 }
 
 function pointTimeMs(point: { device_time: string; received_at?: string }) {
@@ -1097,30 +977,6 @@ function tripRowFromFixture(trip: TripSegment, vehicleId: string): BydmateTripRo
     avg_speed_kmh: trip.avgSpeed,
     avg_consumption_kwh_100km: trip.avgConsumptionKwh100Km,
   };
-}
-
-function averageTripConsumption(trips: BydmateTripRow[]) {
-  let weightedConsumption = 0;
-  let weightedDistance = 0;
-  let sampleConsumption = 0;
-  let sampleCount = 0;
-
-  for (const trip of trips) {
-    const consumption = trip.avg_consumption_kwh_100km;
-    if (consumption == null) continue;
-
-    sampleConsumption += consumption;
-    sampleCount += 1;
-
-    const distance = trip.distance_km;
-    if (distance != null && distance > 0) {
-      weightedConsumption += consumption * distance;
-      weightedDistance += distance;
-    }
-  }
-
-  if (weightedDistance > 0) return weightedConsumption / weightedDistance;
-  return sampleCount > 0 ? sampleConsumption / sampleCount : null;
 }
 
 function ExpandedTripPanel({ tripId }: { tripId: string }) {

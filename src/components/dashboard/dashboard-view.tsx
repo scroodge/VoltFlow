@@ -42,7 +42,7 @@ import { fetchSessions } from "@/hooks/use-sessions-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
 import { availableBatteryKwh, formatDuration } from "@/lib/charging-math";
-import { estimateRangeFromSoc, estimateVehicleRangeKm } from "@/lib/bydmate/range-estimate";
+import { useVehicleRangeEstimate } from "@/hooks/use-vehicle-range-estimate";
 import {
   chargingParamsFromSession,
   deriveChargingSessionLiveBundle,
@@ -473,13 +473,12 @@ export function DashboardView() {
     setRingDisplay("percent");
   }, [selectedCar?.id]);
 
-  const rangeEstimate = latestBydmateSnapshot
-    ? estimateVehicleRangeKm(latestBydmateSnapshot, latestTrips)
-    : estimateRangeFromSoc({
-        soc: currentPercent,
-        batteryCapacityKwh: selectedCar?.battery_capacity_kwh,
-        recentTrips: latestTrips,
-      });
+  const rangeEstimate = useVehicleRangeEstimate({
+    baseSnapshot: baseBydmateSnapshot,
+    scopedVehicleId,
+    batteryCapacityKwh: selectedCar?.battery_capacity_kwh,
+    fallbackSoc: currentPercent,
+  });
   const rangeDetail =
     rangeEstimate?.estimatedRangeKm != null
       ? `≈ ${fmt(rangeEstimate.estimatedRangeKm)} km`

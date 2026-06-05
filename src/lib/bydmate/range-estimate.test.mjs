@@ -22,8 +22,19 @@ const baseSnapshot = {
 };
 
 test("does not let a low reported range dominate a full-battery estimate", () => {
-  const estimate = estimateVehicleRangeKm(baseSnapshot, []);
+  const estimate = estimateVehicleRangeKm(baseSnapshot, [], { batteryCapacityKwh: 45.1 });
 
   assert.ok(estimate.estimatedRangeKm > 180);
   assert.ok(estimate.estimatedRangeKm < 260);
+});
+
+test("uses car profile battery capacity when provided", () => {
+  const estimate = estimateVehicleRangeKm(
+    { ...baseSnapshot, telemetry: { soc: 82, speed_kmh: 0 } },
+    [{ avg_consumption_kwh_100km: 16.87, distance_km: 26.9, sample_count: 100 }],
+    { batteryCapacityKwh: 45 },
+  );
+
+  assert.ok(estimate.estimatedRangeKm > 209);
+  assert.ok(estimate.estimatedRangeKm < 212);
 });
