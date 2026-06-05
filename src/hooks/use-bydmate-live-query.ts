@@ -4,6 +4,7 @@ import { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { usePageVisible } from "@/hooks/use-page-visible";
+import { backfillLiveSnapshotsWithSoh } from "@/lib/bydmate/live-soh-backfill";
 import { devFetch, isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { createClient } from "@/lib/supabase/client";
 import { queryKeys } from "@/lib/query-keys";
@@ -34,7 +35,11 @@ async function fetchBydmateLive(): Promise<BydmateLiveSnapshotRow[]> {
 
   if (error) throw error;
 
-  return (data ?? []) as BydmateLiveSnapshotRow[];
+  return backfillLiveSnapshotsWithSoh(
+    supabase,
+    (data ?? []) as BydmateLiveSnapshotRow[],
+    user.id,
+  );
 }
 
 export function useBydmateLiveQuery() {

@@ -432,7 +432,6 @@ function Hero({
 
       {isStale ? (
         <div className="mt-4 grid grid-cols-2 gap-2">
-          {/* <HeroMetric icon={BatteryCharging} label={t("vehicle.metrics.soc")} value={`${fmt(telemetry.soc, 0)}%`} /> */}
           <HeroMetric icon={Activity} label={t("vehicle.metrics.soh")} value={`${fmt(telemetry.soh_percent, 1)}%`} />
           <HeroMetric icon={Route} label={t("vehicle.metrics.range")} value={rangeLabel} />
         </div>
@@ -678,14 +677,14 @@ function CellHealthCard({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
 
   return (
     <Card size="sm" className={`border ${cellStatusClasses(status)}`}>
-      <CardHeader className="flex-row items-center justify-between space-y-0 px-3 pt-3 pb-1">
+      <CardHeader className="flex-row items-center justify-between space-y-0 px-3 pt-2 pb-1">
         <CardTitle className="flex items-center gap-1.5 font-heading text-sm">
           <HeartPulse className="size-4" aria-hidden />
           {tx("vehicle.cellHealth.title")}
-        </CardTitle>
-        <span className="rounded-full border border-current/20 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em]">
+        <span className="rounded-full border border-current/20 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em]">
           {tx(`vehicle.cellHealth.status.${status}`)}
         </span>
+        </CardTitle>
       </CardHeader>
       <CardContent className="grid grid-cols-3 gap-2 px-3 pb-3 pt-0">
         {items.map((item) => (
@@ -1096,7 +1095,7 @@ function TripBrowser({
         </div>
       ) : null}
 
-      <div className="mt-5 grid grid-cols-2 gap-3 min-[430px]:grid-cols-4">
+      <div className="mt-5 grid grid-cols-2 gap-3 min-[100px]:grid-cols-3">
         <SummaryPill label={tx("vehicle.trips.count")} value={isLoading ? "…" : String(trips.length)} />
         <SummaryPill label={tx("vehicle.trips.distance")} value={`${fmt(totalDistance, 1)} km`} />
         <SummaryPill label={tx("vehicle.trips.regen")} value={`${fmt(totalRegenEnergy, 2)} kWh`} />
@@ -1246,9 +1245,9 @@ function TripListItem({
 
 function SummaryPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-border bg-white/[0.02] p-3">
+    <div className="rounded-2xl border border-border bg-white/[0.02] p-3 mx-auto w-fit">
       <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
-      <p className="mt-1 font-heading text-lg font-semibold tabular-nums">{value}</p>
+      <p className="mt-1 text-center font-heading text-lg font-semibold tabular-nums">{value}</p>
     </div>
   );
 }
@@ -2207,9 +2206,6 @@ function TelemetryLineChart({
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-heading text-lg font-semibold tracking-tight">{title}</h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {hasData ? rangeLabel : tx("vehicle.charts.noValues")}
-          </p>
         </div>
         <div className="flex shrink-0 items-center">
           <IconButton label={tx("vehicle.charts.fullscreen")} onClick={() => setIsOpen(true)}>
