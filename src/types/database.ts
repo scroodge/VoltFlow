@@ -137,6 +137,23 @@ export type BydmateDiplus = {
   rain?: string | number | boolean | null;
   light_low?: string | number | boolean | null;
   drl?: string | number | boolean | null;
+  sunshade_percent?: number | null;
+  sentry_state?: string | number | null;
+  remote_lock_state?: string | number | null;
+};
+
+export type VehicleCommandStatus = "pending" | "sent" | "done" | "failed" | "rejected";
+
+export type VehicleCommandRow = {
+  id: string;
+  user_id: string;
+  vehicle_id: string;
+  type: string;
+  params: Record<string, unknown>;
+  status: VehicleCommandStatus;
+  result: Record<string, unknown> | null;
+  created_at: string;
+  executed_at: string | null;
 };
 
 export type BydmateLocation = {

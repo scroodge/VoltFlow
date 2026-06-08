@@ -91,6 +91,56 @@ Manual API key paste remains supported in VoltFlow Mate **Advanced** (Gateway or
 **APK implementation:** `VoltflowLinkClient` derives redeem URL from the telemetry endpoint  
 (`…/api/bydmate/telemetry` → `…/api/bydmate/link-code/redeem`). See `docs/cloud-telemetry-contract-ru.md` in the Mate repo.
 
+## Remote commands (VoltFlow Mate agent poll)
+
+When cloud sync is enabled, `VehicleCommandPoller` polls for abstract commands (not raw D+ phrases).
+
+### Poll pending commands
+
+```http
+GET https://<voltflow-domain>/api/bydmate/commands
+X-API-Key: <profile bydmate_cloud_api_key>
+X-Vehicle-Id: <vehicle_id>
+```
+
+Success:
+
+```json
+{
+  "ok": true,
+  "commands": [
+    { "id": "uuid", "type": "lock", "params": {} }
+  ]
+}
+```
+
+Rows transition `pending` → `sent` when delivered. Poll interval on device: ~2.5 s.
+
+### Acknowledge results
+
+```http
+POST https://<voltflow-domain>/api/bydmate/commands/ack
+Content-Type: application/json
+X-API-Key: <profile bydmate_cloud_api_key>
+X-Vehicle-Id: <vehicle_id>
+
+{
+  "acks": [
+    {
+      "id": "uuid",
+      "status": "done",
+      "result": { "phrase": "车门上锁", "verified": false }
+    }
+  ]
+}
+```
+
+`status` must be one of `done`, `failed`, `rejected`. The agent builds D+ phrases locally via `CommandAllowlist` — never accept raw `cmd` from the cloud.
+
+Commands older than 60 s in `pending` are marked `failed` (timeout) on the next poll.
+
+Allowed `type` values: `lock`, `unlock`, `set_soc_limit`, `schedule_charge`, `window`, `sunroof`, `sunshade`, `hud`, `auto_highbeam`, `child_lock_left`, `tts`. See `BYD_MA/docs/COMMAND_ALLOWLIST.md`.
+
 ## Sample Shape
 
 ```ts

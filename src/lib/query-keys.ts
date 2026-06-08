@@ -17,4 +17,5 @@ export const queryKeys = {
   bydmateTelemetryHistory: (range: string, date: string, vehicleId: string | null) =>
     ["bydmate-telemetry-history", range, date, vehicleId] as const,
   bydmateTelemetryPoints: ["bydmate-telemetry-points"] as const,
+  vehicleCommands: (vehicleId: string | null) => ["vehicle-commands", vehicleId] as const,
 };

@@ -27,6 +27,7 @@ import { BrandBadge } from "@/components/brand/BrandBadge";
 import { LogoFull } from "@/components/brand/LogoFull";
 import { useVehicleDevSnapshotOverride } from "@/components/dev/vehicle-dev-snapshot-context";
 import { VehicleAnalyticsTeaser } from "@/components/vehicle/vehicle-analytics-teaser";
+import { VehicleControlPanel } from "@/components/vehicle/vehicle-control-panel";
 import { ChartSeriesLegend, TelemetryBarChart, type BarChartModel } from "@/components/vehicle/telemetry-analytics-charts";
 import {
   ChartDataTooltip,
@@ -307,6 +308,9 @@ function VehicleLiveContent({
         vehicleLabel={vehicleLabel}
         hasMounted={hasMounted}
       />
+      {!fixturePoints && !isCharging ? (
+        <VehicleControlPanel vehicleId={scopedVehicleId ?? snapshot.vehicle_id} />
+      ) : null}
       {isCharging ? (
         <ChargingModeCard snapshot={snapshot} />
       ) : (

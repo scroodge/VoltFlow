@@ -97,6 +97,9 @@ export const diplusSchema = z
     rain: diplusFlagSchema.nullable().optional(),
     light_low: diplusFlagSchema.nullable().optional(),
     drl: diplusFlagSchema.nullable().optional(),
+    sunshade_percent: numericSchema,
+    sentry_state: diplusStateSchema.nullable().optional(),
+    remote_lock_state: diplusStateSchema.nullable().optional(),
   })
   .passthrough();
 
