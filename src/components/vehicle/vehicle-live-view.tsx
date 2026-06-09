@@ -1416,6 +1416,19 @@ function prepareDeltaBySoc(
   };
 }
 
+/** Mate trip samples are sparse; default line-gap logic splits every segment. */
+function deltaBySocTripLineGapMs(
+  points: DeltaBySocPoint[],
+  fallbackGapMs: number,
+) {
+  if (points.length < 2) return fallbackGapMs;
+  const minTime = Math.min(...points.map((point) => point.time));
+  const maxTime = Math.max(...points.map((point) => point.time));
+  if (maxTime <= minTime) return fallbackGapMs;
+  const avgGapMs = (maxTime - minTime) / (points.length - 1);
+  return Math.max(fallbackGapMs, avgGapMs * 2.5);
+}
+
 function prepareTelemetryHistory(
   points: TelemetryChartSource[],
   t: Translator,
@@ -1546,7 +1559,9 @@ function prepareTelemetryHistory(
     hasData,
     charts,
     regenRecoveryChart,
-    deltaBySoc: includeCellDelta ? prepareDeltaBySoc(deltaBySocPoints, "discharge") : { points: [], minSoc: 0, maxSoc: 100, minDelta: 0, maxDelta: 0, latest: null, socDirection: "discharge" as const },
+    deltaBySoc: includeCellDelta
+      ? prepareDeltaBySoc(deltaBySocPoints, "discharge")
+      : { points: [], minSoc: 0, maxSoc: 100, minDelta: 0, maxDelta: 0, latest: null, socDirection: "discharge" as const },
   };
 }
 
@@ -2390,6 +2405,7 @@ function DeltaBySocPlot({
   const deltaPad = Math.max((visibleMaxDelta - visibleMinDelta) * 0.14, 0.005);
   const yMin = Math.max(0, visibleMinDelta - deltaPad);
   const yMax = visibleMaxDelta + deltaPad;
+  const effectiveLineGapMs = deltaBySocTripLineGapMs(points, lineGapMs);
 
   const x = (time: number) => {
     if (maxTime === minTime || !Number.isFinite(time)) return 160;
@@ -2409,7 +2425,7 @@ function DeltaBySocPlot({
       x: x(point.time),
       y: y(point.delta),
     }),
-    lineGapMs,
+    effectiveLineGapMs,
   );
   const socPaths = buildBrokenLinePaths(
     points,
@@ -2417,9 +2433,10 @@ function DeltaBySocPlot({
       x: x(point.time),
       y: socY(point.soc),
     }),
-    lineGapMs,
+    effectiveLineGapMs,
   );
-  const markerPoints = points.length <= MAX_CHART_MARKERS ? points : [];
+  const markerPoints =
+    points.length <= MAX_CHART_MARKERS ? points : latest ? [latest] : [];
   const hoveredPoint = hoverIndex == null ? null : points[hoverIndex] ?? null;
 
   const handleMouseMove = (event: React.MouseEvent<SVGSVGElement>) => {

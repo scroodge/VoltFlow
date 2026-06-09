@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
+import { useBydmateSohHistoryQuery } from "@/hooks/use-bydmate-soh-history-query";
 import { useBydmateTelemetryHistoryQuery } from "@/hooks/use-bydmate-telemetry-history-query";
 import { useTranslation } from "@/hooks/use-translation";
 import { buildAnalyticsSummary, consumptionByOutsideTemp } from "@/lib/bydmate/telemetry-buckets";
@@ -292,8 +293,7 @@ export function VehicleAnalyticsPanels({
 
   const periodSummaryLoading = periodTripsQuery.isLoading || periodSessionsQuery.isLoading;
 
-  const sohQuery = useBydmateTelemetryHistoryQuery({
-    range: "year",
+  const sohQuery = useBydmateSohHistoryQuery({
     anchorDate,
     vehicleId,
   });

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { enrichTripsWithEnergy } from "@/lib/bydmate/attach-trip-energy";
 import type { BydmateTelemetrySampleRow, ChargingSessionRow, BydmateTripRow } from "@/types/database";
 
 export type MonthlyStats = {
@@ -76,8 +77,17 @@ export async function fetchMonthlyStats({
       .in("status", ["completed", "stopped"]),
   ]);
 
-  const tripRows = (trips ?? []) as BydmateTripRow[];
+  let tripRows = (trips ?? []) as BydmateTripRow[];
   const sessionRows = (sessions ?? []) as ChargingSessionRow[];
+
+  if (tripRows.length > 0) {
+    tripRows = await enrichTripsWithEnergy({
+      supabase,
+      userId,
+      trips: tripRows,
+      vehicleId: vehicleId ?? undefined,
+    });
+  }
 
   let weightedConsumption = 0;
   let weightedDistance = 0;
@@ -91,12 +101,34 @@ export async function fetchMonthlyStats({
     }
   }
 
+  let regenKwh = tripRows.reduce((sum, trip) => sum + (trip.regen_energy_kwh ?? 0), 0);
+  let tractionKwh = tripRows.reduce((sum, trip) => sum + (trip.traction_energy_kwh ?? 0), 0);
+
+  if (vehicleId && (regenKwh === 0 || tractionKwh === 0)) {
+    const { data: hourlyRows } = await supabase
+      .from("bydmate_telemetry_hourly")
+      .select("regen_kwh_sum, traction_kwh_sum")
+      .eq("user_id", userId)
+      .eq("vehicle_id", vehicleId)
+      .gte("hour_start", from)
+      .lte("hour_start", to);
+
+    let hourlyRegen = 0;
+    let hourlyTraction = 0;
+    for (const row of hourlyRows ?? []) {
+      hourlyRegen += Number(row.regen_kwh_sum) || 0;
+      hourlyTraction += Number(row.traction_kwh_sum) || 0;
+    }
+    if (regenKwh === 0) regenKwh = hourlyRegen;
+    if (tractionKwh === 0) tractionKwh = hourlyTraction;
+  }
+
   return {
     month: monthKey,
     tripCount: tripRows.length,
     distanceKm: tripRows.reduce((sum, trip) => sum + (trip.distance_km ?? 0), 0),
-    regenKwh: tripRows.reduce((sum, trip) => sum + (trip.regen_energy_kwh ?? 0), 0),
-    tractionKwh: tripRows.reduce((sum, trip) => sum + (trip.traction_energy_kwh ?? 0), 0),
+    regenKwh,
+    tractionKwh,
     chargedKwh: sessionRows.reduce((sum, session) => sum + session.charged_energy_kwh, 0),
     chargingCost: sessionRows.reduce((sum, session) => sum + session.estimated_cost, 0),
     sessionCount: sessionRows.length,

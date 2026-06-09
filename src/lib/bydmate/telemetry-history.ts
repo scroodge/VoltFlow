@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   downsampleByIndex,
   MAX_TELEMETRY_CHART_POINTS,
+  resolveLocalCalendarDayWindow,
   resolveTelemetryWindow,
   type TelemetryHistoryRange,
 } from "@/lib/bydmate/telemetry-ranges";
@@ -297,4 +298,119 @@ export async function fetchChargingSessionSamples({
 
   const chargingPoints = data.filter(isChargingSample);
   return downsampleByIndex(chargingPoints, MAX_TELEMETRY_CHART_POINTS);
+}
+
+const SOH_DAILY_PROBE_LIMIT = 20;
+const SOH_FETCH_CONCURRENCY = 25;
+
+export function parseSohPercent(telemetry: BydmateTelemetry): number | null {
+  const raw = telemetry.soh_percent;
+  if (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 && raw <= 100) {
+    return raw;
+  }
+  if (typeof raw === "string") {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 100) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+export function enumerateCalendarDays(fromIso: string, toIso: string): string[] {
+  const days: string[] = [];
+  const start = new Date(fromIso);
+  const end = new Date(toIso);
+  const cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+  const endDay = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()));
+
+  while (cursor <= endDay) {
+    days.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  return days;
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await mapper(items[index]!, index);
+    }
+  }
+
+  const workerCount = Math.min(concurrency, items.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+  return results;
+}
+
+async function fetchSohSampleForDay({
+  supabase,
+  userId,
+  vehicleId,
+  day,
+}: {
+  supabase: SupabaseClient;
+  userId: string;
+  vehicleId: string | null;
+  day: string;
+}): Promise<TelemetryHistoryPoint | null> {
+  const vehicleFilter = vehicleId ? { vehicle_id: vehicleId } : {};
+  const dayWindow = resolveLocalCalendarDayWindow(day);
+
+  const { data, error } = await supabase
+    .from("bydmate_telemetry_samples")
+    .select("device_time, telemetry")
+    .eq("user_id", userId)
+    .match(vehicleFilter)
+    .gte("device_time", dayWindow.from)
+    .lte("device_time", dayWindow.to)
+    .order("device_time", { ascending: false })
+    .limit(SOH_DAILY_PROBE_LIMIT);
+
+  if (error) throw error;
+
+  for (const row of (data ?? []) as BydmateTelemetrySampleRow[]) {
+    const soh = parseSohPercent(row.telemetry);
+    if (soh != null) {
+      return {
+        device_time: row.device_time,
+        telemetry: { soh_percent: soh },
+      };
+    }
+  }
+
+  return null;
+}
+
+/** Year-range SOH chart: hourly rollups omit soh_percent, so probe one raw sample per day. */
+export async function fetchSohTelemetryHistory({
+  supabase,
+  userId,
+  vehicleId,
+  anchorDate,
+}: {
+  supabase: SupabaseClient;
+  userId: string;
+  vehicleId: string | null;
+  anchorDate: string;
+}): Promise<TelemetryHistoryPoint[]> {
+  const window = resolveTelemetryWindow("year", anchorDate);
+  const days = enumerateCalendarDays(window.from, window.to);
+
+  const points = await mapWithConcurrency(days, SOH_FETCH_CONCURRENCY, (day) =>
+    fetchSohSampleForDay({ supabase, userId, vehicleId, day }),
+  );
+
+  return points.filter((point): point is TelemetryHistoryPoint => point != null);
 }
