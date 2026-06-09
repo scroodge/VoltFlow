@@ -1,7 +1,14 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { AirVent, PanelBottomClose, PanelTopOpen, Snowflake, Wind } from "lucide-react";
+import {
+  AirVent,
+  ChevronDown,
+  PanelBottomClose,
+  PanelTopOpen,
+  Snowflake,
+  Wind,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +34,7 @@ import {
   VEHICLE_CONTROL_LOW_AUX_V,
   VEHICLE_CONTROL_STALE_MS,
 } from "@/lib/vehicle/vehicle-control-guards";
+import { cn } from "@/lib/utils";
 import type { BydmateLiveSnapshotRow, VehicleCommandRow } from "@/types/database";
 
 function statusLabel(status: VehicleCommandRow["status"]) {
@@ -154,16 +162,22 @@ export type VehicleComfortControlsProps = {
   vehicleId: string | null;
   /** Dev only: allow enqueue without fresh parked live snapshot. */
   relaxGuards?: boolean;
+  /** Collapsed header on Vehicle page; expands on tap. */
+  collapsible?: boolean;
+  defaultExpanded?: boolean;
 };
 
 export function VehicleComfortControls({
   vehicleId,
   relaxGuards = false,
+  collapsible = false,
+  defaultExpanded = false,
 }: VehicleComfortControlsProps) {
   const { data: liveRows } = useBydmateLiveQuery();
   const { data: commands } = useVehicleCommandsQuery(vehicleId);
   const sendCommand = useSendVehicleCommand(vehicleId);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(defaultExpanded);
 
   const snapshot = useMemo(() => {
     if (!vehicleId) return undefined;
@@ -191,14 +205,55 @@ export function VehicleComfortControls({
 
   if (!vehicleId) return null;
 
+  const showBody = !collapsible || expanded;
+
   return (
     <Card className="border-border/70">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">Удалённое управление</CardTitle>
-        <CardDescription>Окна и климат. Только на стоянке (P, 0 км/ч).</CardDescription>
+      <CardHeader className={cn("pb-3", collapsible && !expanded && "pb-4")}>
+        {collapsible ? (
+          <button
+            type="button"
+            className="flex w-full items-start gap-2 text-left"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            <div className="min-w-0 flex-1 space-y-1">
+              <CardTitle className="text-base">Remote commands</CardTitle>
+              <CardDescription className="text-xs">
+                Окна и климат · на стоянке и при зарядке (0 км/ч)
+              </CardDescription>
+              <RemoteReadyBadge remoteReady={remoteReady} compact />
+            </div>
+            <ChevronDown
+              className={cn(
+                "mt-0.5 size-5 shrink-0 text-muted-foreground transition-transform",
+                expanded && "rotate-180",
+              )}
+              aria-hidden
+            />
+          </button>
+        ) : (
+          <>
+            <CardTitle className="text-base">Удалённое управление</CardTitle>
+            <CardDescription>Окна и климат. На стоянке и при зарядке (0 км/ч).</CardDescription>
+          </>
+        )}
       </CardHeader>
+      {showBody ? (
       <CardContent className="space-y-5">
-        <StatusRow snapshot={snapshot} remoteReady={remoteReady} aux={aux} />
+        {!collapsible ? (
+          <StatusRow snapshot={snapshot} remoteReady={remoteReady} aux={aux} />
+        ) : (
+          snapshot && isTelemetryFresh(snapshot) ? (
+            <p className="text-xs text-muted-foreground">
+              {readSentryProvider(snapshot) === "overdrive"
+                ? `Overdrive sentry: ${snapshot.diplus?.sentry_active === true ? "on" : "off"}`
+                : `Stall sentry: ${String(snapshot.diplus?.stall_sentry_mode ?? "—")}`}
+              {" · "}
+              {aux != null ? `${aux.toFixed(1)} V` : "12V —"}
+            </p>
+          ) : null
+        )}
 
         {stale ? (
           <p className="text-sm text-amber-600">Нет свежих данных с машины (&gt;90 с).</p>
@@ -244,7 +299,30 @@ export function VehicleComfortControls({
           <CommandHistory commands={commands} />
         ) : null}
       </CardContent>
+      ) : null}
     </Card>
+  );
+}
+
+function RemoteReadyBadge({
+  remoteReady,
+  compact = false,
+}: {
+  remoteReady: boolean;
+  compact?: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex rounded-full font-medium",
+        compact ? "mt-1 px-2 py-0.5 text-[11px]" : "px-2.5 py-0.5 text-xs",
+        remoteReady
+          ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+          : "bg-amber-500/15 text-amber-800 dark:text-amber-400",
+      )}
+    >
+      {remoteReady ? "Remote ready" : "Remote offline"}
+    </span>
   );
 }
 
@@ -259,15 +337,7 @@ function StatusRow({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span
-        className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
-          remoteReady
-            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
-            : "bg-amber-500/15 text-amber-800 dark:text-amber-400"
-        }`}
-      >
-        {remoteReady ? "Remote ready" : "Remote offline"}
-      </span>
+      <RemoteReadyBadge remoteReady={remoteReady} />
       {snapshot && isTelemetryFresh(snapshot) ? (
         <span className="text-xs text-muted-foreground">
           {readSentryProvider(snapshot) === "overdrive"

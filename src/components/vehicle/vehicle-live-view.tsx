@@ -308,8 +308,11 @@ function VehicleLiveContent({
         vehicleLabel={vehicleLabel}
         hasMounted={hasMounted}
       />
-      {!fixturePoints && !isCharging ? (
-        <VehicleControlPanel vehicleId={scopedVehicleId ?? snapshot.vehicle_id} />
+      {!fixturePoints ? (
+        <VehicleControlPanel
+          vehicleId={scopedVehicleId ?? snapshot.vehicle_id}
+          collapsible
+        />
       ) : null}
       {isCharging ? (
         <ChargingModeCard snapshot={snapshot} />

@@ -1,3 +1,4 @@
+import { isTelemetryCharging } from "@/lib/bydmate/telemetry-charging";
 import type { BydmateLiveSnapshotRow } from "@/types/database";
 
 export const VEHICLE_CONTROL_STALE_MS = 90_000;
@@ -45,14 +46,21 @@ export function readAuxVoltage(snapshot: BydmateLiveSnapshotRow | undefined) {
   return snapshot?.diplus?.voltage_12v ?? snapshot?.telemetry?.aux_voltage_v ?? null;
 }
 
+/** Parked (P) or plugged in and stationary — windows/climate OK while charging. */
+export function isStationaryForRemoteControl(snapshot: BydmateLiveSnapshotRow | undefined) {
+  if (!snapshot) return false;
+  if (readSpeed(snapshot) > 0) return false;
+  if (gearIsPark(readGear(snapshot))) return true;
+  return isTelemetryCharging(snapshot.telemetry);
+}
+
 export function isControlAllowed(snapshot: BydmateLiveSnapshotRow | undefined) {
   if (!snapshot) return false;
   const receivedAt = new Date(snapshot.received_at).getTime();
   if (Number.isNaN(receivedAt) || Date.now() - receivedAt > VEHICLE_CONTROL_STALE_MS) {
     return false;
   }
-  if (readSpeed(snapshot) > 0) return false;
-  if (!gearIsPark(readGear(snapshot))) return false;
+  if (!isStationaryForRemoteControl(snapshot)) return false;
   const aux = readAuxVoltage(snapshot);
   if (aux != null && aux > 0 && aux < VEHICLE_CONTROL_LOW_AUX_V) return false;
   return true;
@@ -60,8 +68,7 @@ export function isControlAllowed(snapshot: BydmateLiveSnapshotRow | undefined) {
 
 export function isRemoteReady(snapshot: BydmateLiveSnapshotRow | undefined) {
   if (!isTelemetryFresh(snapshot)) return false;
-  if (readSpeed(snapshot) > 0) return false;
-  if (!gearIsPark(readGear(snapshot))) return false;
+  if (!isStationaryForRemoteControl(snapshot)) return false;
   const aux = readAuxVoltage(snapshot);
   if (aux != null && aux > 0 && aux < VEHICLE_CONTROL_LOW_AUX_V) return false;
   return isSentryReady(snapshot);
