@@ -1,12 +1,16 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { motion } from "framer-motion";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 
+import { BatteryRing } from "@/components/charging/BatteryRing";
 import { ChargingDeltaCard } from "@/components/charging/charging-delta-card";
+import {
+  ChargingStatsGrid,
+  type ChargingStat,
+} from "@/components/charging/ChargingStatsGrid";
 import {
   useChargingDevLiveOverride,
   useChargingDevSource,
@@ -62,6 +66,7 @@ export function ChargingSessionScreen({
   const liveDerived = useChargingUi((s) => s.liveDerived);
   const setLiveDerived = useChargingUi((s) => s.setLiveDerived);
   const currency = useAppPreferences((s) => s.currency);
+  const defaultPricePerKwh = useAppPreferences((s) => s.defaultPricePerKwh);
   const appPath = useAppPath();
   const { locale, t } = useTranslation();
 
@@ -222,9 +227,15 @@ export function ChargingSessionScreen({
 
   if (isLoading) {
     return (
-      <div className="animate-pulse space-y-6 p-4">
-        <div className="h-40 rounded-3xl bg-white/5" />
-        <div className="h-36 rounded-3xl bg-white/5" />
+      <div className="animate-pulse space-y-5 p-4">
+        <div className="h-10 w-2/5 rounded-xl bg-white/5" />
+        <div className="voltflow-card h-44" />
+        <div className="grid grid-cols-2 gap-3">
+          <div className="voltflow-card h-[92px]" />
+          <div className="voltflow-card h-[92px]" />
+          <div className="voltflow-card h-[92px]" />
+          <div className="voltflow-card h-[92px]" />
+        </div>
         <div className="h-14 rounded-full bg-white/10" />
       </div>
     );
@@ -243,20 +254,34 @@ export function ChargingSessionScreen({
 
   const charging = session.status === "charging";
   const historyMode = mode === "history";
-  const costAtFull =
-    session.price_per_kwh > 0
-      ? costFromGridEnergy(
-          energyFromGridKwh(
-            energyNeededKwh(
-              session.battery_capacity_kwh,
-              session.start_percent,
-              100,
-            ),
-            session.efficiency_percent,
-          ),
-          session.price_per_kwh,
+  const effectivePricePerKwh =
+    session.price_per_kwh > 0 ? session.price_per_kwh : defaultPricePerKwh;
+  const displayCurrentCost =
+    effectivePricePerKwh > 0
+      ? formatCurrencyAmount(
+          currency,
+          costFromGridEnergy(derived.chargedEnergyKwh, effectivePricePerKwh),
+          locale,
         )
-      : null;
+      : "—";
+  const displayCostAtFull =
+    effectivePricePerKwh > 0
+      ? formatCurrencyAmount(
+          currency,
+          costFromGridEnergy(
+            energyFromGridKwh(
+              energyNeededKwh(
+                session.battery_capacity_kwh,
+                session.start_percent,
+                100,
+              ),
+              session.efficiency_percent,
+            ),
+            effectivePricePerKwh,
+          ),
+          locale,
+        )
+      : "—";
 
   const chargeParams = toParams(session);
   const startedAtMs = session.started_at ? Date.parse(session.started_at) : null;
@@ -277,17 +302,76 @@ export function ChargingSessionScreen({
       ? secondsUntilTargetSoc(chargeParams, derived.currentPercent)
       : null;
 
+  const localeCode =
+    locale === "be" ? "be-BY" : locale === "ru" ? "ru-RU" : "en-US";
+  const chargingStats: ChargingStat[] = [
+    {
+      label: t("charging.elapsed") as string,
+      value: formatDuration(derived.elapsedSeconds),
+    },
+    {
+      label: t("charging.remaining") as string,
+      value: charging ? formatDuration(derived.remainingSeconds) : "—",
+      accent: "cyan",
+    },
+    {
+      label: t("charging.energyDelivered") as string,
+      value: `${derived.chargedEnergyKwh.toFixed(2)} kWh`,
+      accent: "green",
+    },
+    {
+      label: t("charging.currentCost") as string,
+      value: displayCurrentCost,
+    },
+    {
+      label: t("charging.fullCost") as string,
+      value: displayCostAtFull,
+    },
+    {
+      label: t("charging.acPower") as string,
+      value: `${session.charger_power_kw.toFixed(1)} kW`,
+      accent: "blue",
+    },
+    {
+      label: t("charging.batteryPack") as string,
+      value: `${session.battery_capacity_kwh} kWh`,
+    },
+  ];
+
+  if (!historyMode && charging && estimatedFinishMs != null) {
+    chargingStats.push({
+      label: t("charging.estimatedFinish") as string,
+      value: new Date(estimatedFinishMs).toLocaleTimeString(localeCode, {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      accent: "cyan",
+    });
+  }
+  if (!historyMode && charging && projectedSocAtMorning != null) {
+    chargingStats.push({
+      label: t("charging.projectedAtSeven") as string,
+      value: `${projectedSocAtMorning.toFixed(1)}%`,
+    });
+  }
+  if (!historyMode && charging && secondsToTarget != null && secondsToTarget > 0) {
+    chargingStats.push({
+      label: t("charging.secondsToTarget") as string,
+      value: formatDuration(secondsToTarget),
+    });
+  }
+
   return (
     <div className="flex flex-1 flex-col gap-5 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-muted-foreground text-xs uppercase tracking-widest">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             {historyMode ? t("history.eyebrow") : t("charging.live")}
           </p>
-          <h1 className="mt-2 text-xl font-semibold tracking-tight text-balance">
+          <h1 className="mt-1 font-heading text-2xl font-bold tracking-normal text-balance">
             {historyMode ? t("history.detail") : t("charging.session")}
           </h1>
-          <p className="text-muted-foreground mt-1 text-sm">
+          <p className="mt-1 text-sm text-muted-foreground">
             {charging && !historyMode
               ? t("charging.updating")
               : historyMode
@@ -295,132 +379,46 @@ export function ChargingSessionScreen({
                 : t("charging.frozen")}
           </p>
         </div>
-        <Button asChild variant="outline" size="lg" className="min-h-[44px]">
+        <Button
+          asChild
+          variant="outline"
+          size="lg"
+          className="min-h-[44px] rounded-full border-border bg-white/[0.03] font-heading text-sm font-bold"
+        >
           <Link href={appPath(historyMode ? "/history" : "/dashboard")}>
             {historyMode ? t("history.title") : t("charging.dashboard")}
           </Link>
         </Button>
       </div>
 
-      <motion.div
-        animate={
-          charging
-            ? { boxShadow: "0 0 40px oklch(0.72 0.17 173 / 0.22)" }
-            : { boxShadow: "0 12px 30px rgb(0 0 0 / 0.18)" }
-        }
-        transition={{ duration: 1.8, repeat: charging ? Infinity : 0 }}
-        className="bg-card relative overflow-hidden rounded-[2rem] border border-white/[0.08] px-6 py-8"
-      >
-        <motion.div
-          aria-hidden
-          className="from-primary pointer-events-none absolute inset-0 bg-gradient-to-br to-transparent opacity-15"
-          animate={{ opacity: charging ? [0.12, 0.22, 0.12] : 0.08 }}
-          transition={{ duration: 3.2, repeat: charging ? Infinity : 0 }}
-        />
-        <div className="relative flex flex-col items-center gap-2">
-          <span className="text-muted-foreground text-sm font-medium">
-            {t("charging.battery")}
-          </span>
-          <motion.span
-            className="text-primary drop-shadow-[0_0_32px_oklch(0.75_0.15_173_/_0.35)] text-7xl font-semibold tracking-tighter tabular-nums"
-            key={Math.round(pctForBar * 100) / 100}
-            initial={{ opacity: 0.6, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
+      <section className="voltflow-card relative px-4 py-5">
+        {charging && !historyMode ? (
+          <span
+            className={
+              "absolute right-3 top-3 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] " +
+              (displayUsesLiveSoc
+                ? "text-[var(--voltflow-cyan)]"
+                : "text-muted-foreground")
+            }
           >
-            {pctForBar.toFixed(1)}%
-          </motion.span>
-          <p className="text-muted-foreground text-sm tabular-nums">
-            {t("charging.goal", {
-              target: session.target_percent.toFixed(0),
-              start: session.start_percent.toFixed(0),
-            })}
-          </p>
-          {charging && !historyMode ? (
-            <span
-              className={
-                "mt-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] " +
-                (displayUsesLiveSoc
-                  ? "border border-cyan-400/30 bg-cyan-400/10 text-cyan-100"
-                  : "border border-white/10 bg-white/[0.04] text-muted-foreground")
-              }
-            >
-              {displayUsesLiveSoc ? "Mate SOC" : "Estimate"}
-            </span>
-          ) : null}
-        </div>
+            {displayUsesLiveSoc ? "Mate" : "Est."}
+          </span>
+        ) : null}
 
-        <div className="relative mt-8">
-          <div className="h-4 rounded-full bg-white/10 shadow-inner overflow-hidden">
-            <motion.div
-              className="from-primary bg-gradient-to-r to-teal-200 h-full rounded-full shadow-[inset_0_1px_0_rgb(255_255_255/0.2)]"
-              initial={false}
-              animate={{ width: `${pctForBar}%` }}
-              transition={{ type: "spring", stiffness: 120, damping: 20 }}
-              layout
-            />
-          </div>
-          <p className="text-muted-foreground mt-3 text-xs">
-            {t("charging.segment", { pct: pctToTarget.toFixed(0) })}
-          </p>
-        </div>
-      </motion.div>
+        <BatteryRing
+          size="compact"
+          percent={pctForBar}
+          status={`${session.start_percent.toFixed(0)}% → ${session.target_percent.toFixed(0)}%`}
+          charging={charging && !historyMode}
+          className="mx-auto max-w-[132px]"
+        />
 
-      <div className="grid grid-cols-2 gap-3">
-        <StatCard label={t("charging.elapsed") as string} value={formatDuration(derived.elapsedSeconds)} />
-        <StatCard
-          label={t("charging.remaining") as string}
-          value={charging ? formatDuration(derived.remainingSeconds) : "—"}
-        />
-        <StatCard
-          label={t("charging.energyDelivered") as string}
-          value={`${derived.chargedEnergyKwh.toFixed(2)} kWh`}
-        />
-        <StatCard
-          label={t("charging.currentCost") as string}
-          value={
-            session.price_per_kwh > 0
-              ? formatCurrencyAmount(currency, derived.estimatedCost, locale)
-              : "—"
-          }
-        />
-        <StatCard
-          label={t("charging.fullCost") as string}
-          value={
-            costAtFull != null
-              ? formatCurrencyAmount(currency, costAtFull, locale)
-              : "—"
-          }
-        />
-        <StatCard
-          label={t("charging.acPower") as string}
-          value={`${session.charger_power_kw.toFixed(1)} kW`}
-        />
-        <StatCard
-          label={t("charging.batteryPack") as string}
-          value={`${session.battery_capacity_kwh} kWh`}
-        />
-        {!historyMode && charging && estimatedFinishMs != null ? (
-          <StatCard
-            label={t("charging.estimatedFinish") as string}
-            value={new Date(estimatedFinishMs).toLocaleTimeString(
-              locale === "be" ? "be-BY" : locale === "ru" ? "ru-RU" : "en-US",
-              { hour: "2-digit", minute: "2-digit" },
-            )}
-          />
-        ) : null}
-        {!historyMode && charging && projectedSocAtMorning != null ? (
-          <StatCard
-            label={t("charging.projectedAtSeven") as string}
-            value={`${projectedSocAtMorning.toFixed(1)}%`}
-          />
-        ) : null}
-        {!historyMode && charging && secondsToTarget != null && secondsToTarget > 0 ? (
-          <StatCard
-            label={t("charging.secondsToTarget") as string}
-            value={formatDuration(secondsToTarget)}
-          />
-        ) : null}
-      </div>
+        <p className="mt-1 text-center text-[11px] text-muted-foreground tabular-nums">
+          {t("charging.segment", { pct: pctToTarget.toFixed(0) })}
+        </p>
+      </section>
+
+      <ChargingStatsGrid stats={chargingStats} />
 
       <ChargingDeltaCard session={session} vehicleId={sessionVehicleId ?? undefined} />
 
@@ -431,7 +429,7 @@ export function ChargingSessionScreen({
             size="lg"
             variant="destructive"
             disabled={!charging}
-            className="h-14 w-full rounded-full text-base font-semibold tracking-wide"
+            className="h-14 w-full rounded-full font-heading text-base font-bold tracking-wide"
             onClick={() => void stopSession()}
           >
             {t("charging.stop")}
@@ -445,19 +443,6 @@ export function ChargingSessionScreen({
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-card rounded-3xl border border-white/[0.08] p-5 shadow-inner">
-      <p className="text-muted-foreground text-xs uppercase tracking-[0.2em]">
-        {label}
-      </p>
-      <p className="mt-3 text-xl font-semibold tabular-nums tracking-tight">
-        {value}
-      </p>
     </div>
   );
 }
