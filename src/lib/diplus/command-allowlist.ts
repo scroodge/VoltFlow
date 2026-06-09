@@ -24,6 +24,26 @@ export const VEHICLE_COMMAND_TYPES = [
   "hud",
   "auto_highbeam",
   "child_lock_left",
+  // Extended set — keep in sync with CommandAllowlist.kt + BYD_MA COMMAND_ALLOWLIST.md.
+  "sentry",
+  "sentry_autostart",
+  "screen_off",
+  "windows_close",
+  "ac_temp_up",
+  "ac_temp_down",
+  "ac_temp",
+  "fan_level",
+  "trunk",
+  "defrost",
+  "rear_defrost",
+  "seat_heat_driver",
+  "seat_heat_pass",
+  "steering_heat",
+  "mirror_fold",
+  "find_car",
+  "honk",
+  "flash_lights",
+  "charge_port",
   "tts",
 ] as const;
 
@@ -159,6 +179,94 @@ export function buildDiplusPhrase(
     }
     case "child_lock_left":
       phrase = "打开左童锁";
+      break;
+    // --- Extended set (sync with CommandAllowlist.kt + BYD_MA COMMAND_ALLOWLIST.md) ---
+    case "sentry": {
+      const on = readBool(params.on);
+      if (on == null) return { ok: false, error: "sentry.on must be boolean" };
+      phrase = on ? "开启哨兵模式" : "关闭哨兵模式";
+      break;
+    }
+    case "sentry_autostart": {
+      const on = readBool(params.on);
+      if (on == null) return { ok: false, error: "sentry_autostart.on must be boolean" };
+      phrase = on ? "开启自动启动哨兵模式" : "关闭自动启动哨兵模式";
+      break;
+    }
+    case "screen_off":
+      phrase = "屏幕关闭";
+      break;
+    case "windows_close":
+      phrase = "一键关窗";
+      break;
+    case "ac_temp_up":
+      phrase = "空调升温";
+      break;
+    case "ac_temp_down":
+      phrase = "空调降温";
+      break;
+    case "ac_temp": {
+      const value = readInt(params.value);
+      if (value == null || value < 16 || value > 32) return { ok: false, error: "ac_temp.value must be 16–32" };
+      phrase = `空调温度${value}度`;
+      break;
+    }
+    case "fan_level": {
+      const value = readInt(params.value);
+      if (value == null || value < 0 || value > 7) return { ok: false, error: "fan_level.value must be 0–7" };
+      phrase = `风量${value}档`;
+      break;
+    }
+    case "trunk":
+      phrase = "打开后备箱";
+      break;
+    case "defrost": {
+      const on = readBool(params.on);
+      if (on == null) return { ok: false, error: "defrost.on must be boolean" };
+      phrase = on ? "打开除雾" : "关闭除雾";
+      break;
+    }
+    case "rear_defrost": {
+      const on = readBool(params.on);
+      if (on == null) return { ok: false, error: "rear_defrost.on must be boolean" };
+      phrase = on ? "打开后除霜" : "关闭后除霜";
+      break;
+    }
+    case "seat_heat_driver": {
+      const on = readBool(params.on);
+      if (on == null) return { ok: false, error: "seat_heat_driver.on must be boolean" };
+      phrase = on ? "打开主驾座椅加热" : "关闭主驾座椅加热";
+      break;
+    }
+    case "seat_heat_pass": {
+      const on = readBool(params.on);
+      if (on == null) return { ok: false, error: "seat_heat_pass.on must be boolean" };
+      phrase = on ? "打开副驾座椅加热" : "关闭副驾座椅加热";
+      break;
+    }
+    case "steering_heat": {
+      const on = readBool(params.on);
+      if (on == null) return { ok: false, error: "steering_heat.on must be boolean" };
+      phrase = on ? "打开方向盘加热" : "关闭方向盘加热";
+      break;
+    }
+    case "mirror_fold": {
+      const on = readBool(params.on);
+      if (on == null) return { ok: false, error: "mirror_fold.on must be boolean" };
+      phrase = on ? "折叠后视镜" : "展开后视镜";
+      break;
+    }
+    case "find_car":
+      phrase = "寻车";
+      break;
+    case "honk":
+      phrase = "鸣笛";
+      break;
+    case "flash_lights":
+      phrase = "闪灯";
+      break;
+    case "charge_port":
+      phrase = "打开充电口";
       break;
     case "tts": {
       const text = typeof params.text === "string" ? params.text.trim() : "";
