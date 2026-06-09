@@ -1579,7 +1579,7 @@ export function TelemetryHistoryCharts({
   isLoading: boolean;
   hasError: boolean;
   embedded?: boolean;
-  chartMode?: "trip" | "analytics" | "soh";
+  chartMode?: "trip" | "analytics";
   historyRange?: TelemetryHistoryRange;
   anchorDate?: string;
   barCharts?: BarChartModel[];
@@ -1606,7 +1606,6 @@ export function TelemetryHistoryCharts({
   );
   const showLineCharts =
     chartMode === "trip" ||
-    chartMode === "soh" ||
     (chartMode === "analytics" && historyRange === "day");
   const showBarCharts =
     chartMode === "analytics" && historyRange != null && historyRange !== "day" && (barCharts?.length ?? 0) > 0;
@@ -1645,11 +1644,9 @@ export function TelemetryHistoryCharts({
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
         </div>
-        {chartMode !== "soh" ? (
-          <span className="rounded-full border border-border bg-white/[0.03] px-3 py-1 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-            {tx("vehicle.charts.refresh")}
-          </span>
-        ) : null}
+        <span className="rounded-full border border-border bg-white/[0.03] px-3 py-1 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+          {tx("vehicle.charts.refresh")}
+        </span>
       </div>
 
       {isLoading ? (

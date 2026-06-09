@@ -13,7 +13,7 @@ import {
   useAnalyticsBarCharts,
 } from "@/components/vehicle/telemetry-analytics-charts";
 import { RouteInsightsSection } from "@/components/vehicle/route-insights-section";
-import { TelemetryHistoryCharts, RouteMap } from "@/components/vehicle/vehicle-live-view";
+import { RouteMap, TelemetryHistoryCharts } from "@/components/vehicle/vehicle-live-view";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -386,13 +386,16 @@ export function VehicleAnalyticsPanels({
     [periodTrips],
   );
 
-  const sohPoints = useMemo(() => {
-    return (sohQuery.data ?? [])
-      .filter((point) => typeof point.telemetry.soh_percent === "number")
-      .map((point) => ({
-        device_time: point.device_time,
-        telemetry: { soc: point.telemetry.soh_percent },
-      }));
+  const latestSohPercent = useMemo(() => {
+    const points = (sohQuery.data ?? []).filter(
+      (point) => typeof point.telemetry.soh_percent === "number",
+    );
+    if (points.length === 0) return null;
+
+    const latest = points.reduce((best, point) =>
+      Date.parse(point.device_time) >= Date.parse(best.device_time) ? point : best,
+    );
+    return latest.telemetry.soh_percent ?? null;
   }, [sohQuery.data]);
 
   const exportBase = `/api/vehicle/export?format=csv&vehicle_id=${encodeURIComponent(vehicleId)}&from=${costFrom}T00:00:00.000Z&to=${costTo}T23:59:59.999Z`;
@@ -496,16 +499,21 @@ export function VehicleAnalyticsPanels({
       </section>
 
       <section className="voltflow-card p-5">
-        <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.sohTitle")}</h2>
+        <h2 className="font-heading text-2xl font-semibold tracking-tight">
+          {t("vehicle.analytics.sohTitle")}
+        </h2>
         <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.sohSubtitle")}</p>
         <div className="mt-4">
-          <TelemetryHistoryCharts
-            points={sohPoints}
-            isLoading={sohQuery.isLoading}
-            hasError={Boolean(sohQuery.error)}
-            embedded
-            chartMode="soh"
-          />
+          {sohQuery.isLoading ? (
+            <Skeleton className="h-14 w-28 rounded-2xl" />
+          ) : sohQuery.error || latestSohPercent == null ? (
+            <p className="font-heading text-3xl font-bold tabular-nums text-muted-foreground">—</p>
+          ) : (
+            <p className="font-heading text-5xl font-bold tabular-nums tracking-tight text-[var(--voltflow-cyan)]">
+              {fmt(latestSohPercent, 1)}
+              <span className="ml-0.5 text-2xl font-semibold text-muted-foreground">%</span>
+            </p>
+          )}
         </div>
       </section>
 

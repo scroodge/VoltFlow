@@ -168,7 +168,7 @@ export function VehicleControlPanel({ vehicleId, relaxGuards = false }: VehicleC
             <span className="text-xs text-muted-foreground">
               {readSentryProvider(snapshot) === "overdrive"
                 ? `Overdrive sentry: ${snapshot.diplus?.sentry_active === true ? "on" : "off"}`
-                : `Stall sentry: ${String((snapshot.diplus as Record<string, unknown> | undefined)?.stall_sentry_mode ?? "—")}`}
+                : `Stall sentry: ${String(snapshot.diplus?.stall_sentry_mode ?? "—")}`}
               {" · "}
               {aux != null ? `${aux.toFixed(1)} V` : "12V —"}
             </span>

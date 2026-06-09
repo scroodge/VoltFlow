@@ -139,6 +139,9 @@ export type BydmateDiplus = {
   drl?: string | number | boolean | null;
   sunshade_percent?: number | null;
   sentry_state?: string | number | null;
+  sentry_provider?: string | null;
+  sentry_active?: boolean | null;
+  stall_sentry_mode?: string | null;
   remote_lock_state?: string | number | null;
 };
 
