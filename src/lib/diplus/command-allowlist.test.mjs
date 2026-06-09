@@ -30,3 +30,16 @@ test("schedule_charge pads minutes", () => {
   assert.equal(result.ok, true);
   if (result.ok) assert.equal(result.phrase, "预约充电22:05-6");
 });
+
+test("windows_preset maps vent close open", () => {
+  assert.equal(buildDiplusPhrase("windows_preset", { preset: "vent" }).phrase, "车窗通风");
+  assert.equal(buildDiplusPhrase("windows_preset", { preset: "close" }).phrase, "车窗关闭");
+  assert.equal(buildDiplusPhrase("windows_preset", { preset: "open" }).phrase, "车窗全开");
+});
+
+test("ac and ac_vent map climate phrases", () => {
+  assert.equal(buildDiplusPhrase("ac", { on: true }).phrase, "自动空调");
+  assert.equal(buildDiplusPhrase("ac", { on: false }).phrase, "关闭空调");
+  assert.equal(buildDiplusPhrase("ac_vent", { on: true }).phrase, "打开空调通风");
+  assert.equal(buildDiplusPhrase("ac_vent", { on: false }).phrase, "关闭空调");
+});

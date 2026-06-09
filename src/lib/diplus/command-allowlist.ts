@@ -16,6 +16,9 @@ export const VEHICLE_COMMAND_TYPES = [
   "set_soc_limit",
   "schedule_charge",
   "window",
+  "windows_preset",
+  "ac",
+  "ac_vent",
   "sunroof",
   "sunshade",
   "hud",
@@ -34,6 +37,13 @@ const WINDOW_TARGETS: Record<string, string> = {
   rl: "左后车窗",
   rr: "右后车窗",
   all: "全部车窗",
+};
+
+const WINDOWS_PRESET_PHRASES: Record<string, string> = {
+  vent: "车窗通风",
+  close: "车窗关闭",
+  open: "车窗全开",
+  half: "车窗半开",
 };
 
 function containsDeniedPhrase(text: string) {
@@ -102,6 +112,25 @@ export function buildDiplusPhrase(
       const pct = readInt(params.pct);
       if (pct == null || pct < 0 || pct > 100) return { ok: false, error: "window.pct must be 0–100" };
       phrase = `${cn}打开百分之${pct}`;
+      break;
+    }
+    case "windows_preset": {
+      const preset = typeof params.preset === "string" ? params.preset : "";
+      const presetPhrase = WINDOWS_PRESET_PHRASES[preset];
+      if (!presetPhrase) return { ok: false, error: "windows_preset.preset invalid" };
+      phrase = presetPhrase;
+      break;
+    }
+    case "ac": {
+      const on = readBool(params.on);
+      if (on == null) return { ok: false, error: "ac.on must be boolean" };
+      phrase = on ? "自动空调" : "关闭空调";
+      break;
+    }
+    case "ac_vent": {
+      const on = readBool(params.on);
+      if (on == null) return { ok: false, error: "ac_vent.on must be boolean" };
+      phrase = on ? "打开空调通风" : "关闭空调";
       break;
     }
     case "sunroof": {
