@@ -2,6 +2,38 @@
 
 import type { ReactNode } from "react";
 
+import { cn } from "@/lib/utils";
+
+export type ChartTooltipPlacement = "top" | "auto";
+
+/** Corner placement keeps scatter/line tooltips off the drawn series. */
+export function chartTooltipTransform(
+  placement: ChartTooltipPlacement,
+  viewBoxX: number,
+  viewBoxY: number,
+  viewBoxWidth: number,
+  viewBoxHeight: number,
+) {
+  if (placement === "top") {
+    return "-translate-x-1/2 -translate-y-[calc(100%+0.5rem)]";
+  }
+
+  const xRatio = viewBoxX / viewBoxWidth;
+  const yRatio = viewBoxY / viewBoxHeight;
+  const preferLeft = xRatio > 0.28;
+  const preferBottom = yRatio < 0.55;
+
+  if (preferBottom) {
+    return preferLeft
+      ? "-translate-x-[calc(100%+0.5rem)] translate-y-2"
+      : "translate-x-2 translate-y-2";
+  }
+
+  return preferLeft
+    ? "-translate-x-[calc(100%+0.5rem)] -translate-y-[calc(100%+0.5rem)]"
+    : "translate-x-2 -translate-y-[calc(100%+0.5rem)]";
+}
+
 export const STD_CHART = {
   width: 340,
   height: 158,
@@ -164,6 +196,7 @@ export function ChartDataTooltip({
   viewBoxY,
   viewBoxWidth,
   viewBoxHeight,
+  placement = "top",
 }: {
   title?: string;
   rows: Array<{ label: string; value: string; color?: string }>;
@@ -171,13 +204,17 @@ export function ChartDataTooltip({
   viewBoxY: number;
   viewBoxWidth: number;
   viewBoxHeight: number;
+  placement?: ChartTooltipPlacement;
 }) {
   const left = (viewBoxX / viewBoxWidth) * 100;
   const top = (viewBoxY / viewBoxHeight) * 100;
 
   return (
     <div
-      className="pointer-events-none absolute z-10 min-w-[8rem] -translate-x-1/2 -translate-y-[calc(100%+0.5rem)] rounded-lg border border-border bg-background/95 px-2.5 py-1.5 text-[11px] shadow-lg backdrop-blur"
+      className={cn(
+        "pointer-events-none absolute z-10 min-w-[8rem] rounded-lg border border-border bg-background/95 px-2.5 py-1.5 text-[11px] shadow-lg backdrop-blur",
+        chartTooltipTransform(placement, viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight),
+      )}
       style={{ left: `${left}%`, top: `${top}%` }}
     >
       {title ? <p className="font-semibold text-foreground">{title}</p> : null}

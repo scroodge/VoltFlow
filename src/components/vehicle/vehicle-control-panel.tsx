@@ -20,6 +20,39 @@ import type { BydmateLiveSnapshotRow, VehicleCommandRow } from "@/types/database
 
 const STALE_MS = 90_000;
 const LOW_AUX_V = 11.8;
+
+function isTelemetryFresh(snapshot: BydmateLiveSnapshotRow | undefined) {
+  if (!snapshot) return false;
+  const receivedAt = new Date(snapshot.received_at).getTime();
+  return !Number.isNaN(receivedAt) && Date.now() - receivedAt <= STALE_MS;
+}
+
+function readSentryProvider(snapshot: BydmateLiveSnapshotRow | undefined) {
+  const diplus = snapshot?.diplus as Record<string, unknown> | undefined;
+  const provider = diplus?.sentry_provider;
+  return typeof provider === "string" ? provider : "diplus";
+}
+
+function isSentryReady(snapshot: BydmateLiveSnapshotRow | undefined) {
+  const diplus = snapshot?.diplus as Record<string, unknown> | undefined;
+  if (!diplus) return false;
+  const provider = readSentryProvider(snapshot);
+  if (provider === "overdrive") {
+    return diplus.sentry_active === true;
+  }
+  const stall = diplus.stall_sentry_mode;
+  return stall != null && stall !== "关闭" && stall !== "";
+}
+
+function isRemoteReady(snapshot: BydmateLiveSnapshotRow | undefined) {
+  if (!isTelemetryFresh(snapshot)) return false;
+  if (readSpeed(snapshot) > 0) return false;
+  if (!gearIsPark(readGear(snapshot))) return false;
+  const aux = readAuxVoltage(snapshot);
+  if (aux != null && aux > 0 && aux < LOW_AUX_V) return false;
+  return isSentryReady(snapshot);
+}
+
 function gearIsPark(gear: unknown) {
   if (gear === 1 || gear === "1" || gear === "P") return true;
   return false;
@@ -90,6 +123,7 @@ export function VehicleControlPanel({ vehicleId, relaxGuards = false }: VehicleC
   }, [liveRows, vehicleId]);
 
   const allowed = relaxGuards || isControlAllowed(snapshot);
+  const remoteReady = relaxGuards || isRemoteReady(snapshot);
   const stale =
     !relaxGuards &&
     snapshot != null &&
@@ -120,6 +154,26 @@ export function VehicleControlPanel({ vehicleId, relaxGuards = false }: VehicleC
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
+              remoteReady
+                ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                : "bg-amber-500/15 text-amber-800 dark:text-amber-400"
+            }`}
+          >
+            {remoteReady ? "Remote ready" : "Remote offline"}
+          </span>
+          {snapshot ? (
+            <span className="text-xs text-muted-foreground">
+              {readSentryProvider(snapshot) === "overdrive"
+                ? `Overdrive sentry: ${snapshot.diplus?.sentry_active === true ? "on" : "off"}`
+                : `Stall sentry: ${String((snapshot.diplus as Record<string, unknown> | undefined)?.stall_sentry_mode ?? "—")}`}
+              {" · "}
+              {aux != null ? `${aux.toFixed(1)} V` : "12V —"}
+            </span>
+          ) : null}
+        </div>
         {stale ? (
           <p className="text-sm text-amber-600">Нет свежих данных с машины (&gt;90 с).</p>
         ) : null}

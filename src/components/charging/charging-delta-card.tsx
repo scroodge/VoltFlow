@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { chartTooltipTransform } from "@/components/vehicle/chart-interaction";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBydmateChargingSessionSamplesQuery, type ChargingSessionTelemetrySample } from "@/hooks/use-bydmate-charging-session-samples-query";
 import type { ChargingSessionRow } from "@/types/database";
@@ -326,11 +327,16 @@ function DeltaPlot({
         </svg>
         {hoveredPoint ? (
           <div
-            className="pointer-events-none absolute z-10 min-w-40 rounded-xl border border-border bg-popover/95 p-3 text-xs text-popover-foreground shadow-xl"
+            className={`pointer-events-none absolute z-10 min-w-40 rounded-xl border border-border bg-popover/95 p-3 text-xs text-popover-foreground shadow-xl ${chartTooltipTransform(
+              "auto",
+              (tooltipPosition.x / 100) * 320,
+              (tooltipPosition.y / 100) * 142,
+              320,
+              142,
+            )}`}
             style={{
               left: `${tooltipPosition.x}%`,
               top: `${tooltipPosition.y}%`,
-              transform: tooltipPosition.x > 62 ? "translate(-100%, -105%)" : "translate(8px, -105%)",
             }}
           >
             <p className="font-heading text-sm font-semibold tabular-nums">

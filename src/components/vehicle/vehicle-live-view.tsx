@@ -2543,6 +2543,7 @@ function DeltaBySocPlot({
               viewBoxY={y(hoveredPoint.delta)}
               viewBoxWidth={DELTA_SOC_CHART.width}
               viewBoxHeight={DELTA_SOC_CHART.height}
+              placement="auto"
             />
           ) : null
         }

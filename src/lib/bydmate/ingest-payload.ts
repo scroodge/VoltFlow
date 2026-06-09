@@ -100,6 +100,9 @@ export const diplusSchema = z
     sunshade_percent: numericSchema,
     sentry_state: diplusStateSchema.nullable().optional(),
     remote_lock_state: diplusStateSchema.nullable().optional(),
+    stall_sentry_mode: z.string().nullable().optional(),
+    sentry_provider: z.string().nullable().optional(),
+    sentry_active: z.boolean().nullable().optional(),
   })
   .passthrough();
 
