@@ -833,6 +833,8 @@ type ChartPoint = {
   time: number;
   value: number;
   powerKw?: number | null;
+  /** Distance from trip start in km — populated only in trip mode */
+  distanceKm?: number | null;
 };
 
 type RoutePoint = {
@@ -878,7 +880,10 @@ type TelemetryChart = {
   maxValue: number;
   minTime: number;
   maxTime: number;
+  minDistanceKm: number;
+  maxDistanceKm: number;
   hasData: boolean;
+  hasDistanceData: boolean;
 };
 
 type RegenRecoveryChartModel = {
@@ -1544,6 +1549,9 @@ function finalizeChart(chart: TelemetryChart, maxPoints = MAX_CHART_POINTS): Tel
       maxValue: 1,
       minTime: 0,
       maxTime: 1,
+      minDistanceKm: 0,
+      maxDistanceKm: 0,
+      hasDistanceData: false,
     };
   }
 
@@ -1551,6 +1559,9 @@ function finalizeChart(chart: TelemetryChart, maxPoints = MAX_CHART_POINTS): Tel
   let maxValue = -Infinity;
   let minTime = Infinity;
   let maxTime = -Infinity;
+  let minDistanceKm = Infinity;
+  let maxDistanceKm = -Infinity;
+  let hasDistanceData = false;
 
   for (const item of series) {
     for (const point of item.points) {
@@ -1558,6 +1569,11 @@ function finalizeChart(chart: TelemetryChart, maxPoints = MAX_CHART_POINTS): Tel
       maxValue = Math.max(maxValue, point.value);
       minTime = Math.min(minTime, point.time);
       maxTime = Math.max(maxTime, point.time);
+      if (point.distanceKm != null) {
+        minDistanceKm = Math.min(minDistanceKm, point.distanceKm);
+        maxDistanceKm = Math.max(maxDistanceKm, point.distanceKm);
+        hasDistanceData = true;
+      }
     }
   }
 
@@ -1569,6 +1585,9 @@ function finalizeChart(chart: TelemetryChart, maxPoints = MAX_CHART_POINTS): Tel
     maxValue,
     minTime,
     maxTime,
+    minDistanceKm: hasDistanceData ? minDistanceKm : 0,
+    maxDistanceKm: hasDistanceData ? maxDistanceKm : 0,
+    hasDistanceData,
   };
 }
 
@@ -1589,14 +1608,23 @@ function createChart(
     maxValue: 1,
     minTime: 0,
     maxTime: 1,
+    minDistanceKm: 0,
+    maxDistanceKm: 0,
     hasData: false,
+    hasDistanceData: false,
   };
 }
 
-function addChartPoint(chart: TelemetryChart, seriesIndex: number, time: number, value: number | null) {
+function addChartPoint(
+  chart: TelemetryChart,
+  seriesIndex: number,
+  time: number,
+  value: number | null,
+  distanceKm?: number | null,
+) {
   if (value == null || !Number.isFinite(time)) return;
 
-  chart.series[seriesIndex].points.push({ time, value });
+  chart.series[seriesIndex].points.push({ time, value, distanceKm });
   chart.minValue = chart.hasData ? Math.min(chart.minValue, value) : value;
   chart.maxValue = chart.hasData ? Math.max(chart.maxValue, value) : value;
   chart.minTime = chart.hasData ? Math.min(chart.minTime, time) : time;
@@ -1715,6 +1743,10 @@ function prepareTelemetryHistory(
   let start: string | undefined;
   let end: string | undefined;
   const deviceTimes: string[] = [];
+  // Distance tracking: use current_trip_distance_km if available, else odometer delta
+  const firstOdometerKm = validNumber(
+    points.find((point) => point.telemetry?.odometer_km != null)?.telemetry?.odometer_km,
+  );
 
   for (const point of points) {
     if (!point.telemetry) continue;
@@ -1727,14 +1759,24 @@ function prepareTelemetryHistory(
     const time = pointTimeMs(point);
     const soc = validNumber(point.telemetry.soc);
     const cellDelta = cellDeltaValue(point);
-    addChartPoint(socChart, 0, time, soc);
-    addChartPoint(speedPowerChart, 0, time, validNumber(point.telemetry.speed_kmh));
-    addChartPoint(speedPowerChart, 1, time, validNumber(point.telemetry.power_kw));
-    addChartPoint(temperatureChart, 0, time, validTempNumber(point.telemetry.battery_temp_c));
-    addChartPoint(temperatureChart, 1, time, validTempNumber(point.telemetry.outside_temp_c));
-    addChartPoint(temperatureChart, 2, time, validTempNumber(point.telemetry.cabin_temp_c));
+
+    // Prefer current_trip_distance_km; fall back to odometer delta from first sample
+    const tripDistKm = validNumber(point.telemetry.current_trip_distance_km);
+    const odometerKm = validNumber(point.telemetry.odometer_km);
+    const distanceKm =
+      tripDistKm ??
+      (firstOdometerKm != null && odometerKm != null
+        ? Math.max(0, odometerKm - firstOdometerKm)
+        : null);
+
+    addChartPoint(socChart, 0, time, soc, distanceKm);
+    addChartPoint(speedPowerChart, 0, time, validNumber(point.telemetry.speed_kmh), distanceKm);
+    addChartPoint(speedPowerChart, 1, time, validNumber(point.telemetry.power_kw), distanceKm);
+    addChartPoint(temperatureChart, 0, time, validTempNumber(point.telemetry.battery_temp_c), distanceKm);
+    addChartPoint(temperatureChart, 1, time, validTempNumber(point.telemetry.outside_temp_c), distanceKm);
+    addChartPoint(temperatureChart, 2, time, validTempNumber(point.telemetry.cabin_temp_c), distanceKm);
     if (includeCellDelta) {
-      addChartPoint(cellDeltaChart, 0, time, cellDelta);
+      addChartPoint(cellDeltaChart, 0, time, cellDelta, distanceKm);
       addDeltaBySocPoint(deltaBySocPoints, time, soc, cellDelta);
       if (cellDelta != null) hasCellDeltaData = true;
     }
@@ -1837,6 +1879,7 @@ export function TelemetryHistoryCharts({
 }) {
   const { locale, t } = useTranslation();
   const tx = t as Translator;
+  const [tripXAxis, setTripXAxis] = useState<"time" | "distance">("time");
   const includeCellDelta = chartMode === "trip";
   const isAnalyticsDay = chartMode === "analytics" && historyRange === "day";
   const maxChartPoints =
@@ -1855,6 +1898,7 @@ export function TelemetryHistoryCharts({
       ),
     [history.medianGapSeconds, history.minTime, history.maxTime, history.visiblePointCount, history.hasData],
   );
+  const historyHasDistanceData = history.charts.some((c) => c.hasDistanceData);
   const showLineCharts =
     chartMode === "trip" ||
     (chartMode === "analytics" && historyRange === "day");
@@ -1916,6 +1960,22 @@ export function TelemetryHistoryCharts({
         </p>
       ) : (
         <>
+          {chartMode === "trip" && historyHasDistanceData && showLineCharts ? (
+            <div className="mt-4 flex items-center gap-1.5">
+              <button
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition ${tripXAxis === "time" ? "border-primary bg-primary/10 text-primary" : "border-border bg-white/[0.02] text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}
+                onClick={() => setTripXAxis("time")}
+              >
+                ⏱ {tx("vehicle.charts.elapsed")}
+              </button>
+              <button
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition ${tripXAxis === "distance" ? "border-primary bg-primary/10 text-primary" : "border-border bg-white/[0.02] text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}
+                onClick={() => setTripXAxis("distance")}
+              >
+                ↔ km
+              </button>
+            </div>
+          ) : null}
           {showLineCharts && history.visiblePointCount > 0 && history.visiblePointCount < 2 ? (
             <p className="mt-5 rounded-2xl border border-primary/20 bg-primary/10 p-4 text-sm text-primary">
               {tx("vehicle.charts.onePoint")}
@@ -1932,6 +1992,7 @@ export function TelemetryHistoryCharts({
                       key={chart.title}
                       chart={chart}
                       lineGapMs={lineGapMs}
+                      xAxis={chartMode === "trip" ? tripXAxis : "time"}
                     />
                   ))}
               </div>
@@ -2247,15 +2308,19 @@ function RegenRecoveryChart({ chart }: { chart: RegenRecoveryChartModel }) {
 function TelemetryLineChart({
   chart,
   lineGapMs = CHART_LINE_GAP_MS,
+  xAxis = "time",
 }: {
   chart: TelemetryChart;
   lineGapMs?: number;
+  xAxis?: "time" | "distance";
 }) {
   const { t } = useTranslation();
   const tx = t as Translator;
   const [isOpen, setIsOpen] = useState(false);
   const [hoverTime, setHoverTime] = useState<number | null>(null);
-  const { title, unit, valueDigits, series, hasData, minValue, maxValue, minTime, maxTime } = chart;
+  const { title, unit, valueDigits, series, hasData, minValue, maxValue, minTime, maxTime, minDistanceKm, maxDistanceKm } = chart;
+  // Fall back to time axis if no distance data available
+  const activeXAxis = xAxis === "distance" && chart.hasDistanceData ? "distance" : "time";
   const dualAxis = chartUsesDualAxis(series, unit);
   const valuePad = Math.max((maxValue - minValue) * 0.12, maxValue === minValue ? 1 : 0);
   const yMin = minValue - valuePad;
@@ -2275,24 +2340,51 @@ function TelemetryLineChart({
     () => [...new Set(series.flatMap((item) => item.points.map((point) => point.time)))].sort((a, b) => a - b),
     [series],
   );
+  // Parallel distance array for chartTimes (used when activeXAxis === "distance")
+  const chartTimeDistances = useMemo<(number | null)[] | null>(() => {
+    if (activeXAxis !== "distance") return null;
+    const map = new Map<number, number>();
+    for (const item of series) {
+      for (const point of item.points) {
+        if (point.distanceKm != null) map.set(point.time, point.distanceKm);
+      }
+    }
+    return chartTimes.map((t) => map.get(t) ?? null);
+  }, [activeXAxis, series, chartTimes]);
 
-  const x = (time: number) => {
+  // X-axis: time mode uses point.time; distance mode uses point.distanceKm
+  const x = (timeOrDist: number) => {
+    if (activeXAxis === "distance") {
+      if (maxDistanceKm === minDistanceKm) return 160;
+      return 34 + ((timeOrDist - minDistanceKm) / (maxDistanceKm - minDistanceKm)) * 284;
+    }
     if (maxTime === minTime) return 160;
-    return 34 + ((time - minTime) / (maxTime - minTime)) * 284;
+    return 34 + ((timeOrDist - minTime) / (maxTime - minTime)) * 284;
   };
   const y = (seriesIndex: number, value: number) =>
     dualAxis ? seriesScales[seriesIndex].y(value) : singleY(value);
   const startTime = Number.isFinite(minTime) ? minTime : 0;
+  // X-axis ticks: time labels or distance labels
   const xTicks = hasData
-    ? [
-        { label: new Date(minTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), time: minTime },
-        {
-          label: new Date(minTime + (maxTime - minTime) / 2).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          time: minTime + (maxTime - minTime) / 2,
-        },
-        { label: new Date(maxTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), time: maxTime },
-      ]
+    ? activeXAxis === "distance"
+      ? [
+          { label: `${fmt(minDistanceKm, 1)} km`, xVal: minDistanceKm },
+          { label: `${fmt((minDistanceKm + maxDistanceKm) / 2, 1)} km`, xVal: (minDistanceKm + maxDistanceKm) / 2 },
+          { label: `${fmt(maxDistanceKm, 1)} km`, xVal: maxDistanceKm },
+        ]
+      : [
+          { label: new Date(minTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), xVal: minTime },
+          {
+            label: new Date(minTime + (maxTime - minTime) / 2).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            xVal: minTime + (maxTime - minTime) / 2,
+          },
+          { label: new Date(maxTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), xVal: maxTime },
+        ]
     : [];
+  const xAxisLabel = activeXAxis === "distance" ? "km" : tx("vehicle.charts.elapsed");
+  // Get SVG X coordinate for a chart point (uses distanceKm in distance mode)
+  const xCoord = (point: ChartPoint) =>
+    activeXAxis === "distance" && point.distanceKm != null ? x(point.distanceKm) : x(point.time);
   const singleYTicks = hasData
     ? [
         { label: fmt(maxValue, valueDigits), value: maxValue },
@@ -2335,10 +2427,26 @@ function TelemetryLineChart({
         setHoverTime(null);
         return;
       }
-      const xPositions = chartTimes.map((time) => x(time));
+      const xPositions = chartTimes.map((time, i) =>
+        activeXAxis === "distance" && chartTimeDistances
+          ? (chartTimeDistances[i] != null ? x(chartTimeDistances[i]!) : x(time))
+          : x(time),
+      );
       const index = nearestIndexByX(pointer.x, xPositions);
       setHoverTime(chartTimes[index] ?? null);
     };
+
+    // Hover X position in SVG coords — distance mode uses mapped distanceKm
+    const hoverX =
+      hoverTime == null
+        ? 0
+        : activeXAxis === "distance"
+          ? (() => {
+              const idx = chartTimes.indexOf(hoverTime);
+              const dist = idx >= 0 && chartTimeDistances ? (chartTimeDistances[idx] ?? null) : null;
+              return dist != null ? x(dist) : x(hoverTime);
+            })()
+          : x(hoverTime);
 
     const svg = (
       <svg
@@ -2380,14 +2488,14 @@ function TelemetryLineChart({
           ))}
       {xTicks.map((tick, index) => (
         <g key={`${title}-x-${index}`}>
-          <line x1={x(tick.time)} x2={x(tick.time)} y1="104" y2="109" stroke="currentColor" className="text-border" strokeWidth="1" />
-          <text x={x(tick.time)} y="124" textAnchor="middle" className="fill-muted-foreground text-[9px]">
+          <line x1={x(tick.xVal)} x2={x(tick.xVal)} y1="104" y2="109" stroke="currentColor" className="text-border" strokeWidth="1" />
+          <text x={x(tick.xVal)} y="124" textAnchor="middle" className="fill-muted-foreground text-[9px]">
             {tick.label}
           </text>
         </g>
       ))}
       <text x="176" y="148" textAnchor="middle" className="fill-muted-foreground text-[9px]">
-        {tx("vehicle.charts.elapsed")}
+        {xAxisLabel}
       </text>
       {dualAxis ? (
         <>
@@ -2407,7 +2515,7 @@ function TelemetryLineChart({
         const pathSegments = buildBrokenLinePaths(
           item.points,
           (point) => ({
-            x: x(point.time),
+            x: xCoord(point),
             y: y(seriesIndex, point.value),
           }),
           lineGapMs,
@@ -2429,7 +2537,7 @@ function TelemetryLineChart({
             {item.points.map((point, index) => (
               <circle
                 key={`${item.label}-hit-${point.time}-${index}`}
-                cx={x(point.time)}
+                cx={xCoord(point)}
                 cy={y(seriesIndex, point.value)}
                 r="7"
                 fill="transparent"
@@ -2438,7 +2546,7 @@ function TelemetryLineChart({
               </circle>
             ))}
             {markers.map((point, index) => (
-              <circle key={`${item.label}-${point.time}-${index}`} cx={x(point.time)} cy={y(seriesIndex, point.value)} r="3.5" fill={item.color}>
+              <circle key={`${item.label}-${point.time}-${index}`} cx={xCoord(point)} cy={y(seriesIndex, point.value)} r="3.5" fill={item.color}>
                 {!interactive ? <title>{pointTitle(item, point)}</title> : null}
               </circle>
             ))}
@@ -2448,7 +2556,7 @@ function TelemetryLineChart({
                   if (!point) return null;
                   return (
                     <circle
-                      cx={x(point.time)}
+                      cx={xCoord(point)}
                       cy={y(seriesIndex, point.value)}
                       r="5"
                       fill="#ffffff"
@@ -2463,7 +2571,7 @@ function TelemetryLineChart({
         );
       })}
       {interactive && hoverTime != null ? (
-        <ChartHoverCrosshair snapX={x(hoverTime)} plotTop={STD_CHART.plotTop} plotBottom={STD_CHART.plotBottom} />
+        <ChartHoverCrosshair snapX={hoverX} plotTop={STD_CHART.plotTop} plotBottom={STD_CHART.plotBottom} />
       ) : null}
       </svg>
     );
@@ -2477,7 +2585,7 @@ function TelemetryLineChart({
             <ChartDataTooltip
               title={formatClock(hoverTime)}
               rows={hoverRows.map(({ label, value, color }) => ({ label, value, color }))}
-              viewBoxX={x(hoverTime)}
+              viewBoxX={hoverX}
               viewBoxY={Math.min(...hoverRows.map((row) => row.y)) - 8}
               viewBoxWidth={STD_CHART.width}
               viewBoxHeight={STD_CHART.height}
