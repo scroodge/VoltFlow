@@ -74,6 +74,11 @@ async function fetchAnalytics<T>(path: string): Promise<T> {
 const anchorSelectClassName =
   "h-8 min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30";
 
+const MONTH_NAMES_EN = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
 function AnalyticsRangeAnchorPicker({
   range,
   anchorDate,
@@ -85,8 +90,11 @@ function AnalyticsRangeAnchorPicker({
   onAnchorDateChange: (value: string) => void;
   tx: Translator;
 }) {
-  const weekPickerValue = useMemo(() => isoWeekValueFromDate(anchorDate), [anchorDate]);
-  const monthPickerValue = useMemo(() => monthValueFromDate(anchorDate), [anchorDate]);
+  // Week: anchorDate is already the Monday of the week (YYYY-MM-DD)
+  // Month: anchorDate is YYYY-MM-01
+  const monthYear = anchorDate ? Number(anchorDate.slice(0, 4)) : new Date().getUTCFullYear();
+  const monthNum = anchorDate ? Number(anchorDate.slice(5, 7)) : new Date().getUTCMonth() + 1;
+
   const quarterPickerValue = useMemo(() => quarterValueFromDate(anchorDate), [anchorDate]);
   const yearPickerValue = useMemo(() => yearValueFromDate(anchorDate), [anchorDate]);
 
@@ -109,19 +117,46 @@ function AnalyticsRangeAnchorPicker({
     <label className="mt-4 grid gap-1 text-sm text-muted-foreground">
       {tx(labelKey)}
       {range === "week" ? (
+        // type="week" unsupported on iOS — use date input snapped to Monday
         <Input
-          type="week"
-          value={weekPickerValue}
-          onChange={(event) => onAnchorDateChange(isoWeekValueToAnchorDate(event.target.value))}
-          className="w-52"
-        />
-      ) : range === "month" ? (
-        <Input
-          type="month"
-          value={monthPickerValue}
-          onChange={(event) => onAnchorDateChange(monthValueToAnchorDate(event.target.value))}
+          type="date"
+          value={anchorDate}
+          onChange={(event) =>
+            onAnchorDateChange(snapAnchorDateForRange("week", event.target.value))
+          }
           className="w-44"
         />
+      ) : range === "month" ? (
+        // type="month" unsupported on iOS — use select + year number like quarter
+        <div className="flex flex-wrap gap-2">
+          <select
+            value={monthNum}
+            onChange={(event) =>
+              onAnchorDateChange(
+                `${monthYear}-${String(event.target.value).padStart(2, "0")}-01`,
+              )
+            }
+            className={`${anchorSelectClassName} w-36`}
+            aria-label={tx("vehicle.analytics.anchorMonth")}
+          >
+            {MONTH_NAMES_EN.map((name, i) => (
+              <option key={i} value={i + 1}>{name}</option>
+            ))}
+          </select>
+          <Input
+            type="number"
+            min={2018}
+            max={2100}
+            value={monthYear}
+            onChange={(event) =>
+              onAnchorDateChange(
+                `${event.target.value}-${String(monthNum).padStart(2, "0")}-01`,
+              )
+            }
+            className="w-28"
+            aria-label={tx("vehicle.analytics.anchorYear")}
+          />
+        </div>
       ) : range === "quarter" ? (
         <div className="flex flex-wrap gap-2">
           <select
