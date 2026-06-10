@@ -28,7 +28,7 @@ export function parseAnalyticsRange(value: string | null): TelemetryHistoryRange
   ) {
     return value;
   }
-  return "week";
+  return "day";
 }
 
 /** Local calendar day [start, end] for YYYY-MM-DD (matches Trips tab semantics). */

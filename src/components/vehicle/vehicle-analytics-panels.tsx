@@ -198,11 +198,11 @@ export function VehicleAnalyticsPanels({
   };
 
   const [historyRange, setHistoryRange] = useState<TelemetryHistoryRange>(() =>
-    initialRange ? parseAnalyticsRange(initialRange) : "week",
+    initialRange ? parseAnalyticsRange(initialRange) : "day",
   );
   const [anchorDate, setAnchorDate] = useState(() =>
     parseInitialAnchorDate(
-      initialRange ? parseAnalyticsRange(initialRange) : "week",
+      initialRange ? parseAnalyticsRange(initialRange) : "day",
       initialDate,
     ),
   );
