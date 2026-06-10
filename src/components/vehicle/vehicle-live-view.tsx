@@ -3509,12 +3509,15 @@ export function RouteMap({
   isLoading = false,
   hasError = false,
   embedded = false,
+  headingMode = "route",
 }: {
   points?: BydmateTelemetryPointRow[];
   trackPoints?: BydmateTripTrackPointRow[];
   isLoading?: boolean;
   hasError?: boolean;
   embedded?: boolean;
+  /** Location card shows last-known position, not a trip route browser. */
+  headingMode?: "route" | "lastSeen";
 }) {
   const { t } = useTranslation();
   const tx = t as Translator;
@@ -3547,16 +3550,23 @@ export function RouteMap({
     setZoomOffset(0);
     setPan({ x: 0, y: 0 });
   };
+  const mapDialogTitleKey =
+    headingMode === "lastSeen" ? ("vehicle.location.lastSeen" as TranslationKey) : ("vehicle.route.dialogTitle" as TranslationKey);
 
   return (
     <section className={embedded ? "rounded-2xl border border-border bg-white/[0.02] p-4" : "voltflow-card p-5"}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="font-heading text-2xl font-semibold tracking-tight">
-            {tx("vehicle.route.title")}
+            {tx(headingMode === "lastSeen" ? "vehicle.location.lastSeen" : "vehicle.route.title")}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {tx("vehicle.route.gpsPoints", { value: route.totalPoints })}
+            {tx(
+              headingMode === "lastSeen"
+                ? "vehicle.location.lastSeenPoints"
+                : "vehicle.route.gpsPoints",
+              { value: route.totalPoints },
+            )}
           </p>
         </div>
         {start && end ? (
@@ -3606,7 +3616,7 @@ export function RouteMap({
           </div>
           <Dialog open={isFullscreenOpen} onOpenChange={setIsFullscreenOpen}>
             <DialogContent className="h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] gap-3 p-3 sm:max-w-[calc(100vw-2rem)]">
-              <DialogTitle className="sr-only">{tx("vehicle.route.dialogTitle")}</DialogTitle>
+              <DialogTitle className="sr-only">{tx(mapDialogTitleKey)}</DialogTitle>
               <InteractiveRouteCanvas
                 route={route}
                 zoomOffset={zoomOffset}
@@ -4210,7 +4220,7 @@ function LocationCard({
           <Skeleton className="h-40 rounded-xl" />
         ) : hasTrack ? (
           // Show full last-trip route — endpoint is where the car is parked
-          <RouteMap trackPoints={trackPoints} embedded />
+          <RouteMap trackPoints={trackPoints} embedded headingMode="lastSeen" />
         ) : hasLiveLocation ? (
           // No trip track yet — fall back to live snapshot single-pin map
           <LiveLocationMap

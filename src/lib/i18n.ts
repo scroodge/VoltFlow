@@ -493,6 +493,8 @@ export const dictionaries = {
         deviceTime: "Device time",
         received: "Received",
         lastTrip: "last trip",
+        lastSeen: "Last seen",
+        lastSeenPoints: "{value} GPS points from last trip",
       },
       empty: {
         title: "No car data yet",
@@ -1206,6 +1208,8 @@ export const dictionaries = {
         deviceTime: "Час прылады",
         received: "Атрымана",
         lastTrip: "апошняя паездка",
+        lastSeen: "Апошні раз бачылі",
+        lastSeenPoints: "{value} GPS-кропак з апошняй паездкі",
       },
       empty: {
         title: "Даных аўто пакуль няма",
@@ -1919,6 +1923,8 @@ export const dictionaries = {
         deviceTime: "Время устройства",
         received: "Получено",
         lastTrip: "последняя поездка",
+        lastSeen: "Последнее местоположение",
+        lastSeenPoints: "{value} GPS-точек с последней поездки",
       },
       empty: {
         title: "Данных авто пока нет",
