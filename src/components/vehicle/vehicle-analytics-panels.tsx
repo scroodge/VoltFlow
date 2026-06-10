@@ -30,9 +30,6 @@ import {
   parseAnalyticsRange,
   resolveTelemetryWindow,
   snapAnchorDateForRange,
-  isoWeekValueFromDate,
-  isoWeekValueToAnchorDate,
-  monthValueFromDate,
   monthValueToAnchorDate,
   quarterValueFromDate,
   quarterValueToAnchorDate,
@@ -133,7 +130,9 @@ function AnalyticsRangeAnchorPicker({
             value={monthNum}
             onChange={(event) =>
               onAnchorDateChange(
-                `${monthYear}-${String(event.target.value).padStart(2, "0")}-01`,
+                monthValueToAnchorDate(
+                  `${monthYear}-${String(event.target.value).padStart(2, "0")}`,
+                ),
               )
             }
             className={`${anchorSelectClassName} w-36`}
@@ -150,7 +149,9 @@ function AnalyticsRangeAnchorPicker({
             value={monthYear}
             onChange={(event) =>
               onAnchorDateChange(
-                `${event.target.value}-${String(monthNum).padStart(2, "0")}-01`,
+                monthValueToAnchorDate(
+                  `${event.target.value}-${String(monthNum).padStart(2, "0")}`,
+                ),
               )
             }
             className="w-28"
