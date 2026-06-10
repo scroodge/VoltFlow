@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { isStationaryChargingLikeTrip } from "./trip-filter.ts";
+import { isJunkTrip, isStationaryChargingLikeTrip } from "./trip-filter.ts";
 
 const baseTrip = {
   id: "trip-1",
@@ -68,6 +68,44 @@ test("keeps trips without stationary evidence", () => {
         avg_speed_kmh: null,
       },
       [{ power_kw: -4 }],
+    ),
+    false,
+  );
+});
+
+test("isJunkTrip drops two-sample stationary parking trips", () => {
+  assert.equal(
+    isJunkTrip(
+      {
+        ...baseTrip,
+        sample_count: 2,
+        distance_km: 0,
+        max_speed_kmh: 0,
+        avg_speed_kmh: 0,
+      },
+      [
+        { power_kw: 0, speed_kmh: 0, current_trip_distance_km: 0 },
+        { power_kw: 0.1, speed_kmh: 0, current_trip_distance_km: 0 },
+      ],
+    ),
+    true,
+  );
+});
+
+test("isJunkTrip keeps two-sample trips with movement", () => {
+  assert.equal(
+    isJunkTrip(
+      {
+        ...baseTrip,
+        sample_count: 2,
+        distance_km: 2.4,
+        max_speed_kmh: 38,
+        avg_speed_kmh: 24,
+      },
+      [
+        { power_kw: 12, speed_kmh: 30, current_trip_distance_km: 1 },
+        { power_kw: 8, speed_kmh: 38, current_trip_distance_km: 2.4 },
+      ],
     ),
     false,
   );

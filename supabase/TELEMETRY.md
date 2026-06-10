@@ -165,9 +165,10 @@ sample.
 Samples are **not** attached to trips when:
 
 - the vehicle is charging (same as migration `20260526101500`), or
-- Di+ reports explicit park gear (`diplus.gear` = `1` / `P`) — migration `20260610120000`.
+- Di+ reports explicit park gear (`diplus.gear` = `1` / `P`) — migration `20260610120000`, or
+- there is no open trip and the sample shows no drive evidence (speed ≤ 5 km/h and gear not D/R/N) — migration `20260610140000`.
 
-Open trips are finalized when a parked or charging sample arrives.
+Open trips are finalized when a parked or charging sample arrives. Closed trips with fewer than three samples, distance ≤ 0.1 km, and max speed ≤ 3 km/h are **discarded** (deleted) instead of kept — migration `20260610140000`. The trips API also hides these via `isJunkTrip` in `trip-filter.ts`.
 
 Since migration `20260530121000`, closed trips persist:
 

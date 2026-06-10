@@ -1,6 +1,7 @@
 import type { BydmateTripRow } from "@/types/database";
 
 export const MOVING_SPEED_THRESHOLD_KMH = 3;
+export const MIN_TRIP_SAMPLES = 3;
 const STATIONARY_DISTANCE_THRESHOLD_KM = 0.1;
 const CHARGING_POWER_THRESHOLD_KW = -0.1;
 
@@ -61,6 +62,14 @@ function hasStationaryEvidence(trip: BydmateTripRow, points: TripMotionPowerPoin
 
 export function isSingleSampleTrip(trip: BydmateTripRow): boolean {
   return trip.sample_count < 2;
+}
+
+/** Stationary micro-trips (1–2 samples, no real movement) — common while parked. */
+export function isJunkTrip(trip: BydmateTripRow, points: TripMotionPowerPoint[] = []) {
+  if (isStationaryChargingLikeTrip(trip, points)) return true;
+  if (trip.sample_count < 2) return true;
+  if (trip.sample_count < MIN_TRIP_SAMPLES && !hasMovingEvidence(trip, points)) return true;
+  return false;
 }
 
 export function isStationaryChargingLikeTrip(

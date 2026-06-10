@@ -206,7 +206,7 @@ function useClientMounted() {
   );
 }
 
-export function VehicleLiveView() {
+export function VehicleLiveView({ isAdmin = false }: { isAdmin?: boolean }) {
   const { t } = useTranslation();
   const tx = t as Translator;
   const searchParams = useSearchParams();
@@ -267,6 +267,7 @@ export function VehicleLiveView() {
       nowMs={nowMs}
       initialTripId={initialTripId}
       hasMounted={hasMounted}
+      isAdmin={isAdmin}
     />
   );
 }
@@ -300,6 +301,7 @@ function VehicleLiveContent({
   fixturePoints,
   initialTripId = null,
   hasMounted = true,
+  isAdmin = false,
 }: {
   snapshot: BydmateLiveSnapshotRow;
   rangeBaseSnapshot: BydmateLiveSnapshotRow | null;
@@ -308,6 +310,7 @@ function VehicleLiveContent({
   fixturePoints?: BydmateTelemetryPointRow[];
   initialTripId?: string | null;
   hasMounted?: boolean;
+  isAdmin?: boolean;
 }) {
   const { data: carsData } = useCarsQuery();
   const selectedCarId = useAppPreferences((state) => state.selectedCarId);
@@ -387,7 +390,7 @@ function VehicleLiveContent({
         vehicleLabel={vehicleLabel}
         hasMounted={hasMounted}
       />
-      {!fixturePoints ? (
+      {!fixturePoints && isAdmin ? (
         <VehicleControlPanel
           vehicleId={scopedVehicleId ?? snapshot.vehicle_id}
           collapsible

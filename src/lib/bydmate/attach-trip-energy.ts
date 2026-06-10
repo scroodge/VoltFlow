@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { isStationaryChargingLikeTrip, isSingleSampleTrip } from "@/lib/bydmate/trip-filter";
+import { isJunkTrip } from "@/lib/bydmate/trip-filter";
 import { calculateTripEnergy } from "@/lib/bydmate/trip-energy";
 import type { BydmateTelemetry, BydmateTripRow } from "@/types/database";
 
@@ -117,7 +117,7 @@ export async function enrichTripsWithEnergy({
   return trips.map((trip) => mergeTripEnergy(trip, samplesByTrip));
 }
 
-/** Enrich trips and drop single-sample / charging-like rows (vehicle trip browser). */
+/** Enrich trips and drop junk rows (micro stationary / charging-like) for the trip browser. */
 export async function attachTripEnergy({
   supabase,
   userId,
@@ -138,13 +138,13 @@ export async function attachTripEnergy({
       typeof trip.regen_energy_kwh === "number" &&
       typeof trip.traction_energy_kwh === "number"
     ) {
-      if (isSingleSampleTrip(trip)) return [];
+      if (isJunkTrip(trip)) return [];
       return [trip];
     }
 
     const points = powerPointsForTrip(samplesByTrip, trip.id);
 
-    if (isSingleSampleTrip(trip) || isStationaryChargingLikeTrip(trip, points)) {
+    if (isJunkTrip(trip, points)) {
       return [];
     }
 
