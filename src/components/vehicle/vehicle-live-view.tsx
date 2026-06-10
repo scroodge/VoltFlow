@@ -63,6 +63,11 @@ import { isTelemetryCharging } from "@/lib/bydmate/telemetry-charging";
 import { averageTripConsumption } from "@/lib/bydmate/range-estimate";
 import { calculateRegenRecoverySegments, calculateTripEnergy, prepareRegenRecoveryBars } from "@/lib/bydmate/trip-energy";
 import { isRouteTrackDisplayable } from "@/lib/bydmate/route-insights";
+import {
+  odometerDeltaFromSamples,
+  resolvePreferredTripDistanceKm,
+  trackPathDistanceKm,
+} from "@/lib/bydmate/trip-distance";
 import type { Locale, TranslationKey } from "@/lib/i18n";
 import {
   deriveDashboardVehicleMode,
@@ -1054,12 +1059,18 @@ function buildTrips(points: BydmateTelemetryPointRow[]): TripSegment[] {
       odometerValues.length > 1 ? odometerValues.at(-1)! - odometerValues[0] : null;
     const tripDistance =
       tripDistanceValues.length > 0 ? Math.max(...tripDistanceValues) - Math.min(...tripDistanceValues) : null;
-    const distanceKm =
-      odometerDistance != null && odometerDistance >= 0
-        ? odometerDistance
-        : tripDistance != null && tripDistance >= 0
-          ? tripDistance
-          : null;
+    const gpsCoords = tripPoints
+      .map((point) => {
+        const lat = validNumber(point.location?.lat);
+        const lon = validNumber(point.location?.lon);
+        return lat != null && lon != null ? { lat, lon } : null;
+      })
+      .filter((point): point is { lat: number; lon: number } => point != null);
+    const distanceKm = resolvePreferredTripDistanceKm({
+      gpsDistanceKm: trackPathDistanceKm(gpsCoords),
+      odometerDistanceKm: odometerDistance,
+      tripCounterDistanceKm: tripDistance,
+    });
 
     return {
       id: `${startMs}-${index}`,
@@ -1100,7 +1111,7 @@ function tripRowFromFixture(trip: TripSegment, vehicleId: string): BydmateTripRo
   };
 }
 
-function ExpandedTripPanel({ tripId }: { tripId: string }) {
+function ExpandedTripPanel({ tripId, trip }: { tripId: string; trip: BydmateTripRow }) {
   const {
     data: samples = [],
     isLoading: isSamplesLoading,
@@ -1111,6 +1122,14 @@ function ExpandedTripPanel({ tripId }: { tripId: string }) {
     isLoading: isTrackLoading,
     error: trackError,
   } = useBydmateTripTrackQuery(tripId);
+  const odometerDistanceKm = useMemo(
+    () => odometerDeltaFromSamples(samples) ?? trip.distance_km,
+    [samples, trip.distance_km],
+  );
+  const showRouteMap = useMemo(
+    () => isRouteTrackDisplayable(track, 2, 75, { odometerDistanceKm }),
+    [track, odometerDistanceKm],
+  );
 
   return (
     <>
@@ -1120,7 +1139,9 @@ function ExpandedTripPanel({ tripId }: { tripId: string }) {
         hasError={Boolean(samplesError)}
         embedded
       />
-      <RouteMap trackPoints={track} isLoading={isTrackLoading} hasError={Boolean(trackError)} embedded />
+      {showRouteMap || isTrackLoading || trackError || track.length === 0 ? (
+        <RouteMap trackPoints={track} isLoading={isTrackLoading} hasError={Boolean(trackError)} embedded />
+      ) : null}
     </>
   );
 }
@@ -1269,7 +1290,7 @@ function TripBrowser({
                       <RouteMap points={expandedFixtureTrip.points} embedded />
                     </>
                   ) : (
-                    <ExpandedTripPanel tripId={trip.id} />
+                    <ExpandedTripPanel tripId={trip.id} trip={trip} />
                   )
                 ) : null}
               </div>
@@ -3380,9 +3401,11 @@ export function RouteMap({
 
 export function RouteMapPreview({
   trackPoints,
+  odometerDistanceKm = null,
   className = "h-40",
 }: {
   trackPoints: BydmateTripTrackPointRow[];
+  odometerDistanceKm?: number | null;
   className?: string;
 }) {
   const { t } = useTranslation();
@@ -3395,8 +3418,12 @@ export function RouteMapPreview({
   panRef.current = pan;
   const [selectedLayer, setSelectedLayer] = useState<RouteLayer>("route");
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
+  const displayable = useMemo(
+    () => isRouteTrackDisplayable(trackPoints, 2, 75, { odometerDistanceKm }),
+    [trackPoints, odometerDistanceKm],
+  );
 
-  if (!isRouteTrackDisplayable(trackPoints) || route.totalPoints < 2) return null;
+  if (!displayable || route.totalPoints < 2) return null;
 
   const zoomBy = (delta: number) => {
     setZoomOffset((offset) => {
@@ -4049,7 +4076,7 @@ function LastTripDetail({
           <MiniStat label={tx("vehicle.trips.avgSpeed")} value={`${fmt(trip.avg_speed_kmh)} km/h`} />
         </div>
       </div>
-      <ExpandedTripPanel tripId={trip.id} />
+      <ExpandedTripPanel tripId={trip.id} trip={trip} />
     </div>
   );
 }

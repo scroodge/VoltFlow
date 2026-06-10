@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { enrichTripsWithEnergy } from "@/lib/bydmate/attach-trip-energy";
+import {
+  haversineMeters,
+  trackPathDistanceKm,
+  tripDistanceSourcesAgree,
+} from "@/lib/bydmate/trip-distance";
 import type { BydmateTripRow } from "@/types/database";
 
 const MIN_ROUTE_TRIPS = 3;
@@ -109,22 +114,12 @@ function toRouteTrackPoints(
   }));
 }
 
-function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const earthRadiusM = 6_371_000;
-  const toRad = (deg: number) => (deg * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return 2 * earthRadiusM * Math.asin(Math.min(1, Math.sqrt(a)));
-}
-
 /** True when GPS track has enough spread to render a meaningful route map. */
 export function isRouteTrackDisplayable(
   points: { lat: number; lon: number }[],
   minPoints = 2,
   minSpanMeters = 75,
+  options?: { odometerDistanceKm?: number | null },
 ) {
   const valid = points.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lon));
   if (valid.length < minPoints) return false;
@@ -150,7 +145,24 @@ export function isRouteTrackDisplayable(
   const latSpanM = haversineMeters(minLat, minLon, maxLat, minLon);
   const lonSpanM = haversineMeters(minLat, minLon, minLat, maxLon);
 
-  return pathMeters >= minSpanMeters || latSpanM >= minSpanMeters || lonSpanM >= minSpanMeters;
+  const geometricOk =
+    pathMeters >= minSpanMeters || latSpanM >= minSpanMeters || lonSpanM >= minSpanMeters;
+  if (geometricOk) return true;
+
+  const odometerKm = options?.odometerDistanceKm;
+  const pathKm = trackPathDistanceKm(valid);
+  if (
+    pathKm != null &&
+    pathKm > 0 &&
+    typeof odometerKm === "number" &&
+    Number.isFinite(odometerKm) &&
+    odometerKm > 0 &&
+    tripDistanceSourcesAgree(pathKm, odometerKm)
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 async function fetchRoutePreferences(
@@ -404,7 +416,10 @@ export async function fetchRouteInsights({
 
     const cluster = clusters.get(key) ?? { label, trips: [], trackPoints: [] };
     cluster.trips.push(ref);
-    if (isRouteTrackDisplayable(mappedTrack) && mappedTrack.length > cluster.trackPoints.length) {
+    if (
+      isRouteTrackDisplayable(mappedTrack, 2, 75, { odometerDistanceKm: trip.distance_km }) &&
+      mappedTrack.length > cluster.trackPoints.length
+    ) {
       cluster.trackPoints = mappedTrack;
     }
     clusters.set(key, cluster);
@@ -446,7 +461,15 @@ export async function fetchRouteInsights({
       tripCount: cluster.trips.length,
       tripsNeeded: 0,
       unlocked: true,
-      trackPoints: isRouteTrackDisplayable(cluster.trackPoints) ? cluster.trackPoints : [],
+      trackPoints: isRouteTrackDisplayable(cluster.trackPoints, 2, 75, {
+        odometerDistanceKm: median(
+          cluster.trips
+            .map((trip) => trip.distanceKm)
+            .filter((value): value is number => value != null && value >= 0),
+        ),
+      })
+        ? cluster.trackPoints
+        : [],
       medianConsumptionKwh100: med,
       minConsumptionKwh100: consumptions.length ? Math.min(...consumptions) : null,
       maxConsumptionKwh100: consumptions.length ? Math.max(...consumptions) : null,
