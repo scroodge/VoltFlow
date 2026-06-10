@@ -716,9 +716,9 @@ function buildChargingBarCharts(
   currencyUnit: string,
   tx: Translator,
 ): BarChartModel[] {
-  const finished = sessions.filter(
-    (s) => (s.status === "completed" || s.status === "stopped") && s.started_at,
-  );
+  const finished = sessions
+    .filter((s) => (s.status === "completed" || s.status === "stopped") && s.started_at)
+    .sort((a, b) => Date.parse(a.started_at!) - Date.parse(b.started_at!)); // oldest → left
   if (finished.length === 0) return [];
 
   const granularity = range === "quarter" || range === "year" ? "week" : "day";
