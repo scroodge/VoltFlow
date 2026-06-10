@@ -865,10 +865,13 @@ type ChartSeries = {
   valueDigits?: number;
 };
 
+type ChartTier = "base" | "diagnostic";
+
 type TelemetryChart = {
   title: string;
   unit: string;
   valueDigits: number;
+  tier: ChartTier;
   series: ChartSeries[];
   minValue: number;
   maxValue: number;
@@ -1476,11 +1479,13 @@ function createChart(
   unit: string,
   series: ChartSeries[],
   valueDigits = 1,
+  tier: ChartTier = "base",
 ): TelemetryChart {
   return {
     title,
     unit,
     valueDigits,
+    tier,
     series,
     minValue: 0,
     maxValue: 1,
@@ -1580,7 +1585,7 @@ function prepareTelemetryHistory(
   const maxChartPoints = options?.maxChartPoints ?? MAX_CHART_POINTS;
   const socChart = createChart(t("vehicle.charts.soc"), "%", [
     { label: "SOC", color: "var(--voltflow-cyan)", points: [] },
-  ]);
+  ], 1, "base");
   const speedPowerChart = createChart(t("vehicle.charts.speedPower"), "", [
     {
       label: t("vehicle.metrics.speed"),
@@ -1596,16 +1601,17 @@ function prepareTelemetryHistory(
       unit: "kW",
       valueDigits: 1,
     },
-  ]);
+  ], 1, "base");
   const temperatureChart = createChart(t("vehicle.charts.temperatures"), "°C", [
     { label: t("vehicle.charts.battery"), color: "#22c55e", points: [] },
     { label: t("vehicle.charts.outside"), color: "#38bdf8", points: [] },
     { label: t("vehicle.charts.cabin"), color: "#fb7185", points: [] },
-  ]);
+  ], 1, "diagnostic");
   const cellDeltaChart = createChart(t("vehicle.charts.cellDelta"), "V", [
     { label: "Delta", color: "#fb7185", points: [] },
-  ], 3);
+  ], 3, "diagnostic");
   const deltaBySocPoints: DeltaBySocPoint[] = [];
+  let hasCellDeltaData = false;
 
   let visiblePointCount = 0;
   let start: string | undefined;
@@ -1632,6 +1638,7 @@ function prepareTelemetryHistory(
     if (includeCellDelta) {
       addChartPoint(cellDeltaChart, 0, time, cellDelta);
       addDeltaBySocPoint(deltaBySocPoints, time, soc, cellDelta);
+      if (cellDelta != null) hasCellDeltaData = true;
     }
   }
 
@@ -1677,9 +1684,13 @@ function prepareTelemetryHistory(
     hasData: regenBars.hasData,
   };
 
-  const charts = [socChart, speedPowerChart, temperatureChart, ...(includeCellDelta ? [cellDeltaChart] : [])].map((chart) =>
-    finalizeChart(chart, maxChartPoints),
-  );
+  const includesCellDeltaChart = includeCellDelta && hasCellDeltaData;
+  const charts = [
+    socChart,
+    speedPowerChart,
+    temperatureChart,
+    ...(includesCellDeltaChart ? [cellDeltaChart] : []),
+  ].map((chart) => finalizeChart(chart, maxChartPoints));
 
   let minTime = Infinity;
   let maxTime = -Infinity;
@@ -1701,7 +1712,7 @@ function prepareTelemetryHistory(
     hasData,
     charts,
     regenRecoveryChart,
-    deltaBySoc: includeCellDelta
+    deltaBySoc: includesCellDeltaChart
       ? prepareDeltaBySoc(deltaBySocPoints, "discharge")
       : { points: [], minSoc: 0, maxSoc: 100, minDelta: 0, maxDelta: 0, latest: null, socDirection: "discharge" as const },
   };
@@ -1814,28 +1825,50 @@ export function TelemetryHistoryCharts({
           ) : null}
           {showLineCharts && history.visiblePointCount > 0 ? (
             <>
+              {/* Base charts — always visible */}
               <div className="mt-5 grid gap-3 md:grid-cols-2">
-                {history.charts.slice(0, 2).map((chart) => (
-                  <TelemetryLineChart
-                    key={chart.title}
-                    chart={chart}
-                    lineGapMs={lineGapMs}
-                  />
-                ))}
-                {history.regenRecoveryChart.hasData ? (
-                  <RegenRecoveryChart chart={history.regenRecoveryChart} />
-                ) : null}
-                {history.charts.slice(2).map((chart) => (
-                  <TelemetryLineChart
-                    key={chart.title}
-                    chart={chart}
-                    lineGapMs={lineGapMs}
-                  />
-                ))}
+                {history.charts
+                  .filter((c) => c.tier === "base")
+                  .map((chart) => (
+                    <TelemetryLineChart
+                      key={chart.title}
+                      chart={chart}
+                      lineGapMs={lineGapMs}
+                    />
+                  ))}
               </div>
-              {includeCellDelta ? (
-                <DeltaBySocChart chart={history.deltaBySoc} lineGapMs={lineGapMs} />
-              ) : null}
+              {/* Diagnostic charts — collapsed by default */}
+              {(() => {
+                const diagnosticCharts = history.charts.filter((c) => c.tier === "diagnostic" && c.hasData);
+                const hasDiagnostic =
+                  diagnosticCharts.length > 0 ||
+                  history.regenRecoveryChart.hasData ||
+                  history.deltaBySoc.points.length > 0;
+                if (!hasDiagnostic) return null;
+                return (
+                  <details className="mt-3 group">
+                    <summary className="flex cursor-pointer list-none items-center gap-2 rounded-xl border border-border bg-white/[0.02] px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground transition hover:border-primary/40 hover:text-foreground">
+                      <span className="transition-transform group-open:rotate-90">›</span>
+                      {tx("vehicle.charts.diagnosticsLabel")}
+                    </summary>
+                    <div className="mt-2 grid gap-3 md:grid-cols-2">
+                      {diagnosticCharts.map((chart) => (
+                        <TelemetryLineChart
+                          key={chart.title}
+                          chart={chart}
+                          lineGapMs={lineGapMs}
+                        />
+                      ))}
+                      {history.regenRecoveryChart.hasData ? (
+                        <RegenRecoveryChart chart={history.regenRecoveryChart} />
+                      ) : null}
+                    </div>
+                    {history.deltaBySoc.points.length > 0 ? (
+                      <DeltaBySocChart chart={history.deltaBySoc} lineGapMs={lineGapMs} />
+                    ) : null}
+                  </details>
+                );
+              })()}
             </>
           ) : null}
           {showBarCharts ? (

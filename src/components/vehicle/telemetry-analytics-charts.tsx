@@ -212,6 +212,7 @@ function buildBarCharts(
 
   const labels = buckets.map((b) => b.label);
 
+  // Regen + outside temperature only — speed/power/SOC-band removed (noisy aggregates)
   const charts: BarChartModel[] = [
     {
       title: tx("vehicle.charts.regen"),
@@ -221,41 +222,15 @@ function buildBarCharts(
       series: [{ label: tx("vehicle.trips.regen"), color: "#34d399", values: buckets.map((b) => b.regenKwhSum) }],
     },
     {
-      title: tx("vehicle.metrics.speed"),
-      unit: "km/h",
-      valueDigits: 0,
-      labels,
-      series: [{ label: tx("vehicle.metrics.speed"), color: "#7dd3fc", values: buckets.map((b) => b.speedMax ?? 0) }],
-    },
-    {
-      title: tx("vehicle.metrics.power"),
-      unit: "kW",
-      valueDigits: 1,
-      labels,
-      series: [{ label: tx("vehicle.metrics.power"), color: "#facc15", values: buckets.map((b) => b.powerAvg ?? 0) }],
-    },
-    {
-      title: tx("vehicle.charts.temperatures"),
+      title: tx("vehicle.charts.outsideTemp"),
       unit: "°C",
       valueDigits: 1,
       labels,
       series: [
-        { label: tx("vehicle.charts.battery"), color: "#22c55e", values: buckets.map((b) => b.batteryTempAvg ?? 0) },
         { label: tx("vehicle.charts.outside"), color: "#38bdf8", values: buckets.map((b) => b.outsideTempAvg ?? 0) },
       ],
     },
   ];
-
-  const socBand: BarChartModel = {
-    title: tx("vehicle.charts.soc"),
-    unit: "%",
-    valueDigits: 0,
-    labels,
-    series: [],
-    bandMin: buckets.map((b) => b.socMin ?? b.socLast ?? 0),
-    bandMax: buckets.map((b) => b.socMax ?? b.socLast ?? 0),
-  };
-  charts.unshift(socBand);
 
   // Mileage + efficiency from trips grouped by bucket
   const granularity = range === "quarter" || range === "year" ? "week" : "day";

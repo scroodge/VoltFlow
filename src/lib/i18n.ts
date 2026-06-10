@@ -444,6 +444,8 @@ export const dictionaries = {
         onePoint: "One point received. Charts will turn into lines after the next cloud payload.",
         noValues: "No values",
         chartAria: "{title} history chart",
+        diagnosticsLabel: "Diagnostics",
+        outsideTemp: "Outside temperature",
       },
       route: {
         title: "Route",
@@ -1142,6 +1144,8 @@ export const dictionaries = {
         onePoint: "Адна кропка атрымана. Графікі стануць лініямі пасля наступнага payload.",
         noValues: "Няма значэнняў",
         chartAria: "Графік гісторыі {title}",
+        diagnosticsLabel: "Дыягностыка",
+        outsideTemp: "Тэмпература звонку",
       },
       route: {
         title: "Маршрут",
@@ -1840,6 +1844,8 @@ export const dictionaries = {
         onePoint: "Получена одна точка. Графики станут линиями после следующего payload.",
         noValues: "Нет значений",
         chartAria: "График истории {title}",
+        diagnosticsLabel: "Диагностика",
+        outsideTemp: "Температура снаружи",
       },
       route: {
         title: "Маршрут",
