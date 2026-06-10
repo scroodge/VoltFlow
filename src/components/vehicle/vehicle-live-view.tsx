@@ -1175,7 +1175,7 @@ export function TripSummaryCard({ trip }: { trip: BydmateTripRow }) {
     },
     {
       label: tx("vehicle.trips.duration"),
-      value: durationMs != null ? formatDuration(durationMs / 1000) : "—",
+      value: durationMs != null ? formatDuration(durationMs) : "—",
     },
     {
       label: tx("vehicle.trips.energy"),
