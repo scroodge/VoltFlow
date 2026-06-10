@@ -212,27 +212,8 @@ function buildBarCharts(
 
   const labels = buckets.map((b) => b.label);
 
-  // Regen + outside temperature only — speed/power/SOC-band removed (noisy aggregates)
-  const charts: BarChartModel[] = [
-    {
-      title: tx("vehicle.charts.regen"),
-      unit: "kWh",
-      valueDigits: 2,
-      labels,
-      series: [{ label: tx("vehicle.trips.regen"), color: "#34d399", values: buckets.map((b) => b.regenKwhSum) }],
-    },
-    {
-      title: tx("vehicle.charts.outsideTemp"),
-      unit: "°C",
-      valueDigits: 1,
-      labels,
-      series: [
-        { label: tx("vehicle.charts.outside"), color: "#38bdf8", values: buckets.map((b) => b.outsideTempAvg ?? 0) },
-      ],
-    },
-  ];
-
-  // Mileage + efficiency from trips grouped by bucket
+  // Mileage + efficiency from trips grouped by bucket — computed first so
+  // the efficiency chart can appear at position [0] (most actionable insight)
   const granularity = range === "quarter" || range === "year" ? "week" : "day";
   const distanceByLabel = new Map<string, number>();
   const consumptionWeighted = new Map<string, { sum: number; weight: number }>();
@@ -267,46 +248,64 @@ function buildBarCharts(
   const periodAvgConsumption =
     periodConsumptionWeight > 0 ? periodConsumptionSum / periodConsumptionWeight : null;
 
-  charts.push({
-    title: tx("vehicle.analytics.mileageTitle"),
-    unit: "km",
-    valueDigits: 0,
-    labels,
-    series: [{
-      label: tx("vehicle.trips.distance"),
-      color: "var(--voltflow-cyan)",
-      values: labels.map((label) => distanceByLabel.get(label) ?? 0),
-    }],
-  });
-
-  charts.push({
-    title: tx("vehicle.analytics.efficiencyTitle"),
-    unit: "kWh/100",
-    valueDigits: 1,
-    yAxisMin: 10,
-    labels,
-    subtitle:
-      periodAvgConsumption != null
-        ? tx("vehicle.analytics.efficiencySubtitle", { value: fmt(periodAvgConsumption, 1) })
-        : undefined,
-    referenceLine:
-      periodAvgConsumption != null
-        ? { value: periodAvgConsumption, label: tx("vehicle.analytics.periodAverage") }
-        : undefined,
-    series: [{
-      label: tx("vehicle.analytics.efficiencyBarLabel"),
-      color: "#a78bfa",
-      values: labels.map((label) => {
-        const row = consumptionWeighted.get(label);
-        return row && row.weight > 0 ? row.sum / row.weight : 0;
+  // Chart order: Efficiency → Mileage → Regen → Outside Temp
+  const charts: BarChartModel[] = [
+    {
+      title: tx("vehicle.analytics.efficiencyTitle"),
+      unit: "kWh/100",
+      valueDigits: 1,
+      yAxisMin: 10,
+      labels,
+      subtitle:
+        periodAvgConsumption != null
+          ? tx("vehicle.analytics.efficiencySubtitle", { value: fmt(periodAvgConsumption, 1) })
+          : undefined,
+      referenceLine:
+        periodAvgConsumption != null
+          ? { value: periodAvgConsumption, label: tx("vehicle.analytics.periodAverage") }
+          : undefined,
+      series: [{
+        label: tx("vehicle.analytics.efficiencyBarLabel"),
+        color: "#a78bfa",
+        values: labels.map((label) => {
+          const row = consumptionWeighted.get(label);
+          return row && row.weight > 0 ? row.sum / row.weight : 0;
+        }),
+      }],
+      barInsideText: labels.map((label) => {
+        const km = distanceByLabel.get(label) ?? 0;
+        return km > 0 ? `${fmt(km, 0)} km` : null;
       }),
-    }],
-    barInsideText: labels.map((label) => {
-      const km = distanceByLabel.get(label) ?? 0;
-      return km > 0 ? `${fmt(km, 0)} km` : null;
-    }),
-    barInsideLegend: `${tx("vehicle.trips.distance")} · ${tx("vehicle.analytics.inBar")}`,
-  });
+      barInsideLegend: `${tx("vehicle.trips.distance")} · ${tx("vehicle.analytics.inBar")}`,
+    },
+    {
+      title: tx("vehicle.analytics.mileageTitle"),
+      unit: "km",
+      valueDigits: 0,
+      labels,
+      series: [{
+        label: tx("vehicle.trips.distance"),
+        color: "var(--voltflow-cyan)",
+        values: labels.map((label) => distanceByLabel.get(label) ?? 0),
+      }],
+    },
+    {
+      title: tx("vehicle.charts.regen"),
+      unit: "kWh",
+      valueDigits: 2,
+      labels,
+      series: [{ label: tx("vehicle.trips.regen"), color: "#34d399", values: buckets.map((b) => b.regenKwhSum) }],
+    },
+    {
+      title: tx("vehicle.charts.outsideTemp"),
+      unit: "°C",
+      valueDigits: 1,
+      labels,
+      series: [
+        { label: tx("vehicle.charts.outside"), color: "#38bdf8", values: buckets.map((b) => b.outsideTempAvg ?? 0) },
+      ],
+    },
+  ];
 
   return charts.filter((chart) => {
     if (chart.bandMin && chart.bandMax) {
