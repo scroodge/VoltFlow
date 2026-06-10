@@ -4174,12 +4174,27 @@ function LocationCard({
   const { locale, t } = useTranslation();
   const tx = t as Translator;
   const loc = snapshot.location;
-  const hasLocation = typeof loc.lat === "number" && typeof loc.lon === "number";
+  const hasLiveLocation = typeof loc.lat === "number" && typeof loc.lon === "number";
+
+  // Load last trip track — the route map is more useful than a single pin, and provides
+  // a GPS fallback when the live snapshot has no location.
+  const { data: latestTrips = [] } = useLatestBydmateTripsQuery(snapshot.vehicle_id, 1);
+  const lastTripId = latestTrips[0]?.id ?? null;
+  const {
+    data: trackPoints = [],
+    isLoading: isTrackLoading,
+  } = useBydmateTripTrackQuery(lastTripId);
+
+  const hasTrack = trackPoints.length > 0;
+  const lastTrackPoint = trackPoints[trackPoints.length - 1] ?? null;
+
+  // Resolve display coordinates: prefer live snapshot, fall back to last track point
+  const displayLat = hasLiveLocation ? (loc.lat as number) : validNumber(lastTrackPoint?.lat);
+  const displayLon = hasLiveLocation ? (loc.lon as number) : validNumber(lastTrackPoint?.lon);
+  const hasAnyLocation = displayLat != null && displayLon != null;
+
   const deviceTimeLabel = hasMounted
     ? new Date(snapshot.device_time).toLocaleString(localeCode(locale))
-    : "—";
-  const receivedLabel = hasMounted
-    ? new Date(snapshot.received_at).toLocaleString(localeCode(locale))
     : "—";
 
   return (
@@ -4191,26 +4206,34 @@ function LocationCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 px-3 pb-3 text-sm">
-        {hasLocation ? (
-          <>
-            <LiveLocationMap
-              location={loc}
-              deviceTimeMs={Date.parse(snapshot.device_time)}
-              telemetry={snapshot.telemetry}
-            />
-            <div className="space-y-0">
-              <Row label={tx("vehicle.location.accuracy")} value={`${fmt(loc.accuracy_m, 1)} m`} />
-              <Row label={tx("vehicle.location.bearing")} value={`${fmt(loc.bearing_deg, 0)}°`} />
-            </div>
-          </>
+        {isTrackLoading ? (
+          <Skeleton className="h-40 rounded-xl" />
+        ) : hasTrack ? (
+          // Show full last-trip route — endpoint is where the car is parked
+          <RouteMap trackPoints={trackPoints} embedded />
+        ) : hasLiveLocation ? (
+          // No trip track yet — fall back to live snapshot single-pin map
+          <LiveLocationMap
+            location={loc}
+            deviceTimeMs={Date.parse(snapshot.device_time)}
+            telemetry={snapshot.telemetry}
+          />
         ) : (
-          <p className="text-muted-foreground">
-            {tx("vehicle.location.empty")}
-          </p>
+          <p className="text-muted-foreground">{tx("vehicle.location.empty")}</p>
         )}
+        {hasAnyLocation ? (
+          <p className="text-center font-mono text-[11px] tabular-nums text-muted-foreground">
+            {displayLat.toFixed(5)}, {displayLon.toFixed(5)}
+            {!hasLiveLocation ? (
+              <span className="ml-1.5 text-muted-foreground/60">({tx("vehicle.location.lastTrip")})</span>
+            ) : null}
+          </p>
+        ) : null}
         <div className="space-y-0">
           <Row label={tx("vehicle.location.deviceTime")} value={deviceTimeLabel} />
-          <Row label={tx("vehicle.location.received")} value={receivedLabel} />
+          {hasLiveLocation ? (
+            <Row label={tx("vehicle.location.accuracy")} value={`${fmt(loc.accuracy_m, 1)} m`} />
+          ) : null}
         </div>
       </CardContent>
     </Card>

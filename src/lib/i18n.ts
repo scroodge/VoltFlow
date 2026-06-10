@@ -492,6 +492,7 @@ export const dictionaries = {
           "No GPS in the latest payload. BYDMate sends location only when Android location permission is granted.",
         deviceTime: "Device time",
         received: "Received",
+        lastTrip: "last trip",
       },
       empty: {
         title: "No car data yet",
@@ -1204,6 +1205,7 @@ export const dictionaries = {
           "У апошнім payload няма GPS. BYDMate дасылае лакацыю толькі калі Android мае дазвол на геалакацыю.",
         deviceTime: "Час прылады",
         received: "Атрымана",
+        lastTrip: "апошняя паездка",
       },
       empty: {
         title: "Даных аўто пакуль няма",
@@ -1916,6 +1918,7 @@ export const dictionaries = {
           "В последнем payload нет GPS. BYDMate отправляет геопозицию только когда Android выдал разрешение на геолокацию.",
         deviceTime: "Время устройства",
         received: "Получено",
+        lastTrip: "последняя поездка",
       },
       empty: {
         title: "Данных авто пока нет",
