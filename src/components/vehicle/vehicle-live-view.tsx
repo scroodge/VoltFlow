@@ -59,6 +59,7 @@ import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
 import { useAppPath } from "@/lib/dev/dev-path";
 import { gearIsPark, readGear } from "@/lib/bydmate/gear";
+import { isTelemetryCharging } from "@/lib/bydmate/telemetry-charging";
 import { averageTripConsumption } from "@/lib/bydmate/range-estimate";
 import { calculateRegenRecoverySegments, calculateTripEnergy, prepareRegenRecoveryBars } from "@/lib/bydmate/trip-energy";
 import { isRouteTrackDisplayable } from "@/lib/bydmate/route-insights";
@@ -944,11 +945,6 @@ function validNumber(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function isChargingTelemetry(telemetry: BydmateTelemetry) {
-  const chargePowerKw = validNumber(telemetry.charge_power_kw);
-  return telemetry.is_charging === true || (chargePowerKw != null && chargePowerKw > 0.1);
-}
-
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
@@ -1008,7 +1004,7 @@ function buildTrips(points: BydmateTelemetryPointRow[]): TripSegment[] {
     .filter(
       (point) =>
         pointTimeMs(point) > 0 &&
-        !isChargingTelemetry(point.telemetry) &&
+        !isTelemetryCharging(point.telemetry, point) &&
         !gearIsPark(readGear(point)),
     )
     .sort((a, b) => pointTimeMs(a) - pointTimeMs(b));

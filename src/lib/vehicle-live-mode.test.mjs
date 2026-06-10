@@ -200,6 +200,17 @@ test("charging in D → driving, not charging", () => {
   );
 });
 
+test("gear P gun unplugged with stale is_charging flag → parked", () => {
+  const snap = snapshot({
+    diplus: { gear: 1, charge_gun_state: 1, charging_status: 1 },
+    telemetry: { soc: 32, speed_kmh: 0, is_charging: true },
+  });
+  assert.equal(
+    deriveDashboardVehicleMode({ snapshot: snap, nowMs: NOW, hasActiveSession: false }),
+    "parked",
+  );
+});
+
 test("parked AC charging blocks driving mode", () => {
   assert.equal(
     isDrivingTelemetry(

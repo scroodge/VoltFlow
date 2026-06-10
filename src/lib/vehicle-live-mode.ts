@@ -36,7 +36,7 @@ export function isRawDrivingTelemetry(snapshot: BydmateLiveSnapshotRow | null | 
 export function isChargingTelemetry(snapshot: BydmateLiveSnapshotRow | null | undefined) {
   if (!snapshot || isDriveTelemetry(snapshot)) return false;
   if (!isParkStateTelemetry(snapshot)) return false;
-  return isTelemetryCharging(snapshot.telemetry);
+  return isTelemetryCharging(snapshot.telemetry, snapshot);
 }
 
 export function isParkedTelemetry(snapshot: BydmateLiveSnapshotRow | null | undefined) {

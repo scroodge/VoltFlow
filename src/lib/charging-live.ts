@@ -41,7 +41,7 @@ export function isFreshChargingSnapshot(
   if (!snapshot) return false;
   if (!isFreshLiveSnapshot(snapshot, nowMs, staleMs)) return false;
   if (isFreshSnapshotDriving(snapshot, nowMs)) return false;
-  return isTelemetryCharging(snapshot.telemetry);
+  return isTelemetryCharging(snapshot.telemetry, snapshot);
 }
 
 export function isFreshLiveSnapshot(
@@ -138,7 +138,7 @@ export function shouldBlockAutoComplete(
 ) {
   if (!isFreshLiveSnapshot(snapshot, nowMs)) return true;
   if (isFreshSnapshotDriving(snapshot, nowMs)) return true;
-  return !isTelemetryCharging(snapshot?.telemetry ?? {});
+  return !isTelemetryCharging(snapshot?.telemetry ?? {}, snapshot ?? undefined);
 }
 
 /** Allow math-based auto-complete only while Mate live SOC is stale (>90s) or absent. */

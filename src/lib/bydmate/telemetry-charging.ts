@@ -1,6 +1,8 @@
-import type { BydmateTelemetry } from "@/types/database";
+import type { BydmateDiplus, BydmateTelemetry } from "@/types/database";
 
 export const TELEMETRY_CHARGE_POWER_THRESHOLD_KW = 0.1;
+/** BYD Mate / Di+: gun connected (AC or DC), not unplugged (1). */
+export const CHARGING_GUN_STATES = new Set([2, 3, 4, 5]);
 export const AUTO_CHARGING_MIN_CONSECUTIVE_SAMPLES = 2;
 export const AUTO_CHARGING_DRIVE_STOP_SPEED_KMH = 5;
 
@@ -13,10 +15,52 @@ export function finiteTelemetryNumber(value: unknown): number | null {
   return null;
 }
 
-export function isTelemetryCharging(telemetry: Pick<BydmateTelemetry, "is_charging" | "charge_power_kw">) {
-  if (telemetry.is_charging === true) return true;
+export type TelemetryChargingDiplusContext = {
+  diplus?: Pick<BydmateDiplus, "charge_gun_state"> | null;
+  diplus_charge_gun_state?: string | number | null;
+};
+
+export function readChargeGunState(context?: TelemetryChargingDiplusContext | null) {
+  if (!context) return null;
+  const fromDiplus = context.diplus?.charge_gun_state;
+  if (fromDiplus != null) return fromDiplus;
+  return context.diplus_charge_gun_state ?? null;
+}
+
+export function chargeGunStateIndicatesCharging(gun: unknown) {
+  const gunState = finiteTelemetryNumber(gun);
+  return gunState != null && CHARGING_GUN_STATES.has(gunState);
+}
+
+export function telemetryChargingContext(
+  source: TelemetryChargingDiplusContext | null | undefined,
+): TelemetryChargingDiplusContext | undefined {
+  if (!source) return undefined;
+  return {
+    diplus: source.diplus,
+    diplus_charge_gun_state: source.diplus_charge_gun_state,
+  };
+}
+
+/**
+ * Active charging or gun plugged in. Ignores Mate `is_charging` when gun is explicitly unplugged (1).
+ * Aligns with BYD Mate TelemetrySnapshot gun-state logic.
+ */
+export function isTelemetryCharging(
+  telemetry: Pick<BydmateTelemetry, "is_charging" | "charge_power_kw">,
+  context?: TelemetryChargingDiplusContext | null,
+) {
   const chargePowerKw = finiteTelemetryNumber(telemetry.charge_power_kw);
-  return chargePowerKw != null && chargePowerKw > TELEMETRY_CHARGE_POWER_THRESHOLD_KW;
+  if (chargePowerKw != null && chargePowerKw > TELEMETRY_CHARGE_POWER_THRESHOLD_KW) {
+    return true;
+  }
+
+  const gun = readChargeGunState(context);
+  if (gun != null) {
+    return chargeGunStateIndicatesCharging(gun);
+  }
+
+  return false;
 }
 
 /** Parked or unknown speed — not driving away. */

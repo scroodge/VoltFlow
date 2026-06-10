@@ -102,7 +102,7 @@ export async function processBydmateChargeNotifications({
     const result = nextChargeNotificationState({
       previousState,
       currentSoc: finiteTelemetryNumber(sample.telemetry.soc),
-      isCharging: isTelemetryCharging(sample.telemetry),
+      isCharging: isTelemetryCharging(sample.telemetry, sample),
       deviceTime: sample.device_time,
       previousSoc: previousTelemetry.get(sample.vehicle_id)?.telemetry.soc,
     });

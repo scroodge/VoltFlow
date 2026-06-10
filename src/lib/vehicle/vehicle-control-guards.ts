@@ -45,7 +45,7 @@ export function isStationaryForRemoteControl(snapshot: BydmateLiveSnapshotRow | 
   if (!snapshot) return false;
   if (readSpeed(snapshot) > 0) return false;
   if (gearIsPark(readGear(snapshot))) return true;
-  return isTelemetryCharging(snapshot.telemetry);
+  return isTelemetryCharging(snapshot.telemetry, snapshot);
 }
 
 export function isControlAllowed(snapshot: BydmateLiveSnapshotRow | undefined) {
