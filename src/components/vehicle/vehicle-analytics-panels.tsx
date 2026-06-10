@@ -20,6 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useBydmateSohHistoryQuery } from "@/hooks/use-bydmate-soh-history-query";
 import { useBydmateTelemetryHistoryQuery } from "@/hooks/use-bydmate-telemetry-history-query";
+import type { TelemetryHistoryPoint } from "@/lib/bydmate/telemetry-history";
 import { useTranslation } from "@/hooks/use-translation";
 import { buildAnalyticsSummary, consumptionByOutsideTemp } from "@/lib/bydmate/telemetry-buckets";
 import { computeHistoryPeriodSummary } from "@/lib/history-day-summary";
@@ -203,11 +204,6 @@ export function VehicleAnalyticsPanels({
       initialDate,
     ),
   );
-  const [monthKey, setMonthKey] = useState(() => new Date().toISOString().slice(0, 7));
-  const [costFrom, setCostFrom] = useState(() =>
-    new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10),
-  );
-  const [costTo, setCostTo] = useState(() => new Date().toISOString().slice(0, 10));
 
   useEffect(() => {
     if (initialRange == null && initialDate == null) return;
@@ -293,23 +289,14 @@ export function VehicleAnalyticsPanels({
 
   const periodSummaryLoading = periodTripsQuery.isLoading || periodSessionsQuery.isLoading;
 
+  const periodCostPerKm = useMemo(() => {
+    if (!periodSummary.hasPricedSessions || periodSummary.distanceKm <= 0) return null;
+    return periodSummary.chargingCost / periodSummary.distanceKm;
+  }, [periodSummary]);
+
   const sohQuery = useBydmateSohHistoryQuery({
     anchorDate,
     vehicleId,
-  });
-
-  const monthlyQuery = useQuery({
-    queryKey: ["vehicle-analytics", "monthly", monthKey, vehicleId],
-    queryFn: () =>
-      fetchAnalytics<{
-        distanceKm: number;
-        regenKwh: number;
-        chargedKwh: number;
-        chargingCost: number;
-        sessionCount: number;
-        tripCount: number;
-        avgConsumptionKwh100: number | null;
-      }>(`/api/vehicle/analytics?type=monthly&month=${monthKey}&vehicle_id=${encodeURIComponent(vehicleId)}`),
   });
 
   const phantomQuery = useQuery({
@@ -317,14 +304,6 @@ export function VehicleAnalyticsPanels({
     queryFn: () =>
       fetchAnalytics<{ rows: { date: string; drainPercent: number; idleHours: number }[] }>(
         `/api/vehicle/analytics?type=phantom&vehicle_id=${encodeURIComponent(vehicleId)}`,
-      ),
-  });
-
-  const costQuery = useQuery({
-    queryKey: ["vehicle-analytics", "cost", costFrom, costTo, vehicleId],
-    queryFn: () =>
-      fetchAnalytics<{ distanceKm: number; chargingCost: number; costPerKm: number | null }>(
-        `/api/vehicle/analytics?type=cost-per-km&from=${costFrom}&to=${costTo}&vehicle_id=${encodeURIComponent(vehicleId)}`,
       ),
   });
 
@@ -398,7 +377,7 @@ export function VehicleAnalyticsPanels({
     return latest.telemetry.soh_percent ?? null;
   }, [sohQuery.data]);
 
-  const exportBase = `/api/vehicle/export?format=csv&vehicle_id=${encodeURIComponent(vehicleId)}&from=${costFrom}T00:00:00.000Z&to=${costTo}T23:59:59.999Z`;
+  const exportBase = `/api/vehicle/export?format=csv&vehicle_id=${encodeURIComponent(vehicleId)}&from=${telemetryWindow.from}&to=${telemetryWindow.to}`;
   const exportUrl = isDevAppRoute() ? withDevApiParams(exportBase) : exportBase;
 
   const historySubtitle =
@@ -479,8 +458,16 @@ export function VehicleAnalyticsPanels({
             {historyQuery.isLoading || periodTripsQuery.isLoading ? (
               <AnalyticsSummaryStatsLoading />
             ) : (
-              <AnalyticsSummaryStats summary={summary} />
+              <AnalyticsSummaryStats summary={summary} chargedKwh={periodSummary.chargedKwh > 0 ? periodSummary.chargedKwh : null} />
             )}
+            {!periodSummaryLoading && periodSummary.hasPricedSessions ? (
+              <div className="mt-3 grid grid-cols-2 gap-3 min-[430px]:grid-cols-3">
+                <AnalyticsStat label={t("vehicle.analytics.cost") as string} value={formatMoney(periodSummary.chargingCost)} />
+                {periodCostPerKm != null ? (
+                  <AnalyticsStat label={t("vehicle.analytics.costPerKm") as string} value={`${formatMoney(periodCostPerKm, 3)}/km`} />
+                ) : null}
+              </div>
+            ) : null}
 
             <div className="mt-4">
               <TelemetryHistoryCharts
@@ -499,47 +486,31 @@ export function VehicleAnalyticsPanels({
       </section>
 
       <section className="voltflow-card p-5">
-        <h2 className="font-heading text-2xl font-semibold tracking-tight">
-          {t("vehicle.analytics.sohTitle")}
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.sohSubtitle")}</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-heading text-2xl font-semibold tracking-tight">
+              {t("vehicle.analytics.sohTitle")}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.sohSubtitle")}</p>
+          </div>
+          {latestSohPercent != null ? (
+            <p className="font-heading text-4xl font-bold tabular-nums tracking-tight text-[var(--voltflow-cyan)]">
+              {fmt(latestSohPercent, 1)}
+              <span className="ml-0.5 text-xl font-semibold text-muted-foreground">%</span>
+            </p>
+          ) : null}
+        </div>
         <div className="mt-4">
           {sohQuery.isLoading ? (
-            <Skeleton className="h-14 w-28 rounded-2xl" />
-          ) : sohQuery.error || latestSohPercent == null ? (
-            <p className="font-heading text-3xl font-bold tabular-nums text-muted-foreground">—</p>
-          ) : (
-            <p className="font-heading text-5xl font-bold tabular-nums tracking-tight text-[var(--voltflow-cyan)]">
-              {fmt(latestSohPercent, 1)}
-              <span className="ml-0.5 text-2xl font-semibold text-muted-foreground">%</span>
+            <Skeleton className="h-40 rounded-2xl" />
+          ) : sohQuery.error || (sohQuery.data ?? []).length === 0 ? (
+            <p className="rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
+              {t("vehicle.analytics.sohNoData")}
             </p>
+          ) : (
+            <SohTrendChart points={sohQuery.data ?? []} locale={locale} />
           )}
         </div>
-      </section>
-
-      <section className="voltflow-card p-5">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.monthlyTitle")}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.monthlySubtitle")}</p>
-          </div>
-          <Input type="month" value={monthKey} onChange={(event) => setMonthKey(event.target.value)} className="w-44" />
-        </div>
-        {monthlyQuery.isLoading ? (
-          <Skeleton className="mt-4 h-24 rounded-2xl" />
-        ) : (
-          <div className="mt-4 grid grid-cols-2 gap-3 min-[430px]:grid-cols-3">
-            <AnalyticsStat label={t("vehicle.analytics.trips") as string} value={String(monthlyQuery.data?.tripCount ?? 0)} />
-            <AnalyticsStat label={t("vehicle.trips.distance") as string} value={`${fmt(monthlyQuery.data?.distanceKm, 0)} km`} />
-            <AnalyticsStat label={t("vehicle.trips.regen") as string} value={`${fmt(monthlyQuery.data?.regenKwh, 2)} kWh`} />
-            <AnalyticsStat label={t("vehicle.analytics.charged") as string} value={`${fmt(monthlyQuery.data?.chargedKwh, 1)} kWh`} />
-            <AnalyticsStat label={t("vehicle.analytics.cost") as string} value={formatMoney(monthlyQuery.data?.chargingCost, 2)} />
-            <AnalyticsStat
-              label={t("vehicle.trips.consumption") as string}
-              value={`${fmt(monthlyQuery.data?.avgConsumptionKwh100, 1)} kWh/100`}
-            />
-          </div>
-        )}
       </section>
 
       <section className="voltflow-card p-5">
@@ -580,30 +551,6 @@ export function VehicleAnalyticsPanels({
       </section>
 
       <section className="voltflow-card p-5">
-        <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.costPerKmTitle")}</h2>
-        <div className="mt-4 flex flex-wrap gap-3">
-          <Input type="date" value={costFrom} onChange={(event) => setCostFrom(event.target.value)} className="w-40" />
-          <Input type="date" value={costTo} onChange={(event) => setCostTo(event.target.value)} className="w-40" />
-        </div>
-        {costQuery.isLoading ? (
-          <Skeleton className="mt-4 h-16 rounded-2xl" />
-        ) : (
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <AnalyticsStat label={t("vehicle.trips.distance") as string} value={`${fmt(costQuery.data?.distanceKm, 0)} km`} />
-            <AnalyticsStat label={t("vehicle.analytics.cost") as string} value={formatMoney(costQuery.data?.chargingCost, 2)} />
-            <AnalyticsStat
-              label={t("vehicle.analytics.costPerKm") as string}
-              value={
-                typeof costQuery.data?.costPerKm === "number" && Number.isFinite(costQuery.data.costPerKm)
-                  ? `${formatMoney(costQuery.data.costPerKm, 3)}/km`
-                  : "—"
-              }
-            />
-          </div>
-        )}
-      </section>
-
-      <section className="voltflow-card p-5">
         <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.lifetimeMapTitle")}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.lifetimeMapSubtitle")}</p>
         <div className="mt-4">
@@ -634,6 +581,93 @@ export function VehicleAnalyticsPanels({
         </div>
       </section>
     </div>
+  );
+}
+
+function SohTrendChart({
+  points,
+  locale,
+}: {
+  points: TelemetryHistoryPoint[];
+  locale: string;
+}) {
+  const validPoints = points
+    .filter((p) => typeof p.telemetry.soh_percent === "number" && Number.isFinite(p.telemetry.soh_percent))
+    .map((p) => ({ time: Date.parse(p.device_time), soh: p.telemetry.soh_percent as number }))
+    .sort((a, b) => a.time - b.time);
+
+  if (validPoints.length < 2) {
+    if (validPoints.length === 1) {
+      return (
+        <p className="font-heading text-4xl font-bold tabular-nums tracking-tight text-[var(--voltflow-cyan)]">
+          {validPoints[0].soh.toFixed(1)}
+          <span className="ml-0.5 text-xl font-semibold text-muted-foreground">%</span>
+        </p>
+      );
+    }
+    return null;
+  }
+
+  const minTime = validPoints[0].time;
+  const maxTime = validPoints[validPoints.length - 1].time;
+  const minSoh = Math.min(...validPoints.map((p) => p.soh));
+  const maxSoh = Math.max(...validPoints.map((p) => p.soh));
+  const sohPad = Math.max((maxSoh - minSoh) * 0.2, 0.5);
+  const yMin = Math.max(0, minSoh - sohPad);
+  const yMax = Math.min(105, maxSoh + sohPad);
+
+  const xFn = (time: number) => {
+    if (maxTime === minTime) return 176;
+    return 34 + ((time - minTime) / (maxTime - minTime)) * 284;
+  };
+  const yFn = (soh: number) => {
+    if (yMax === yMin) return 60;
+    return 104 - ((soh - yMin) / (yMax - yMin)) * 88;
+  };
+
+  const pathD = validPoints
+    .map((p, i) => `${i === 0 ? "M" : "L"} ${xFn(p.time).toFixed(1)} ${yFn(p.soh).toFixed(1)}`)
+    .join(" ");
+
+  const latest = validPoints[validPoints.length - 1];
+  const dateFmt = (ms: number) =>
+    new Date(ms).toLocaleDateString(locale, { month: "short", day: "numeric" });
+  const midTime = (minTime + maxTime) / 2;
+
+  const yTicks = [
+    { v: yMax, label: `${yMax.toFixed(1)}%` },
+    { v: (yMin + yMax) / 2, label: `${((yMin + yMax) / 2).toFixed(1)}%` },
+    { v: yMin, label: `${yMin.toFixed(1)}%` },
+  ];
+
+  return (
+    <svg className="h-44 w-full overflow-visible" viewBox="0 0 340 140">
+      <line x1="34" x2="318" y1="104" y2="104" stroke="currentColor" className="text-border" strokeWidth="1" />
+      <line x1="34" x2="34" y1="16" y2="104" stroke="currentColor" className="text-border" strokeWidth="1" />
+      {yTicks.map((tick) => (
+        <g key={tick.label}>
+          <line x1="34" x2="318" y1={yFn(tick.v)} y2={yFn(tick.v)} stroke="currentColor" className="text-border/40" strokeWidth="1" strokeDasharray="4 6" />
+          <text x="29" y={yFn(tick.v) + 3} textAnchor="end" fontSize="9" className="fill-muted-foreground">
+            {tick.label}
+          </text>
+        </g>
+      ))}
+      {[minTime, midTime, maxTime].map((t, i) => (
+        <g key={i}>
+          <line x1={xFn(t)} x2={xFn(t)} y1="104" y2="109" stroke="currentColor" className="text-border" strokeWidth="1" />
+          <text x={xFn(t)} y="122" textAnchor="middle" fontSize="9" className="fill-muted-foreground">
+            {dateFmt(t)}
+          </text>
+        </g>
+      ))}
+      <path d={pathD} fill="none" stroke="var(--voltflow-cyan)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      {validPoints.length <= 60
+        ? validPoints.map((p, i) => (
+            <circle key={i} cx={xFn(p.time)} cy={yFn(p.soh)} r="2.5" fill="var(--voltflow-cyan)" />
+          ))
+        : null}
+      <circle cx={xFn(latest.time)} cy={yFn(latest.soh)} r="5" fill="var(--voltflow-cyan)" stroke="#fff" strokeWidth="1.5" />
+    </svg>
   );
 }
 
