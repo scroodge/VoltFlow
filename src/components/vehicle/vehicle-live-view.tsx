@@ -99,6 +99,78 @@ function isMissingMetricValue(value: string) {
   return value === "—" || value.includes("—%") || /^—\s/.test(value);
 }
 
+function finiteMetric(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function finiteKm(value: unknown) {
+  return finiteMetric(value);
+}
+
+function readAuxVoltageV(
+  snapshot: Pick<BydmateLiveSnapshotRow, "telemetry" | "diplus" | "diplus_voltage_12v">,
+) {
+  const fromTelemetry = finiteMetric(snapshot.telemetry.aux_voltage_v);
+  if (fromTelemetry != null) return fromTelemetry;
+
+  const fromColumn = finiteMetric(snapshot.diplus_voltage_12v);
+  if (fromColumn != null) return fromColumn;
+
+  const fromDiplus = finiteMetric(snapshot.diplus?.voltage_12v);
+  if (fromDiplus != null) return fromDiplus;
+
+  return null;
+}
+
+function heroCoreMetrics(snapshot: BydmateLiveSnapshotRow, t: Translator, locale: Locale) {
+  const telemetry = snapshot.telemetry;
+  return [
+    {
+      key: "soh",
+      icon: Activity,
+      label: t("vehicle.metrics.soh"),
+      value: `${fmt(telemetry.soh_percent, 1)}%`,
+    },
+    {
+      key: "auxBattery",
+      icon: Zap,
+      label: t("vehicle.telemetry.auxBattery"),
+      value: `${fmt(readAuxVoltageV(snapshot), 1)} V`,
+    },
+    {
+      key: "odometer",
+      icon: CarFront,
+      label: t("vehicle.telemetry.odometer"),
+      value: fmtOdometerKm(readOdometerKm(snapshot), locale),
+    },
+  ];
+}
+
+function readOdometerKm(
+  snapshot: Pick<BydmateLiveSnapshotRow, "telemetry" | "diplus" | "diplus_mileage_km">,
+) {
+  const fromTelemetry = finiteKm(snapshot.telemetry.odometer_km);
+  if (fromTelemetry != null) return fromTelemetry;
+
+  const fromColumn = finiteKm(snapshot.diplus_mileage_km);
+  if (fromColumn != null) return fromColumn;
+
+  const fromDiplus = finiteKm(snapshot.diplus?.mileage_km);
+  if (fromDiplus != null) return fromDiplus;
+
+  return null;
+}
+
+function fmtOdometerKm(km: number | null | undefined, locale: Locale) {
+  if (typeof km !== "number" || !Number.isFinite(km)) return "—";
+  return `${km.toLocaleString(localeCode(locale), { maximumFractionDigits: 0 })} km`;
+}
+
 function telemetryGridClass(count: number) {
   if (count % 3 === 0) return "grid grid-cols-3 gap-2";
   return "grid grid-cols-2 gap-2 min-[380px]:grid-cols-3";
@@ -328,7 +400,7 @@ function VehicleLiveContent({
             </>
           ) : (
             <>
-              <TelemetryGrid telemetry={snapshot.telemetry} />
+              <TelemetryGrid snapshot={snapshot} />
               <TripBrowser
                 showDateFilter={Boolean(fixturePoints)}
                 selectedDate={selectedDate}
@@ -406,9 +478,10 @@ function Hero({
   vehicleLabel: string;
   hasMounted: boolean;
 }) {
-  const { t: translate } = useTranslation();
+  const { locale, t: translate } = useTranslation();
   const t = translate as Translator;
   const telemetry = snapshot.telemetry;
+  const coreMetrics = heroCoreMetrics(snapshot, t, locale);
 
   return (
     <section className="voltflow-card overflow-hidden p-4">
@@ -437,27 +510,82 @@ function Hero({
         </span>
       </div>
 
-      {isStale ? (
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <HeroMetric icon={Activity} label={t("vehicle.metrics.soh")} value={`${fmt(telemetry.soh_percent, 1)}%`} />
-          <HeroMetric icon={Route} label={t("vehicle.metrics.range")} value={rangeLabel} />
-        </div>
-      ) : (
-        <div className="mt-4 grid grid-cols-3 gap-2">
-          {isCharging ? (
-            <>
-              <HeroMetric icon={BatteryCharging} label={t("vehicle.telemetry.charging")} value={fmtBool(telemetry.is_charging, t)} />
-              <HeroMetric icon={Zap} label={t("vehicle.telemetry.chargePower")} value={`${fmt(telemetry.charge_power_kw, 1)} kW`} />
-            </>
-          ) : (
-            <>
-              <HeroMetric icon={Gauge} label={t("vehicle.metrics.speed")} value={`${fmt(telemetry.speed_kmh, 0)} km/h`} />
-              <HeroMetric icon={Zap} label={t("vehicle.metrics.power")} value={`${fmt(telemetry.power_kw, 1)} kW`} />
-            </>
-          )}
-          <HeroMetric icon={Route} label={t("vehicle.metrics.range")} value={rangeLabel} />
-        </div>
-      )}
+      <div className={`mt-4 ${telemetryGridClass(coreMetrics.length)}`}>
+        {coreMetrics.map((metric) => (
+          <HeroMetric
+            key={metric.key}
+            icon={metric.icon}
+            label={metric.label}
+            value={metric.value}
+          />
+        ))}
+      </div>
+
+      {(() => {
+        const modeMetrics: {
+          key: string;
+          icon: typeof Gauge;
+          label: string;
+          value: string;
+        }[] = [];
+
+        if (isStale) {
+          modeMetrics.push({
+            key: "range",
+            icon: Route,
+            label: t("vehicle.metrics.range"),
+            value: rangeLabel,
+          });
+        } else if (isCharging) {
+          modeMetrics.push(
+            {
+              key: "charging",
+              icon: BatteryCharging,
+              label: t("vehicle.telemetry.charging"),
+              value: fmtBool(telemetry.is_charging, t),
+            },
+            {
+              key: "chargePower",
+              icon: Zap,
+              label: t("vehicle.telemetry.chargePower"),
+              value: `${fmt(telemetry.charge_power_kw, 1)} kW`,
+            },
+            { key: "range", icon: Route, label: t("vehicle.metrics.range"), value: rangeLabel },
+          );
+        } else {
+          modeMetrics.push(
+            {
+              key: "speed",
+              icon: Gauge,
+              label: t("vehicle.metrics.speed"),
+              value: `${fmt(telemetry.speed_kmh, 0)} km/h`,
+            },
+            {
+              key: "power",
+              icon: Zap,
+              label: t("vehicle.metrics.power"),
+              value: `${fmt(telemetry.power_kw, 1)} kW`,
+            },
+            { key: "range", icon: Route, label: t("vehicle.metrics.range"), value: rangeLabel },
+          );
+        }
+
+        const visibleModeMetrics = modeMetrics.filter((metric) => !isMissingMetricValue(metric.value));
+        if (visibleModeMetrics.length === 0) return null;
+
+        return (
+          <div className={`mt-2 ${telemetryGridClass(visibleModeMetrics.length)}`}>
+            {visibleModeMetrics.map((metric) => (
+              <HeroMetric
+                key={metric.key}
+                icon={metric.icon}
+                label={metric.label}
+                value={metric.value}
+              />
+            ))}
+          </div>
+        );
+      })()}
     </section>
   );
 }
@@ -529,9 +657,10 @@ function StaleTelemetryNotice() {
   );
 }
 
-function TelemetryGrid({ telemetry }: { telemetry: BydmateTelemetry }) {
+function TelemetryGrid({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
   const { t } = useTranslation();
   const tx = t as Translator;
+  const telemetry = snapshot.telemetry;
   const isCharging = Boolean(telemetry.is_charging);
 
   const items = useMemo(() => {
@@ -560,24 +689,6 @@ function TelemetryGrid({ telemetry }: { telemetry: BydmateTelemetry }) {
         icon: Thermometer,
         label: tx("vehicle.telemetry.outsideTemp"),
         value: fmtTemp(telemetry.outside_temp_c),
-      },
-      {
-        key: "odometer",
-        icon: Activity,
-        label: tx("vehicle.telemetry.odometer"),
-        value: `${fmt(telemetry.odometer_km, 1)} km`,
-      },
-      {
-        key: "soh",
-        icon: Activity,
-        label: tx("vehicle.telemetry.soh"),
-        value: `${fmt(telemetry.soh_percent, 1)}%`,
-      },
-      {
-        key: "auxBattery",
-        icon: Zap,
-        label: tx("vehicle.telemetry.auxBattery"),
-        value: `${fmt(telemetry.aux_voltage_v, 1)} V`,
       },
       {
         key: "tripDistance",
