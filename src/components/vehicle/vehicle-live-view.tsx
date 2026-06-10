@@ -1829,7 +1829,7 @@ function prepareTelemetryHistory(
     socChart,
     speedPowerChart,
     temperatureChart,
-    ...(includesCellDeltaChart ? [cellDeltaChart] : []),
+    // Cell Delta time-series removed — Delta by SOC below captures the same signal more usefully
   ].map((chart) => finalizeChart(chart, maxChartPoints));
 
   let minTime = Infinity;
