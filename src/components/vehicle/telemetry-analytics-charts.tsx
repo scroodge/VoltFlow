@@ -23,6 +23,7 @@ import {
   type TempConsumptionBucket,
 } from "@/lib/bydmate/telemetry-buckets";
 import type { TelemetryHistoryPoint } from "@/lib/bydmate/telemetry-history";
+import type { ChargingSessionRow } from "@/types/database";
 import type { TelemetryHistoryRange } from "@/lib/bydmate/telemetry-ranges";
 
 type Translator = (key: TranslationKey, values?: Record<string, string | number>) => string;
@@ -705,6 +706,131 @@ export function useAnalyticsBarCharts(
     const buckets = aggregateTelemetryBuckets(points, range, localeCode(locale));
     return buildBarCharts(buckets, trips, range, localeCode(locale), tx);
   }, [points, trips, range, locale, tx]);
+}
+
+/** Build BarChartModel[] for completed charging sessions bucketed by range. */
+function buildChargingBarCharts(
+  sessions: ChargingSessionRow[],
+  range: TelemetryHistoryRange,
+  locale: string,
+  currencyUnit: string,
+  tx: Translator,
+): BarChartModel[] {
+  const finished = sessions.filter(
+    (s) => (s.status === "completed" || s.status === "stopped") && s.started_at,
+  );
+  if (finished.length === 0) return [];
+
+  const granularity = range === "quarter" || range === "year" ? "week" : "day";
+
+  const energyByLabel = new Map<string, number>();
+  const costByLabel = new Map<string, number>();
+  const speedWeighted = new Map<string, { sum: number; weight: number }>();
+  const countByLabel = new Map<string, number>();
+  const labelsOrdered: string[] = [];
+  let hasAnyPriced = false;
+  let hasSpeedData = false;
+
+  for (const session of finished) {
+    const ms = Date.parse(session.started_at!);
+    if (!Number.isFinite(ms)) continue;
+    const d = new Date(ms);
+    let key: string;
+    if (granularity === "week") {
+      const day = d.getUTCDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      d.setUTCDate(d.getUTCDate() + diff);
+      d.setUTCHours(0, 0, 0, 0);
+      key = d.toLocaleDateString(locale, { month: "short", day: "numeric" });
+    } else {
+      key = d.toLocaleDateString(locale, { month: "short", day: "numeric" });
+    }
+    if (!labelsOrdered.includes(key)) labelsOrdered.push(key);
+
+    const kwh = session.charged_energy_kwh ?? 0;
+    energyByLabel.set(key, (energyByLabel.get(key) ?? 0) + kwh);
+    countByLabel.set(key, (countByLabel.get(key) ?? 0) + 1);
+
+    if (session.price_per_kwh > 0) {
+      hasAnyPriced = true;
+      costByLabel.set(key, (costByLabel.get(key) ?? 0) + (session.estimated_cost ?? 0));
+    }
+
+    if (session.charger_power_kw > 0 && kwh > 0) {
+      hasSpeedData = true;
+      const row = speedWeighted.get(key) ?? { sum: 0, weight: 0 };
+      row.sum += session.charger_power_kw * kwh;
+      row.weight += kwh;
+      speedWeighted.set(key, row);
+    }
+  }
+
+  if (labelsOrdered.length === 0) return [];
+
+  const charts: BarChartModel[] = [
+    {
+      title: tx("vehicle.analytics.chargingEnergyTitle"),
+      unit: "kWh",
+      valueDigits: 1,
+      labels: labelsOrdered,
+      series: [{
+        label: tx("vehicle.analytics.chargingEnergyLabel"),
+        color: "#f59e0b",
+        values: labelsOrdered.map((l) => energyByLabel.get(l) ?? 0),
+      }],
+      barInsideText: labelsOrdered.map((l) => {
+        const n = countByLabel.get(l) ?? 0;
+        return n > 0 ? `×${n}` : null;
+      }),
+      barInsideLegend: tx("vehicle.analytics.chargingSessionsInBar"),
+    },
+  ];
+
+  if (hasAnyPriced) {
+    charts.push({
+      title: tx("vehicle.analytics.chargingCostChartTitle"),
+      unit: currencyUnit,
+      valueDigits: 2,
+      labels: labelsOrdered,
+      series: [{
+        label: tx("vehicle.analytics.cost"),
+        color: "#fb923c",
+        values: labelsOrdered.map((l) => costByLabel.get(l) ?? 0),
+      }],
+    });
+  }
+
+  if (hasSpeedData) {
+    charts.push({
+      title: tx("vehicle.analytics.chargingSpeedTitle"),
+      unit: "kW",
+      valueDigits: 1,
+      labels: labelsOrdered,
+      series: [{
+        label: tx("vehicle.analytics.chargingSpeedLabel"),
+        color: "#a78bfa",
+        values: labelsOrdered.map((l) => {
+          const row = speedWeighted.get(l);
+          return row && row.weight > 0 ? row.sum / row.weight : 0;
+        }),
+      }],
+    });
+  }
+
+  return charts.filter((c) => c.series.some((s) => s.values.some((v) => v > 0)));
+}
+
+export function useChargingBarCharts(
+  sessions: ChargingSessionRow[],
+  range: TelemetryHistoryRange,
+  locale: Locale,
+  currencyUnit: string,
+  tx: Translator,
+): BarChartModel[] {
+  return useMemo(() => {
+    if (range === "day") return [];
+    return buildChargingBarCharts(sessions, range, localeCode(locale), currencyUnit, tx);
+  }, [sessions, range, locale, currencyUnit, tx]);
 }
 
 export type { BarChartModel };

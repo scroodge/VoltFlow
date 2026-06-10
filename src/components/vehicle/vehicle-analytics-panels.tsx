@@ -9,8 +9,10 @@ import {
   AnalyticsSummaryStats,
   AnalyticsSummaryStatsLoading,
   PhantomDrainBarChart,
+  TelemetryBarChart,
   TempConsumptionBarChart,
   useAnalyticsBarCharts,
+  useChargingBarCharts,
 } from "@/components/vehicle/telemetry-analytics-charts";
 import { RouteInsightsSection } from "@/components/vehicle/route-insights-section";
 import { RouteMap, TelemetryHistoryCharts } from "@/components/vehicle/vehicle-live-view";
@@ -348,6 +350,17 @@ export function VehicleAnalyticsPanels({
     tx,
   );
 
+  // Currency symbol for charging cost bar chart
+  const currencyUnit = formatCurrencyAmount(currency, 0, locale as Locale).replace(/[\d.,\s]/g, "").trim() || currency;
+
+  const chargingBarCharts = useChargingBarCharts(
+    periodSessions,
+    historyRange,
+    locale as Locale,
+    currencyUnit,
+    tx,
+  );
+
   const handleRangeChange = (range: TelemetryHistoryRange) => {
     const nextDate = snapAnchorDateForRange(range, anchorDate);
     setHistoryRange(range);
@@ -512,6 +525,29 @@ export function VehicleAnalyticsPanels({
           )}
         </div>
       </section>
+
+      {!isDayRange && chargingBarCharts.length > 0 ? (
+        <section className="voltflow-card p-5">
+          <h2 className="font-heading text-2xl font-semibold tracking-tight">
+            {t("vehicle.analytics.chargingTrendsTitle")}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("vehicle.analytics.chargingTrendsSubtitle")}
+          </p>
+          {periodSessionsQuery.isLoading ? (
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              <Skeleton className="h-52 rounded-2xl" />
+              <Skeleton className="h-52 rounded-2xl" />
+            </div>
+          ) : (
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              {chargingBarCharts.map((chart) => (
+                <TelemetryBarChart key={chart.title} chart={chart} />
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
 
       <section className="voltflow-card p-5">
         <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.phantomTitle")}</h2>
