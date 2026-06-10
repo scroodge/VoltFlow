@@ -68,7 +68,8 @@ import {
   resolvePreferredTripDistanceKm,
   trackPathDistanceKm,
 } from "@/lib/bydmate/trip-distance";
-import type { Locale, TranslationKey } from "@/lib/i18n";
+import { formatCurrencyAmount } from "@/lib/i18n";
+import type { Currency, Locale, TranslationKey } from "@/lib/i18n";
 import {
   deriveDashboardVehicleMode,
   resolveLiveSnapshotForVehicle,
@@ -1117,6 +1118,102 @@ function tripRowFromFixture(trip: TripSegment, vehicleId: string): BydmateTripRo
   };
 }
 
+// ─── Trip summary card ────────────────────────────────────────────────────────
+
+export function TripSummaryCard({ trip }: { trip: BydmateTripRow }) {
+  const { locale, t } = useTranslation();
+  const tx = t as Translator;
+  const currency = useAppPreferences((s) => s.currency) as Currency;
+  const pricePerKwh = useAppPreferences((s) => s.defaultPricePerKwh);
+
+  const distanceKm = trip.distance_km;
+  const durationMs =
+    trip.started_at && (trip.ended_at ?? trip.last_device_time)
+      ? Date.parse(trip.ended_at ?? trip.last_device_time) - Date.parse(trip.started_at)
+      : null;
+
+  // Energy: prefer traction_energy_kwh; fallback to distance × avg_consumption / 100
+  const energyKwh =
+    typeof trip.traction_energy_kwh === "number" && Number.isFinite(trip.traction_energy_kwh)
+      ? trip.traction_energy_kwh
+      : distanceKm != null && trip.avg_consumption_kwh_100km != null
+        ? (distanceKm * trip.avg_consumption_kwh_100km) / 100
+        : null;
+
+  const regenKwh =
+    typeof trip.regen_energy_kwh === "number" && Number.isFinite(trip.regen_energy_kwh)
+      ? trip.regen_energy_kwh
+      : null;
+
+  // Cost = energy × tariff (only if tariff is configured > 0)
+  const costValue =
+    energyKwh != null && pricePerKwh > 0 ? energyKwh * pricePerKwh : null;
+  const costStr =
+    costValue != null
+      ? formatCurrencyAmount(currency, costValue, locale as Locale, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })
+      : null;
+
+  // Regen as % of energy used
+  const regenPct =
+    regenKwh != null && energyKwh != null && energyKwh > 0
+      ? (regenKwh / energyKwh) * 100
+      : null;
+
+  type Stat = { label: string; value: string; sub?: string };
+  const stats: Stat[] = [
+    {
+      label: tx("vehicle.trips.distance"),
+      value: distanceKm != null ? `${fmt(distanceKm, 1)} km` : "—",
+    },
+    {
+      label: tx("vehicle.trips.duration"),
+      value: durationMs != null ? formatDuration(durationMs / 1000) : "—",
+    },
+    {
+      label: tx("vehicle.trips.energy"),
+      value: energyKwh != null ? `${fmt(energyKwh, 2)} kWh` : "—",
+    },
+    {
+      label: tx("vehicle.trips.consumption"),
+      value: trip.avg_consumption_kwh_100km != null ? `${fmt(trip.avg_consumption_kwh_100km, 1)} kWh/100` : "—",
+    },
+    ...(costStr != null
+      ? [{ label: tx("vehicle.trips.cost"), value: costStr }]
+      : []),
+    {
+      label: tx("vehicle.trips.regen"),
+      value: regenKwh != null ? `${fmt(regenKwh, 2)} kWh` : "—",
+      sub: regenPct != null ? `${fmt(regenPct, 0)}%` : undefined,
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 gap-2 min-[400px]:grid-cols-3">
+      {stats.map((stat) => (
+        <div
+          key={stat.label}
+          className="rounded-xl border border-border bg-white/[0.02] px-3 py-2.5"
+        >
+          <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            {stat.label}
+          </p>
+          <p className="mt-0.5 font-heading text-base font-semibold tabular-nums leading-tight">
+            {stat.value}
+            {stat.sub ? (
+              <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                {stat.sub}
+              </span>
+            ) : null}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ExpandedTripPanel({ tripId, trip }: { tripId: string; trip: BydmateTripRow }) {
   const {
     data: samples = [],
@@ -1139,6 +1236,7 @@ function ExpandedTripPanel({ tripId, trip }: { tripId: string; trip: BydmateTrip
 
   return (
     <>
+      <TripSummaryCard trip={trip} />
       <TelemetryHistoryCharts
         points={samples}
         isLoading={isSamplesLoading}

@@ -2,9 +2,16 @@
 
 import { useBydmateTripSamplesQuery } from "@/hooks/use-bydmate-trip-samples-query";
 import { useBydmateTripTrackQuery } from "@/hooks/use-bydmate-trip-track-query";
-import { TelemetryHistoryCharts, RouteMap } from "@/components/vehicle/vehicle-live-view";
+import { TelemetryHistoryCharts, RouteMap, TripSummaryCard } from "@/components/vehicle/vehicle-live-view";
+import type { BydmateTripRow } from "@/types/database";
 
-export function TripDetailPanel({ tripId }: { tripId: string }) {
+export function TripDetailPanel({
+  tripId,
+  trip,
+}: {
+  tripId: string;
+  trip?: BydmateTripRow;
+}) {
   const {
     data: samples = [],
     isLoading: isSamplesLoading,
@@ -18,6 +25,7 @@ export function TripDetailPanel({ tripId }: { tripId: string }) {
 
   return (
     <>
+      {trip ? <TripSummaryCard trip={trip} /> : null}
       <TelemetryHistoryCharts
         points={samples}
         isLoading={isSamplesLoading}

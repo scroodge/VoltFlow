@@ -775,7 +775,7 @@ function HistoryTripCard({
         ) : null}
       </article>
 
-      {isOpen && showDetail ? <TripDetailPanel tripId={trip.id} /> : null}
+      {isOpen && showDetail ? <TripDetailPanel tripId={trip.id} trip={trip} /> : null}
     </div>
   );
 }
