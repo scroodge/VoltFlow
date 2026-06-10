@@ -162,6 +162,13 @@ Server-side trip segments inferred from telemetry samples. A trip is closed when
 the next accepted sample arrives more than five minutes after the previous
 sample.
 
+Samples are **not** attached to trips when:
+
+- the vehicle is charging (same as migration `20260526101500`), or
+- Di+ reports explicit park gear (`diplus.gear` = `1` / `P`) — migration `20260610120000`.
+
+Open trips are finalized when a parked or charging sample arrives.
+
 Since migration `20260530121000`, closed trips persist:
 
 - `regen_energy_kwh` — total regen for the trip (computed at trip close from samples)

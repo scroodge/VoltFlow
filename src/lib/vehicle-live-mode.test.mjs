@@ -4,8 +4,10 @@ import test from "node:test";
 import {
   canStartChargingSession,
   deriveDashboardVehicleMode,
+  isChargingTelemetry,
   isDrivingTelemetry,
   isParkedTelemetry,
+  vehicleStatusLabelKey,
 } from "./vehicle-live-mode.ts";
 
 const NOW = Date.UTC(2026, 4, 30, 12, 0, 0);
@@ -37,17 +39,18 @@ test("moving-live → driving", () => {
   assert.equal(canStartChargingSession(mode), false);
 });
 
-test("parked-idle → parked", () => {
+test("unknown gear idle → parked (parking)", () => {
   const mode = deriveDashboardVehicleMode({
     snapshot: snapshot(),
     nowMs: NOW,
     hasActiveSession: false,
   });
   assert.equal(mode, "parked");
+  assert.equal(vehicleStatusLabelKey(mode), "vehicle.status.parking");
   assert.equal(canStartChargingSession(mode), true);
 });
 
-test("gear P at zero speed → parked", () => {
+test("gear P fresh not charging → parked", () => {
   const snap = snapshot({
     diplus: { gear: 1 },
     telemetry: { soc: 60, speed_kmh: 0, is_charging: false },
@@ -60,6 +63,30 @@ test("gear P at zero speed → parked", () => {
   );
 });
 
+test("gear P fresh charging → live_charging", () => {
+  const snap = snapshot({
+    diplus: { gear: 1 },
+    telemetry: { soc: 58, speed_kmh: 0, is_charging: true, charge_power_kw: 7.4 },
+  });
+  assert.equal(
+    deriveDashboardVehicleMode({ snapshot: snap, nowMs: NOW, hasActiveSession: false }),
+    "live_charging",
+  );
+});
+
+test("gear P stale → stale", () => {
+  const mode = deriveDashboardVehicleMode({
+    snapshot: snapshot({
+      diplus: { gear: 1 },
+      received_at: new Date(NOW - 120_000).toISOString(),
+      telemetry: { soc: 60, speed_kmh: 0, is_charging: false },
+    }),
+    nowMs: NOW,
+    hasActiveSession: false,
+  });
+  assert.equal(mode, "stale");
+});
+
 test("gear D at zero speed → driving", () => {
   const snap = snapshot({
     diplus: { gear: 4 },
@@ -69,12 +96,28 @@ test("gear D at zero speed → driving", () => {
   assert.equal(isDrivingTelemetry(snap), true);
 });
 
+test("gear R at zero speed → driving", () => {
+  const snap = snapshot({
+    diplus: { gear: 2 },
+    telemetry: { soc: 60, speed_kmh: 0, is_charging: false },
+  });
+  assert.equal(isDrivingTelemetry(snap), true);
+});
+
+test("gear N at zero speed → driving", () => {
+  const snap = snapshot({
+    diplus: { gear: 3 },
+    telemetry: { soc: 60, speed_kmh: 0, is_charging: false },
+  });
+  assert.equal(isDrivingTelemetry(snap), true);
+});
+
 test("speed above 5 km/h → driving without gear", () => {
   const snap = snapshot({ telemetry: { soc: 60, speed_kmh: 6, is_charging: false } });
   assert.equal(isDrivingTelemetry(snap), true);
 });
 
-test("stationary-charging → live_charging", () => {
+test("no gear speed 0 charging → live_charging", () => {
   const mode = deriveDashboardVehicleMode({
     snapshot: snapshot({
       telemetry: { soc: 58, speed_kmh: 0, is_charging: true, charge_power_kw: 7.4 },
@@ -86,7 +129,20 @@ test("stationary-charging → live_charging", () => {
   assert.equal(canStartChargingSession(mode), true);
 });
 
-test("stale-driving → stale", () => {
+test("gear D stale → stale", () => {
+  const mode = deriveDashboardVehicleMode({
+    snapshot: snapshot({
+      diplus: { gear: 4 },
+      received_at: new Date(NOW - 120_000).toISOString(),
+      telemetry: { soc: 50, speed_kmh: 0, is_charging: false },
+    }),
+    nowMs: NOW,
+    hasActiveSession: false,
+  });
+  assert.equal(mode, "stale");
+});
+
+test("stale driving speed → stale", () => {
   const mode = deriveDashboardVehicleMode({
     snapshot: snapshot({
       received_at: new Date(NOW - 120_000).toISOString(),
@@ -130,6 +186,18 @@ test("traction power_kw while driving → driving, not live_charging", () => {
     hasActiveSession: false,
   });
   assert.equal(mode, "driving");
+});
+
+test("charging in D → driving, not charging", () => {
+  const snap = snapshot({
+    diplus: { gear: 4 },
+    telemetry: { soc: 65, speed_kmh: 20, is_charging: true, charge_power_kw: 7 },
+  });
+  assert.equal(isChargingTelemetry(snap), false);
+  assert.equal(
+    deriveDashboardVehicleMode({ snapshot: snap, nowMs: NOW, hasActiveSession: false }),
+    "driving",
+  );
 });
 
 test("parked AC charging blocks driving mode", () => {

@@ -184,6 +184,7 @@ export type BydmateLiveSnapshotRow = {
   diplus_cell_delta_v?: number | null;
   diplus_mileage_km?: number | null;
   diplus_voltage_12v?: number | null;
+  diplus_gear?: string | number | null;
 };
 
 export type BydmateTelemetryPointRow = Omit<BydmateLiveSnapshotRow, "updated_at"> & {

@@ -58,6 +58,7 @@ import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
 import { useAppPath } from "@/lib/dev/dev-path";
+import { gearIsPark, readGear } from "@/lib/bydmate/gear";
 import { averageTripConsumption } from "@/lib/bydmate/range-estimate";
 import { calculateRegenRecoverySegments, calculateTripEnergy, prepareRegenRecoveryBars } from "@/lib/bydmate/trip-energy";
 import { isRouteTrackDisplayable } from "@/lib/bydmate/route-insights";
@@ -454,6 +455,8 @@ function heroStatusBadgeClass(mode: DashboardVehicleMode) {
       return "border-cyan-300/25 bg-cyan-300/10 text-cyan-100";
     case "driving":
       return "border-cyan-300/25 bg-cyan-300/10 text-cyan-100";
+    case "parked":
+      return "border-emerald-300/25 bg-emerald-300/10 text-emerald-100";
     default:
       return "border-primary/25 bg-primary/10 text-primary";
   }
@@ -1002,7 +1005,12 @@ function formatDuration(ms: number) {
 
 function buildTrips(points: BydmateTelemetryPointRow[]): TripSegment[] {
   const sorted = [...points]
-    .filter((point) => pointTimeMs(point) > 0 && !isChargingTelemetry(point.telemetry))
+    .filter(
+      (point) =>
+        pointTimeMs(point) > 0 &&
+        !isChargingTelemetry(point.telemetry) &&
+        !gearIsPark(readGear(point)),
+    )
     .sort((a, b) => pointTimeMs(a) - pointTimeMs(b));
 
   const groups: BydmateTelemetryPointRow[][] = [];

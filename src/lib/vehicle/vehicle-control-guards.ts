@@ -1,5 +1,8 @@
+import { gearIsPark, readGear } from "@/lib/bydmate/gear";
 import { isTelemetryCharging } from "@/lib/bydmate/telemetry-charging";
 import type { BydmateLiveSnapshotRow } from "@/types/database";
+
+export { gearIsPark, readGear };
 
 export const VEHICLE_CONTROL_STALE_MS = 90_000;
 export const VEHICLE_CONTROL_LOW_AUX_V = 11.8;
@@ -27,19 +30,10 @@ export function isSentryReady(snapshot: BydmateLiveSnapshotRow | undefined) {
   return stall != null && stall !== "关闭" && stall !== "";
 }
 
-export function gearIsPark(gear: unknown) {
-  if (gear === 1 || gear === "1" || gear === "P") return true;
-  return false;
-}
-
 export function readSpeed(snapshot: BydmateLiveSnapshotRow | undefined) {
   const fromDiplus = snapshot?.diplus?.speed_kmh;
   const fromTelemetry = snapshot?.telemetry?.speed_kmh;
   return Number(fromDiplus ?? fromTelemetry ?? 0);
-}
-
-export function readGear(snapshot: BydmateLiveSnapshotRow | undefined) {
-  return snapshot?.diplus?.gear ?? null;
 }
 
 export function readAuxVoltage(snapshot: BydmateLiveSnapshotRow | undefined) {

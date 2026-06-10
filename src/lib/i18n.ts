@@ -192,6 +192,7 @@ export const dictionaries = {
       statusCompleted: "Completed",
       statusIdle: "Idle",
       statusOnline: "Online",
+      statusParking: "Parking",
       statusDriving: "Driving",
       statusLive: "Live",
       statusStale: "Last seen",
@@ -346,6 +347,7 @@ export const dictionaries = {
       timeAgoHours: "{value}h ago",
       status: {
         online: "online",
+        parking: "parking",
         driving: "driving",
         live: "live",
         stale: "stale",
@@ -888,6 +890,7 @@ export const dictionaries = {
       statusCompleted: "Завершана",
       statusIdle: "Чаканне",
       statusOnline: "На сувязі",
+      statusParking: "Паркоўка",
       statusDriving: "Рух",
       statusLive: "Live",
       statusStale: "Без сувязі",
@@ -1042,6 +1045,7 @@ export const dictionaries = {
       timeAgoHours: "{value} г таму",
       status: {
         online: "на сувязі",
+        parking: "паркоўка",
         driving: "рух",
         live: "жыва",
         stale: "састарэла",
@@ -1584,6 +1588,7 @@ export const dictionaries = {
       statusCompleted: "Завершено",
       statusIdle: "Ожидание",
       statusOnline: "На связи",
+      statusParking: "Парковка",
       statusDriving: "В движении",
       statusLive: "Live",
       statusStale: "Давно не обновлялось",
@@ -1738,6 +1743,7 @@ export const dictionaries = {
       timeAgoHours: "{value} ч назад",
       status: {
         online: "на связи",
+        parking: "парковка",
         driving: "в движении",
         live: "онлайн",
         stale: "устарело",
