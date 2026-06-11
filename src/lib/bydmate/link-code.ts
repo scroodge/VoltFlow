@@ -53,7 +53,11 @@ export function bydmateTelemetryEndpointUrl(): string {
   const apiBase = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/$/, "");
   if (apiBase) return `${apiBase}/api/bydmate/telemetry`;
 
-  const vercelHost = process.env.VERCEL_URL?.trim();
+  // VERCEL_PROJECT_PRODUCTION_URL is always the stable production domain.
+  // VERCEL_URL changes per deployment (preview URLs are Vercel-auth-protected → 401).
+  const vercelHost =
+    process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() ||
+    process.env.VERCEL_URL?.trim();
   if (vercelHost) return `https://${vercelHost}/api/bydmate/telemetry`;
 
   return DEFAULT_TELEMETRY_ENDPOINT;
