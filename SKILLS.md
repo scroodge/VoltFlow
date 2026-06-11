@@ -122,10 +122,14 @@ node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types -
 Know these files before changing History analytics, trip charts, or route maps:
 
 - `src/components/history/history-view.tsx` — History tabs including `?tab=analytics`; trips calendar uses `?month=` dates query
-- `src/components/vehicle/vehicle-analytics-panels.tsx` — analytics host (ranges, KPIs, charts, export)
-- `src/components/vehicle/vehicle-live-view.tsx` — `TelemetryHistoryCharts`, `RouteMap`, `RouteMapPreview`, trip chart prep, route map layers and hover
+- `src/components/vehicle/vehicle-analytics-panels.tsx` — analytics host (range/anchor picker, KPIs, SoH trend, charging-trend bars, export); also defines `AnalyticsRangeAnchorPicker`
+- `src/components/vehicle/analytics-day-view.tsx` — single-day analytics view (line charts)
+- `src/components/vehicle/vehicle-live-view.tsx` — `TelemetryHistoryCharts`, `RouteMap` (`headingMode` for dynamic title/point display), `RouteMapPreview`, `LocationCard` (last-trip route map, not a single GPS pin), trip chart prep, route map layers and hover
 - `src/components/vehicle/chart-interaction.tsx` — fullscreen crosshair + tooltip helpers shared by line/bar charts
 - `src/components/vehicle/telemetry-analytics-charts.tsx` — summary stats, bar charts, loading states, fullscreen bar hover
+- `src/hooks/use-bydmate-soh-history-query.ts` — SoH trend query (calls the dedicated SoH endpoint, not hourly rollups)
+- `src/app/api/vehicle/telemetry/soh/route.ts` + `fetchSohTelemetryHistory` in `telemetry-history.ts` — probe one raw sample per calendar day for `soh_percent`
+- `docs/CHART_OPTIMIZATION_SPEC.md` — chart phasing/spec for the analytics charts
 - `src/components/vehicle/route-insights-section.tsx` — route cards, rename, park, map preview
 - `src/components/vehicle/vehicle-analytics-teaser.tsx` — Vehicle page link to History analytics
 - `src/lib/bydmate/telemetry-buckets.ts` — daily/weekly aggregation and period summary
@@ -140,6 +144,10 @@ Know these files before changing History analytics, trip charts, or route maps:
 Preserve these behaviors:
 
 - Analytics primary UI lives under **History → Analytics**, not inline on the Vehicle page (teaser only).
+- Default range is **day/today** — `parseAnalyticsRange()` in `telemetry-ranges.ts` and the `VehicleAnalyticsPanels` `useState` initializers must fall back to `"day"` (not `"week"`), and `anchorDate` must default to today. Opening `/history?tab=analytics` with no params shows today, and switching week→day must anchor to today, not the week's Monday.
+- `AnalyticsRangeAnchorPicker` must not use native `week`/`month` `<input>` types — iOS Safari does not support them. Use the custom picker UI instead.
+- SoH trend reads **raw samples** via the dedicated `/api/vehicle/telemetry/soh` endpoint; `bydmate_telemetry_hourly` rollups omit `soh_percent`, so do not source the SoH chart from `useBydmateTelemetryHistoryQuery`.
+- Charging-trend bars are sorted **ascending (oldest → left)**.
 - Week+ ranges use client-side daily/weekly bucket aggregation and bar charts; day range keeps line charts.
 - Period summary waits for both telemetry history and period-trips queries before rendering KPIs.
 - Route insights exclude parked fingerprints and routes with fewer than three trips from the main list.
@@ -315,3 +323,4 @@ When the project changes, update the relevant document:
 - `supabase/BYDMATE_APK_API.md` for APK ingest contract changes.
 - `supabase/MIGRATIONS_AUDIT.md` for migration-chain and squash/reset notes.
 - `docs/CHARGING_SESSIONS.md` for charging sync, Mate auto sessions, reconcile, and ops scripts.
+- `docs/CHART_OPTIMIZATION_SPEC.md` for the analytics/trip chart phasing, ranges, and chart-type rules.
