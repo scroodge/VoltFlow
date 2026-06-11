@@ -32,14 +32,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(payload, { status: backendResponse.status });
   }
 
+  const items = mapMarketplaceItems(payload.items, existingIds);
+  const relatedItems = mapMarketplaceItems(payload.related_items, existingIds);
+
   return NextResponse.json({
-    items: Array.isArray(payload.items)
-      ? payload.items.map(mapMarketplaceItem)
-        .map((item: ReturnType<typeof mapMarketplaceItem>) => ({
-          ...item,
-          exists_in_db: existingIds.has(item.wb_id),
-        }))
-      : [],
+    query: stringValue(payload.query) || query,
+    sources: Array.isArray(payload.sources)
+      ? payload.sources.map(stringValue).filter(Boolean)
+      : ["wildberries"],
+    total: numberValue(payload.total) ?? items.length,
+    items,
+    related_total: numberValue(payload.related_total) ?? relatedItems.length,
+    related_items: relatedItems,
   });
 }
 
@@ -60,11 +64,26 @@ async function getExistingWbIds(query: string) {
   const payload = await response.json();
   const items = Array.isArray(payload.items) ? payload.items : [];
 
-  return new Set(
-    items
-      .map((item: Record<string, unknown>) => stringValue(item.external_id))
-      .filter(Boolean),
-  );
+  const ids: string[] = [];
+
+  for (const item of items as Record<string, unknown>[]) {
+    const id = stringValue(item.external_id);
+
+    if (id) {
+      ids.push(id);
+    }
+  }
+
+  return new Set<string>(ids);
+}
+
+function mapMarketplaceItems(items: unknown, existingIds: Set<string>) {
+  return Array.isArray(items)
+    ? items.map(mapMarketplaceItem).map((item) => ({
+        ...item,
+        exists_in_db: existingIds.has(item.wb_id),
+      }))
+    : [];
 }
 
 function mapMarketplaceItem(item: Record<string, unknown>) {
@@ -74,8 +93,8 @@ function mapMarketplaceItem(item: Record<string, unknown>) {
     wb_id: wbId,
     name: stringValue(item.title),
     brand: stringValue(item.seller),
-    price: numberValue(item.price) ?? 0,
-    rating: numberValue(item.rating) ?? 0,
+    price: numberValue(item.price),
+    rating: numberValue(item.rating),
     image: stringValue(item.image_url),
     url: stringValue(item.url) || wildberriesUrl(wbId),
     exists_in_db: false,

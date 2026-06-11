@@ -11,15 +11,20 @@ type WbProduct = {
   wb_id: string;
   name: string;
   brand: string;
-  price: number;
-  rating: number;
+  price: number | null;
+  rating: number | null;
   image: string;
   url: string;
   exists_in_db: boolean;
 };
 
 type SearchResponse = {
+  query: string;
+  sources: string[];
+  total: number;
   items: WbProduct[];
+  related_total: number;
+  related_items: WbProduct[];
 };
 
 type CheckResponse = {
@@ -50,6 +55,8 @@ type RowState = {
 export function WbApiDebugger() {
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<WbProduct[]>([]);
+  const [relatedItems, setRelatedItems] = useState<WbProduct[]>([]);
+  const [resolvedQuery, setResolvedQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,8 +82,12 @@ export function WbApiDebugger() {
       );
 
       setItems(response.items ?? []);
+      setRelatedItems(response.related_items ?? []);
+      setResolvedQuery(response.query || trimmedQuery);
     } catch (searchError) {
       setItems([]);
+      setRelatedItems([]);
+      setResolvedQuery("");
       setError(errorMessage(searchError));
     } finally {
       setIsSearching(false);
@@ -195,6 +206,8 @@ export function WbApiDebugger() {
           hasSearched={hasSearched}
           isSearching={isSearching}
           items={items}
+          query={resolvedQuery}
+          relatedItems={relatedItems}
           rowStates={rowStates}
           onCheck={checkProduct}
           onSave={saveProduct}
@@ -208,6 +221,8 @@ function ResultsTable({
   hasSearched,
   isSearching,
   items,
+  query,
+  relatedItems,
   rowStates,
   onCheck,
   onSave,
@@ -215,6 +230,8 @@ function ResultsTable({
   hasSearched: boolean;
   isSearching: boolean;
   items: WbProduct[];
+  query: string;
+  relatedItems: WbProduct[];
   rowStates: Record<string, RowState>;
   onCheck: (product: WbProduct) => void;
   onSave: (product: WbProduct) => void;
@@ -227,7 +244,7 @@ function ResultsTable({
     );
   }
 
-  if (hasSearched && items.length === 0) {
+  if (hasSearched && items.length === 0 && relatedItems.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
         No products returned.
@@ -244,33 +261,88 @@ function ResultsTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full min-w-[980px] border-collapse text-left text-sm">
-        <thead className="bg-white/[0.04] text-xs uppercase tracking-[0.14em] text-muted-foreground">
-          <tr>
-            <th className="p-3">Image</th>
-            <th className="p-3">Name</th>
-            <th className="p-3">Brand</th>
-            <th className="p-3">Price</th>
-            <th className="p-3">Rating</th>
-            <th className="p-3">WB ID</th>
-            <th className="p-3">Exists</th>
-            <th className="p-3">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <ProductRow
-              key={item.wb_id}
-              item={item}
-              rowState={rowStates[item.wb_id] ?? {}}
-              onCheck={onCheck}
-              onSave={onSave}
-            />
-          ))}
-        </tbody>
-      </table>
+    <div className="grid gap-5">
+      {items.length > 0 ? (
+        <ProductTable
+          items={items}
+          rowStates={rowStates}
+          title="Exact matches"
+          onCheck={onCheck}
+          onSave={onSave}
+        />
+      ) : relatedItems.length > 0 ? (
+        <div className="rounded-lg border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
+          No exact results for {query ? `"${query}"` : "this query"}.
+        </div>
+      ) : null}
+
+      {relatedItems.length > 0 ? (
+        <ProductTable
+          description="Broader BYD Yuan Up products returned by the backend fallback contract."
+          items={relatedItems}
+          rowStates={rowStates}
+          title="Related products"
+          onCheck={onCheck}
+          onSave={onSave}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function ProductTable({
+  description,
+  items,
+  rowStates,
+  title,
+  onCheck,
+  onSave,
+}: {
+  description?: string;
+  items: WbProduct[];
+  rowStates: Record<string, RowState>;
+  title: string;
+  onCheck: (product: WbProduct) => void;
+  onSave: (product: WbProduct) => void;
+}) {
+  return (
+    <section className="grid gap-3">
+      <div>
+        <h2 className="text-sm font-semibold text-foreground">
+          {title} ({items.length})
+        </h2>
+        {description ? (
+          <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+        ) : null}
+      </div>
+      <div className="overflow-x-auto rounded-lg border border-border">
+        <table className="w-full min-w-[980px] border-collapse text-left text-sm">
+          <thead className="bg-white/[0.04] text-xs uppercase tracking-[0.14em] text-muted-foreground">
+            <tr>
+              <th className="p-3">Image</th>
+              <th className="p-3">Name</th>
+              <th className="p-3">Brand</th>
+              <th className="p-3">Price</th>
+              <th className="p-3">Rating</th>
+              <th className="p-3">WB ID</th>
+              <th className="p-3">Exists</th>
+              <th className="p-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item) => (
+              <ProductRow
+                key={item.wb_id}
+                item={item}
+                rowState={rowStates[item.wb_id] ?? {}}
+                onCheck={onCheck}
+                onSave={onSave}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
@@ -323,7 +395,7 @@ function ProductRow({
       </td>
       <td className="p-3">{item.brand}</td>
       <td className="p-3">{formatPrice(item.price)}</td>
-      <td className="p-3">{item.rating}</td>
+      <td className="p-3">{formatNullableNumber(item.rating)}</td>
       <td className="p-3 font-mono text-xs">{item.wb_id}</td>
       <td className="p-3">
         <span
@@ -374,12 +446,20 @@ function ProductRow({
   );
 }
 
-function formatPrice(price: number) {
+function formatPrice(price: number | null) {
+  if (price == null) {
+    return "n/a";
+  }
+
   return new Intl.NumberFormat("ru-RU", {
     maximumFractionDigits: 0,
     style: "currency",
     currency: "RUB",
   }).format(price);
+}
+
+function formatNullableNumber(value: number | null) {
+  return value == null ? "n/a" : value;
 }
 
 function errorMessage(error: unknown) {
