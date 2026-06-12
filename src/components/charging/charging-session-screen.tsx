@@ -164,17 +164,9 @@ export function ChargingSessionScreen({
 
   const pctForBar =
     session && derived ? derived.currentPercent : session?.current_percent ?? 0;
-  const pctToTarget =
+  const remainingToTargetPercent =
     session && derived
-      ? Math.min(
-          100,
-          Math.max(
-            0,
-            ((derived.currentPercent - session.start_percent) /
-              Math.max(session.target_percent - session.start_percent, 0.001)) *
-              100,
-          ),
-        )
+      ? Math.max(0, session.target_percent - derived.currentPercent)
       : 0;
 
   const stopSession = useCallback(async () => {
@@ -416,7 +408,9 @@ export function ChargingSessionScreen({
         />
 
         <p className="mt-1 text-center text-[11px] text-muted-foreground tabular-nums">
-          {t("charging.segment", { pct: pctToTarget.toFixed(0) })}
+          {t("charging.remainingToTarget", {
+            pct: remainingToTargetPercent.toFixed(0),
+          })}
         </p>
       </section>
 
