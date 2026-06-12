@@ -98,6 +98,7 @@ function mapMarketplaceItem(item: Record<string, unknown>) {
     image: stringValue(item.image_url),
     url: stringValue(item.url) || wildberriesUrl(wbId),
     exists_in_db: false,
+    availability: booleanValue(item.availability),
   };
 }
 
@@ -111,4 +112,8 @@ function stringValue(value: unknown) {
 
 function numberValue(value: unknown) {
   return typeof value === "number" ? value : null;
+}
+
+function booleanValue(value: unknown) {
+  return typeof value === "boolean" ? value : null;
 }
