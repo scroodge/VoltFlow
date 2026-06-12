@@ -395,13 +395,15 @@ export function ChargingSessionScreen({
         {charging && !historyMode ? (
           <span
             className={
-              "absolute right-3 top-3 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] " +
+              "absolute right-3 top-3 max-w-[9.5rem] rounded-lg px-2 py-0.5 text-right text-[8px] font-semibold leading-snug tracking-normal " +
               (displayUsesLiveSoc
                 ? "text-[var(--voltflow-cyan)]"
                 : "text-muted-foreground")
             }
           >
-            {displayUsesLiveSoc ? "Mate" : "Est."}
+            {displayUsesLiveSoc
+              ? (t("charging.socSourceLive") as string)
+              : (t("charging.socSourceEstimate") as string)}
           </span>
         ) : null}
 
