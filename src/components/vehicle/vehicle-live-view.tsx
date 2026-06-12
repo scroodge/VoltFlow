@@ -1219,7 +1219,15 @@ export function TripSummaryCard({ trip }: { trip: BydmateTripRow }) {
   );
 }
 
-function ExpandedTripPanel({ tripId, trip }: { tripId: string; trip: BydmateTripRow }) {
+function ExpandedTripPanel({
+  tripId,
+  trip,
+  showSummary = true,
+}: {
+  tripId: string;
+  trip: BydmateTripRow;
+  showSummary?: boolean;
+}) {
   const {
     data: samples = [],
     isLoading: isSamplesLoading,
@@ -1241,7 +1249,7 @@ function ExpandedTripPanel({ tripId, trip }: { tripId: string; trip: BydmateTrip
 
   return (
     <>
-      <TripSummaryCard trip={trip} />
+      {showSummary ? <TripSummaryCard trip={trip} /> : null}
       <TelemetryHistoryCharts
         points={samples}
         isLoading={isSamplesLoading}
@@ -4351,7 +4359,7 @@ function LastTripDetail({
           <MiniStat label={tx("vehicle.trips.avgSpeed")} value={`${fmt(trip.avg_speed_kmh)} km/h`} />
         </div>
       </div>
-      <ExpandedTripPanel tripId={trip.id} trip={trip} />
+      <ExpandedTripPanel tripId={trip.id} trip={trip} showSummary={false} />
     </div>
   );
 }
