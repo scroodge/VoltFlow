@@ -4194,26 +4194,38 @@ function LocationCard({
   const loc = snapshot.location;
   const hasLiveLocation = typeof loc.lat === "number" && typeof loc.lon === "number";
 
-  // Load last trip track — the route map is more useful than a single pin, and provides
-  // a GPS fallback when the live snapshot has no location.
+  // Fall back to the last GPS point of the latest trip when the live snapshot has no location.
   const { data: latestTrips = [] } = useLatestBydmateTripsQuery(snapshot.vehicle_id, 1);
-  const lastTripId = latestTrips[0]?.id ?? null;
+  const lastTripId = hasLiveLocation ? null : (latestTrips[0]?.id ?? null);
   const {
     data: trackPoints = [],
     isLoading: isTrackLoading,
   } = useBydmateTripTrackQuery(lastTripId);
 
-  const hasTrack = trackPoints.length > 0;
   const lastTrackPoint = trackPoints[trackPoints.length - 1] ?? null;
+  const usingLastTripFinish =
+    !hasLiveLocation &&
+    lastTrackPoint != null &&
+    validNumber(lastTrackPoint.lat) != null &&
+    validNumber(lastTrackPoint.lon) != null;
 
-  // Resolve display coordinates: prefer live snapshot, fall back to last track point
-  const displayLat = hasLiveLocation ? (loc.lat as number) : validNumber(lastTrackPoint?.lat);
-  const displayLon = hasLiveLocation ? (loc.lon as number) : validNumber(lastTrackPoint?.lon);
+  const displayLat = hasLiveLocation
+    ? (loc.lat as number)
+    : validNumber(lastTrackPoint?.lat);
+  const displayLon = hasLiveLocation
+    ? (loc.lon as number)
+    : validNumber(lastTrackPoint?.lon);
   const hasAnyLocation = displayLat != null && displayLon != null;
 
-  const deviceTimeLabel = hasMounted
-    ? new Date(snapshot.device_time).toLocaleString(localeCode(locale))
-    : "—";
+  const locationDeviceTimeMs = hasLiveLocation
+    ? Date.parse(snapshot.device_time)
+    : lastTrackPoint
+      ? Date.parse(lastTrackPoint.device_time)
+      : Number.NaN;
+  const deviceTimeLabel =
+    hasMounted && Number.isFinite(locationDeviceTimeMs)
+      ? new Date(locationDeviceTimeMs).toLocaleString(localeCode(locale))
+      : "—";
 
   return (
     <Card size="sm" className="voltflow-card gap-2 border-border bg-transparent">
@@ -4224,17 +4236,27 @@ function LocationCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 px-3 pb-3 text-sm">
-        {isTrackLoading ? (
+        {isTrackLoading && lastTripId ? (
           <Skeleton className="h-40 rounded-xl" />
-        ) : hasTrack ? (
-          // Show full last-trip route — endpoint is where the car is parked
-          <RouteMap trackPoints={trackPoints} embedded headingMode="lastSeen" />
         ) : hasLiveLocation ? (
-          // No trip track yet — fall back to live snapshot single-pin map
           <LiveLocationMap
             location={loc}
             deviceTimeMs={Date.parse(snapshot.device_time)}
             telemetry={snapshot.telemetry}
+          />
+        ) : usingLastTripFinish && lastTrackPoint ? (
+          <LiveLocationMap
+            location={{
+              lat: lastTrackPoint.lat,
+              lon: lastTrackPoint.lon,
+              accuracy_m: lastTrackPoint.accuracy_m,
+            }}
+            deviceTimeMs={Date.parse(lastTrackPoint.device_time)}
+            telemetry={{
+              power_kw: lastTrackPoint.power_kw,
+              speed_kmh: lastTrackPoint.speed_kmh,
+              soc: lastTrackPoint.soc,
+            }}
           />
         ) : (
           <p className="text-muted-foreground">{tx("vehicle.location.empty")}</p>
