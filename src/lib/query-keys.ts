@@ -20,4 +20,5 @@ export const queryKeys = {
     ["bydmate-soh-history", date, vehicleId] as const,
   bydmateTelemetryPoints: ["bydmate-telemetry-points"] as const,
   vehicleCommands: (vehicleId: string | null) => ["vehicle-commands", vehicleId] as const,
+  mateLatestRelease: ["mate-latest-release"] as const,
 };

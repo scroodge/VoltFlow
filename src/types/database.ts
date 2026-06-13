@@ -185,6 +185,17 @@ export type BydmateLiveSnapshotRow = {
   diplus_mileage_km?: number | null;
   diplus_voltage_12v?: number | null;
   diplus_gear?: string | number | null;
+  mate_version?: string | null;
+};
+
+export type MateAppReleaseRow = {
+  id: string;
+  version: string;
+  version_code: number | null;
+  apk_url: string | null;
+  release_notes: string | null;
+  published_at: string;
+  created_at: string;
 };
 
 export type BydmateTelemetryPointRow = Omit<BydmateLiveSnapshotRow, "updated_at"> & {
