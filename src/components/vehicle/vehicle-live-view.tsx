@@ -1123,110 +1123,36 @@ function tripRowFromFixture(trip: TripSegment, vehicleId: string): BydmateTripRo
   };
 }
 
-// ─── Trip summary card ────────────────────────────────────────────────────────
-
-export function TripSummaryCard({ trip }: { trip: BydmateTripRow }) {
-  const { locale, t } = useTranslation();
-  const tx = t as Translator;
-  const currency = useAppPreferences((s) => s.currency) as Currency;
-  const pricePerKwh = useAppPreferences((s) => s.defaultPricePerKwh);
-
+function formatTripCostStr(
+  trip: BydmateTripRow,
+  currency: Currency,
+  pricePerKwh: number,
+  locale: Locale,
+): string | null {
   const distanceKm = trip.distance_km;
-  const durationMs =
-    trip.started_at && (trip.ended_at ?? trip.last_device_time)
-      ? Date.parse(trip.ended_at ?? trip.last_device_time) - Date.parse(trip.started_at)
-      : null;
-
-  // Energy: prefer traction_energy_kwh; fallback to distance × avg_consumption / 100
   const energyKwh =
     typeof trip.traction_energy_kwh === "number" && Number.isFinite(trip.traction_energy_kwh)
       ? trip.traction_energy_kwh
       : distanceKm != null && trip.avg_consumption_kwh_100km != null
         ? (distanceKm * trip.avg_consumption_kwh_100km) / 100
         : null;
-
-  const regenKwh =
-    typeof trip.regen_energy_kwh === "number" && Number.isFinite(trip.regen_energy_kwh)
-      ? trip.regen_energy_kwh
-      : null;
-
-  // Cost = energy × tariff (only if tariff is configured > 0)
   const costValue =
     energyKwh != null && pricePerKwh > 0 ? energyKwh * pricePerKwh : null;
-  const costStr =
-    costValue != null
-      ? formatCurrencyAmount(currency, costValue, locale as Locale, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })
-      : null;
 
-  // Regen as % of energy used
-  const regenPct =
-    regenKwh != null && energyKwh != null && energyKwh > 0
-      ? (regenKwh / energyKwh) * 100
-      : null;
-
-  type Stat = { label: string; value: string; sub?: string };
-  const stats: Stat[] = [
-    {
-      label: tx("vehicle.trips.distance"),
-      value: distanceKm != null ? `${fmt(distanceKm, 1)} km` : "—",
-    },
-    {
-      label: tx("vehicle.trips.duration"),
-      value: durationMs != null ? formatDuration(durationMs) : "—",
-    },
-    {
-      label: tx("vehicle.trips.energy"),
-      value: energyKwh != null ? `${fmt(energyKwh, 2)} kWh` : "—",
-    },
-    {
-      label: tx("vehicle.trips.consumption"),
-      value: trip.avg_consumption_kwh_100km != null ? `${fmt(trip.avg_consumption_kwh_100km, 1)} kWh/100` : "—",
-    },
-    ...(costStr != null
-      ? [{ label: tx("vehicle.trips.cost"), value: costStr }]
-      : []),
-    {
-      label: tx("vehicle.trips.regen"),
-      value: regenKwh != null ? `${fmt(regenKwh, 2)} kWh` : "—",
-      sub: regenPct != null ? `${fmt(regenPct, 0)}%` : undefined,
-    },
-  ];
-
-  return (
-    <div className="grid grid-cols-2 gap-2 min-[400px]:grid-cols-3">
-      {stats.map((stat) => (
-        <div
-          key={stat.label}
-          className="rounded-xl border border-border bg-white/[0.02] px-3 py-2.5"
-        >
-          <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            {stat.label}
-          </p>
-          <p className="mt-0.5 font-heading text-base font-semibold tabular-nums leading-tight">
-            {stat.value}
-            {stat.sub ? (
-              <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                {stat.sub}
-              </span>
-            ) : null}
-          </p>
-        </div>
-      ))}
-    </div>
-  );
+  return costValue != null
+    ? formatCurrencyAmount(currency, costValue, locale, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    : null;
 }
 
 function ExpandedTripPanel({
   tripId,
   trip,
-  showSummary = true,
 }: {
   tripId: string;
   trip: BydmateTripRow;
-  showSummary?: boolean;
 }) {
   const {
     data: samples = [],
@@ -1249,7 +1175,6 @@ function ExpandedTripPanel({
 
   return (
     <>
-      {showSummary ? <TripSummaryCard trip={trip} /> : null}
       <TelemetryHistoryCharts
         points={samples}
         isLoading={isSamplesLoading}
@@ -1433,8 +1358,11 @@ function TripListItem({
   const startMs = Date.parse(trip.started_at);
   const endMs = Date.parse(trip.ended_at ?? trip.last_device_time);
   const durationMs = Math.max(0, endMs - startMs);
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const tx = t as Translator;
+  const currency = useAppPreferences((s) => s.currency) as Currency;
+  const pricePerKwh = useAppPreferences((s) => s.defaultPricePerKwh);
+  const costStr = formatTripCostStr(trip, currency, pricePerKwh, locale as Locale);
 
   if (!expanded) {
     return (
@@ -1498,6 +1426,9 @@ function TripListItem({
         />
         <MiniStat label={tx("vehicle.trips.maxSpeed")} value={`${fmt(trip.max_speed_kmh)} km/h`} />
         <MiniStat label={tx("vehicle.trips.avgSpeed")} value={`${fmt(trip.avg_speed_kmh)} km/h`} />
+        {costStr != null ? (
+          <MiniStat label={tx("vehicle.trips.cost")} value={costStr} />
+        ) : null}
       </div>
     </button>
   );
@@ -4381,7 +4312,7 @@ function LastTripDetail({
           <MiniStat label={tx("vehicle.trips.avgSpeed")} value={`${fmt(trip.avg_speed_kmh)} km/h`} />
         </div>
       </div>
-      <ExpandedTripPanel tripId={trip.id} trip={trip} showSummary={false} />
+      <ExpandedTripPanel tripId={trip.id} trip={trip} />
     </div>
   );
 }
