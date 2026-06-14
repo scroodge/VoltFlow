@@ -9,6 +9,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - At the start of a new session for this project, ask agentmemory for relevant project context before changing code or investigating behavior. Use concepts such as `voltflow-mate-charging-sessions`, `bydmate-telemetry-source-of-truth`, `charging-session-sync`, `mate-auto-start-stop`, and `charging-session-reconcile`.
 - If agentmemory is unavailable, continue from this file and the repo docs, then save any durable decisions or progress back to agentmemory once it is available.
 
+## Trips (`bydmate_trips`)
+
+- Full lifecycle, junk-filter rules, and the phantom-trip root cause are in [docs/TRIPS.md](docs/TRIPS.md). Read it before touching `bydmate_ingest_telemetry` or `bydmate_discard_trip_if_junk`.
+- `bydmate_trips.distance_km` is copied as-is from `telemetry.current_trip_distance_km` (the car's cumulative trip meter), **not** a per-trip delta. This is why a trip re-opened during a D→R→P parking maneuver inherits the previous trip's distance → phantom trips (e.g. `10 s / 2.4 km / 3 km/h`).
+- `bydmate_discard_trip_if_junk` (migration `20260613150000`) runs at every trip close: Rule A (`dist ≤ 0.1` ∧ `max_speed ≤ 3`), Rule B (`dur < 60 s` ∧ `max_speed < 10`), Rule C (`implied speed = dist·3600/dur > max(max_speed·1.5, 80)` → physically impossible, inherited distance). New phantoms are auto-removed; no ongoing manual cleanup needed.
+- **Never edit an already-applied migration** — `supabase db push` skips applied files, so the edit silently never deploys (this is exactly why an earlier Rule B fix didn't take). Always create a new migration; verify live with `pg_get_functiondef('public.bydmate_discard_trip_if_junk(uuid)'::regprocedure)`.
+- The client display filter `src/lib/bydmate/trip-filter.ts` (`isJunkTrip`) is **not** in sync with the server rules (no Rule B/C). Server discard is authoritative; sync the client only if phantoms surface in the UI.
+
 ## VoltFlow Mate charging history
 
 - Do not assume charging-history data is lost when a chart stops below the session target. First compare `charging_sessions.started_at/stopped_at/current_percent/target_percent` with `bydmate_telemetry_samples.device_time` and delayed samples around the stop time.
