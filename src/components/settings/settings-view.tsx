@@ -4,6 +4,8 @@ import Link from "next/link";
 import { Bell, Pencil } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
+  ArrowUpCircle,
+  CheckCircle2,
   ChevronDown,
   Code2,
   Copy,
@@ -35,8 +37,11 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
+import { useMateReleaseQuery } from "@/hooks/use-mate-release-query";
 import { useTranslation } from "@/hooks/use-translation";
+import { isMateUpdateAvailable } from "@/lib/mate-version";
 import {
   currencies,
   currencyLabels,
@@ -463,6 +468,8 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             </Button>
           </div>
 
+          <MateVersionPanel />
+
           {linkCode && linkCountdownSec != null && linkCountdownSec > 0 ? (
             <div className="space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
               <p className="text-center font-mono text-5xl font-semibold tracking-[0.35em] tabular-nums">
@@ -672,6 +679,62 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
 
       <PrivacyNote />
       <AboutSection />
+    </div>
+  );
+}
+
+/**
+ * VoltFlow Mate version indicator. Shows the build currently running on the car
+ * (latest live snapshot `mate_version`) next to the latest published release, and
+ * whether an update is available. Lives inside the VoltFlow Mate settings card.
+ */
+function MateVersionPanel() {
+  const { t } = useTranslation();
+  const { data: bydmateLive = [] } = useBydmateLiveQuery();
+  const { data: release } = useMateReleaseQuery();
+
+  // Snapshots come back newest-first; take the most recent one that reports a version.
+  const installedVersion =
+    bydmateLive.find((snapshot) => snapshot.mate_version)?.mate_version ?? null;
+  const latestVersion = release?.version ?? null;
+  const updateAvailable = isMateUpdateAvailable(installedVersion, latestVersion);
+
+  return (
+    <div className="space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
+      <p className="text-sm font-semibold tracking-tight">
+        {t("settings.cloud.versionTitle")}
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-3">
+          <p className="text-muted-foreground text-xs uppercase tracking-[0.25em]">
+            {t("settings.cloud.versionInstalled")}
+          </p>
+          <p className="mt-2 font-mono text-sm">
+            {installedVersion ?? t("settings.cloud.versionUnknown")}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-3">
+          <p className="text-muted-foreground text-xs uppercase tracking-[0.25em]">
+            {t("settings.cloud.versionLatest")}
+          </p>
+          <p className="mt-2 font-mono text-sm">
+            {latestVersion ?? t("common.unavailable")}
+          </p>
+        </div>
+      </div>
+      {installedVersion ? (
+        updateAvailable ? (
+          <p className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--voltflow-cyan)]">
+            <ArrowUpCircle className="size-4 shrink-0" aria-hidden />
+            {t("settings.cloud.versionUpdateAvailable")}
+          </p>
+        ) : (
+          <p className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--voltflow-green)]">
+            <CheckCircle2 className="size-4 shrink-0" aria-hidden />
+            {t("settings.cloud.versionUpToDate")}
+          </p>
+        )
+      ) : null}
     </div>
   );
 }
