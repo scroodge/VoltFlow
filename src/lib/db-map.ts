@@ -46,6 +46,7 @@ export function mapProfile(raw: Record<string, unknown>): Profile {
     default_price_per_kwh: num(raw.default_price_per_kwh, 0.12),
     bydmate_cloud_api_key:
       raw.bydmate_cloud_api_key != null ? String(raw.bydmate_cloud_api_key) : null,
+    is_premium: raw.is_premium === true,
     created_at: String(raw.created_at ?? ""),
   };
 }
