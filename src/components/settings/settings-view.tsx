@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { deleteCar } from "@/actions/cars";
 import { sendTestPush } from "@/actions/push";
 import { LocaleSwitcher } from "@/components/locale-switcher";
+import { ClusterBackgroundsSettings } from "@/components/settings/cluster-backgrounds-settings";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -581,6 +582,8 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
               </p>
             </div>
           ) : null}
+
+          <ClusterBackgroundsSettings />
         </CardContent>
       </Card>
 

@@ -7,6 +7,7 @@ export type Profile = {
   preferred_locale: "en" | "be" | "ru";
   default_price_per_kwh: number;
   bydmate_cloud_api_key: string | null;
+  is_premium: boolean;
   created_at: string;
 };
 
