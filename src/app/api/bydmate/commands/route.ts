@@ -10,14 +10,14 @@ type PendingCommand = {
   id: string;
   type: string;
   params: Record<string, unknown>;
+  created_at: string;
 };
 
 async function expireStalePending(
   supabase: ReturnType<typeof createServiceClient>,
-  userId: string,
-  vehicleId: string,
+  ids: string[],
 ) {
-  const cutoff = new Date(Date.now() - COMMAND_TIMEOUT_MS).toISOString();
+  if (ids.length === 0) return;
   await supabase
     .from("vehicle_commands")
     .update({
@@ -25,10 +25,8 @@ async function expireStalePending(
       executed_at: new Date().toISOString(),
       result: { error: "timeout", timed_out: true },
     })
-    .eq("user_id", userId)
-    .eq("vehicle_id", vehicleId)
-    .eq("status", "pending")
-    .lt("created_at", cutoff);
+    .in("id", ids)
+    .eq("status", "pending");
 }
 
 export async function GET(request: Request) {
@@ -45,11 +43,9 @@ export async function GET(request: Request) {
       return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
-    await expireStalePending(supabase, profile.id, vehicleId);
-
     const { data: rows, error } = await supabase
       .from("vehicle_commands")
-      .select("id, type, params")
+      .select("id, type, params, created_at")
       .eq("user_id", profile.id)
       .eq("vehicle_id", vehicleId)
       .eq("status", "pending")
@@ -60,7 +56,26 @@ export async function GET(request: Request) {
       return Response.json({ ok: false, error: "Command lookup failed" }, { status: 500 });
     }
 
-    const commands = (rows ?? []) as PendingCommand[];
+    // Empty queue (the overwhelming majority of polls) costs one indexed read and zero
+    // writes. Only touch the table when there is something stale to expire or fresh to send.
+    const pending = (rows ?? []) as PendingCommand[];
+    if (pending.length === 0) {
+      return Response.json({ ok: true, commands: [] });
+    }
+
+    const cutoff = Date.now() - COMMAND_TIMEOUT_MS;
+    const staleIds: string[] = [];
+    const commands: PendingCommand[] = [];
+    for (const row of pending) {
+      if (new Date(row.created_at).getTime() < cutoff) {
+        staleIds.push(row.id);
+      } else {
+        commands.push(row);
+      }
+    }
+
+    await expireStalePending(supabase, staleIds);
+
     if (commands.length > 0) {
       const ids = commands.map((row) => row.id);
       await supabase
