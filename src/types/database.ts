@@ -225,6 +225,7 @@ export type BydmateTripRow = {
   sample_count: number;
   track_point_count: number;
   distance_km: number | null;
+  trip_meter_baseline_km?: number | null;
   soc_start: number | null;
   soc_end: number | null;
   max_speed_kmh: number | null;

@@ -12,7 +12,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## Trips (`bydmate_trips`)
 
 - Full lifecycle, junk-filter rules, and the phantom-trip root cause are in [docs/TRIPS.md](docs/TRIPS.md). Read it before touching `bydmate_ingest_telemetry` or `bydmate_discard_trip_if_junk`.
-- `bydmate_trips.distance_km` is copied as-is from `telemetry.current_trip_distance_km` (the car's cumulative trip meter), **not** a per-trip delta. This is why a trip re-opened during a D→R→P parking maneuver inherits the previous trip's distance → phantom trips (e.g. `10 s / 2.4 km / 3 km/h`).
+- `bydmate_trips.distance_km` is a **per-trip delta** from `trip_meter_baseline_km` (migration `20260615120000`); do not copy `current_trip_distance_km` as-is. Short parking phantoms are still filtered by `bydmate_discard_trip_if_junk`; long inherited-meter inflation is fixed by the baseline.
 - `bydmate_discard_trip_if_junk` (migration `20260613150000`) runs at every trip close: Rule A (`dist ≤ 0.1` ∧ `max_speed ≤ 3`), Rule B (`dur < 60 s` ∧ `max_speed < 10`), Rule C (`implied speed = dist·3600/dur > max(max_speed·1.5, 80)` → physically impossible, inherited distance). New phantoms are auto-removed; no ongoing manual cleanup needed.
 - **Never edit an already-applied migration** — `supabase db push` skips applied files, so the edit silently never deploys (this is exactly why an earlier Rule B fix didn't take). Always create a new migration; verify live with `pg_get_functiondef('public.bydmate_discard_trip_if_junk(uuid)'::regprocedure)`.
 - The client display filter `src/lib/bydmate/trip-filter.ts` (`isJunkTrip`) is **not** in sync with the server rules (no Rule B/C). Server discard is authoritative; sync the client only if phantoms surface in the UI.

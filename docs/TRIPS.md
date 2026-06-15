@@ -18,15 +18,16 @@ Each telemetry sample drives a small state machine over the user's single open t
   `speed ≤ 5` guard, migration `20260612120000`), or the 5-minute gap elapses. On close the
   row is run through `bydmate_discard_trip_if_junk`; survivors get `bydmate_finalize_trip_energy`.
 
-### ⚠️ `distance_km` is the car's trip meter, not a per-trip delta
+### `distance_km` is a per-trip delta from the car trip meter (since `20260615120000`)
 
-`distance_km` is set directly from `telemetry.current_trip_distance_km` — the car's own
-cumulative trip-meter reading, copied as-is. **This is the root of phantom trips:** when a
-real trip closes (gear→P) the car's meter does **not** reset immediately, so if the driver
-shifts through R/D at 1–3 km/h during a parking maneuver, the ingest opens a *new* trip that
-**inherits the stale meter value** (e.g. 2.4 km). Gear=P closes it seconds later → an artifact
-like `10 s / 2.4 km / 3 km/h` or `16 s / 4.5 km / 38 km/h`. The deeper fix (baseline the meter
-at open and store a delta) is not implemented — the junk filter below neutralizes the symptom.
+Ingest stores `trip_meter_baseline_km` = `current_trip_distance_km` at trip open and writes
+`distance_km` as **meter_now − baseline** (with mid-trip reset handling via
+`bydmate_trip_distance_from_meter`). This fixes inherited-meter inflation when the car does
+not reset its trip counter between drives (e.g. Cl 94.1 km stored vs ~50.5 km real on
+2026-06-14). Migration `20260615120100` backfills closed trips from telemetry open/close samples.
+
+**Short phantom trips** (parking D→R→P maneuvers inheriting a stale meter for a few seconds)
+are still caught by `bydmate_discard_trip_if_junk` Rules A/B/C below.
 
 ## Junk filter (`bydmate_discard_trip_if_junk`)
 
