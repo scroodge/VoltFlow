@@ -42,7 +42,7 @@ import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useMateReleaseQuery } from "@/hooks/use-mate-release-query";
 import { useTranslation } from "@/hooks/use-translation";
-import { isMateUpdateAvailable } from "@/lib/mate-version";
+import { compareMateVersions, isMateUpdateAvailable } from "@/lib/mate-version";
 import {
   currencies,
   currencyLabels,
@@ -701,6 +701,10 @@ function MateVersionPanel() {
     bydmateLive.find((snapshot) => snapshot.mate_version)?.mate_version ?? null;
   const latestVersion = release?.version ?? null;
   const updateAvailable = isMateUpdateAvailable(installedVersion, latestVersion);
+  const installedNewerThanLatest =
+    !!installedVersion &&
+    !!latestVersion &&
+    compareMateVersions(installedVersion, latestVersion) > 0;
 
   return (
     <div className="space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
@@ -730,6 +734,11 @@ function MateVersionPanel() {
           <p className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--voltflow-cyan)]">
             <ArrowUpCircle className="size-4 shrink-0" aria-hidden />
             {t("settings.cloud.versionUpdateAvailable")}
+          </p>
+        ) : installedNewerThanLatest ? (
+          <p className="inline-flex items-center gap-2 text-sm font-semibold text-amber-300">
+            <RefreshCw className="size-4 shrink-0" aria-hidden />
+            {t("settings.cloud.versionCatalogLag")}
           </p>
         ) : (
           <p className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--voltflow-green)]">
