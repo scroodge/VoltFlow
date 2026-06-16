@@ -56,6 +56,18 @@ export function resolveTelemetryWindow(range: TelemetryHistoryRange, anchorDate:
     };
   }
 
+  if (range === "week") {
+    const monday = isoWeekMondayFromDate(anchorDate);
+    const sunday = new Date(monday);
+    sunday.setUTCDate(monday.getUTCDate() + 6);
+    return {
+      from: `${monday.toISOString().slice(0, 10)}T00:00:00.000Z`,
+      to: `${sunday.toISOString().slice(0, 10)}T23:59:59.999Z`,
+      useHourly: true,
+      rawSampleDays: 3,
+    };
+  }
+
   const anchor = /^\d{4}-\d{2}-\d{2}$/.test(anchorDate)
     ? new Date(`${anchorDate}T23:59:59.999Z`)
     : new Date();
@@ -134,7 +146,7 @@ export function isoWeekValueFromDate(dateStr: string): string {
   return `${year}-W${pad2(week)}`;
 }
 
-/** End-of-week anchor (Sunday) for an ISO week input value. */
+/** Monday anchor for an ISO week input value. */
 export function isoWeekValueToAnchorDate(weekValue: string): string {
   const match = /^(\d{4})-W(\d{2})$/.exec(weekValue);
   if (!match) return new Date().toISOString().slice(0, 10);
@@ -147,9 +159,7 @@ export function isoWeekValueToAnchorDate(weekValue: string): string {
   firstMonday.setUTCDate(jan4.getUTCDate() - (jan4Day - 1));
   const monday = new Date(firstMonday);
   monday.setUTCDate(firstMonday.getUTCDate() + (week - 1) * 7);
-  const sunday = new Date(monday);
-  sunday.setUTCDate(monday.getUTCDate() + 6);
-  return sunday.toISOString().slice(0, 10);
+  return monday.toISOString().slice(0, 10);
 }
 
 export function snapAnchorDateForRange(

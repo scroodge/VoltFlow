@@ -27,6 +27,8 @@ import { useTranslation } from "@/hooks/use-translation";
 import { buildAnalyticsSummary, consumptionByOutsideTemp } from "@/lib/bydmate/telemetry-buckets";
 import { computeHistoryPeriodSummary } from "@/lib/history-day-summary";
 import {
+  isoWeekValueFromDate,
+  isoWeekValueToAnchorDate,
   parseAnalyticsRange,
   resolveTelemetryWindow,
   snapAnchorDateForRange,
@@ -76,6 +78,30 @@ const MONTH_NAMES_EN = [
   "July", "August", "September", "October", "November", "December",
 ];
 
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function isoWeekPartsFromDate(dateStr: string) {
+  const match = /^(\d{4})-W(\d{2})$/.exec(isoWeekValueFromDate(dateStr));
+  if (!match) {
+    return {
+      year: new Date().getUTCFullYear(),
+      week: 1,
+    };
+  }
+  return {
+    year: Number(match[1]),
+    week: Number(match[2]),
+  };
+}
+
+function isoWeeksInYear(year: number) {
+  const dec28 = new Date(Date.UTC(year, 11, 28)).toISOString().slice(0, 10);
+  const match = /^(\d{4})-W(\d{2})$/.exec(isoWeekValueFromDate(dec28));
+  return match ? Number(match[2]) : 52;
+}
+
 function AnalyticsRangeAnchorPicker({
   range,
   anchorDate,
@@ -87,10 +113,11 @@ function AnalyticsRangeAnchorPicker({
   onAnchorDateChange: (value: string) => void;
   tx: Translator;
 }) {
-  // Week: anchorDate is already the Monday of the week (YYYY-MM-DD)
-  // Month: anchorDate is YYYY-MM-01
+  const [supportsWeekInput, setSupportsWeekInput] = useState(true);
   const monthYear = anchorDate ? Number(anchorDate.slice(0, 4)) : new Date().getUTCFullYear();
   const monthNum = anchorDate ? Number(anchorDate.slice(5, 7)) : new Date().getUTCMonth() + 1;
+  const weekParts = useMemo(() => isoWeekPartsFromDate(anchorDate), [anchorDate]);
+  const weekCount = useMemo(() => isoWeeksInYear(weekParts.year), [weekParts.year]);
 
   const quarterPickerValue = useMemo(() => quarterValueFromDate(anchorDate), [anchorDate]);
   const yearPickerValue = useMemo(() => yearValueFromDate(anchorDate), [anchorDate]);
@@ -98,6 +125,12 @@ function AnalyticsRangeAnchorPicker({
   const quarterMatch = /^(\d{4})-Q([1-4])$/.exec(quarterPickerValue);
   const quarterYear = quarterMatch ? Number(quarterMatch[1]) : new Date().getUTCFullYear();
   const quarterNum = quarterMatch ? Number(quarterMatch[2]) : 1;
+
+  useEffect(() => {
+    const input = document.createElement("input");
+    input.setAttribute("type", "week");
+    setSupportsWeekInput(input.type === "week");
+  }, []);
 
   const labelKey =
     range === "week"
@@ -114,15 +147,44 @@ function AnalyticsRangeAnchorPicker({
     <label className="mt-4 grid gap-1 text-sm text-muted-foreground">
       {tx(labelKey)}
       {range === "week" ? (
-        // type="week" unsupported on iOS — use date input snapped to Monday
-        <Input
-          type="date"
-          value={anchorDate}
-          onChange={(event) =>
-            onAnchorDateChange(snapAnchorDateForRange("week", event.target.value))
-          }
-          className="w-44"
-        />
+        supportsWeekInput ? (
+          <Input
+            type="week"
+            value={isoWeekValueFromDate(anchorDate)}
+            onChange={(event) => onAnchorDateChange(isoWeekValueToAnchorDate(event.target.value))}
+            className="w-44"
+          />
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <select
+              value={weekParts.week}
+              onChange={(event) =>
+                onAnchorDateChange(isoWeekValueToAnchorDate(`${weekParts.year}-W${pad2(Number(event.target.value))}`))
+              }
+              className={`${anchorSelectClassName} w-28`}
+              aria-label={tx("vehicle.analytics.anchorWeek")}
+            >
+              {Array.from({ length: weekCount }, (_, i) => i + 1).map((week) => (
+                <option key={week} value={week}>
+                  {`W${pad2(week)}`}
+                </option>
+              ))}
+            </select>
+            <Input
+              type="number"
+              min={2018}
+              max={2100}
+              value={weekParts.year}
+              onChange={(event) =>
+                onAnchorDateChange(
+                  isoWeekValueToAnchorDate(`${event.target.value}-W${pad2(Math.min(weekParts.week, isoWeeksInYear(Number(event.target.value))))}`),
+                )
+              }
+              className="w-28"
+              aria-label={tx("vehicle.analytics.anchorYear")}
+            />
+          </div>
+        )
       ) : range === "month" ? (
         // type="month" unsupported on iOS — use select + year number like quarter
         <div className="flex flex-wrap gap-2">
