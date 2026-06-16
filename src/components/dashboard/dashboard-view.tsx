@@ -13,7 +13,6 @@ import { BrandBadge } from "@/components/brand/BrandBadge";
 import { ChargingBolt } from "@/components/brand/ChargingBolt";
 import { LogoFull } from "@/components/brand/LogoFull";
 import { useDashboardDevSnapshotOverride } from "@/components/dev/dashboard-dev-snapshot-context";
-import { MateUpdateBanner } from "@/components/dashboard/mate-update-banner";
 import { BatteryRing } from "@/components/charging/BatteryRing";
 import { ChargingActionButton } from "@/components/charging/ChargingActionButton";
 import { Button } from "@/components/ui/button";
@@ -620,8 +619,6 @@ export function DashboardView() {
 
       {!isPageLoading && !carsError && cars && cars.length > 0 ? (
         <>
-          <MateUpdateBanner installedVersion={latestBydmateSnapshot?.mate_version} />
-
           <section className="voltflow-card overflow-hidden p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">

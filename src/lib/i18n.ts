@@ -739,6 +739,9 @@ export const dictionaries = {
         versionUpToDate: "Up to date",
         versionUpdateAvailable: "Update available",
         versionCatalogLag: "Release catalog is updating",
+        versionReleaseSummaryFallback:
+          "A newer VoltFlow Mate build is available with fixes and improvements.",
+        versionViewOnGitHub: "View release on GitHub",
         versionUnknown: "No data from car yet",
       },
       title: "Drive profile",
@@ -1469,6 +1472,9 @@ export const dictionaries = {
         versionUpToDate: "Актуальная версія",
         versionUpdateAvailable: "Даступнае абнаўленне",
         versionCatalogLag: "Каталог рэлізаў абнаўляецца",
+        versionReleaseSummaryFallback:
+          "Даступная новая зборка VoltFlow Mate з выпраўленнямі і паляпшэннямі.",
+        versionViewOnGitHub: "Паглядзець рэліз на GitHub",
         versionUnknown: "Пакуль няма даных з аўто",
       },
       title: "Профіль кіроўцы",
@@ -2198,6 +2204,9 @@ export const dictionaries = {
         versionUpToDate: "Актуальная версия",
         versionUpdateAvailable: "Доступно обновление",
         versionCatalogLag: "Каталог релизов обновляется",
+        versionReleaseSummaryFallback:
+          "Доступна новая сборка VoltFlow Mate с исправлениями и улучшениями.",
+        versionViewOnGitHub: "Открыть релиз на GitHub",
         versionUnknown: "Пока нет данных с авто",
       },
       title: "Профиль водителя",

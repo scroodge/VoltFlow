@@ -44,6 +44,10 @@ import { useMateReleaseQuery } from "@/hooks/use-mate-release-query";
 import { useTranslation } from "@/hooks/use-translation";
 import { compareMateVersions, isMateUpdateAvailable } from "@/lib/mate-version";
 import {
+  MATE_GITHUB_RELEASES_LATEST_URL,
+  summarizeReleaseNotes,
+} from "@/lib/mate-release-summary";
+import {
   currencies,
   currencyLabels,
   currencySymbols,
@@ -705,6 +709,10 @@ function MateVersionPanel() {
     !!installedVersion &&
     !!latestVersion &&
     compareMateVersions(installedVersion, latestVersion) > 0;
+  const releaseSummary =
+    summarizeReleaseNotes(release?.release_notes) ??
+    (updateAvailable ? t("settings.cloud.versionReleaseSummaryFallback") : null);
+  const releaseUrl = release?.apk_url ?? MATE_GITHUB_RELEASES_LATEST_URL;
 
   return (
     <div className="space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
@@ -731,10 +739,24 @@ function MateVersionPanel() {
       </div>
       {installedVersion ? (
         updateAvailable ? (
-          <p className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--voltflow-cyan)]">
-            <ArrowUpCircle className="size-4 shrink-0" aria-hidden />
-            {t("settings.cloud.versionUpdateAvailable")}
-          </p>
+          <div className="space-y-2">
+            <p className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--voltflow-cyan)]">
+              <ArrowUpCircle className="size-4 shrink-0" aria-hidden />
+              {t("settings.cloud.versionUpdateAvailable")}
+            </p>
+            {releaseSummary ? (
+              <p className="text-muted-foreground text-sm leading-relaxed">{releaseSummary}</p>
+            ) : null}
+            <a
+              href={releaseUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--voltflow-cyan)] underline-offset-2 hover:underline"
+            >
+              {t("settings.cloud.versionViewOnGitHub")}
+              <ExternalLink className="size-4 shrink-0" aria-hidden />
+            </a>
+          </div>
         ) : installedNewerThanLatest ? (
           <p className="inline-flex items-center gap-2 text-sm font-semibold text-amber-300">
             <RefreshCw className="size-4 shrink-0" aria-hidden />
