@@ -15,6 +15,8 @@ const APP_SHELL_ROUTES = [
   "/history",
   "/settings",
   "/login",
+  "/legal/privacy/world",
+  "/legal/terms/world",
 ];
 
 self.addEventListener("install", (event) => {

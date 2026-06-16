@@ -7,6 +7,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { LocaleSwitcher } from "@/components/locale-switcher";
+import { LegalFooterLinks } from "@/components/legal/legal-document-view";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -183,6 +184,7 @@ export function LoginForm() {
       </CardFooter>
 
       <CardContent className="pb-10 text-muted-foreground text-center text-[11px] tracking-wide">
+        <LegalFooterLinks className="mb-3" />
         {t("auth.hosted")}
       </CardContent>
     </Card>

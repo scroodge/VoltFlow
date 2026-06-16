@@ -38,7 +38,10 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isDevelopment = process.env.NODE_ENV !== "production";
 
-  const isPublic = PUBLIC_PATHS.has(pathname) || pathname.startsWith("/telegram/");
+  const isPublic =
+    PUBLIC_PATHS.has(pathname) ||
+    pathname.startsWith("/telegram/") ||
+    pathname.startsWith("/legal/");
   const isDevAuthPath = DEV_AUTH_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );

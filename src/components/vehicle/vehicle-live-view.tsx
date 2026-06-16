@@ -17,6 +17,7 @@ import {
   Minimize2,
   Minus,
   MapPin,
+  Navigation,
   Plus,
   Route,
   Thermometer,
@@ -55,12 +56,18 @@ import { useBydmateTripSamplesQuery } from "@/hooks/use-bydmate-trip-samples-que
 import { useBydmateTripTrackQuery } from "@/hooks/use-bydmate-trip-track-query";
 import { useBydmateTripsQuery, useLatestBydmateTripsQuery } from "@/hooks/use-bydmate-trips-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
+import { useSessionsQuery } from "@/hooks/use-sessions-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
 import { useAppPath } from "@/lib/dev/dev-path";
 import { gearIsPark, readGear } from "@/lib/bydmate/gear";
 import { isTelemetryCharging } from "@/lib/bydmate/telemetry-charging";
 import { averageTripConsumption } from "@/lib/bydmate/range-estimate";
+import {
+  computeHeroDriveMetrics,
+  formatHeroDistanceKm,
+  formatKmPerPercent,
+} from "@/lib/bydmate/hero-drive-metrics";
 import { calculateRegenRecoverySegments, calculateTripEnergy, prepareRegenRecoveryBars } from "@/lib/bydmate/trip-energy";
 import { isRouteTrackDisplayable } from "@/lib/bydmate/route-insights";
 import {
@@ -136,14 +143,7 @@ function readAuxVoltageV(
 }
 
 function heroCoreMetrics(snapshot: BydmateLiveSnapshotRow, t: Translator, locale: Locale) {
-  const telemetry = snapshot.telemetry;
   return [
-    {
-      key: "soh",
-      icon: Activity,
-      label: t("vehicle.metrics.soh"),
-      value: `${fmt(telemetry.soh_percent, 1)}%`,
-    },
     {
       key: "auxBattery",
       icon: Zap,
@@ -358,7 +358,25 @@ function VehicleLiveContent({
     isLoading: isTripsLoading,
     error: tripsError,
   } = useBydmateTripsQuery(selectedDate, snapshot.vehicle_id, !fixturePoints && !isCharging && !isStale);
+  const { data: sessions = [] } = useSessionsQuery();
+  const { data: recentTrips = [] } = useLatestBydmateTripsQuery(
+    snapshot.vehicle_id,
+    50,
+    !fixturePoints && !isCharging && Boolean(snapshot.vehicle_id),
+    true,
+  );
   const trips = fixtureTrips ?? apiTrips;
+  const heroDriveMetrics = useMemo(
+    () =>
+      computeHeroDriveMetrics({
+        sessions,
+        carId: matchedCar?.id ?? null,
+        trips: fixtureTrips ?? recentTrips,
+        snapshot,
+        batteryCapacityKwh,
+      }),
+    [sessions, matchedCar?.id, fixtureTrips, recentTrips, snapshot, batteryCapacityKwh],
+  );
   const rangeEstimate = useVehicleRangeEstimate({
     baseSnapshot: rangeBaseSnapshot,
     scopedVehicleId,
@@ -390,6 +408,8 @@ function VehicleLiveContent({
         rangeLabel={rangeLabel}
         vehicleLabel={vehicleLabel}
         hasMounted={hasMounted}
+        distanceSinceChargeKm={heroDriveMetrics.distanceSinceChargeKm}
+        kmPerPercentSoc={heroDriveMetrics.kmPerPercentSoc}
       />
       {!fixturePoints && isAdmin ? (
         <VehicleControlPanel
@@ -481,6 +501,8 @@ function Hero({
   rangeLabel,
   vehicleLabel,
   hasMounted,
+  distanceSinceChargeKm,
+  kmPerPercentSoc,
 }: {
   snapshot: BydmateLiveSnapshotRow;
   nowMs: number;
@@ -490,11 +512,38 @@ function Hero({
   rangeLabel: string;
   vehicleLabel: string;
   hasMounted: boolean;
+  distanceSinceChargeKm: number | null;
+  kmPerPercentSoc: number | null;
 }) {
   const { locale, t: translate } = useTranslation();
   const t = translate as Translator;
   const telemetry = snapshot.telemetry;
   const coreMetrics = heroCoreMetrics(snapshot, t, locale);
+  const primaryMetrics = [
+    {
+      key: "range",
+      icon: Route,
+      label: t("vehicle.metrics.range"),
+      value: rangeLabel,
+    },
+    ...coreMetrics,
+  ];
+  const sinceChargeValue = formatHeroDistanceKm(distanceSinceChargeKm);
+  const kmPerPercentValue = formatKmPerPercent(kmPerPercentSoc);
+  const driveMetrics = [
+    {
+      key: "kmPerPercent",
+      icon: Activity,
+      label: t("vehicle.metrics.kmPerPercent"),
+      value: kmPerPercentValue,
+    },
+    {
+      key: "sinceCharge",
+      icon: Navigation,
+      label: t("vehicle.metrics.sinceLastCharge"),
+      value: sinceChargeValue,
+    },
+  ];
 
   return (
     <section className="voltflow-card overflow-hidden p-4">
@@ -523,8 +572,8 @@ function Hero({
         </span>
       </div>
 
-      <div className={`mt-4 ${telemetryGridClass(coreMetrics.length)}`}>
-        {coreMetrics.map((metric) => (
+      <div className={`mt-4 ${telemetryGridClass(primaryMetrics.length)}`}>
+        {primaryMetrics.map((metric) => (
           <HeroMetric
             key={metric.key}
             icon={metric.icon}
@@ -543,12 +592,7 @@ function Hero({
         }[] = [];
 
         if (isStale) {
-          modeMetrics.push({
-            key: "range",
-            icon: Route,
-            label: t("vehicle.metrics.range"),
-            value: rangeLabel,
-          });
+          modeMetrics.push(...driveMetrics);
         } else if (isCharging) {
           modeMetrics.push(
             {
@@ -563,23 +607,16 @@ function Hero({
               label: t("vehicle.telemetry.chargePower"),
               value: `${fmt(telemetry.charge_power_kw, 1)} kW`,
             },
-            { key: "range", icon: Route, label: t("vehicle.metrics.range"), value: rangeLabel },
           );
         } else {
           modeMetrics.push(
+            ...driveMetrics,
             {
               key: "speed",
               icon: Gauge,
               label: t("vehicle.metrics.speed"),
               value: `${fmt(telemetry.speed_kmh, 0)} km/h`,
             },
-            {
-              key: "power",
-              icon: Zap,
-              label: t("vehicle.metrics.power"),
-              value: `${fmt(telemetry.power_kw, 1)} kW`,
-            },
-            { key: "range", icon: Route, label: t("vehicle.metrics.range"), value: rangeLabel },
           );
         }
 

@@ -83,6 +83,13 @@ export const dictionaries = {
       label: "Language",
       helper: "Saved on-device and applied across the app.",
     },
+    legal: {
+      back: "Back",
+      regionWorld: "World",
+      regionBelarus: "Belarus",
+      lastUpdated: "Last updated: {date}",
+      contact: "Privacy contact:",
+    },
     landing: {
       eyebrow: "EV cockpit · realtime",
       title: "Charging clarity for your pocket-sized drive log.",
@@ -366,6 +373,8 @@ export const dictionaries = {
         speed: "Speed",
         power: "Power",
         range: "Range",
+        sinceLastCharge: "Since charge",
+        kmPerPercent: "km/1%",
       },
       staleTitle: "Car data hidden",
       staleBody:
@@ -781,6 +790,20 @@ export const dictionaries = {
         "Anon JWT only accesses your rows · service role absent on device",
         "Realtime publication limited to charging_sessions inserts/updates · no cross-driver leakage",
       ],
+      legal: {
+        title: "Legal and privacy",
+        description:
+          "International privacy policy and terms of service for VoltFlow.",
+        privacy: "Privacy Policy",
+        terms: "Terms of Service",
+        privacyWorld: "Privacy Policy · International",
+        privacyBelarus: "Privacy Policy · Belarus",
+        termsWorld: "Terms of Service · International",
+        termsBelarus: "Terms of Service · Belarus",
+        recommended: "recommended",
+        recommendedHint:
+          "We highlight the likely version from your app language; you can open any variant anytime.",
+      },
       about: "About",
       aboutBody:
         "VoltFlow is a small planning cockpit for EV charging sessions, costs, and history.",
@@ -813,6 +836,13 @@ export const dictionaries = {
     locale: {
       label: "Мова",
       helper: "Захоўваецца на прыладзе і працуе ва ўсім дадатку.",
+    },
+    legal: {
+      back: "Назад",
+      regionWorld: "Свет",
+      regionBelarus: "Беларусь",
+      lastUpdated: "Абноўлена: {date}",
+      contact: "Кантакт па прыватнасці:",
     },
     landing: {
       eyebrow: "EV-кабiна · рэальны час",
@@ -1098,6 +1128,8 @@ export const dictionaries = {
         speed: "Хуткасць",
         power: "Магутнасць",
         range: "Запас ходу",
+        sinceLastCharge: "Ад зарадкі",
+        kmPerPercent: "км/1%",
       },
       staleTitle: "Даныя аўто схаваныя",
       staleBody:
@@ -1514,6 +1546,20 @@ export const dictionaries = {
         "Anon JWT бачыць толькі вашы радкі · service role няма на прыладзе",
         "Realtime-публікацыя абмежавана inserts/updates у charging_sessions · без уцечак паміж кіроўцамі",
       ],
+      legal: {
+        title: "Прававыя дакументы",
+        description:
+          "Міжнародная палітыка прыватнасці і ўмовы карыстання VoltFlow.",
+        privacy: "Палітыка прыватнасці",
+        terms: "Умовы карыстання",
+        privacyWorld: "Палітыка прыватнасці · міжнародная",
+        privacyBelarus: "Палітыка прыватнасці · Беларусь",
+        termsWorld: "Умовы карыстання · міжнародныя",
+        termsBelarus: "Умовы карыстання · Беларусь",
+        recommended: "рэкамендавана",
+        recommendedHint:
+          "Падказка будуецца па мове дадатку; вы заўсёды можаце адкрыць любы варыянт.",
+      },
       about: "Пра дадатак",
       aboutBody:
         "VoltFlow — невялікая панэль для планавання EV-зарадкі, коштаў і гісторыі сесій.",
@@ -1546,6 +1592,13 @@ export const dictionaries = {
     locale: {
       label: "Язык",
       helper: "Сохраняется на устройстве и применяется во всем приложении.",
+    },
+    legal: {
+      back: "Назад",
+      regionWorld: "Мир",
+      regionBelarus: "Беларусь",
+      lastUpdated: "Обновлено: {date}",
+      contact: "Контакт по приватности:",
     },
     landing: {
       eyebrow: "EV-кокпит · реальное время",
@@ -1830,6 +1883,8 @@ export const dictionaries = {
         speed: "Скорость",
         power: "Мощность",
         range: "Запас хода",
+        sinceLastCharge: "От зарядки",
+        kmPerPercent: "км/1%",
       },
       staleTitle: "Данные авто скрыты",
       staleBody:
@@ -2246,6 +2301,20 @@ export const dictionaries = {
         "Anon JWT видит только ваши строки · service role отсутствует на устройстве",
         "Realtime-публикация ограничена inserts/updates в charging_sessions · без утечек между пользователями",
       ],
+      legal: {
+        title: "Правовые документы",
+        description:
+          "Международная политика конфиденциальности и условия использования VoltFlow.",
+        privacy: "Политика конфиденциальности",
+        terms: "Условия использования",
+        privacyWorld: "Политика конфиденциальности · международная",
+        privacyBelarus: "Политика конфиденциальности · Беларусь",
+        termsWorld: "Условия использования · международные",
+        termsBelarus: "Условия использования · Беларусь",
+        recommended: "рекомендуется",
+        recommendedHint:
+          "Подсказка основана на языке приложения; вы можете открыть любой вариант в любой момент.",
+      },
       about: "О приложении",
       aboutBody:
         "VoltFlow — небольшая панель для планирования EV-зарядки, стоимости и истории сессий.",

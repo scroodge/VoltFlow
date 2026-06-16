@@ -23,7 +23,9 @@ import { toast } from "sonner";
 import { deleteCar } from "@/actions/cars";
 import { sendTestPush } from "@/actions/push";
 import { LocaleSwitcher } from "@/components/locale-switcher";
+import { LegalSettingsRow } from "@/components/legal/legal-document-view";
 import { ClusterBackgroundsSettings } from "@/components/settings/cluster-backgrounds-settings";
+import { SettingsGroup, SettingsGroupDivider, SettingsPageHeader } from "@/components/settings/settings-section";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,6 +58,7 @@ import {
   type Currency,
   type Locale,
 } from "@/lib/i18n";
+import { legalDocumentPath } from "@/lib/legal-region";
 import { parseDecimalInput } from "@/lib/number-input";
 import { devFetch, isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { useAppPath } from "@/lib/dev/dev-path";
@@ -352,47 +355,41 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div>
-        <p className="text-muted-foreground text-xs uppercase tracking-[0.3em]">
-          {t("settings.eyebrow")}
-        </p>
-        <h1 className="mt-2 text-balance text-4xl font-semibold tracking-tight">
-          {t("settings.title")}
-        </h1>
-        <p className="text-muted-foreground mt-3 max-w-2xl text-lg">
-          {t("settings.subtitle")}
-        </p>
-      </div>
+    <div className="flex flex-col gap-3 px-4 pb-5 pt-3">
+      <SettingsPageHeader
+        eyebrow={String(t("settings.eyebrow"))}
+        title={String(t("settings.title"))}
+        subtitle={String(t("settings.subtitle"))}
+      />
 
-      <Card className="border-white/[0.08]">
+      <Card size="sm" className="border-white/[0.08]">
         <CardHeader>
-          <CardTitle className="text-xl tracking-tight">{t("locale.label")}</CardTitle>
+          <CardTitle>{t("locale.label")}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3">
           <LocaleSwitcher onLocaleChange={handleLocaleChange} />
           <p className="text-muted-foreground text-sm">{t("locale.helper")}</p>
         </CardContent>
       </Card>
 
-      <Card className="border-white/[0.08]">
+      <Card size="sm" className="border-white/[0.08]">
         <CardHeader>
-          <CardTitle className="text-xl tracking-tight">{t("settings.account")}</CardTitle>
+          <CardTitle>{t("settings.account")}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4 text-base leading-relaxed">
+        <CardContent className="space-y-3 text-sm leading-relaxed">
           <div>
-            <p className="text-muted-foreground text-sm uppercase tracking-[0.3em]">
+            <p className="text-muted-foreground text-xs uppercase tracking-[0.24em]">
               {t("settings.email")}
             </p>
             {email === null ? (
-              <Skeleton className="mt-4 h-[22px] w-2/5 rounded-xl" />
+              <Skeleton className="mt-2 h-5 w-2/5 rounded-xl" />
             ) : (
-              <p className="mt-4 text-lg">{email ?? t("common.unavailable")}</p>
+              <p className="mt-2 text-sm">{email ?? t("common.unavailable")}</p>
             )}
           </div>
 
           <Button
-            className="h-[54px] w-full rounded-full text-base font-semibold"
+            className="h-11 w-full rounded-full text-sm font-semibold"
             variant="outline"
             type="button"
             onClick={() => void handleSignOut()}
@@ -405,15 +402,15 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       {isAdmin ? <PushDiagnostics /> : null}
 
       {isAdmin ? (
-        <Card className="border-white/[0.08]">
+        <Card size="sm" className="border-white/[0.08]">
           <CardHeader>
-            <CardTitle className="flex items-center gap-3 text-xl tracking-tight">
+            <CardTitle className="flex items-center gap-2">
               <ShieldCheck className="size-5 text-[var(--voltflow-green)]" aria-hidden />
               CMS базы знаний
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-muted-foreground text-base leading-relaxed">
+          <CardContent className="space-y-3">
+            <p className="text-muted-foreground text-sm leading-relaxed">
               Управление статьями, вопросами, аксессуарами, запчастями и разделами
               для Telegram-базы знаний VoltFlow.
             </p>
@@ -421,7 +418,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
               asChild
               variant="secondary"
               size="lg"
-              className="h-[54px] w-full justify-between rounded-full px-5 text-base font-semibold"
+              className="h-11 w-full justify-between rounded-full px-4 text-sm font-semibold"
             >
               <Link href="/admin/knowledge">
                 <span className="inline-flex items-center gap-3">
@@ -435,31 +432,28 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         </Card>
       ) : null}
 
-      <Card className="border-white/[0.08]">
+      <Card size="sm" className="border-white/[0.08]">
         <CardHeader>
-          <CardTitle className="flex items-center gap-3 text-xl tracking-tight">
+          <CardTitle className="flex items-center gap-2">
             <KeyRound className="size-5" aria-hidden />
             {t("settings.cloud.name")} 
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-5">
-          <p className="text-muted-foreground text-base leading-relaxed">
+        <CardContent className="space-y-4">
+          <p className="text-muted-foreground text-sm leading-relaxed">
             {t("settings.cloud.description")}
           </p>
 
-          <div className="space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
-            <p className="text-sm font-semibold tracking-tight">{t("settings.cloud.installTitle")}</p>
-            <ol className="text-muted-foreground list-decimal space-y-3 pl-5 text-sm leading-relaxed">
+          <details className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
+            <summary className="cursor-pointer list-none text-sm font-semibold tracking-tight">
+              {t("settings.cloud.installTitle")}
+            </summary>
+            <ol className="text-muted-foreground mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed">
               {(t("settings.cloud.installSteps") as readonly string[]).map((step) => (
                 <li key={step}>{step}</li>
               ))}
             </ol>
-            <Button
-              asChild
-              variant="outline"
-              size="lg"
-              className="h-[48px] w-full rounded-full"
-            >
+            <Button asChild variant="outline" className="mt-3 h-11 w-full rounded-full text-sm">
               <a
                 href="https://github.com/scroodge/BYDMate-own/releases/latest"
                 target="_blank"
@@ -471,13 +465,13 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                 </span>
               </a>
             </Button>
-          </div>
+          </details>
 
           <MateVersionPanel />
 
           {linkCode && linkCountdownSec != null && linkCountdownSec > 0 ? (
-            <div className="space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
-              <p className="text-center font-mono text-5xl font-semibold tracking-[0.35em] tabular-nums">
+            <div className="space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
+              <p className="text-center font-mono text-4xl font-semibold tracking-[0.32em] tabular-nums">
                 {linkCode.slice(0, 3)} {linkCode.slice(3)}
               </p>
               <p className="text-muted-foreground text-center text-sm">
@@ -492,7 +486,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                 type="button"
                 variant="outline"
                 size="lg"
-                className="h-[48px] w-full rounded-full"
+                className="h-11 w-full rounded-full text-sm"
                 onClick={handleCreateBydmateLinkCode}
                 disabled={linkCreating}
               >
@@ -507,7 +501,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                 type="button"
                 variant="secondary"
                 size="lg"
-                className="h-[54px] w-full rounded-full"
+                className="h-11 w-full rounded-full text-sm"
                 onClick={handleCreateBydmateLinkCode}
                 disabled={linkCreating}
               >
@@ -522,7 +516,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
               type="button"
               variant="secondary"
               size="lg"
-              className="h-[54px] w-full rounded-full"
+              className="h-11 w-full rounded-full text-sm"
               onClick={handleCreateBydmateLinkCode}
               disabled={linkCreating}
             >
@@ -554,7 +548,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                   id="bydmate-api-key"
                   value={bydmateCloudApiKey || "No key generated yet"}
                   readOnly
-                  className="h-[54px] rounded-2xl font-mono text-sm"
+                  className="h-11 rounded-2xl font-mono text-sm"
                 />
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -562,7 +556,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                   type="button"
                   variant="secondary"
                   size="lg"
-                  className="h-[54px] rounded-full"
+                  className="h-11 rounded-full text-sm"
                   onClick={handleGenerateBydmateKey}
                 >
                   <RefreshCw className="mr-2 size-4" aria-hidden />
@@ -572,7 +566,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                   type="button"
                   variant="outline"
                   size="lg"
-                  className="h-[54px] rounded-full"
+                  className="h-11 rounded-full text-sm"
                   disabled={!bydmateCloudApiKey}
                   onClick={handleCopyBydmateKey}
                 >
@@ -591,11 +585,11 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         </CardContent>
       </Card>
 
-      <Card className="border-white/[0.08]">
+      <Card size="sm" className="border-white/[0.08]">
         <CardHeader>
-          <CardTitle className="text-xl tracking-tight">{t("settings.economics")}</CardTitle>
+          <CardTitle>{t("settings.economics")}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-8">
+        <CardContent className="space-y-5">
           <form className="space-y-4" onSubmit={handlePriceSave}>
             <div className="space-y-4">
               <Label htmlFor="pref-currency">{t("settings.currency")}</Label>
@@ -609,7 +603,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
               >
                 <SelectTrigger
                   id="pref-currency"
-                  className="h-[54px] w-full rounded-2xl text-lg"
+                  className="h-11 w-full rounded-2xl text-sm"
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -639,29 +633,29 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
               inputMode="decimal"
               pattern="[0-9]*[,.]?[0-9]*"
               min={0}
-              className="h-[54px] rounded-2xl text-lg"
+              className="h-11 rounded-2xl text-sm"
               required
             />
             <p className="text-muted-foreground text-sm">
               {t("settings.tariffHelp")}
             </p>
-            <Button className="h-[52px] w-full rounded-full text-base font-semibold" type="submit">
+            <Button className="h-11 w-full rounded-full text-sm font-semibold" type="submit">
               {t("settings.storeDefault")}
             </Button>
           </form>
-          <Separator className="my-16 bg-white/15" />
+          <Separator className="my-6 bg-white/15" />
 
-          <div className="space-y-8">
-            <div className="flex items-start justify-between gap-6">
-              <div className="space-y-6">
-                <p className="text-xs uppercase tracking-[0.38em] text-muted-foreground">
+          <div className="space-y-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-3">
+                <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">
                   {t("settings.housekeeping")}
                 </p>
-                <p className="text-lg leading-relaxed text-muted-foreground">
+                <p className="text-sm leading-relaxed text-muted-foreground">
                   {t("settings.housekeepingBody")}
                 </p>
               </div>
-              <Button asChild variant="secondary" size="lg" className="h-[54px] rounded-full">
+              <Button asChild variant="secondary" className="h-10 rounded-full text-sm">
                 <Link href={appPath("/cars/new")}>{t("settings.addEv")}</Link>
               </Button>
             </div>
@@ -684,7 +678,27 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         </CardContent>
       </Card>
 
-      <PrivacyNote />
+      <Card size="sm" className="border-white/[0.08]">
+        <CardHeader>
+          <CardTitle>{t("settings.legal.title")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 px-0 pb-1">
+          <p className="text-muted-foreground px-4 text-sm leading-relaxed">
+            {t("settings.legal.description")}
+          </p>
+          <SettingsGroup className="mx-4">
+            <LegalSettingsRow
+              href={legalDocumentPath("privacy", "world")}
+              label={String(t("settings.legal.privacy"))}
+            />
+            <SettingsGroupDivider />
+            <LegalSettingsRow
+              href={legalDocumentPath("terms", "world")}
+              label={String(t("settings.legal.terms"))}
+            />
+          </SettingsGroup>
+        </CardContent>
+      </Card>
       <AboutSection />
     </div>
   );
@@ -832,14 +846,14 @@ function PushDiagnostics() {
   };
 
   return (
-    <Card className="border-white/[0.08]">
+    <Card size="sm" className="border-white/[0.08]">
       <CardHeader>
-        <CardTitle className="flex items-center gap-3 text-xl tracking-tight">
+        <CardTitle className="flex items-center gap-2">
           <Bell className="size-5" aria-hidden />
           Push diagnostics
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-5">
+      <CardContent className="space-y-4">
         <div className="grid gap-3 text-sm sm:grid-cols-2">
           <PushStatusRow label="Supported" value={status?.supported ? "yes" : "no"} />
           <PushStatusRow label="Permission" value={status?.permission ?? "checking"} />
@@ -852,7 +866,7 @@ function PushDiagnostics() {
             type="button"
             variant="secondary"
             size="lg"
-            className="h-[54px] rounded-full"
+            className="h-11 rounded-full text-sm"
             disabled={busy !== null}
             onClick={handleSync}
           >
@@ -862,7 +876,7 @@ function PushDiagnostics() {
             type="button"
             variant="outline"
             size="lg"
-            className="h-[54px] rounded-full"
+            className="h-11 rounded-full text-sm"
             disabled={busy !== null}
             onClick={handleLocalTest}
           >
@@ -872,7 +886,7 @@ function PushDiagnostics() {
             type="button"
             variant="outline"
             size="lg"
-            className="h-[54px] rounded-full"
+            className="h-11 rounded-full text-sm"
             disabled={busy !== null}
             onClick={handleServerTest}
           >
@@ -911,11 +925,11 @@ function CarRow({ car }: { car: Car }) {
   };
 
   return (
-    <div className="border-white/[0.08] flex flex-wrap items-start justify-between gap-6 rounded-3xl border bg-white/[0.02] px-6 py-6">
+    <div className="border-white/[0.08] flex flex-wrap items-start justify-between gap-3 rounded-2xl border bg-white/[0.02] px-4 py-3.5">
       <div>
-        <p className="text-lg font-semibold tracking-tight">{car.name}</p>
+        <p className="text-base font-semibold tracking-tight">{car.name}</p>
         <p className="text-muted-foreground text-sm">{generationLabel}</p>
-        <p className="text-muted-foreground text-base">
+        <p className="text-muted-foreground text-sm">
           {t("settings.pedestal", {
             battery: car.battery_capacity_kwh,
             power: car.default_charger_power_kw,
@@ -926,7 +940,7 @@ function CarRow({ car }: { car: Car }) {
         <Button
           variant="secondary"
           size="lg"
-          className="rounded-full px-8 text-[15px]"
+          className="h-9 rounded-full px-4 text-xs"
           asChild
         >
           <Link href={appPath(`/cars/${car.id}/edit`)}>
@@ -937,7 +951,7 @@ function CarRow({ car }: { car: Car }) {
         <Button
           variant="ghost"
           size="lg"
-          className="rounded-full px-8 text-[15px]"
+          className="h-9 rounded-full px-4 text-xs"
           type="button"
           onClick={() => void handleDelete()}
         >
@@ -948,36 +962,16 @@ function CarRow({ car }: { car: Car }) {
   );
 }
 
-function PrivacyNote() {
-  const { t } = useTranslation();
-  const privacyItems = t("settings.privacyItems") as readonly string[];
-
-  return (
-    <div className="text-muted-foreground border-white/[0.08] mx-auto rounded-3xl border bg-white/[0.02] px-8 py-16 text-lg leading-relaxed">
-      {t("settings.privacy")}
-      <Separator className="my-14 bg-transparent" />
-      <p className="text-muted-foreground/80 text-[13px] uppercase tracking-[0.45em]">
-        {t("settings.privacyTitle")}
-      </p>
-      <ul className="mt-14 list-none space-y-8 text-muted-foreground/90 tracking-tight">
-        {privacyItems.map((item) => (
-          <li key={item}>{item}</li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 function AboutSection() {
   const { t } = useTranslation();
 
   return (
-    <Card className="border-white/[0.08]">
+    <Card size="sm" className="border-white/[0.08]">
       <CardHeader>
-        <CardTitle className="text-xl tracking-tight">{t("settings.about")}</CardTitle>
+        <CardTitle>{t("settings.about")}</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <p className="text-muted-foreground text-base leading-relaxed">
+      <CardContent className="space-y-4">
+        <p className="text-muted-foreground text-sm leading-relaxed">
           {t("settings.aboutBody")}
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -985,7 +979,7 @@ function AboutSection() {
             asChild
             variant="secondary"
             size="lg"
-            className="h-[54px] justify-between rounded-full px-5 text-base font-semibold"
+            className="h-11 justify-between rounded-full px-4 text-sm font-semibold"
           >
             <a
               href="https://t.me/bydyuanupbuybelarus"
@@ -1003,7 +997,7 @@ function AboutSection() {
             asChild
             variant="secondary"
             size="lg"
-            className="h-[54px] justify-between rounded-full px-5 text-base font-semibold"
+            className="h-11 justify-between rounded-full px-4 text-sm font-semibold"
           >
             <a
               href="https://github.com/scroodge/EvACChargeApp"

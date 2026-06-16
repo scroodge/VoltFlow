@@ -16,6 +16,7 @@ import { BrandBadge } from "@/components/brand/BrandBadge";
 import { LogoFull } from "@/components/brand/LogoFull";
 import { BatteryRing } from "@/components/charging/BatteryRing";
 import { ChargingStatsGrid } from "@/components/charging/ChargingStatsGrid";
+import { LegalFooterLinks } from "@/components/legal/legal-document-view";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
@@ -239,6 +240,7 @@ export default function LandingPage() {
             </article>
           ))}
           <footer className="pt-5 text-center text-xs leading-6 text-muted-foreground">
+            <LegalFooterLinks className="mb-3" />
             <p>{t("landing.copyright", { year })}</p>
             <p>{t("landing.rights")}</p>
           </footer>
