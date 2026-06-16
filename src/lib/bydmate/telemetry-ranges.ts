@@ -78,7 +78,7 @@ export function resolveTelemetryWindow(range: TelemetryHistoryRange, anchorDate:
     from: new Date(fromMs).toISOString(),
     to: new Date(toMs).toISOString(),
     useHourly: true,
-    rawSampleDays: range === "week" ? 3 : 0,
+    rawSampleDays: 0,
   };
 }
 

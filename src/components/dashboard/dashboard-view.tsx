@@ -493,6 +493,13 @@ export function DashboardView() {
       ? drivingStatsFromLive(latestBydmateSnapshot, latestTrip)
       : null;
 
+  const isChargingMode =
+    vehicleMode === "app_charging" || vehicleMode === "live_charging";
+  const chargingTileKw =
+    latestBydmateSnapshot?.telemetry.charge_power_kw ??
+    activeSession?.charger_power_kw ??
+    selectedCar?.default_charger_power_kw;
+
   const isPageLoading = loadingCars || (loadingLive && !latestBydmateSnapshot);
 
   const handleStart = async () => {
@@ -710,15 +717,22 @@ export function DashboardView() {
                       ]}
                     />
                   ) : (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div
+                      className={cn(
+                        "grid gap-2",
+                        isChargingMode ? "grid-cols-2" : "grid-cols-1",
+                      )}
+                    >
                       <DashboardStatTile
                         label={t("dashboard.packShort") as string}
                         value={packTileValue}
                       />
-                      <DashboardStatTile
-                        label={t("dashboard.chargerShort") as string}
-                        value={`${fmt(selectedCar?.default_charger_power_kw, 1)} kW`}
-                      />
+                      {isChargingMode ? (
+                        <DashboardStatTile
+                          label={t("dashboard.chargerShort") as string}
+                          value={`${fmt(chargingTileKw, 1)} kW`}
+                        />
+                      ) : null}
                     </div>
                   )}
                 </div>
