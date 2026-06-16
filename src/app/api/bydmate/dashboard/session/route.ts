@@ -27,6 +27,8 @@ export async function GET(request: NextRequest) {
       entitled: true,
       command: result.command,
       nonce: result.nonce,
+      close_command: result.closeCommand,
+      close_nonce: result.closeNonce,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "session_failed";

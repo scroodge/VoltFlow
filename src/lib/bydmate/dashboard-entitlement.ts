@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveBydmateApiKeyProfile } from "@/lib/bydmate/api-auth";
 
 const CLUSTER_CMD_KEY = "cluster_projection_cmd";
+const CLUSTER_CLOSE_CMD_KEY = "cluster_projection_close_cmd";
 
 export function encryptDashboardCommand(
   command: string,
@@ -72,12 +73,36 @@ export async function loadClusterProjectionCommand(
   return value || null;
 }
 
+export async function loadClusterProjectionCloseCommand(
+  supabase: SupabaseClient,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("mate_dashboard_secrets")
+    .select("value")
+    .eq("key", CLUSTER_CLOSE_CMD_KEY)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const value = typeof data?.value === "string" ? data.value.trim() : "";
+  return value || null;
+}
+
 export async function resolveDashboardSession(
   supabase: SupabaseClient,
   apiKey: string,
   options?: { allowDebugBuild?: boolean },
 ): Promise<
-  | { ok: true; entitled: true; command: string; nonce: string }
+  | {
+      ok: true;
+      entitled: true;
+      command: string;
+      nonce: string;
+      closeCommand: string;
+      closeNonce: string;
+    }
   | { ok: false; error: string; status: number }
 > {
   if (!options?.allowDebugBuild && process.env.ALLOW_DEBUG_DASHBOARD !== "true") {
@@ -99,7 +124,19 @@ export async function resolveDashboardSession(
     return { ok: false, error: "command_unavailable", status: 503 };
   }
 
+  const closeCommand =
+    (await loadClusterProjectionCloseCommand(supabase)) ?? "迪加强关仪表投屏";
+
   const nonce = createDashboardNonce();
   const encrypted = encryptDashboardCommand(command, apiKey.trim(), nonce);
-  return { ok: true, entitled: true, command: encrypted, nonce };
+  const closeNonce = createDashboardNonce();
+  const encryptedClose = encryptDashboardCommand(closeCommand, apiKey.trim(), closeNonce);
+  return {
+    ok: true,
+    entitled: true,
+    command: encrypted,
+    nonce,
+    closeCommand: encryptedClose,
+    closeNonce,
+  };
 }
