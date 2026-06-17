@@ -160,5 +160,5 @@ export function formatHeroDistanceKm(km: number | null | undefined): string {
 
 export function formatKmPerPercent(km: number | null | undefined): string {
   if (typeof km !== "number" || !Number.isFinite(km)) return "—";
-  return `${km.toFixed(1)} km/1%`;
+  return `${km.toFixed(1)} `;
 }

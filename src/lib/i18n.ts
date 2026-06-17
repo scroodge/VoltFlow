@@ -373,8 +373,8 @@ export const dictionaries = {
         speed: "Speed",
         power: "Power",
         range: "Range",
-        sinceLastCharge: "Since charge",
-        kmPerPercent: "km/1%",
+        sinceLastCharge: "Since last charge",
+        kmPerPercent: "km per 1%",
       },
       staleTitle: "Car data hidden",
       staleBody:
@@ -1128,8 +1128,8 @@ export const dictionaries = {
         speed: "Хуткасць",
         power: "Магутнасць",
         range: "Запас ходу",
-        sinceLastCharge: "Ад зарадкі",
-        kmPerPercent: "км/1%",
+        sinceLastCharge: "Пасля зарадцы",
+        kmPerPercent: "км за 1%",
       },
       staleTitle: "Даныя аўто схаваныя",
       staleBody:
@@ -1883,8 +1883,8 @@ export const dictionaries = {
         speed: "Скорость",
         power: "Мощность",
         range: "Запас хода",
-        sinceLastCharge: "От зарядки",
-        kmPerPercent: "км/1%",
+        sinceLastCharge: "Пройдено после зарядки",
+        kmPerPercent: "км за 1%",
       },
       staleTitle: "Данные авто скрыты",
       staleBody:
