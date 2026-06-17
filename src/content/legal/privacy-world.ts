@@ -52,7 +52,8 @@ const en = (op: LegalOperatorDetails): LegalDocument => ({
     {
       title: "Retention",
       paragraphs: [
-        "We keep account and session data while your account is active. Telemetry samples and trip history are retained to power analytics and history features; older raw samples may be aggregated or purged according to operational retention practices documented for your deployment.",
+        "We keep account and session data while your account is active. Raw telemetry retention policy is tiered: Free plan keeps 30 days of raw telemetry/tracks, Premium keeps 365 days. Hourly aggregated telemetry can be kept longer for analytics.",
+        "When raw telemetry retention is exceeded, records are deleted during scheduled cleanup and cannot be restored.",
         "You may request deletion of your account and associated data by contacting us.",
       ],
     },
@@ -135,7 +136,8 @@ const be = (op: LegalOperatorDetails): LegalDocument => ({
     {
       title: "Захоўванне",
       paragraphs: [
-        "Даныя акаўнта захоўваюцца, пакуль акаўнт актыўны. Тэлеметрыя і паездкі захоўваюцца для аналітыкі; старыя сырыя выбіркі могуць агрэгавацца або выдаляцца.",
+        "Даныя акаўнта захоўваюцца, пакуль акаўнт актыўны. Палітыка сырых даных ступенчатая: free-план — 30 дзён сырай тэлеметрыі/трэкаў, Premium — 365 дзён. Пагадзінныя агрэгацыі могуць захоўвацца даўжэй для аналітыкі.",
+        "Пасля дасягнення тэрміну захоўвання сырыя запісы выдаляюцца падчас планавых ачыстак і не могуць быць адноўлены.",
         "Вы можаце запытаць выдаленне акаўнта, звязаўшыся з намі.",
       ],
     },
@@ -216,7 +218,8 @@ const ru = (op: LegalOperatorDetails): LegalDocument => ({
     {
       title: "Хранение",
       paragraphs: [
-        "Данные аккаунта хранятся, пока аккаунт активен. Телеметрия и поездки хранятся для аналитики; старые сырые выборки могут агрегироваться или удаляться.",
+        "Данные аккаунта хранятся, пока аккаунт активен. Политика по сырым данным ступенчатая: free-план — 30 дней сырой телеметрии/треков, Premium — 365 дней. Почасовые агрегаты могут храниться дольше для аналитики.",
+        "После истечения срока хранения сырые записи удаляются в плановых очистках и восстановлению не подлежат.",
         "Вы можете запросить удаление аккаунта, связавшись с нами.",
       ],
     },

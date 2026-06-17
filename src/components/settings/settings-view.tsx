@@ -25,6 +25,7 @@ import { deleteCar } from "@/actions/cars";
 import { sendTestPush } from "@/actions/push";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { LegalSettingsRow } from "@/components/legal/legal-document-view";
+import { FreeRetentionNotice } from "@/components/premium/free-retention-notice";
 import { ClusterBackgroundsSettings } from "@/components/settings/cluster-backgrounds-settings";
 import { SettingsGroup, SettingsGroupDivider, SettingsPageHeader } from "@/components/settings/settings-section";
 import { createClient } from "@/lib/supabase/client";
@@ -622,6 +623,8 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
           </Button>
         </CardContent>
       </Card>
+
+      <FreeRetentionNotice accountEmail={email} userId={profileUserId} />
 
       {isAdmin ? <PushDiagnostics /> : null}
 

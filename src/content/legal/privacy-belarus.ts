@@ -50,7 +50,8 @@ const en = (op: LegalOperatorDetails): LegalDocument => ({
     {
       title: "Retention",
       paragraphs: [
-        "Data is retained for the life of your account and as needed for history, analytics, and legal compliance. You may request erasure subject to limits of applicable law and technical feasibility.",
+        "Data is retained for the life of your account and as needed for history, analytics, and legal compliance. Raw telemetry retention policy is tiered: Free plan keeps 30 days of raw telemetry/tracks, Premium keeps 365 days.",
+        "After retention expires, raw records are deleted during scheduled cleanup and cannot be restored. You may request erasure subject to limits of applicable law and technical feasibility.",
       ],
     },
     {
@@ -131,7 +132,8 @@ const be = (op: LegalOperatorDetails): LegalDocument => ({
     {
       title: "Тэрміны захоўвання",
       paragraphs: [
-        "Даныя захоўваюцца на працягу існавання акаўнта і столькі, колькі патрэбна для гісторыі, аналітыкі і выканання закона. Вы можаце запытаць выдаленне ў межах закону і тэхнічных магчымасцей.",
+        "Даныя захоўваюцца на працягу існавання акаўнта і столькі, колькі патрэбна для гісторыі, аналітыкі і выканання закона. Палітыка сырых даных ступенчатая: free-план — 30 дзён сырай тэлеметрыі/трэкаў, Premium — 365 дзён.",
+        "Пасля заканчэння тэрміну захоўвання сырыя запісы выдаляюцца падчас планавых ачыстак і не могуць быць адноўлены. Вы можаце запытаць выдаленне ў межах закону і тэхнічных магчымасцей.",
       ],
     },
     {
@@ -210,7 +212,8 @@ const ru = (op: LegalOperatorDetails): LegalDocument => ({
     {
       title: "Сроки хранения",
       paragraphs: [
-        "Данные хранятся в течение существования аккаунта и столько, сколько нужно для истории, аналитики и исполнения закона. Вы можете запросить удаление в пределах закона и технических возможностей.",
+        "Данные хранятся в течение существования аккаунта и столько, сколько нужно для истории, аналитики и исполнения закона. Политика по сырым данным ступенчатая: free-план — 30 дней сырой телеметрии/треков, Premium — 365 дней.",
+        "После истечения срока хранения сырые записи удаляются в плановых очистках и восстановлению не подлежат. Вы можете запросить удаление в пределах закона и технических возможностей.",
       ],
     },
     {

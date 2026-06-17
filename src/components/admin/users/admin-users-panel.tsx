@@ -36,6 +36,10 @@ type UsersResponse = {
   page: number;
   pageSize: number;
   total: number;
+  stats?: {
+    connectionsToday: number;
+    registeredUsersTotal: number;
+  };
   users: AdminUser[];
 };
 
@@ -45,6 +49,10 @@ export function AdminUsersPanel() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [refreshTick, setRefreshTick] = useState(0);
+  const [stats, setStats] = useState<{ connectionsToday: number; registeredUsersTotal: number }>({
+    connectionsToday: 0,
+    registeredUsersTotal: 0,
+  });
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -60,6 +68,7 @@ export function AdminUsersPanel() {
           );
         }
         setUsers(payload.users ?? []);
+        setStats(payload.stats ?? { connectionsToday: 0, registeredUsersTotal: 0 });
         if (payload.users.length > 0 && !payload.users.find((item) => item.id === selectedId)) {
           setSelectedId(payload.users[0]?.id ?? null);
         }
@@ -79,7 +88,13 @@ export function AdminUsersPanel() {
   );
 
   return (
-    <div className="grid gap-4 md:grid-cols-[1.1fr_1fr]">
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <MetricTile label="Connections today" value={stats.connectionsToday} />
+        <MetricTile label="Registered users" value={stats.registeredUsersTotal} />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-[1.1fr_1fr]">
       <Card size="sm" className="border-white/10">
         <CardHeader className="space-y-3">
           <CardTitle className="text-base">Users</CardTitle>
@@ -131,7 +146,6 @@ export function AdminUsersPanel() {
           )}
         </CardContent>
       </Card>
-
       <Card size="sm" className="border-white/10">
         <CardHeader>
           <CardTitle className="text-base">User details</CardTitle>
@@ -173,6 +187,7 @@ export function AdminUsersPanel() {
           )}
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

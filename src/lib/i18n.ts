@@ -790,6 +790,13 @@ export const dictionaries = {
         "Anon JWT only accesses your rows · service role absent on device",
         "Realtime publication limited to charging_sessions inserts/updates · no cross-driver leakage",
       ],
+      retentionNotice: {
+        title: "Free plan data retention",
+        body: "Free plan keeps telemetry for {days} days. Older records are automatically deleted.",
+        nextDeletion: "Next cleanup window: {date}",
+        upgradeCta: "Upgrade to Premium",
+        emailHelp: "To upgrade, email us at {email}.",
+      },
       legal: {
         title: "Legal and privacy",
         description:
@@ -1546,6 +1553,13 @@ export const dictionaries = {
         "Anon JWT бачыць толькі вашы радкі · service role няма на прыладзе",
         "Realtime-публікацыя абмежавана inserts/updates у charging_sessions · без уцечак паміж кіроўцамі",
       ],
+      retentionNotice: {
+        title: "Захоўванне даных у free-плане",
+        body: "У free-плане тэлеметрыя захоўваецца {days} дзён. Старэйшыя запісы аўтаматычна выдаляюцца.",
+        nextDeletion: "Наступнае акно ачысткі: {date}",
+        upgradeCta: "Перайсці на Premium",
+        emailHelp: "Каб абнавіцца, напішыце на {email}.",
+      },
       legal: {
         title: "Прававыя дакументы",
         description:
@@ -2301,6 +2315,13 @@ export const dictionaries = {
         "Anon JWT видит только ваши строки · service role отсутствует на устройстве",
         "Realtime-публикация ограничена inserts/updates в charging_sessions · без утечек между пользователями",
       ],
+      retentionNotice: {
+        title: "Хранение данных в free-плане",
+        body: "В free-плане телеметрия хранится {days} дней. Более старые записи автоматически удаляются.",
+        nextDeletion: "Следующее окно очистки: {date}",
+        upgradeCta: "Перейти на Premium",
+        emailHelp: "Чтобы перейти на Premium, напишите на {email}.",
+      },
       legal: {
         title: "Правовые документы",
         description:

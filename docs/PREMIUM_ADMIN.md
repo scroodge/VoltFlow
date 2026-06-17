@@ -16,6 +16,28 @@
   - last seen and latest Mate APK version,
   - 7d/30d activity counters (telemetry, trips, charging sessions),
   - premium controls (term presets, custom term, manual flag).
+  - top counters: `Connections today` and `Registered users`.
+
+## Free-user information flow
+
+- Non-premium users see a retention notice in `Settings` with:
+  - free retention window (`30 days`),
+  - next cleanup window datetime,
+  - one-click premium upgrade CTA.
+- Legal privacy documents explicitly describe retention windows:
+  - free: 30 days raw telemetry/tracks,
+  - premium: 365 days raw telemetry/tracks,
+  - deletion after retention is irreversible.
+
+## Upgrade request procedure (email-only)
+
+- Current premium onboarding is manual via email to `washjurine@gmail.com`.
+- App CTA opens a prefilled `mailto:` template containing:
+  - account email,
+  - user id,
+  - preferred premium term,
+  - app language.
+- Admin then updates premium in `/admin/users` via manual flag and/or term.
 
 ## Manual premium rules
 

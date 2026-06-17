@@ -70,6 +70,7 @@ export async function GET(request: NextRequest) {
     loadLatestVersions(userIds),
     loadActivity(userIds),
   ]);
+  const stats = await loadAdminStats();
 
   const enriched = users.map((row) => {
     const isAdmin = adminSet.has(row.id);
@@ -101,6 +102,7 @@ export async function GET(request: NextRequest) {
     page,
     pageSize,
     total: count ?? 0,
+    stats,
     users: enriched,
   });
 }
@@ -263,4 +265,32 @@ async function countRows(
     .gte(timeColumn, sinceIso);
 
   return count ?? 0;
+}
+
+async function loadAdminStats() {
+  const [profilesCount, liveToday] = await Promise.all([
+    supabaseAdmin.from("profiles").select("id", { count: "exact", head: true }),
+    // "Connections today" is defined as users seen in today's live snapshots.
+    supabaseAdmin
+      .from("bydmate_live_snapshots")
+      .select("user_id")
+      .gte("received_at", startOfUtcDayIso())
+      .limit(5000),
+  ]);
+
+  const connectedToday = new Set(
+    (liveToday.data ?? []).map((row) => String(row.user_id)).filter(Boolean),
+  );
+
+  return {
+    registeredUsersTotal: profilesCount.count ?? 0,
+    connectionsToday: connectedToday.size,
+  };
+}
+
+function startOfUtcDayIso() {
+  const now = new Date();
+  return new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0),
+  ).toISOString();
 }
