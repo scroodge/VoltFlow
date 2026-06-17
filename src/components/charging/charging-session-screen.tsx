@@ -38,13 +38,14 @@ import {
   type DerivedChargingState,
 } from "@/lib/charging-math";
 import { formatCurrencyAmount } from "@/lib/i18n";
-import { PROVIDER_LABELS } from "@/lib/charging-tariffs";
+import { PROVIDER_LABELS, PROVIDER_TARIFF_PRESETS } from "@/lib/charging-tariffs";
 import { isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { isDevMockChargingSessionId } from "@/lib/dev/build-mock-charging-session";
 import { createClient } from "@/lib/supabase/client";
 import { mapChargingSession } from "@/lib/db-map";
 import { queryKeys } from "@/lib/query-keys";
 import { useChargingSessionLiveSync } from "@/hooks/use-charging-session-live-sync";
+import { useChargingSessionAutoTariff } from "@/hooks/use-charging-session-auto-tariff";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useSessionQuery } from "@/hooks/use-session-query";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
@@ -121,6 +122,20 @@ export function ChargingSessionScreen({
     resolveLiveSnapshots: devSource?.resolveLiveSnapshots,
     onDerived: onLiveDerived,
   });
+
+  useChargingSessionAutoTariff({
+    session,
+    sessionId,
+    liveSnapshots: bydmateLive,
+    vehicleId: sessionVehicleId,
+    enabled: Boolean(session) && !isDevMockChargingSessionId(sessionId),
+  });
+
+  useEffect(() => {
+    setTariffTypeDraft(null);
+    setProviderTypeDraft(null);
+    setPriceDraft("");
+  }, [session?.tariff_type, session?.provider_type, session?.price_per_kwh]);
 
   useEffect(() => {
     if (isDevAppRoute()) return;
@@ -262,7 +277,16 @@ export function ChargingSessionScreen({
     await qc.invalidateQueries({ queryKey: queryKeys.session(sessionId) });
     await qc.invalidateQueries({ queryKey: queryKeys.sessions });
     toast.success("Tariff updated");
-  }, [priceDraft, qc, session, sessionId, tariffTypeDraft]);
+  }, [priceDraft, providerTypeDraft, qc, session, sessionId, tariffTypeDraft, defaultPricePerKwh]);
+
+  const applyProviderPresetPrice = useCallback(
+    (provider: ChargingProviderType, tariffType: ChargingTariffType) => {
+      if (provider === "custom") return;
+      const preset = PROVIDER_TARIFF_PRESETS[provider];
+      setPriceDraft(String(preset[tariffType]));
+    },
+    [],
+  );
 
   if (isLoading) {
     return (
@@ -473,12 +497,22 @@ export function ChargingSessionScreen({
         <p className="text-sm font-semibold tracking-tight">
           {historyMode ? "Session tariff correction" : "Tariff while charging"}
         </p>
+        {!historyMode && charging && !session.tariff_manual ? (
+          <p className="text-muted-foreground text-xs">
+            Auto-matches saved GPS locations while charging. Tap Save tariff to pin manually.
+          </p>
+        ) : null}
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="session-provider-type">Provider</Label>
             <Select
               value={effectiveProviderTypeDraft}
-              onValueChange={(value) => setProviderTypeDraft(value as ChargingProviderType)}
+              onValueChange={(value) => {
+                const provider = value as ChargingProviderType;
+                setProviderTypeDraft(provider);
+                applyProviderPresetPrice(provider, effectiveTariffTypeDraft);
+              }}
+              modal={false}
               items={[
                 { value: "home", label: PROVIDER_LABELS.home },
                 { value: "malanka", label: PROVIDER_LABELS.malanka },
@@ -488,10 +522,10 @@ export function ChargingSessionScreen({
                 { value: "custom", label: PROVIDER_LABELS.custom },
               ]}
             >
-              <SelectTrigger id="session-provider-type" className="h-11 rounded-2xl text-sm">
+              <SelectTrigger id="session-provider-type" className="h-11 w-full rounded-2xl text-sm">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-[200]">
                 <SelectItem value="home">{PROVIDER_LABELS.home}</SelectItem>
                 <SelectItem value="malanka">{PROVIDER_LABELS.malanka}</SelectItem>
                 <SelectItem value="evika">{PROVIDER_LABELS.evika}</SelectItem>
@@ -505,17 +539,22 @@ export function ChargingSessionScreen({
             <Label htmlFor="session-tariff-type">Tariff type</Label>
             <Select
               value={effectiveTariffTypeDraft}
-              onValueChange={(value) => setTariffTypeDraft(value as ChargingTariffType)}
+              onValueChange={(value) => {
+                const tariffType = value as ChargingTariffType;
+                setTariffTypeDraft(tariffType);
+                applyProviderPresetPrice(effectiveProviderTypeDraft, tariffType);
+              }}
+              modal={false}
               items={[
                 { value: "home", label: "Home" },
                 { value: "commercial_ac", label: "Commercial AC" },
                 { value: "fast_dc", label: "Fast DC" },
               ]}
             >
-              <SelectTrigger id="session-tariff-type" className="h-11 rounded-2xl text-sm">
+              <SelectTrigger id="session-tariff-type" className="h-11 w-full rounded-2xl text-sm">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-[200]">
                 <SelectItem value="home">Home</SelectItem>
                 <SelectItem value="commercial_ac">Commercial AC</SelectItem>
                 <SelectItem value="fast_dc">Fast DC</SelectItem>

@@ -6,6 +6,7 @@ import { useMemo } from "react";
 import { isDevAppRoute } from "@/lib/dev/dev-fetch";
 
 import { useChargingSessionLiveSync } from "@/hooks/use-charging-session-live-sync";
+import { useChargingSessionAutoTariff } from "@/hooks/use-charging-session-auto-tariff";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { fetchSessions } from "@/hooks/use-sessions-query";
@@ -49,6 +50,14 @@ export function ChargingSessionBackgroundSync() {
   );
 
   useChargingSessionLiveSync({
+    session: activeSession,
+    sessionId: activeSession?.id ?? null,
+    liveSnapshots: bydmateLive,
+    vehicleId: scopedVehicleId,
+    enabled: Boolean(activeSession) && !devRoute,
+  });
+
+  useChargingSessionAutoTariff({
     session: activeSession,
     sessionId: activeSession?.id ?? null,
     liveSnapshots: bydmateLive,
