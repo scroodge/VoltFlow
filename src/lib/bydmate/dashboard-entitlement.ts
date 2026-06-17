@@ -30,11 +30,18 @@ export async function isDashboardEntitled(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<boolean> {
-  const { data: profile, error: profileError } = await supabase
+  const primaryProfile = await supabase
     .from("profiles")
     .select("is_premium,premium_until")
     .eq("id", userId)
     .maybeSingle();
+  const profileResult =
+    primaryProfile.error &&
+    primaryProfile.error.code === "42703" &&
+    primaryProfile.error.message.includes("premium_until")
+      ? await supabase.from("profiles").select("is_premium").eq("id", userId).maybeSingle()
+      : primaryProfile;
+  const { data: profile, error: profileError } = profileResult;
 
   if (profileError) {
     throw new Error(profileError.message);

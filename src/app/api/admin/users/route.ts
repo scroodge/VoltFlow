@@ -11,7 +11,7 @@ type AdminUserRow = {
   id: string;
   email: string | null;
   is_premium: boolean;
-  premium_until: string | null;
+  premium_until?: string | null;
   created_at: string;
 };
 
@@ -38,21 +38,25 @@ export async function GET(request: NextRequest) {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  let query = supabaseAdmin
-    .from("profiles")
-    .select("id,email,is_premium,premium_until,created_at", { count: "exact" })
-    .order("created_at", { ascending: false })
-    .range(from, to);
-
-  if (search.length > 0) {
-    if (looksLikeUuid(search)) {
-      query = query.eq("id", search);
-    } else {
-      query = query.ilike("email", `%${search}%`);
-    }
-  }
-
-  const { data, error, count } = await query;
+  const primary = await runProfilesQuery({
+    includePremiumUntil: true,
+    from,
+    to,
+    search,
+  });
+  const fallback =
+    primary.error &&
+    primary.error.code === "42703" &&
+    primary.error.message.includes("premium_until")
+      ? await runProfilesQuery({
+          includePremiumUntil: false,
+          from,
+          to,
+          search,
+        })
+      : null;
+  const result = fallback ?? primary;
+  const { data, error, count } = result;
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -111,6 +115,34 @@ function looksLikeUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value,
   );
+}
+
+async function runProfilesQuery(params: {
+  includePremiumUntil: boolean;
+  from: number;
+  to: number;
+  search: string;
+}) {
+  let query = supabaseAdmin
+    .from("profiles")
+    .select(
+      params.includePremiumUntil
+        ? "id,email,is_premium,premium_until,created_at"
+        : "id,email,is_premium,created_at",
+      { count: "exact" },
+    )
+    .order("created_at", { ascending: false })
+    .range(params.from, params.to);
+
+  if (params.search.length > 0) {
+    if (looksLikeUuid(params.search)) {
+      query = query.eq("id", params.search);
+    } else {
+      query = query.ilike("email", `%${params.search}%`);
+    }
+  }
+
+  return query;
 }
 
 async function loadAdminSet(userIds: string[]) {
