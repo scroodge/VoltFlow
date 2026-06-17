@@ -66,8 +66,32 @@ const numericTelemetryKeys = Object.keys(numericTelemetryRules) as Array<
   keyof typeof numericTelemetryRules
 >;
 
+// Round float-noisy fields before storage. Raw doubles serialize to ~17-20 chars
+// (e.g. cell_delta_v "0.019999999999999"), bloating the telemetry jsonb on every
+// row. Decimals are chosen to preserve all real precision: cell delta to 0.1 mV,
+// trip distance to 1 m. soc/temps are already short and left untouched.
+const roundingRules = {
+  cell_delta_v: 4,
+  cell_voltage_min_v: 4,
+  cell_voltage_max_v: 4,
+  diplus_cell_delta_v: 4,
+  diplus_min_cell_voltage_v: 4,
+  diplus_max_cell_voltage_v: 4,
+  range_est_km: 1,
+  current_trip_distance_km: 3,
+  current_trip_consumption_kwh_100km: 2,
+  kwh_charged: 3,
+} satisfies Partial<Record<keyof TelemetryPayloadData, number>>;
+
+const roundingKeys = Object.keys(roundingRules) as Array<keyof typeof roundingRules>;
+
 function finiteNumber(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function roundTo(value: number, decimals: number) {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
 }
 
 function isWithinRule(value: number | null | undefined, rule: NumericTelemetryRule) {
@@ -128,6 +152,13 @@ export function sanitizeTelemetry(
     if (!isWithinRule(value, numericTelemetryRules[key])) {
       delete sanitized[key];
       droppedFields += 1;
+    }
+  }
+
+  for (const key of roundingKeys) {
+    const value = finiteNumber(sanitized[key] as number | null | undefined);
+    if (value != null) {
+      sanitized[key] = roundTo(value, roundingRules[key]) as never;
     }
   }
 
