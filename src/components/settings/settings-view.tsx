@@ -656,6 +656,37 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         </Card>
       ) : null}
 
+      {isAdmin ? (
+        <Card size="sm" className="border-white/[0.08]">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ShieldCheck className="size-5 text-[var(--voltflow-cyan)]" aria-hidden />
+              Premium пользователи
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              Ручное управление premium-статусом, сроком действия, активностью пользователя и
+              версиями VoltFlow Mate.
+            </p>
+            <Button
+              asChild
+              variant="secondary"
+              size="lg"
+              className="h-11 w-full justify-between rounded-full px-4 text-sm font-semibold"
+            >
+              <Link href="/admin/users">
+                <span className="inline-flex items-center gap-3">
+                  <ShieldCheck className="size-5" aria-hidden />
+                  Открыть Premium Admin
+                </span>
+                <ExternalLink className="size-4" aria-hidden />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card size="sm" className="border-white/[0.08]">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

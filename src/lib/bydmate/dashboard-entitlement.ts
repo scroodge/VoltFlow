@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { resolveBydmateApiKeyProfile } from "@/lib/bydmate/api-auth";
+import { isPremiumFromUntil } from "@/lib/premium-entitlement";
 
 const CLUSTER_CMD_KEY = "cluster_projection_cmd";
 const CLUSTER_CLOSE_CMD_KEY = "cluster_projection_close_cmd";
@@ -31,7 +32,7 @@ export async function isDashboardEntitled(
 ): Promise<boolean> {
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("is_premium")
+    .select("is_premium,premium_until")
     .eq("id", userId)
     .maybeSingle();
 
@@ -39,7 +40,8 @@ export async function isDashboardEntitled(
     throw new Error(profileError.message);
   }
 
-  if (profile?.is_premium === true) {
+  const hasPremiumUntil = isPremiumFromUntil(profile?.premium_until);
+  if (profile?.is_premium === true || hasPremiumUntil) {
     return true;
   }
 

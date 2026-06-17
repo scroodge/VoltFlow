@@ -19,6 +19,7 @@ export type Profile = {
   fast_dc_price_per_kwh: number;
   bydmate_cloud_api_key: string | null;
   is_premium: boolean;
+  premium_until?: string | null;
   created_at: string;
 };
 
