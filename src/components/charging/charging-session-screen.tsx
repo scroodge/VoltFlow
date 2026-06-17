@@ -546,8 +546,8 @@ export function ChargingSessionScreen({
             {t("charging.tariff.matchedLocation", {
               name: tariffLocationMatch.preset.name,
               distance: Math.round(tariffLocationMatch.distanceM),
-              provider: t(tariffProviderKey(tariffLocationMatch.preset.provider_type)),
-              tariffType: t(tariffTypeKey(tariffLocationMatch.preset.tariff_type)),
+              provider: t(tariffProviderKey(tariffLocationMatch.preset.provider_type)) as string,
+              tariffType: t(tariffTypeKey(tariffLocationMatch.preset.tariff_type)) as string,
             })}
             {autoTariffGps.gpsSource === "browser"
               ? (t("charging.tariff.phoneGpsFallback") as string)
@@ -557,7 +557,7 @@ export function ChargingSessionScreen({
         {!historyMode && charging && !tariffLocationMatch && autoTariffGps.activeLocation ? (
           <p className="text-xs text-muted-foreground">
             {t("charging.tariff.noMatchInRadius", {
-              tariffType: t(tariffTypeKey(powerTariffFallback)),
+              tariffType: t(tariffTypeKey(powerTariffFallback)) as string,
               power: session.charger_power_kw.toFixed(1),
             })}
           </p>
