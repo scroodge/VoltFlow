@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { useTranslation } from "@/hooks/use-translation";
 import { syncChargingSessionTariffFromGps } from "@/actions/sessions";
 import {
   coordinatesFromLiveSnapshots,
@@ -28,6 +29,7 @@ export function useChargingSessionAutoTariff({
   enabled?: boolean;
 }) {
   const qc = useQueryClient();
+  const { t } = useTranslation();
   const syncingRef = useRef(false);
   const lastSyncAtRef = useRef(0);
   const lastLocationKeyRef = useRef<string | null>(null);
@@ -101,7 +103,9 @@ export function useChargingSessionAutoTariff({
           await qc.invalidateQueries({ queryKey: queryKeys.session(sessionId) });
           await qc.invalidateQueries({ queryKey: queryKeys.sessions });
           if (result.locationName) {
-            toast.success(`Tariff applied from ${result.locationName}`);
+            toast.success(
+              t("charging.tariff.appliedFrom", { name: result.locationName }) as string,
+            );
           }
         }
       })
@@ -116,6 +120,7 @@ export function useChargingSessionAutoTariff({
     session?.tariff_manual,
     session?.status,
     sessionId,
+    t,
   ]);
 
   return {

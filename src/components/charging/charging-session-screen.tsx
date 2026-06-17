@@ -37,8 +37,8 @@ import {
   type ChargingParams,
   type DerivedChargingState,
 } from "@/lib/charging-math";
-import { formatCurrencyAmount } from "@/lib/i18n";
-import { PROVIDER_LABELS, PROVIDER_TARIFF_PRESETS, resolveTariffTypeByPower } from "@/lib/charging-tariffs";
+import { formatCurrencyAmount, type TranslationKey } from "@/lib/i18n";
+import { PROVIDER_TARIFF_PRESETS, resolveTariffTypeByPower } from "@/lib/charging-tariffs";
 import { resolveTariffLocationMatch } from "@/lib/charging-gps-location";
 import { isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { isDevMockChargingSessionId } from "@/lib/dev/build-mock-charging-session";
@@ -68,6 +68,12 @@ import type {
 } from "@/types/database";
 
 const toParams = chargingParamsFromSession;
+
+const tariffProviderKey = (provider: ChargingProviderType) =>
+  `charging.tariff.providers.${provider}` as TranslationKey;
+
+const tariffTypeKey = (tariffType: ChargingTariffType) =>
+  `charging.tariff.types.${tariffType}` as TranslationKey;
 
 type ChargingSessionScreenMode = "charging" | "history";
 
@@ -279,7 +285,7 @@ export function ChargingSessionScreen({
         : priceDraft;
     const pricePerKwh = Number.parseFloat(effectivePriceDraft.replace(",", "."));
     if (!Number.isFinite(pricePerKwh) || pricePerKwh < 0) {
-      toast.error("Invalid tariff price");
+      toast.error(t("charging.tariff.invalidPrice") as string);
       return;
     }
     setSavingTariff(true);
@@ -296,8 +302,8 @@ export function ChargingSessionScreen({
     }
     await qc.invalidateQueries({ queryKey: queryKeys.session(sessionId) });
     await qc.invalidateQueries({ queryKey: queryKeys.sessions });
-    toast.success("Tariff updated");
-  }, [priceDraft, providerTypeDraft, qc, session, sessionId, tariffTypeDraft, defaultPricePerKwh]);
+    toast.success(t("charging.tariff.updated") as string);
+  }, [defaultPricePerKwh, priceDraft, providerTypeDraft, qc, session, sessionId, t, tariffTypeDraft]);
 
   const applyProviderPresetPrice = useCallback(
     (provider: ChargingProviderType, tariffType: ChargingTariffType) => {
@@ -307,6 +313,12 @@ export function ChargingSessionScreen({
     },
     [],
   );
+
+  const tariffLocationMatch = useMemo(
+    () => resolveTariffLocationMatch(autoTariffGps.activeLocation, tariffLocations),
+    [autoTariffGps.activeLocation, tariffLocations],
+  );
+  const powerTariffFallback = resolveTariffTypeByPower(session?.charger_power_kw ?? 0);
 
   if (isLoading) {
     return (
@@ -337,11 +349,6 @@ export function ChargingSessionScreen({
 
   const charging = session.status === "charging";
   const historyMode = mode === "history";
-  const tariffLocationMatch = useMemo(
-    () => resolveTariffLocationMatch(autoTariffGps.activeLocation, tariffLocations),
-    [autoTariffGps.activeLocation, tariffLocations],
-  );
-  const powerTariffFallback = resolveTariffTypeByPower(session.charger_power_kw);
   const effectivePricePerKwh =
     session.price_per_kwh > 0 ? session.price_per_kwh : defaultPricePerKwh;
   const effectiveTariffTypeDraft = tariffTypeDraft ?? session.tariff_type;
@@ -520,43 +527,49 @@ export function ChargingSessionScreen({
 
       <section className="voltflow-card space-y-3 p-4">
         <p className="text-sm font-semibold tracking-tight">
-          {historyMode ? "Session tariff correction" : "Tariff while charging"}
+          {historyMode
+            ? (t("charging.tariff.historyCorrection") as string)
+            : (t("charging.tariff.whileCharging") as string)}
         </p>
         {!historyMode && charging && !session.tariff_manual ? (
           <p className="text-muted-foreground text-xs">
-            Auto-matches saved GPS locations while charging. Tap Save tariff to pin manually.
+            {t("charging.tariff.autoMatchHint") as string}
           </p>
         ) : null}
         {!historyMode && charging && session.tariff_manual ? (
           <p className="text-xs text-amber-200/90">
-            Tariff pinned manually for this session. Auto GPS matching is paused.
+            {t("charging.tariff.pinnedManual") as string}
           </p>
         ) : null}
         {!historyMode && charging && tariffLocationMatch ? (
           <p className="rounded-xl border border-[var(--voltflow-green)]/30 bg-[var(--voltflow-green)]/10 px-3 py-2 text-xs text-[var(--voltflow-green)]">
-            Matched location: <span className="font-semibold">{tariffLocationMatch.preset.name}</span>
-            {" · "}
-            {Math.round(tariffLocationMatch.distanceM)} m away
-            {" · "}
-            {PROVIDER_LABELS[tariffLocationMatch.preset.provider_type]} / {tariffLocationMatch.preset.tariff_type.replace("_", " ")}
-            {autoTariffGps.gpsSource === "browser" ? " · phone GPS (Mate GPS unavailable)" : ""}
+            {t("charging.tariff.matchedLocation", {
+              name: tariffLocationMatch.preset.name,
+              distance: Math.round(tariffLocationMatch.distanceM),
+              provider: t(tariffProviderKey(tariffLocationMatch.preset.provider_type)),
+              tariffType: t(tariffTypeKey(tariffLocationMatch.preset.tariff_type)),
+            })}
+            {autoTariffGps.gpsSource === "browser"
+              ? (t("charging.tariff.phoneGpsFallback") as string)
+              : ""}
           </p>
         ) : null}
         {!historyMode && charging && !tariffLocationMatch && autoTariffGps.activeLocation ? (
           <p className="text-xs text-muted-foreground">
-            GPS active but no saved location within radius. Power fallback would use{" "}
-            <span className="font-medium text-foreground">{powerTariffFallback.replace("_", " ")}</span>{" "}
-            at {session.charger_power_kw.toFixed(1)} kW.
+            {t("charging.tariff.noMatchInRadius", {
+              tariffType: t(tariffTypeKey(powerTariffFallback)),
+              power: session.charger_power_kw.toFixed(1),
+            })}
           </p>
         ) : null}
         {!historyMode && charging && !autoTariffGps.activeLocation ? (
           <p className="text-xs text-muted-foreground">
-            Waiting for GPS from Mate or this phone to match saved locations.
+            {t("charging.tariff.waitingGps") as string}
           </p>
         ) : null}
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="session-provider-type">Provider</Label>
+            <Label htmlFor="session-provider-type">{t("charging.tariff.provider") as string}</Label>
             <Select
               value={effectiveProviderTypeDraft}
               onValueChange={(value) => {
@@ -565,30 +578,36 @@ export function ChargingSessionScreen({
                 applyProviderPresetPrice(provider, effectiveTariffTypeDraft);
               }}
               modal={false}
-              items={[
-                { value: "home", label: PROVIDER_LABELS.home },
-                { value: "malanka", label: PROVIDER_LABELS.malanka },
-                { value: "evika", label: PROVIDER_LABELS.evika },
-                { value: "forevo", label: PROVIDER_LABELS.forevo },
-                { value: "zaryadka", label: PROVIDER_LABELS.zaryadka },
-                { value: "custom", label: PROVIDER_LABELS.custom },
-              ]}
+              items={(
+                [
+                  "home",
+                  "malanka",
+                  "evika",
+                  "forevo",
+                  "zaryadka",
+                  "custom",
+                ] as const
+              ).map((value) => ({
+                value,
+                label: t(tariffProviderKey(value)),
+              }))}
             >
               <SelectTrigger id="session-provider-type" className="h-11 w-full rounded-2xl text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="z-[200]">
-                <SelectItem value="home">{PROVIDER_LABELS.home}</SelectItem>
-                <SelectItem value="malanka">{PROVIDER_LABELS.malanka}</SelectItem>
-                <SelectItem value="evika">{PROVIDER_LABELS.evika}</SelectItem>
-                <SelectItem value="forevo">{PROVIDER_LABELS.forevo}</SelectItem>
-                <SelectItem value="zaryadka">{PROVIDER_LABELS.zaryadka}</SelectItem>
-                <SelectItem value="custom">{PROVIDER_LABELS.custom}</SelectItem>
+                {(["home", "malanka", "evika", "forevo", "zaryadka", "custom"] as const).map(
+                  (value) => (
+                    <SelectItem key={value} value={value}>
+                      {t(tariffProviderKey(value))}
+                    </SelectItem>
+                  ),
+                )}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="session-tariff-type">Tariff type</Label>
+            <Label htmlFor="session-tariff-type">{t("charging.tariff.type") as string}</Label>
             <Select
               value={effectiveTariffTypeDraft}
               onValueChange={(value) => {
@@ -597,24 +616,25 @@ export function ChargingSessionScreen({
                 applyProviderPresetPrice(effectiveProviderTypeDraft, tariffType);
               }}
               modal={false}
-              items={[
-                { value: "home", label: "Home" },
-                { value: "commercial_ac", label: "Commercial AC" },
-                { value: "fast_dc", label: "Fast DC" },
-              ]}
+              items={(["home", "commercial_ac", "fast_dc"] as const).map((value) => ({
+                value,
+                label: t(tariffTypeKey(value)),
+              }))}
             >
               <SelectTrigger id="session-tariff-type" className="h-11 w-full rounded-2xl text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="z-[200]">
-                <SelectItem value="home">Home</SelectItem>
-                <SelectItem value="commercial_ac">Commercial AC</SelectItem>
-                <SelectItem value="fast_dc">Fast DC</SelectItem>
+                {(["home", "commercial_ac", "fast_dc"] as const).map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {t(tariffTypeKey(value))}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="session-tariff-price">Price per kWh</Label>
+            <Label htmlFor="session-tariff-price">{t("charging.tariff.pricePerKwh") as string}</Label>
             <Input
               id="session-tariff-price"
               inputMode="decimal"
@@ -631,7 +651,7 @@ export function ChargingSessionScreen({
           disabled={savingTariff}
           onClick={() => void saveTariff()}
         >
-          {savingTariff ? "Saving..." : "Save tariff"}
+          {savingTariff ? (t("common.saving") as string) : (t("charging.tariff.save") as string)}
         </Button>
       </section>
 

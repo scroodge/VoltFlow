@@ -59,6 +59,7 @@ import {
   isLocale,
   type Currency,
   type Locale,
+  type TranslationKey,
 } from "@/lib/i18n";
 import { legalDocumentPath } from "@/lib/legal-region";
 import { parseDecimalInput } from "@/lib/number-input";
@@ -345,7 +346,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
 
   const handleUseCurrentGps = () => {
     if (!navigator.geolocation) {
-      toast.error("Geolocation is unavailable");
+      toast.error(t("settings.locationTariffs.geolocationUnavailable") as string);
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -360,7 +361,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
 
   const handleAddTariffLocation = () => {
     if (!profileUserId) {
-      toast.error("Sign in required");
+      toast.error(t("settings.locationTariffs.signInRequired") as string);
       return;
     }
     const lat = parseDecimalInput(newLocationLat);
@@ -368,7 +369,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
     const radiusM = parseDecimalInput(newLocationRadius);
     const override = parseDecimalInput(newLocationOverridePrice);
     if (!newLocationName.trim()) {
-      toast.error("Location name is required");
+      toast.error(t("settings.locationTariffs.nameRequired") as string);
       return;
     }
     if (
@@ -377,7 +378,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       !Number.isFinite(radiusM) ||
       radiusM <= 0
     ) {
-      toast.error("Invalid location coordinates or radius");
+      toast.error(t("settings.locationTariffs.invalidCoords") as string);
       return;
     }
 
@@ -407,7 +408,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         );
         setNewLocationName("");
         setNewLocationOverridePrice("");
-        toast.success("Location tariff saved");
+        toast.success(t("settings.locationTariffs.saved") as string);
       });
   };
 
@@ -879,12 +880,12 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="provider-preset">Provider preset</Label>
+              <Label htmlFor="provider-preset">{t("settings.locationTariffs.providerPreset") as string}</Label>
               <Select
                 value="custom"
                 onValueChange={(value) => applyProviderPreset(value as ChargingProviderType)}
                 items={[
-                  { value: "custom", label: "Manual values" },
+                  { value: "custom", label: t("settings.locationTariffs.manualValues") as string },
                   { value: "home", label: PROVIDER_LABELS.home },
                   { value: "malanka", label: PROVIDER_LABELS.malanka },
                   { value: "evika", label: PROVIDER_LABELS.evika },
@@ -893,10 +894,10 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                 ]}
               >
                 <SelectTrigger id="provider-preset" className="h-11 w-full rounded-2xl text-sm">
-                  <SelectValue placeholder="Apply provider preset" />
+                  <SelectValue placeholder={t("settings.locationTariffs.applyProviderPreset") as string} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="custom">Manual values</SelectItem>
+                  <SelectItem value="custom">{t("settings.locationTariffs.manualValues") as string}</SelectItem>
                   <SelectItem value="home">{PROVIDER_LABELS.home}</SelectItem>
                   <SelectItem value="malanka">{PROVIDER_LABELS.malanka}</SelectItem>
                   <SelectItem value="evika">{PROVIDER_LABELS.evika}</SelectItem>
@@ -907,7 +908,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="pref-price-home">
-                Home tariff ({currencySymbols[currency]}/kWh)
+                {t("settings.locationTariffs.homeTariff", { currency: currencySymbols[currency] })}
               </Label>
               <Input
                 key={homePricePerKwh}
@@ -925,7 +926,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="pref-price-ac">
-                Commercial AC tariff ({currencySymbols[currency]}/kWh)
+                {t("settings.locationTariffs.acTariff", { currency: currencySymbols[currency] })}
               </Label>
               <Input
                 key={commercialAcPricePerKwh}
@@ -943,7 +944,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="pref-price-dc">
-                Fast DC tariff ({currencySymbols[currency]}/kWh)
+                {t("settings.locationTariffs.dcTariff", { currency: currencySymbols[currency] })}
               </Label>
               <Input
                 key={fastDcPricePerKwh}
@@ -960,17 +961,19 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
               />
             </div>
             <p className="text-muted-foreground text-sm">
-              AC auto-tier is 4.0-9.99 kW, fast DC is 10.0+ kW.
+              {t("settings.locationTariffs.autoTierHint") as string}
             </p>
             <Button className="h-11 w-full rounded-full text-sm font-semibold" type="submit">
               {t("settings.storeDefault")}
             </Button>
           </form>
           <div className="space-y-4 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4">
-            <p className="text-sm font-semibold tracking-tight">Saved charging locations</p>
+            <p className="text-sm font-semibold tracking-tight">
+              {t("settings.locationTariffs.title") as string}
+            </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <Input
-                placeholder="Location name"
+                placeholder={t("settings.locationTariffs.namePlaceholder") as string}
                 value={newLocationName}
                 onChange={(event) => setNewLocationName(event.target.value)}
                 className="h-11 rounded-2xl text-sm"
@@ -981,7 +984,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                 className="h-11 rounded-full text-sm"
                 onClick={handleUseCurrentGps}
               >
-                Use current GPS
+                {t("settings.locationTariffs.useCurrentGps") as string}
               </Button>
               <Button
                 type="button"
@@ -989,10 +992,12 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                 className="h-11 rounded-full text-sm"
                 onClick={() => setNewLocationAutoGps((value) => !value)}
               >
-                {newLocationAutoGps ? "Auto GPS: On" : "Auto GPS: Off"}
+                {newLocationAutoGps
+                  ? (t("settings.locationTariffs.autoGpsOn") as string)
+                  : (t("settings.locationTariffs.autoGpsOff") as string)}
               </Button>
               <Input
-                placeholder="Radius meters"
+                placeholder={t("settings.locationTariffs.radiusPlaceholder") as string}
                 value={newLocationRadius}
                 onChange={(event) => setNewLocationRadius(event.target.value)}
                 className="h-11 rounded-2xl text-sm"
@@ -1002,19 +1007,20 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                 onValueChange={(value) =>
                   setNewLocationTariffType(value as ChargingTariffType)
                 }
-                items={[
-                  { value: "home", label: "Home" },
-                  { value: "commercial_ac", label: "Commercial AC" },
-                  { value: "fast_dc", label: "Fast DC" },
-                ]}
+                items={(["home", "commercial_ac", "fast_dc"] as const).map((value) => ({
+                  value,
+                  label: t(`charging.tariff.types.${value}` as TranslationKey),
+                }))}
               >
                 <SelectTrigger className="h-11 rounded-2xl text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="home">Home</SelectItem>
-                  <SelectItem value="commercial_ac">Commercial AC</SelectItem>
-                  <SelectItem value="fast_dc">Fast DC</SelectItem>
+                  {(["home", "commercial_ac", "fast_dc"] as const).map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {t(`charging.tariff.types.${value}` as TranslationKey)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <Select
@@ -1022,25 +1028,24 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                 onValueChange={(value) =>
                   setNewLocationProviderType(value as ChargingProviderType)
                 }
-                items={[
-                  { value: "custom", label: PROVIDER_LABELS.custom },
-                  { value: "home", label: PROVIDER_LABELS.home },
-                  { value: "malanka", label: PROVIDER_LABELS.malanka },
-                  { value: "evika", label: PROVIDER_LABELS.evika },
-                  { value: "forevo", label: PROVIDER_LABELS.forevo },
-                  { value: "zaryadka", label: PROVIDER_LABELS.zaryadka },
-                ]}
+                items={(
+                  ["custom", "home", "malanka", "evika", "forevo", "zaryadka"] as const
+                ).map((value) => ({
+                  value,
+                  label: t(`charging.tariff.providers.${value}` as TranslationKey),
+                }))}
               >
                 <SelectTrigger className="h-11 rounded-2xl text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="custom">{PROVIDER_LABELS.custom}</SelectItem>
-                  <SelectItem value="home">{PROVIDER_LABELS.home}</SelectItem>
-                  <SelectItem value="malanka">{PROVIDER_LABELS.malanka}</SelectItem>
-                  <SelectItem value="evika">{PROVIDER_LABELS.evika}</SelectItem>
-                  <SelectItem value="forevo">{PROVIDER_LABELS.forevo}</SelectItem>
-                  <SelectItem value="zaryadka">{PROVIDER_LABELS.zaryadka}</SelectItem>
+                  {(["custom", "home", "malanka", "evika", "forevo", "zaryadka"] as const).map(
+                    (value) => (
+                      <SelectItem key={value} value={value}>
+                        {t(`charging.tariff.providers.${value}` as TranslationKey)}
+                      </SelectItem>
+                    ),
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -1056,17 +1061,21 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                   }}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Point: {Number.parseFloat(newLocationLat).toFixed(6)},{" "}
-                  {Number.parseFloat(newLocationLng).toFixed(6)}. Tap map or drag marker to move.
+                  {t("settings.locationTariffs.pointCoords", {
+                    lat: Number.parseFloat(newLocationLat).toFixed(6),
+                    lon: Number.parseFloat(newLocationLng).toFixed(6),
+                  })}
                 </p>
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">
-                GPS point not detected yet. Use Auto mode or click “Use current GPS”.
+                {t("settings.locationTariffs.gpsPending") as string}
               </p>
             )}
             <Input
-              placeholder={`Optional custom price (${currencySymbols[currency]}/kWh)`}
+              placeholder={t("settings.locationTariffs.optionalPrice", {
+                currency: currencySymbols[currency],
+              })}
               value={newLocationOverridePrice}
               onChange={(event) => setNewLocationOverridePrice(event.target.value)}
               className="h-11 rounded-2xl text-sm"
@@ -1076,11 +1085,13 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
               className="h-11 w-full rounded-full text-sm font-semibold"
               onClick={handleAddTariffLocation}
             >
-              Save location tariff
+              {t("settings.locationTariffs.save") as string}
             </Button>
             <div className="space-y-2">
               {tariffLocations.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No location tariffs saved yet.</p>
+                <p className="text-xs text-muted-foreground">
+                  {t("settings.locationTariffs.empty") as string}
+                </p>
               ) : (
                 tariffLocations.map((location) => (
                   <div
@@ -1101,7 +1112,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                       className="h-8 rounded-full text-xs"
                       onClick={() => handleDeleteTariffLocation(location.id)}
                     >
-                      Delete
+                      {t("settings.locationTariffs.delete") as string}
                     </Button>
                   </div>
                 ))
