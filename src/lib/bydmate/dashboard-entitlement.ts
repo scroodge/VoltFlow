@@ -41,12 +41,15 @@ export async function isDashboardEntitled(
     primaryProfile.error.message.includes("premium_until")
       ? await supabase.from("profiles").select("is_premium").eq("id", userId).maybeSingle()
       : primaryProfile;
-  const { data: profile, error: profileError } = profileResult;
+  const { data: profileRaw, error: profileError } = profileResult;
 
   if (profileError) {
     throw new Error(profileError.message);
   }
 
+  const profile = (profileRaw ?? null) as
+    | { is_premium?: boolean | null; premium_until?: string | null }
+    | null;
   const hasPremiumUntil = isPremiumFromUntil(profile?.premium_until);
   if (profile?.is_premium === true || hasPremiumUntil) {
     return true;

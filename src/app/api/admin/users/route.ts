@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const users = (data ?? []) as AdminUserRow[];
+  const users = (data ?? []) as unknown as AdminUserRow[];
   const userIds = users.map((row) => row.id);
   const now = Date.now();
 
