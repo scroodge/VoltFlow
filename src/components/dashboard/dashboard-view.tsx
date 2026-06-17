@@ -41,7 +41,11 @@ import { usePageVisible } from "@/hooks/use-page-visible";
 import { fetchSessions } from "@/hooks/use-sessions-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
-import { availableBatteryKwh, formatDuration } from "@/lib/charging-math";
+import {
+  availableBatteryKwh,
+  costFromGridEnergy,
+  formatDuration,
+} from "@/lib/charging-math";
 import { useVehicleRangeEstimate } from "@/hooks/use-vehicle-range-estimate";
 import {
   chargingParamsFromSession,
@@ -50,7 +54,7 @@ import {
 } from "@/lib/charging-session-sync";
 import { snapshotSoc } from "@/lib/charging-live";
 import { useAppPath } from "@/lib/dev/dev-path";
-import { currencySymbols, type TranslationKey } from "@/lib/i18n";
+import { currencySymbols, formatCurrencyAmount, type TranslationKey } from "@/lib/i18n";
 import { parseDecimalInput } from "@/lib/number-input";
 import { ensureNotificationsPermission, ensurePushSubscription } from "@/lib/push/client";
 import { queryKeys } from "@/lib/query-keys";
@@ -481,11 +485,25 @@ export function DashboardView() {
 
   const chargingProgressLine =
     activeSession && liveActive
-      ? (t("dashboard.chargingProgress", {
-          remaining: formatDuration(Math.round(liveActive.remainingSeconds)),
-          energy: fmt(liveActive.chargedEnergyKwh, 2),
-          cost: `${currencySymbols[currency]}${fmt(liveActive.estimatedCost, 2)}`,
-        }) as string)
+      ? (() => {
+          const effectivePricePerKwh =
+            activeSession.price_per_kwh > 0
+              ? activeSession.price_per_kwh
+              : defaultPrice;
+          const cost =
+            effectivePricePerKwh > 0
+              ? formatCurrencyAmount(
+                  currency,
+                  costFromGridEnergy(liveActive.chargedEnergyKwh, effectivePricePerKwh),
+                  locale,
+                )
+              : "—";
+          return t("dashboard.chargingProgress", {
+            remaining: formatDuration(Math.round(liveActive.remainingSeconds)),
+            energy: fmt(liveActive.chargedEnergyKwh, 2),
+            cost,
+          }) as string;
+        })()
       : null;
 
   const drivingStats =

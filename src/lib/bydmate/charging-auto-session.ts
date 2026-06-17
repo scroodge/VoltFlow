@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { deriveSessionProgressFromSoc } from "@/lib/charging-math";
-import { isAtHomeCharger } from "@/lib/home-charger-geofence";
 import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
 import {
   nextAutoChargingSessionStep,
@@ -58,19 +57,13 @@ function stateToRow(
 async function resolvePricePerKwh(
   supabase: SupabaseClient,
   userId: string,
-  car: Car,
-  sample: TelemetryPayload,
 ) {
-  const location = sample.location;
-  if (isAtHomeCharger(location, car)) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("default_price_per_kwh")
-      .eq("id", userId)
-      .maybeSingle();
-    return Number(profile?.default_price_per_kwh ?? 0);
-  }
-  return 0;
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("default_price_per_kwh")
+    .eq("id", userId)
+    .maybeSingle();
+  return Number(profile?.default_price_per_kwh ?? 0);
 }
 
 async function closeOpenChargingSessions(supabase: SupabaseClient, userId: string, stoppedAt: string) {
@@ -98,7 +91,7 @@ async function startSessionFromTelemetry({
 }) {
   const startedAt = sample.device_time;
   await closeOpenChargingSessions(supabase, userId, startedAt);
-  const pricePerKwh = await resolvePricePerKwh(supabase, userId, car, sample);
+  const pricePerKwh = await resolvePricePerKwh(supabase, userId);
   const chargerPower = Math.min(350, Math.max(chargerPowerKw, 0.1));
 
   const { data: session, error } = await supabase
