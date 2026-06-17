@@ -128,8 +128,8 @@ function formatTripTractionKwh(trip: BydmateTripRow, digits = 2) {
 type HistoryTab = "charging" | "trips" | "analytics";
 
 function parseHistoryTab(value: string | null): HistoryTab {
-  if (value === "trips" || value === "analytics") return value;
-  return "charging";
+  if (value === "charging" || value === "trips" || value === "analytics") return value;
+  return "trips";
 }
 
 function TabToggle({
