@@ -319,7 +319,12 @@ export async function syncChargingSessionTariffFromGps(
     return { ok: true as const, applied: false as const };
   }
   if (sessionTariffMatches(session, tariff)) {
-    return { ok: true as const, applied: false as const };
+    return {
+      ok: true as const,
+      applied: false as const,
+      locationName: locationPresets.find((preset) => preset.id === tariff.locationPresetId)?.name ?? null,
+      alreadyApplied: true as const,
+    };
   }
 
   const pricePerKwh = tariff.pricePerKwh;
@@ -364,5 +369,8 @@ export async function syncChargingSessionTariffFromGps(
   revalidatePath("/history");
   revalidatePath(`/charging/${parsed.data.sessionId}`);
 
-  return { ok: true as const, applied: true as const };
+  const locationName =
+    locationPresets.find((preset) => preset.id === tariff.locationPresetId)?.name ?? null;
+
+  return { ok: true as const, applied: true as const, locationName };
 }
