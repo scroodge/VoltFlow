@@ -5,6 +5,7 @@ import { formatDuration } from "@/lib/charging-math";
 import type { HistoryDaySummary, HistorySummaryScope } from "@/lib/history-day-summary";
 import { formatCurrencyAmount, type Currency, type Locale, type TranslationKey } from "@/lib/i18n";
 import { useTranslation } from "@/hooks/use-translation";
+import { useAppPreferences } from "@/stores/use-app-preferences";
 import { cn } from "@/lib/utils";
 
 type Translator = (key: TranslationKey, values?: Record<string, string | number>) => string;
@@ -94,6 +95,7 @@ export function HistoryDaySummaryCard({
 }) {
   const { t } = useTranslation();
   const tx = t as Translator;
+  const defaultPricePerKwh = useAppPreferences((state) => state.defaultPricePerKwh);
 
   if (loading) {
     return (
@@ -135,8 +137,17 @@ export function HistoryDaySummaryCard({
           : "history.periodSummary.balanceExplainBalanced";
   const noTripsKey = isDay ? "history.daySummary.noTrips" : "history.periodSummary.noTrips";
 
-  const costValue = summary.hasPricedSessions
-    ? formatCurrencyAmount(currency, summary.chargingCost, locale)
+  const fallbackCost =
+    !summary.hasPricedSessions &&
+    summary.chargedKwh > 0 &&
+    defaultPricePerKwh > 0
+      ? summary.chargedKwh * defaultPricePerKwh
+      : null;
+  const totalCost = summary.hasPricedSessions
+    ? summary.chargingCost
+    : fallbackCost;
+  const costValue = totalCost != null
+    ? formatCurrencyAmount(currency, totalCost, locale)
     : "—";
   const durationValue =
     summary.chargingDurationSec > 0 ? formatDuration(summary.chargingDurationSec) : "—";
