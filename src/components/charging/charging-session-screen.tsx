@@ -2,7 +2,8 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { updateChargingSessionTariff } from "@/actions/sessions";
 import { toast } from "sonner";
 
 import { BatteryRing } from "@/components/charging/BatteryRing";
@@ -16,6 +17,15 @@ import {
   useChargingDevSource,
 } from "@/components/dev/charging-dev-source-context";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   costFromGridEnergy,
   deriveChargingState,
@@ -28,6 +38,7 @@ import {
   type DerivedChargingState,
 } from "@/lib/charging-math";
 import { formatCurrencyAmount } from "@/lib/i18n";
+import { PROVIDER_LABELS } from "@/lib/charging-tariffs";
 import { isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { isDevMockChargingSessionId } from "@/lib/dev/build-mock-charging-session";
 import { createClient } from "@/lib/supabase/client";
@@ -48,7 +59,11 @@ import { deriveLiveChargingState, findFreshChargingSnapshot } from "@/lib/chargi
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import { useAppPath } from "@/lib/dev/dev-path";
 import { useChargingUi } from "@/stores/use-charging-ui";
-import type { ChargingSessionRow } from "@/types/database";
+import type {
+  ChargingProviderType,
+  ChargingSessionRow,
+  ChargingTariffType,
+} from "@/types/database";
 
 const toParams = chargingParamsFromSession;
 
@@ -69,6 +84,10 @@ export function ChargingSessionScreen({
   const defaultPricePerKwh = useAppPreferences((s) => s.defaultPricePerKwh);
   const appPath = useAppPath();
   const { locale, t } = useTranslation();
+  const [tariffTypeDraft, setTariffTypeDraft] = useState<ChargingTariffType | null>(null);
+  const [priceDraft, setPriceDraft] = useState("");
+  const [providerTypeDraft, setProviderTypeDraft] = useState<ChargingProviderType | null>(null);
+  const [savingTariff, setSavingTariff] = useState(false);
 
   const { data: session, error, isLoading } = useSessionQuery(sessionId);
   const { data: carsResult } = useCarsQuery();
@@ -217,6 +236,34 @@ export function ChargingSessionScreen({
     toast.message(t("charging.saved") as string);
   }, [bydmateLive, devSource, qc, session, sessionId, supabase, t]);
 
+  const saveTariff = useCallback(async () => {
+    if (!session) return;
+    const effectivePriceDraft =
+      priceDraft.trim() === ""
+        ? String(session.price_per_kwh > 0 ? session.price_per_kwh : defaultPricePerKwh)
+        : priceDraft;
+    const pricePerKwh = Number.parseFloat(effectivePriceDraft.replace(",", "."));
+    if (!Number.isFinite(pricePerKwh) || pricePerKwh < 0) {
+      toast.error("Invalid tariff price");
+      return;
+    }
+    setSavingTariff(true);
+    const res = await updateChargingSessionTariff({
+      sessionId,
+      tariffType: tariffTypeDraft ?? session.tariff_type,
+      providerType: providerTypeDraft ?? session.provider_type,
+      pricePerKwh,
+    });
+    setSavingTariff(false);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    await qc.invalidateQueries({ queryKey: queryKeys.session(sessionId) });
+    await qc.invalidateQueries({ queryKey: queryKeys.sessions });
+    toast.success("Tariff updated");
+  }, [priceDraft, qc, session, sessionId, tariffTypeDraft]);
+
   if (isLoading) {
     return (
       <div className="animate-pulse space-y-5 p-4">
@@ -248,6 +295,12 @@ export function ChargingSessionScreen({
   const historyMode = mode === "history";
   const effectivePricePerKwh =
     session.price_per_kwh > 0 ? session.price_per_kwh : defaultPricePerKwh;
+  const effectiveTariffTypeDraft = tariffTypeDraft ?? session.tariff_type;
+  const effectiveProviderTypeDraft = providerTypeDraft ?? session.provider_type;
+  const effectivePriceDraft =
+    priceDraft.trim() === ""
+      ? String(session.price_per_kwh > 0 ? session.price_per_kwh : defaultPricePerKwh)
+      : priceDraft;
   const displayCurrentCost =
     effectivePricePerKwh > 0
       ? formatCurrencyAmount(
@@ -415,6 +468,81 @@ export function ChargingSessionScreen({
       </section>
 
       <ChargingStatsGrid stats={chargingStats} />
+
+      <section className="voltflow-card space-y-3 p-4">
+        <p className="text-sm font-semibold tracking-tight">
+          {historyMode ? "Session tariff correction" : "Tariff while charging"}
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="session-provider-type">Provider</Label>
+            <Select
+              value={effectiveProviderTypeDraft}
+              onValueChange={(value) => setProviderTypeDraft(value as ChargingProviderType)}
+              items={[
+                { value: "home", label: PROVIDER_LABELS.home },
+                { value: "malanka", label: PROVIDER_LABELS.malanka },
+                { value: "evika", label: PROVIDER_LABELS.evika },
+                { value: "forevo", label: PROVIDER_LABELS.forevo },
+                { value: "zaryadka", label: PROVIDER_LABELS.zaryadka },
+                { value: "custom", label: PROVIDER_LABELS.custom },
+              ]}
+            >
+              <SelectTrigger id="session-provider-type" className="h-11 rounded-2xl text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="home">{PROVIDER_LABELS.home}</SelectItem>
+                <SelectItem value="malanka">{PROVIDER_LABELS.malanka}</SelectItem>
+                <SelectItem value="evika">{PROVIDER_LABELS.evika}</SelectItem>
+                <SelectItem value="forevo">{PROVIDER_LABELS.forevo}</SelectItem>
+                <SelectItem value="zaryadka">{PROVIDER_LABELS.zaryadka}</SelectItem>
+                <SelectItem value="custom">{PROVIDER_LABELS.custom}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="session-tariff-type">Tariff type</Label>
+            <Select
+              value={effectiveTariffTypeDraft}
+              onValueChange={(value) => setTariffTypeDraft(value as ChargingTariffType)}
+              items={[
+                { value: "home", label: "Home" },
+                { value: "commercial_ac", label: "Commercial AC" },
+                { value: "fast_dc", label: "Fast DC" },
+              ]}
+            >
+              <SelectTrigger id="session-tariff-type" className="h-11 rounded-2xl text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="home">Home</SelectItem>
+                <SelectItem value="commercial_ac">Commercial AC</SelectItem>
+                <SelectItem value="fast_dc">Fast DC</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="session-tariff-price">Price per kWh</Label>
+            <Input
+              id="session-tariff-price"
+              inputMode="decimal"
+              value={effectivePriceDraft}
+              onChange={(event) => setPriceDraft(event.target.value)}
+              className="h-11 rounded-2xl text-sm"
+            />
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          className="h-11 w-full rounded-full text-sm font-semibold"
+          disabled={savingTariff}
+          onClick={() => void saveTariff()}
+        >
+          {savingTariff ? "Saving..." : "Save tariff"}
+        </Button>
+      </section>
 
       <ChargingDeltaCard session={session} vehicleId={sessionVehicleId ?? undefined} />
 

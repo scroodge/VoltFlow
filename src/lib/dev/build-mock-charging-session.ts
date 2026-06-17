@@ -22,6 +22,8 @@ export function buildMockChargingSession(nowMs = Date.now()): ChargingSessionRow
     battery_capacity_kwh: 71.8,
     charger_power_kw: 7.4,
     efficiency_percent: 90,
+    tariff_type: "commercial_ac",
+    provider_type: "home",
     price_per_kwh: 0.15,
     charged_energy_kwh: 0,
     estimated_cost: 0,

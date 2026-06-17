@@ -1,4 +1,12 @@
 export type SessionStatus = "idle" | "charging" | "completed" | "stopped";
+export type ChargingTariffType = "home" | "commercial_ac" | "fast_dc";
+export type ChargingProviderType =
+  | "home"
+  | "malanka"
+  | "evika"
+  | "forevo"
+  | "zaryadka"
+  | "custom";
 
 export type Profile = {
   id: string;
@@ -6,6 +14,9 @@ export type Profile = {
   preferred_currency: "EUR" | "USD" | "BYN" | "RUB";
   preferred_locale: "en" | "be" | "ru";
   default_price_per_kwh: number;
+  home_price_per_kwh: number;
+  commercial_ac_price_per_kwh: number;
+  fast_dc_price_per_kwh: number;
   bydmate_cloud_api_key: string | null;
   is_premium: boolean;
   created_at: string;
@@ -38,12 +49,28 @@ export type ChargingSessionRow = {
   battery_capacity_kwh: number;
   charger_power_kw: number;
   efficiency_percent: number;
+  tariff_type: ChargingTariffType;
+  provider_type: ChargingProviderType;
   price_per_kwh: number;
   charged_energy_kwh: number;
   estimated_cost: number;
   status: SessionStatus;
   started_at: string | null;
   stopped_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ChargingTariffLocationRow = {
+  id: string;
+  user_id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  radius_m: number;
+  tariff_type: ChargingTariffType;
+  provider_type: ChargingProviderType;
+  price_per_kwh_override: number | null;
   created_at: string;
   updated_at: string;
 };

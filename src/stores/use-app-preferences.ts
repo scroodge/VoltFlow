@@ -15,10 +15,18 @@ import {
 type AppPreferencesState = {
   selectedCarId: string | null;
   defaultPricePerKwh: number;
+  homePricePerKwh: number;
+  commercialAcPricePerKwh: number;
+  fastDcPricePerKwh: number;
   currency: Currency;
   locale: Locale;
   setSelectedCarId: (id: string | null) => void;
   setDefaultPricePerKwh: (n: number) => void;
+  setTariffPrices: (input: {
+    homePricePerKwh: number;
+    commercialAcPricePerKwh: number;
+    fastDcPricePerKwh: number;
+  }) => void;
   setCurrency: (currency: Currency) => void;
   setLocale: (locale: Locale) => void;
 };
@@ -36,6 +44,17 @@ export const useAppPreferences = create(
       setSelectedCarId: (selectedCarId) => set({ selectedCarId }),
       setDefaultPricePerKwh: (defaultPricePerKwh) =>
         set({ defaultPricePerKwh }),
+      setTariffPrices: ({
+        homePricePerKwh,
+        commercialAcPricePerKwh,
+        fastDcPricePerKwh,
+      }) =>
+        set({
+          defaultPricePerKwh: homePricePerKwh,
+          homePricePerKwh,
+          commercialAcPricePerKwh,
+          fastDcPricePerKwh,
+        }),
       setCurrency: (currency) => set({ currency }),
       setLocale: (locale) => set({ locale }),
     }),
@@ -46,9 +65,30 @@ export const useAppPreferences = create(
       ),
       merge: (persisted, current) => {
         const saved = persisted as Partial<AppPreferencesState> | undefined;
+        const fallbackPrice =
+          typeof saved?.defaultPricePerKwh === "number" &&
+          Number.isFinite(saved.defaultPricePerKwh)
+            ? saved.defaultPricePerKwh
+            : current.defaultPricePerKwh;
         return {
           ...current,
           ...saved,
+          defaultPricePerKwh: fallbackPrice,
+          homePricePerKwh:
+            typeof saved?.homePricePerKwh === "number" &&
+            Number.isFinite(saved.homePricePerKwh)
+              ? saved.homePricePerKwh
+              : fallbackPrice,
+          commercialAcPricePerKwh:
+            typeof saved?.commercialAcPricePerKwh === "number" &&
+            Number.isFinite(saved.commercialAcPricePerKwh)
+              ? saved.commercialAcPricePerKwh
+              : fallbackPrice,
+          fastDcPricePerKwh:
+            typeof saved?.fastDcPricePerKwh === "number" &&
+            Number.isFinite(saved.fastDcPricePerKwh)
+              ? saved.fastDcPricePerKwh
+              : fallbackPrice,
           currency:
             saved?.currency && isCurrency(saved.currency)
               ? saved.currency
@@ -63,6 +103,9 @@ export const useAppPreferences = create(
       partialize: (s) => ({
         selectedCarId: s.selectedCarId,
         defaultPricePerKwh: s.defaultPricePerKwh,
+        homePricePerKwh: s.homePricePerKwh,
+        commercialAcPricePerKwh: s.commercialAcPricePerKwh,
+        fastDcPricePerKwh: s.fastDcPricePerKwh,
         currency: s.currency,
         locale: s.locale,
       }) as unknown as AppPreferencesState,

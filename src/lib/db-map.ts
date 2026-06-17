@@ -1,5 +1,12 @@
 import { isCarGeneration } from "@/lib/car-generations";
-import type { ChargingSessionRow, Car, Profile } from "@/types/database";
+import type {
+  ChargingSessionRow,
+  Car,
+  ChargingProviderType,
+  ChargingTariffType,
+  ChargingTariffLocationRow,
+  Profile,
+} from "@/types/database";
 
 function num(v: unknown, fallback = 0): number {
   const n = typeof v === "number" ? v : Number(v);
@@ -34,6 +41,7 @@ export function mapCar(raw: Record<string, unknown>): Car {
 }
 
 export function mapProfile(raw: Record<string, unknown>): Profile {
+  const defaultPricePerKwh = num(raw.default_price_per_kwh, 0.12);
   return {
     id: String(raw.id),
     email: raw.email != null ? String(raw.email) : null,
@@ -43,7 +51,10 @@ export function mapProfile(raw: Record<string, unknown>): Profile {
       "EUR",
     ),
     preferred_locale: enumValue(raw.preferred_locale, ["en", "be", "ru"], "en"),
-    default_price_per_kwh: num(raw.default_price_per_kwh, 0.12),
+    default_price_per_kwh: defaultPricePerKwh,
+    home_price_per_kwh: num(raw.home_price_per_kwh, defaultPricePerKwh),
+    commercial_ac_price_per_kwh: num(raw.commercial_ac_price_per_kwh, defaultPricePerKwh),
+    fast_dc_price_per_kwh: num(raw.fast_dc_price_per_kwh, defaultPricePerKwh),
     bydmate_cloud_api_key:
       raw.bydmate_cloud_api_key != null ? String(raw.bydmate_cloud_api_key) : null,
     is_premium: raw.is_premium === true,
@@ -64,12 +75,49 @@ export function mapChargingSession(
     battery_capacity_kwh: num(raw.battery_capacity_kwh),
     charger_power_kw: num(raw.charger_power_kw),
     efficiency_percent: num(raw.efficiency_percent),
+    tariff_type: enumValue(
+      raw.tariff_type,
+      ["home", "commercial_ac", "fast_dc"] as const,
+      "home",
+    ) as ChargingTariffType,
+    provider_type: enumValue(
+      raw.provider_type,
+      ["home", "malanka", "evika", "forevo", "zaryadka", "custom"] as const,
+      "custom",
+    ) as ChargingProviderType,
     price_per_kwh: num(raw.price_per_kwh),
     charged_energy_kwh: num(raw.charged_energy_kwh),
     estimated_cost: num(raw.estimated_cost),
     status: raw.status as ChargingSessionRow["status"],
     started_at: raw.started_at ? String(raw.started_at) : null,
     stopped_at: raw.stopped_at ? String(raw.stopped_at) : null,
+    created_at: String(raw.created_at ?? ""),
+    updated_at: String(raw.updated_at ?? ""),
+  };
+}
+
+export function mapChargingTariffLocation(
+  raw: Record<string, unknown>,
+): ChargingTariffLocationRow {
+  return {
+    id: String(raw.id),
+    user_id: String(raw.user_id),
+    name: String(raw.name ?? ""),
+    lat: num(raw.lat),
+    lng: num(raw.lng),
+    radius_m: num(raw.radius_m, 150),
+    tariff_type: enumValue(
+      raw.tariff_type,
+      ["home", "commercial_ac", "fast_dc"] as const,
+      "home",
+    ) as ChargingTariffType,
+    provider_type: enumValue(
+      raw.provider_type,
+      ["home", "malanka", "evika", "forevo", "zaryadka", "custom"] as const,
+      "custom",
+    ) as ChargingProviderType,
+    price_per_kwh_override:
+      raw.price_per_kwh_override != null ? num(raw.price_per_kwh_override) : null,
     created_at: String(raw.created_at ?? ""),
     updated_at: String(raw.updated_at ?? ""),
   };

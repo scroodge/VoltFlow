@@ -78,6 +78,22 @@ Logic: `src/lib/charging-session-reconcile-logic.ts` (pure), `src/lib/charging-s
 
 Session card **«Старт → Итог»** shows `start_percent → current_percent`, not target. Target 100% is a separate row only when `current_percent` is still below target.
 
+## Tariffs and providers (2026-06)
+
+- Session pricing now stores both:
+  - `tariff_type` (`home | commercial_ac | fast_dc`)
+  - `provider_type` (`home | malanka | evika | forevo | zaryadka | custom`)
+- Start priority:
+  1. manual session override (tariff/price/provider),
+  2. matched GPS location preset (`charging_tariff_locations`),
+  3. power-based auto tier (AC `4.0-9.99`, DC `10.0+`, else Home).
+- Provider presets (Belarus 2026 baseline):
+  - Malanka: AC `0.55`, DC `0.73`
+  - Evika!: AC `0.54`, DC `0.72`
+  - forEVo: AC `0.46`, DC `0.61`
+  - Zaryadka: AC `0.48`, DC `0.61`
+  - Home: `0.15-0.54` (time-of-use); app stores your configured home/default values.
+
 ## Migrations (applied 2026-06-02)
 
 | File | Purpose |

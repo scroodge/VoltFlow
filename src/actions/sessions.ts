@@ -4,15 +4,21 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
+import { costFromGridEnergy, deriveChargingState } from "@/lib/charging-math";
+import { mapChargingTariffLocation } from "@/lib/db-map";
 import { resolveStopProgressForSession } from "@/lib/charging-session-finalize";
-import { isAtHomeCharger } from "@/lib/home-charger-geofence";
-import type { SessionStatus } from "@/types/database";
+import { resolveSessionTariff } from "@/lib/charging-tariffs";
+import type { ChargingTariffType, SessionStatus } from "@/types/database";
 
 const startSchema = z.object({
   carId: z.string().uuid(),
   startPercent: z.coerce.number().min(0).max(99),
   targetPercent: z.coerce.number().min(1).max(100),
   pricePerKwh: z.coerce.number().min(0).max(999).optional(),
+  tariffType: z.enum(["home", "commercial_ac", "fast_dc"]).optional(),
+  providerType: z
+    .enum(["home", "malanka", "evika", "forevo", "zaryadka", "custom"])
+    .optional(),
   chargerPowerKw: z.coerce.number().positive().max(350).optional(),
 });
 
@@ -55,24 +61,41 @@ export async function startChargingSession(input: z.infer<typeof startSchema>) {
     .eq("user_id", user.id)
     .eq("status", "charging");
 
-  let pricePerKwh = parsed.data.pricePerKwh ?? 0;
-
-  if (pricePerKwh <= 0) {
-    const [{ data: liveRows }, { data: profile }] = await Promise.all([
+  const [{ data: liveRows }, { data: profile }, { data: rawPresets }] =
+    await Promise.all([
       supabase
         .from("bydmate_live_snapshots")
         .select("location")
         .eq("user_id", user.id)
         .order("received_at", { ascending: false })
         .limit(1),
-      supabase.from("profiles").select("default_price_per_kwh").eq("id", user.id).maybeSingle(),
+      supabase
+        .from("profiles")
+        .select(
+          "default_price_per_kwh,home_price_per_kwh,commercial_ac_price_per_kwh,fast_dc_price_per_kwh",
+        )
+        .eq("id", user.id)
+        .maybeSingle(),
+      supabase
+        .from("charging_tariff_locations")
+        .select("*")
+        .eq("user_id", user.id),
     ]);
 
-    const liveLocation = liveRows?.[0]?.location as { lat?: number; lon?: number } | null | undefined;
-    if (isAtHomeCharger(liveLocation, car)) {
-      pricePerKwh = Number(profile?.default_price_per_kwh ?? 0);
-    }
-  }
+  const liveLocation = liveRows?.[0]?.location as { lat?: number; lon?: number } | null | undefined;
+  const locationPresets = (rawPresets ?? []).map((row) =>
+    mapChargingTariffLocation(row as Record<string, unknown>),
+  );
+  const manualTariffType = (parsed.data.tariffType ?? null) as ChargingTariffType | null;
+  const tariff = resolveSessionTariff({
+    manualPricePerKwh: parsed.data.pricePerKwh,
+    manualTariffType,
+    manualProviderType: parsed.data.providerType ?? null,
+    chargerPowerKw,
+    location: liveLocation,
+    locationPresets,
+    profile,
+  });
 
   const { data: session, error: insertError } = await supabase
     .from("charging_sessions")
@@ -85,7 +108,9 @@ export async function startChargingSession(input: z.infer<typeof startSchema>) {
       battery_capacity_kwh: car.battery_capacity_kwh,
       charger_power_kw: chargerPowerKw,
       efficiency_percent: car.default_efficiency_percent,
-      price_per_kwh: pricePerKwh,
+      tariff_type: tariff.tariffType,
+      provider_type: tariff.providerType,
+      price_per_kwh: tariff.pricePerKwh,
       charged_energy_kwh: 0,
       estimated_cost: 0,
       status: "charging" as SessionStatus,
@@ -152,6 +177,82 @@ export async function stopChargingSession(sessionId: string) {
   revalidatePath("/dashboard");
   revalidatePath("/history");
   revalidatePath(`/charging/${sessionId}`);
+
+  return { ok: true as const };
+}
+
+const updateTariffSchema = z.object({
+  sessionId: z.string().uuid(),
+  tariffType: z.enum(["home", "commercial_ac", "fast_dc"]),
+  providerType: z.enum(["home", "malanka", "evika", "forevo", "zaryadka", "custom"]),
+  pricePerKwh: z.coerce.number().min(0).max(999),
+});
+
+export async function updateChargingSessionTariff(
+  input: z.infer<typeof updateTariffSchema>,
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Unauthorized" };
+
+  const parsed = updateTariffSchema.safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: "Invalid input" };
+
+  const { data: session, error } = await supabase
+    .from("charging_sessions")
+    .select("*")
+    .eq("id", parsed.data.sessionId)
+    .eq("user_id", user.id)
+    .single();
+  if (error || !session) {
+    return { ok: false as const, error: "Charging session not found" };
+  }
+
+  const pricePerKwh = parsed.data.pricePerKwh;
+  let estimatedCost = Number(session.estimated_cost ?? 0);
+  let chargedEnergyKwh = Number(session.charged_energy_kwh ?? 0);
+  let currentPercent = Number(session.current_percent ?? session.start_percent);
+
+  if (session.status === "charging" && session.started_at) {
+    const derived = deriveChargingState(
+      {
+        startPercent: session.start_percent,
+        targetPercent: session.target_percent,
+        batteryCapacityKwh: session.battery_capacity_kwh,
+        chargerPowerKw: session.charger_power_kw,
+        efficiencyPercent: session.efficiency_percent,
+        pricePerKwh,
+      },
+      Date.parse(session.started_at),
+      Date.now(),
+    );
+    estimatedCost = derived.estimatedCost;
+    chargedEnergyKwh = derived.chargedEnergyKwh;
+    currentPercent = derived.currentPercent;
+  } else {
+    estimatedCost = costFromGridEnergy(chargedEnergyKwh, pricePerKwh);
+  }
+
+  const { error: updateError } = await supabase
+    .from("charging_sessions")
+    .update({
+      tariff_type: parsed.data.tariffType,
+      provider_type: parsed.data.providerType,
+      price_per_kwh: pricePerKwh,
+      estimated_cost: estimatedCost,
+      charged_energy_kwh: chargedEnergyKwh,
+      current_percent: currentPercent,
+    })
+    .eq("id", parsed.data.sessionId)
+    .eq("user_id", user.id);
+  if (updateError) return { ok: false as const, error: updateError.message };
+
+  revalidatePath("/dashboard");
+  revalidatePath("/history");
+  revalidatePath(`/charging/${parsed.data.sessionId}`);
+  revalidatePath(`/history/${parsed.data.sessionId}`);
 
   return { ok: true as const };
 }

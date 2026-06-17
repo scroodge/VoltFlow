@@ -56,6 +56,7 @@ import { snapshotSoc } from "@/lib/charging-live";
 import { useAppPath } from "@/lib/dev/dev-path";
 import { currencySymbols, formatCurrencyAmount, type TranslationKey } from "@/lib/i18n";
 import { parseDecimalInput } from "@/lib/number-input";
+import { PROVIDER_LABELS } from "@/lib/charging-tariffs";
 import { ensureNotificationsPermission, ensurePushSubscription } from "@/lib/push/client";
 import { queryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
@@ -67,7 +68,12 @@ import {
   type DashboardVehicleMode,
 } from "@/lib/vehicle-live-mode";
 import { useAppPreferences } from "@/stores/use-app-preferences";
-import type { BydmateLiveSnapshotRow, BydmateTripRow, ChargingSessionRow } from "@/types/database";
+import type {
+  BydmateLiveSnapshotRow,
+  BydmateTripRow,
+  ChargingSessionRow,
+  ChargingTariffType,
+} from "@/types/database";
 
 function liveStartPercent(snapshot: BydmateLiveSnapshotRow | null | undefined) {
   const soc = snapshotSoc(snapshot);
@@ -415,6 +421,12 @@ export function DashboardView() {
   const [targetPct, setTargetPct] = useState("100");
   const [chargerKw, setChargerKw] = useState("");
   const [price, setPrice] = useState(String(defaultPrice));
+  const [manualProviderType, setManualProviderType] = useState<
+    "custom" | "home" | "malanka" | "evika" | "forevo" | "zaryadka"
+  >("custom");
+  const [manualTariffType, setManualTariffType] = useState<"auto" | ChargingTariffType>(
+    "auto",
+  );
   const [submitting, setSubmitting] = useState(false);
   const [stopping, setStopping] = useState(false);
   const hasMounted = useSyncExternalStore(
@@ -540,6 +552,11 @@ export function DashboardView() {
         startPercent: start,
         targetPercent: target,
         pricePerKwh: parseDecimalInput(price) || 0,
+        tariffType:
+          manualTariffType === "auto"
+            ? undefined
+            : (manualTariffType as ChargingTariffType),
+        providerType: manualProviderType,
         ...overrides,
       });
       if (!res.ok) throw new Error(res.error);
@@ -559,6 +576,8 @@ export function DashboardView() {
     if (!canStartSession) return;
     if (liveStartPct !== null) setStartPct(liveStartPct);
     setPrice(String(defaultPrice));
+    setManualTariffType("auto");
+    setManualProviderType("custom");
     setDialogOpen(true);
   };
 
@@ -920,6 +939,73 @@ export function DashboardView() {
                 onChange={(e) => setChargerKw(e.target.value)}
                 className="h-[52px] rounded-xl text-lg"
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="session-provider-type">Provider</Label>
+              <Select
+                value={manualProviderType}
+                onValueChange={(value) =>
+                  setManualProviderType(
+                    value as
+                      | "custom"
+                      | "home"
+                      | "malanka"
+                      | "evika"
+                      | "forevo"
+                      | "zaryadka",
+                  )
+                }
+                items={[
+                  { value: "custom", label: PROVIDER_LABELS.custom },
+                  { value: "home", label: PROVIDER_LABELS.home },
+                  { value: "malanka", label: PROVIDER_LABELS.malanka },
+                  { value: "evika", label: PROVIDER_LABELS.evika },
+                  { value: "forevo", label: PROVIDER_LABELS.forevo },
+                  { value: "zaryadka", label: PROVIDER_LABELS.zaryadka },
+                ]}
+              >
+                <SelectTrigger id="session-provider-type" className="h-[52px] rounded-xl text-lg">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="custom">{PROVIDER_LABELS.custom}</SelectItem>
+                  <SelectItem value="home">{PROVIDER_LABELS.home}</SelectItem>
+                  <SelectItem value="malanka">{PROVIDER_LABELS.malanka}</SelectItem>
+                  <SelectItem value="evika">{PROVIDER_LABELS.evika}</SelectItem>
+                  <SelectItem value="forevo">{PROVIDER_LABELS.forevo}</SelectItem>
+                  <SelectItem value="zaryadka">{PROVIDER_LABELS.zaryadka}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="session-tariff-type">Tariff type</Label>
+              <Select
+                value={manualTariffType}
+                onValueChange={(value) =>
+                  setManualTariffType(value as "auto" | ChargingTariffType)
+                }
+                items={[
+                  { value: "auto", label: "Auto by power/location" },
+                  { value: "home", label: "Home" },
+                  { value: "commercial_ac", label: "Commercial AC" },
+                  { value: "fast_dc", label: "Fast DC" },
+                ]}
+              >
+                <SelectTrigger id="session-tariff-type" className="h-[52px] rounded-xl text-lg">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Auto by power/location</SelectItem>
+                  <SelectItem value="home">Home</SelectItem>
+                  <SelectItem value="commercial_ac">Commercial AC</SelectItem>
+                  <SelectItem value="fast_dc">Fast DC</SelectItem>
+                </SelectContent>
+              </Select>
+              {manualTariffType === "auto" ? (
+                <p className="text-muted-foreground text-xs">
+                  Auto rule: AC 4.0-9.99 kW, fast DC 10.0+ kW.
+                </p>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label htmlFor="energy-price">

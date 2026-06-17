@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { deriveSessionProgressFromSoc } from "@/lib/charging-math";
+import { mapChargingTariffLocation } from "@/lib/db-map";
+import { resolveSessionTariff } from "@/lib/charging-tariffs";
 import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
 import {
   nextAutoChargingSessionStep,
@@ -54,16 +56,30 @@ function stateToRow(
   };
 }
 
-async function resolvePricePerKwh(
+async function resolveTariffForTelemetry(
   supabase: SupabaseClient,
   userId: string,
+  chargerPowerKw: number,
+  location: { lat?: number | null; lon?: number | null } | null | undefined,
 ) {
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("default_price_per_kwh")
-    .eq("id", userId)
-    .maybeSingle();
-  return Number(profile?.default_price_per_kwh ?? 0);
+  const [{ data: profile }, { data: rawPresets }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select(
+        "default_price_per_kwh,home_price_per_kwh,commercial_ac_price_per_kwh,fast_dc_price_per_kwh",
+      )
+      .eq("id", userId)
+      .maybeSingle(),
+    supabase.from("charging_tariff_locations").select("*").eq("user_id", userId),
+  ]);
+  return resolveSessionTariff({
+    chargerPowerKw,
+    location,
+    profile,
+    locationPresets: (rawPresets ?? []).map((row) =>
+      mapChargingTariffLocation(row as Record<string, unknown>),
+    ),
+  });
 }
 
 async function closeOpenChargingSessions(supabase: SupabaseClient, userId: string, stoppedAt: string) {
@@ -91,8 +107,13 @@ async function startSessionFromTelemetry({
 }) {
   const startedAt = sample.device_time;
   await closeOpenChargingSessions(supabase, userId, startedAt);
-  const pricePerKwh = await resolvePricePerKwh(supabase, userId);
   const chargerPower = Math.min(350, Math.max(chargerPowerKw, 0.1));
+  const tariff = await resolveTariffForTelemetry(
+    supabase,
+    userId,
+    chargerPower,
+    sample.location,
+  );
 
   const { data: session, error } = await supabase
     .from("charging_sessions")
@@ -105,7 +126,9 @@ async function startSessionFromTelemetry({
       battery_capacity_kwh: car.battery_capacity_kwh,
       charger_power_kw: chargerPower,
       efficiency_percent: car.default_efficiency_percent,
-      price_per_kwh: pricePerKwh,
+      tariff_type: tariff.tariffType,
+      provider_type: tariff.providerType,
+      price_per_kwh: tariff.pricePerKwh,
       charged_energy_kwh: 0,
       estimated_cost: 0,
       status: "charging",

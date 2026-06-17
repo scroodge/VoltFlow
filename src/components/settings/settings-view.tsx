@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { Bell, Pencil } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
@@ -62,6 +63,11 @@ import { legalDocumentPath } from "@/lib/legal-region";
 import { parseDecimalInput } from "@/lib/number-input";
 import { devFetch, isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { useAppPath } from "@/lib/dev/dev-path";
+import { mapChargingTariffLocation } from "@/lib/db-map";
+import {
+  PROVIDER_LABELS,
+  PROVIDER_TARIFF_PRESETS,
+} from "@/lib/charging-tariffs";
 import {
   ensureNotificationsPermission,
   ensurePushSubscription,
@@ -69,7 +75,20 @@ import {
   showLocalTestNotification,
 } from "@/lib/push/client";
 import { useAppPreferences } from "@/stores/use-app-preferences";
-import type { Car } from "@/types/database";
+import type {
+  Car,
+  ChargingProviderType,
+  ChargingTariffLocationRow,
+  ChargingTariffType,
+} from "@/types/database";
+
+const TariffLocationMapPicker = dynamic(
+  () =>
+    import("@/components/settings/tariff-location-map-picker").then(
+      (mod) => mod.TariffLocationMapPicker,
+    ),
+  { ssr: false },
+);
 
 export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   const router = useRouter();
@@ -85,11 +104,40 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   const [linkCreating, setLinkCreating] = useState(false);
   const [cloudAdvancedOpen, setCloudAdvancedOpen] = useState(false);
   const defaultPricePerKwh = useAppPreferences((s) => s.defaultPricePerKwh);
+  const homePricePerKwh = useAppPreferences((s) => s.homePricePerKwh);
+  const commercialAcPricePerKwh = useAppPreferences((s) => s.commercialAcPricePerKwh);
+  const fastDcPricePerKwh = useAppPreferences((s) => s.fastDcPricePerKwh);
   const setDefaultPrice = useAppPreferences((s) => s.setDefaultPricePerKwh);
+  const setTariffPrices = useAppPreferences((s) => s.setTariffPrices);
   const currency = useAppPreferences((s) => s.currency);
   const setCurrency = useAppPreferences((s) => s.setCurrency);
   const setLocale = useAppPreferences((s) => s.setLocale);
+  const [tariffLocations, setTariffLocations] = useState<ChargingTariffLocationRow[]>([]);
+  const [newLocationName, setNewLocationName] = useState("");
+  const [newLocationLat, setNewLocationLat] = useState("");
+  const [newLocationLng, setNewLocationLng] = useState("");
+  const [newLocationAutoGps, setNewLocationAutoGps] = useState(true);
+  const [newLocationRadius, setNewLocationRadius] = useState("150");
+  const [newLocationTariffType, setNewLocationTariffType] =
+    useState<ChargingTariffType>("home");
+  const [newLocationProviderType, setNewLocationProviderType] =
+    useState<ChargingProviderType>("custom");
+  const [newLocationOverridePrice, setNewLocationOverridePrice] = useState("");
   const { t } = useTranslation();
+
+  useEffect(() => {
+    if (!newLocationAutoGps) return;
+    if (!navigator.geolocation) return;
+    if (newLocationLat.trim() !== "" && newLocationLng.trim() !== "") return;
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setNewLocationLat(String(position.coords.latitude));
+        setNewLocationLng(String(position.coords.longitude));
+      },
+      () => {},
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
+    );
+  }, [newLocationAutoGps, newLocationLat, newLocationLng]);
   useEffect(() => {
     let mounted = true;
 
@@ -102,8 +150,12 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             id?: string;
             preferred_currency?: string;
             default_price_per_kwh?: number;
+            home_price_per_kwh?: number;
+            commercial_ac_price_per_kwh?: number;
+            fast_dc_price_per_kwh?: number;
             bydmate_cloud_api_key?: string | null;
           } | null;
+          tariffLocations?: Record<string, unknown>[];
         };
 
         setEmail(payload.email ?? null);
@@ -114,10 +166,35 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
           setCurrency(preferredCurrency);
         }
 
-        const defaultPrice = Number(payload.profile?.default_price_per_kwh);
-        if (Number.isFinite(defaultPrice) && defaultPrice >= 0) {
-          setDefaultPrice(defaultPrice);
+        const homePrice = Number(
+          payload.profile?.home_price_per_kwh ?? payload.profile?.default_price_per_kwh,
+        );
+        const commercialPrice = Number(
+          payload.profile?.commercial_ac_price_per_kwh ?? payload.profile?.default_price_per_kwh,
+        );
+        const dcPrice = Number(
+          payload.profile?.fast_dc_price_per_kwh ?? payload.profile?.default_price_per_kwh,
+        );
+        if (
+          Number.isFinite(homePrice) &&
+          Number.isFinite(commercialPrice) &&
+          Number.isFinite(dcPrice) &&
+          homePrice >= 0 &&
+          commercialPrice >= 0 &&
+          dcPrice >= 0
+        ) {
+          setTariffPrices({
+            homePricePerKwh: homePrice,
+            commercialAcPricePerKwh: commercialPrice,
+            fastDcPricePerKwh: dcPrice,
+          });
         }
+        setTariffLocations(
+          (payload.tariffLocations ?? []).map((row) =>
+            mapChargingTariffLocation(row),
+          ),
+        );
+
 
         setBydmateCloudApiKey(
           typeof payload.profile?.bydmate_cloud_api_key === "string"
@@ -141,11 +218,14 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       setProfileUserId(user?.id ?? null);
       if (!user) return;
 
-      const { data: profile, error } = await supabase
+      const [{ data: profile, error }, { data: locationRows }] = await Promise.all([
+        supabase
         .from("profiles")
-        .select("preferred_currency, default_price_per_kwh, bydmate_cloud_api_key")
+        .select("preferred_currency, default_price_per_kwh, home_price_per_kwh, commercial_ac_price_per_kwh, fast_dc_price_per_kwh, bydmate_cloud_api_key")
         .eq("id", user.id)
-        .single();
+        .single(),
+        supabase.from("charging_tariff_locations").select("*").eq("user_id", user.id),
+      ]);
 
       if (!mounted || error) return;
 
@@ -154,9 +234,24 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         setCurrency(preferredCurrency);
       }
 
-      const defaultPrice = Number(profile?.default_price_per_kwh);
-      if (Number.isFinite(defaultPrice) && defaultPrice >= 0) {
-        setDefaultPrice(defaultPrice);
+      const homePrice = Number(profile?.home_price_per_kwh ?? profile?.default_price_per_kwh);
+      const commercialPrice = Number(
+        profile?.commercial_ac_price_per_kwh ?? profile?.default_price_per_kwh,
+      );
+      const dcPrice = Number(profile?.fast_dc_price_per_kwh ?? profile?.default_price_per_kwh);
+      if (
+        Number.isFinite(homePrice) &&
+        Number.isFinite(commercialPrice) &&
+        Number.isFinite(dcPrice) &&
+        homePrice >= 0 &&
+        commercialPrice >= 0 &&
+        dcPrice >= 0
+      ) {
+        setTariffPrices({
+          homePricePerKwh: homePrice,
+          commercialAcPricePerKwh: commercialPrice,
+          fastDcPricePerKwh: dcPrice,
+        });
       }
 
       setBydmateCloudApiKey(
@@ -164,25 +259,47 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
           ? profile.bydmate_cloud_api_key
           : "",
       );
+      setTariffLocations(
+        (locationRows ?? []).map((row) =>
+          mapChargingTariffLocation(row as Record<string, unknown>),
+        ),
+      );
     });
 
     return () => {
       mounted = false;
     };
-  }, [setCurrency, setDefaultPrice]);
+  }, [setCurrency, setDefaultPrice, setTariffPrices]);
 
   const handlePriceSave = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const numeric = parseDecimalInput(
-      String(new FormData(event.currentTarget).get("pref-price") ?? ""),
-    );
-    if (!Number.isFinite(numeric) || numeric < 0) {
+    const form = new FormData(event.currentTarget);
+    const homeNumeric = parseDecimalInput(String(form.get("pref-price-home") ?? ""));
+    const acNumeric = parseDecimalInput(String(form.get("pref-price-ac") ?? ""));
+    const dcNumeric = parseDecimalInput(String(form.get("pref-price-dc") ?? ""));
+    if (
+      !Number.isFinite(homeNumeric) ||
+      !Number.isFinite(acNumeric) ||
+      !Number.isFinite(dcNumeric) ||
+      homeNumeric < 0 ||
+      acNumeric < 0 ||
+      dcNumeric < 0
+    ) {
       toast.error(t("settings.tariffPositive") as string);
       return;
     }
 
-    const previous = defaultPricePerKwh;
-    setDefaultPrice(numeric);
+    const previous = {
+      home: homePricePerKwh,
+      ac: commercialAcPricePerKwh,
+      dc: fastDcPricePerKwh,
+    };
+    setTariffPrices({
+      homePricePerKwh: homeNumeric,
+      commercialAcPricePerKwh: acNumeric,
+      fastDcPricePerKwh: dcNumeric,
+    });
+    setDefaultPrice(homeNumeric);
 
     if (!profileUserId) {
       toast.success(t("settings.tariffSaved") as string);
@@ -191,15 +308,122 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
 
     void createClient()
       .from("profiles")
-      .update({ default_price_per_kwh: numeric })
+      .update({
+        default_price_per_kwh: homeNumeric,
+        home_price_per_kwh: homeNumeric,
+        commercial_ac_price_per_kwh: acNumeric,
+        fast_dc_price_per_kwh: dcNumeric,
+      })
       .eq("id", profileUserId)
       .then(({ error }) => {
         if (error) {
-          setDefaultPrice(previous);
+          setTariffPrices({
+            homePricePerKwh: previous.home,
+            commercialAcPricePerKwh: previous.ac,
+            fastDcPricePerKwh: previous.dc,
+          });
+          setDefaultPrice(previous.home);
           toast.error(error.message);
           return;
         }
         toast.success(t("settings.tariffSaved") as string);
+      });
+  };
+
+  const applyProviderPreset = (provider: ChargingProviderType) => {
+    if (provider === "custom") return;
+    const preset = PROVIDER_TARIFF_PRESETS[provider];
+    if (!preset) return;
+    setTariffPrices({
+      homePricePerKwh: preset.home,
+      commercialAcPricePerKwh: preset.commercial_ac,
+      fastDcPricePerKwh: preset.fast_dc,
+    });
+    setDefaultPrice(preset.home);
+  };
+
+  const handleUseCurrentGps = () => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation is unavailable");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setNewLocationLat(String(position.coords.latitude));
+        setNewLocationLng(String(position.coords.longitude));
+      },
+      (error) => toast.error(error.message),
+      { enableHighAccuracy: true, timeout: 12_000, maximumAge: 30_000 },
+    );
+  };
+
+  const handleAddTariffLocation = () => {
+    if (!profileUserId) {
+      toast.error("Sign in required");
+      return;
+    }
+    const lat = parseDecimalInput(newLocationLat);
+    const lng = parseDecimalInput(newLocationLng);
+    const radiusM = parseDecimalInput(newLocationRadius);
+    const override = parseDecimalInput(newLocationOverridePrice);
+    if (!newLocationName.trim()) {
+      toast.error("Location name is required");
+      return;
+    }
+    if (
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lng) ||
+      !Number.isFinite(radiusM) ||
+      radiusM <= 0
+    ) {
+      toast.error("Invalid location coordinates or radius");
+      return;
+    }
+
+    void createClient()
+      .from("charging_tariff_locations")
+      .insert({
+        user_id: profileUserId,
+        name: newLocationName.trim(),
+        lat,
+        lng,
+        radius_m: radiusM,
+        tariff_type: newLocationTariffType,
+        provider_type: newLocationProviderType,
+        price_per_kwh_override:
+          Number.isFinite(override) && override > 0 ? override : null,
+      })
+      .select("*")
+      .single()
+      .then(({ data, error }) => {
+        if (error || !data) {
+          toast.error(error?.message ?? "Could not save location tariff");
+          return;
+        }
+        const mapped = mapChargingTariffLocation(data as Record<string, unknown>);
+        setTariffLocations((prev) =>
+          [mapped, ...prev.filter((item) => item.id !== mapped.id)],
+        );
+        setNewLocationName("");
+        setNewLocationOverridePrice("");
+        toast.success("Location tariff saved");
+      });
+  };
+
+  const handleDeleteTariffLocation = (id: string) => {
+    const previous = tariffLocations;
+    setTariffLocations((list) => list.filter((item) => item.id !== id));
+    void createClient()
+      .from("charging_tariff_locations")
+      .delete()
+      .eq("id", id)
+      .then(({ error }) => {
+        if (error) {
+          setTariffLocations(previous);
+          toast.error(error.message);
+          return;
+        }
+        toast.success("Location tariff removed");
       });
   };
 
@@ -620,29 +844,236 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
               </p>
             </div>
 
-            <Label htmlFor="pref-price">
-              {t("settings.tariff", { currency: currencySymbols[currency] })}
-            </Label>
-            <Input
-              key={defaultPricePerKwh}
-              id="pref-price"
-              name="pref-price"
-              type="text"
-              step="any"
-              defaultValue={String(defaultPricePerKwh)}
-              inputMode="decimal"
-              pattern="[0-9]*[,.]?[0-9]*"
-              min={0}
-              className="h-11 rounded-2xl text-sm"
-              required
-            />
+            <div className="space-y-2">
+              <Label htmlFor="provider-preset">Provider preset</Label>
+              <Select
+                value="custom"
+                onValueChange={(value) => applyProviderPreset(value as ChargingProviderType)}
+                items={[
+                  { value: "custom", label: "Manual values" },
+                  { value: "home", label: PROVIDER_LABELS.home },
+                  { value: "malanka", label: PROVIDER_LABELS.malanka },
+                  { value: "evika", label: PROVIDER_LABELS.evika },
+                  { value: "forevo", label: PROVIDER_LABELS.forevo },
+                  { value: "zaryadka", label: PROVIDER_LABELS.zaryadka },
+                ]}
+              >
+                <SelectTrigger id="provider-preset" className="h-11 w-full rounded-2xl text-sm">
+                  <SelectValue placeholder="Apply provider preset" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="custom">Manual values</SelectItem>
+                  <SelectItem value="home">{PROVIDER_LABELS.home}</SelectItem>
+                  <SelectItem value="malanka">{PROVIDER_LABELS.malanka}</SelectItem>
+                  <SelectItem value="evika">{PROVIDER_LABELS.evika}</SelectItem>
+                  <SelectItem value="forevo">{PROVIDER_LABELS.forevo}</SelectItem>
+                  <SelectItem value="zaryadka">{PROVIDER_LABELS.zaryadka}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pref-price-home">
+                Home tariff ({currencySymbols[currency]}/kWh)
+              </Label>
+              <Input
+                key={homePricePerKwh}
+                id="pref-price-home"
+                name="pref-price-home"
+                type="text"
+                step="any"
+                defaultValue={String(homePricePerKwh)}
+                inputMode="decimal"
+                pattern="[0-9]*[,.]?[0-9]*"
+                min={0}
+                className="h-11 rounded-2xl text-sm"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pref-price-ac">
+                Commercial AC tariff ({currencySymbols[currency]}/kWh)
+              </Label>
+              <Input
+                key={commercialAcPricePerKwh}
+                id="pref-price-ac"
+                name="pref-price-ac"
+                type="text"
+                step="any"
+                defaultValue={String(commercialAcPricePerKwh)}
+                inputMode="decimal"
+                pattern="[0-9]*[,.]?[0-9]*"
+                min={0}
+                className="h-11 rounded-2xl text-sm"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pref-price-dc">
+                Fast DC tariff ({currencySymbols[currency]}/kWh)
+              </Label>
+              <Input
+                key={fastDcPricePerKwh}
+                id="pref-price-dc"
+                name="pref-price-dc"
+                type="text"
+                step="any"
+                defaultValue={String(fastDcPricePerKwh)}
+                inputMode="decimal"
+                pattern="[0-9]*[,.]?[0-9]*"
+                min={0}
+                className="h-11 rounded-2xl text-sm"
+                required
+              />
+            </div>
             <p className="text-muted-foreground text-sm">
-              {t("settings.tariffHelp")}
+              AC auto-tier is 4.0-9.99 kW, fast DC is 10.0+ kW.
             </p>
             <Button className="h-11 w-full rounded-full text-sm font-semibold" type="submit">
               {t("settings.storeDefault")}
             </Button>
           </form>
+          <div className="space-y-4 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4">
+            <p className="text-sm font-semibold tracking-tight">Saved charging locations</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Input
+                placeholder="Location name"
+                value={newLocationName}
+                onChange={(event) => setNewLocationName(event.target.value)}
+                className="h-11 rounded-2xl text-sm"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 rounded-full text-sm"
+                onClick={handleUseCurrentGps}
+              >
+                Use current GPS
+              </Button>
+              <Button
+                type="button"
+                variant={newLocationAutoGps ? "secondary" : "outline"}
+                className="h-11 rounded-full text-sm"
+                onClick={() => setNewLocationAutoGps((value) => !value)}
+              >
+                {newLocationAutoGps ? "Auto GPS: On" : "Auto GPS: Off"}
+              </Button>
+              <Input
+                placeholder="Radius meters"
+                value={newLocationRadius}
+                onChange={(event) => setNewLocationRadius(event.target.value)}
+                className="h-11 rounded-2xl text-sm"
+              />
+              <Select
+                value={newLocationTariffType}
+                onValueChange={(value) =>
+                  setNewLocationTariffType(value as ChargingTariffType)
+                }
+                items={[
+                  { value: "home", label: "Home" },
+                  { value: "commercial_ac", label: "Commercial AC" },
+                  { value: "fast_dc", label: "Fast DC" },
+                ]}
+              >
+                <SelectTrigger className="h-11 rounded-2xl text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="home">Home</SelectItem>
+                  <SelectItem value="commercial_ac">Commercial AC</SelectItem>
+                  <SelectItem value="fast_dc">Fast DC</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={newLocationProviderType}
+                onValueChange={(value) =>
+                  setNewLocationProviderType(value as ChargingProviderType)
+                }
+                items={[
+                  { value: "custom", label: PROVIDER_LABELS.custom },
+                  { value: "home", label: PROVIDER_LABELS.home },
+                  { value: "malanka", label: PROVIDER_LABELS.malanka },
+                  { value: "evika", label: PROVIDER_LABELS.evika },
+                  { value: "forevo", label: PROVIDER_LABELS.forevo },
+                  { value: "zaryadka", label: PROVIDER_LABELS.zaryadka },
+                ]}
+              >
+                <SelectTrigger className="h-11 rounded-2xl text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="custom">{PROVIDER_LABELS.custom}</SelectItem>
+                  <SelectItem value="home">{PROVIDER_LABELS.home}</SelectItem>
+                  <SelectItem value="malanka">{PROVIDER_LABELS.malanka}</SelectItem>
+                  <SelectItem value="evika">{PROVIDER_LABELS.evika}</SelectItem>
+                  <SelectItem value="forevo">{PROVIDER_LABELS.forevo}</SelectItem>
+                  <SelectItem value="zaryadka">{PROVIDER_LABELS.zaryadka}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {Number.isFinite(Number.parseFloat(newLocationLat)) &&
+            Number.isFinite(Number.parseFloat(newLocationLng)) ? (
+              <div className="space-y-2">
+                <TariffLocationMapPicker
+                  lat={Number.parseFloat(newLocationLat)}
+                  lng={Number.parseFloat(newLocationLng)}
+                  onChange={(lat, lng) => {
+                    setNewLocationLat(String(lat));
+                    setNewLocationLng(String(lng));
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Point: {Number.parseFloat(newLocationLat).toFixed(6)},{" "}
+                  {Number.parseFloat(newLocationLng).toFixed(6)}. Tap map or drag marker to move.
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                GPS point not detected yet. Use Auto mode or click “Use current GPS”.
+              </p>
+            )}
+            <Input
+              placeholder={`Optional custom price (${currencySymbols[currency]}/kWh)`}
+              value={newLocationOverridePrice}
+              onChange={(event) => setNewLocationOverridePrice(event.target.value)}
+              className="h-11 rounded-2xl text-sm"
+            />
+            <Button
+              type="button"
+              className="h-11 w-full rounded-full text-sm font-semibold"
+              onClick={handleAddTariffLocation}
+            >
+              Save location tariff
+            </Button>
+            <div className="space-y-2">
+              {tariffLocations.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No location tariffs saved yet.</p>
+              ) : (
+                tariffLocations.map((location) => (
+                  <div
+                    key={location.id}
+                    className="flex items-center justify-between rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2"
+                  >
+                    <div>
+                      <p className="text-sm font-medium">{location.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {location.provider_type} · {location.tariff_type} · {location.radius_m} m · {location.lat.toFixed(5)},{" "}
+                        {location.lng.toFixed(5)}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 rounded-full text-xs"
+                      onClick={() => handleDeleteTariffLocation(location.id)}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
           <Separator className="my-6 bg-white/15" />
 
           <div className="space-y-5">

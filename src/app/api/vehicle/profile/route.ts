@@ -10,18 +10,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data, error } = await access.supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", access.userId)
-    .maybeSingle();
+  const [{ data, error }, { data: tariffLocations, error: locationError }] =
+    await Promise.all([
+      access.supabase.from("profiles").select("*").eq("id", access.userId).maybeSingle(),
+      access.supabase
+        .from("charging_tariff_locations")
+        .select("*")
+        .eq("user_id", access.userId),
+    ]);
 
-  if (error) {
+  if (error || locationError) {
     return NextResponse.json({ error: "Failed to load profile" }, { status: 500 });
   }
 
   return NextResponse.json({
     email: access.devMode ? DEV_USER_EMAIL : (data?.email as string | null) ?? null,
     profile: data ? mapProfile(data as Record<string, unknown>) : null,
+    tariffLocations: tariffLocations ?? [],
   });
 }

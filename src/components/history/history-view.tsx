@@ -359,6 +359,24 @@ function SessionStatsBlock({
   currency: Currency;
   locale: Locale;
 }) {
+  const tariffLabel =
+    session.tariff_type === "commercial_ac"
+      ? "Commercial AC"
+      : session.tariff_type === "fast_dc"
+        ? "Fast DC"
+        : "Home";
+  const providerLabel =
+    session.provider_type === "malanka"
+      ? "Malanka"
+      : session.provider_type === "evika"
+        ? "Evika!"
+        : session.provider_type === "forevo"
+          ? "forEVo"
+          : session.provider_type === "zaryadka"
+            ? "Zaryadka"
+            : session.provider_type === "home"
+              ? "Home"
+              : "Custom";
   return (
     <dl className="divide-y divide-border border-b border-border">
       <CompactStatRow
@@ -381,6 +399,8 @@ function SessionStatsBlock({
           value={formatCurrencyAmount(currency, session.estimated_cost, locale)}
         />
       ) : null}
+      <CompactStatRow label="Tariff" value={tariffLabel} />
+      <CompactStatRow label="Provider" value={providerLabel} />
       <CompactStatRow label={tx("history.duration")} value={sessionDuration(session)} />
     </dl>
   );

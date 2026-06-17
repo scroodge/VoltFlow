@@ -12,6 +12,9 @@ export const appPreferencesStorageKey = "ev-charge-preferences";
 export type PersistedAppPreferences = {
   selectedCarId: string | null;
   defaultPricePerKwh: number;
+  homePricePerKwh: number;
+  commercialAcPricePerKwh: number;
+  fastDcPricePerKwh: number;
   currency: Currency;
   locale: Locale;
 };
@@ -46,6 +49,24 @@ export function parsePersistedAppPreferences(
     ) {
       preferences.defaultPricePerKwh = state.defaultPricePerKwh;
     }
+    if (
+      typeof state.homePricePerKwh === "number" &&
+      Number.isFinite(state.homePricePerKwh)
+    ) {
+      preferences.homePricePerKwh = state.homePricePerKwh;
+    }
+    if (
+      typeof state.commercialAcPricePerKwh === "number" &&
+      Number.isFinite(state.commercialAcPricePerKwh)
+    ) {
+      preferences.commercialAcPricePerKwh = state.commercialAcPricePerKwh;
+    }
+    if (
+      typeof state.fastDcPricePerKwh === "number" &&
+      Number.isFinite(state.fastDcPricePerKwh)
+    ) {
+      preferences.fastDcPricePerKwh = state.fastDcPricePerKwh;
+    }
 
     if (typeof state.currency === "string" && isCurrency(state.currency)) {
       preferences.currency = state.currency;
@@ -72,6 +93,9 @@ export function hasPersistedLocalePreference(storage: StorageLike) {
 export const initialAppPreferences: PersistedAppPreferences = {
   selectedCarId: null,
   defaultPricePerKwh: 0.12,
+  homePricePerKwh: 0.12,
+  commercialAcPricePerKwh: 0.12,
+  fastDcPricePerKwh: 0.12,
   currency: defaultCurrency,
   locale: defaultLocale,
 };

@@ -130,7 +130,7 @@ export default async function BydmateDiplusDebugPage({
 
   const samplesQuery = await supabase
     .from("bydmate_telemetry_samples")
-    .select(`id, vehicle_id, device_time, received_at, telemetry, diplus, ${DIPLUS_COLUMNS}`)
+    .select(`id, vehicle_id, device_time, received_at, telemetry, `)
     .eq("vehicle_id", vehicleId)
     .order("device_time", { ascending: false })
     .limit(SAMPLE_LIMIT);
@@ -145,7 +145,7 @@ export default async function BydmateDiplusDebugPage({
   const tripSamplesQuery = latestTrip && tripEndAt
     ? await supabase
       .from("bydmate_telemetry_samples")
-      .select(`id, vehicle_id, device_time, received_at, telemetry, diplus, ${DIPLUS_COLUMNS}`)
+      .select(`id, vehicle_id, device_time, received_at, telemetry, `)
       .eq("vehicle_id", vehicleId)
       .gte("device_time", latestTrip.started_at)
       .lte("device_time", tripEndAt)
@@ -154,7 +154,7 @@ export default async function BydmateDiplusDebugPage({
     : { data: [], error: null };
   const chargingSamplesQuery = await supabase
     .from("bydmate_telemetry_samples")
-    .select(`id, vehicle_id, device_time, received_at, telemetry, diplus, ${DIPLUS_COLUMNS}`)
+    .select(`id, vehicle_id, device_time, received_at, telemetry, `)
     .eq("vehicle_id", vehicleId)
     .eq("telemetry->>is_charging", "true")
     .order("device_time", { ascending: false })
