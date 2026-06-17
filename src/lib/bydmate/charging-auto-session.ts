@@ -128,6 +128,7 @@ async function startSessionFromTelemetry({
       efficiency_percent: car.default_efficiency_percent,
       tariff_type: tariff.tariffType,
       provider_type: tariff.providerType,
+      tariff_manual: false,
       price_per_kwh: tariff.pricePerKwh,
       charged_energy_kwh: 0,
       estimated_cost: 0,
@@ -246,6 +247,7 @@ export async function processBydmateAutoChargingSessions({
   let started = 0;
   let stopped = 0;
   const sessionIds: string[] = [];
+  const lastLocationByVehicle = new Map<string, { lat?: number | null; lon?: number | null }>();
   const newestSampleMs = Math.max(
     ...orderedSamples.map((sample) => Date.parse(sample.device_time)),
   );
@@ -253,6 +255,13 @@ export async function processBydmateAutoChargingSessions({
   for (const sample of orderedSamples) {
     const car = carsByVehicleId.get(sample.vehicle_id);
     if (!car) continue;
+
+    if (
+      typeof sample.location?.lat === "number" &&
+      typeof sample.location?.lon === "number"
+    ) {
+      lastLocationByVehicle.set(sample.vehicle_id, sample.location);
+    }
 
     const speedKmh = telemetrySpeedKmh(sample.telemetry);
     const isCharging = isMateAutoSessionCharging(sample.telemetry, speedKmh);
@@ -287,7 +296,14 @@ export async function processBydmateAutoChargingSessions({
         supabase,
         userId,
         car,
-        sample,
+        sample: {
+          ...sample,
+          location:
+            typeof sample.location?.lat === "number" &&
+            typeof sample.location?.lon === "number"
+              ? sample.location
+              : (lastLocationByVehicle.get(sample.vehicle_id) ?? sample.location),
+        },
         startPercent: step.action.startPercent,
         chargerPowerKw: step.action.chargerPowerKw,
       });

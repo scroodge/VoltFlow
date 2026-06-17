@@ -85,6 +85,7 @@ export function mapChargingSession(
       ["home", "malanka", "evika", "forevo", "zaryadka", "custom"] as const,
       "custom",
     ) as ChargingProviderType,
+    tariff_manual: raw.tariff_manual === true,
     price_per_kwh: num(raw.price_per_kwh),
     charged_energy_kwh: num(raw.charged_energy_kwh),
     estimated_cost: num(raw.estimated_cost),

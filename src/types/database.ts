@@ -52,6 +52,7 @@ export type ChargingSessionRow = {
   efficiency_percent: number;
   tariff_type: ChargingTariffType;
   provider_type: ChargingProviderType;
+  tariff_manual: boolean;
   price_per_kwh: number;
   charged_energy_kwh: number;
   estimated_cost: number;
