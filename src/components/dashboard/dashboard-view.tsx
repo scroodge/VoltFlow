@@ -52,7 +52,7 @@ import {
   deriveChargingSessionLiveBundle,
   filterLiveSnapshotsForVehicle,
 } from "@/lib/charging-session-sync";
-import { snapshotSoc } from "@/lib/charging-live";
+import { resolveDisplayChargePowerKw, snapshotSoc } from "@/lib/charging-live";
 import { useAppPath } from "@/lib/dev/dev-path";
 import { currencySymbols, formatCurrencyAmount, type TranslationKey } from "@/lib/i18n";
 import { parseDecimalInput } from "@/lib/number-input";
@@ -194,6 +194,7 @@ function liveVehicleSummaryTitle(
   snapshot: BydmateLiveSnapshotRow | null,
   mode: DashboardVehicleMode,
   statusLabel: string,
+  chargePowerKw: number | null,
   t: (key: TranslationKey, params?: Record<string, string | number>) => string,
   formatNumber: (value: number | null | undefined, digits?: number) => string,
 ) {
@@ -202,7 +203,7 @@ function liveVehicleSummaryTitle(
   const telemetry = snapshot.telemetry;
   if (mode === "app_charging" || mode === "live_charging") {
     return t("dashboard.liveVehicleCharging", {
-      power: formatNumber(telemetry.charge_power_kw, 1),
+      power: formatNumber(chargePowerKw, 1),
     });
   }
   if (mode === "driving") {
@@ -472,10 +473,17 @@ export function DashboardView() {
       ? (t("dashboard.ringToggleEnergy") as string)
       : (t("dashboard.ringTogglePercent") as string);
 
+  const displayChargePowerKw = resolveDisplayChargePowerKw({
+    snapshot: latestBydmateSnapshot,
+    sessionChargerPowerKw: activeSession?.charger_power_kw,
+    defaultChargerPowerKw: selectedCar?.default_charger_power_kw,
+  });
+
   const liveVehicleTitle = liveVehicleSummaryTitle(
     latestBydmateSnapshot,
     vehicleMode,
     statusLabel,
+    displayChargePowerKw,
     (key, params) => String(t(key, params)),
     fmt,
   );
@@ -525,10 +533,7 @@ export function DashboardView() {
 
   const isChargingMode =
     vehicleMode === "app_charging" || vehicleMode === "live_charging";
-  const chargingTileKw =
-    latestBydmateSnapshot?.telemetry.charge_power_kw ??
-    activeSession?.charger_power_kw ??
-    selectedCar?.default_charger_power_kw;
+  const chargingTileKw = displayChargePowerKw;
 
   const isPageLoading = loadingCars || (loadingLive && !latestBydmateSnapshot);
 

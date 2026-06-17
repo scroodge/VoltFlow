@@ -33,6 +33,28 @@ export function snapshotChargePowerKw(snapshot: BydmateLiveSnapshotRow | null | 
   return power != null && power > 0 ? power : null;
 }
 
+function positiveChargerKw(value: unknown): number | null {
+  const power = finiteNumber(value);
+  return power != null && power > 0 ? power : null;
+}
+
+/** Live Mate kW when > 0, else session/car defaults (Mate may send 0 while gun is connected). */
+export function resolveDisplayChargePowerKw({
+  snapshot,
+  sessionChargerPowerKw,
+  defaultChargerPowerKw,
+}: {
+  snapshot?: BydmateLiveSnapshotRow | null;
+  sessionChargerPowerKw?: number | null;
+  defaultChargerPowerKw?: number | null;
+}): number | null {
+  return (
+    snapshotChargePowerKw(snapshot) ??
+    positiveChargerKw(sessionChargerPowerKw) ??
+    positiveChargerKw(defaultChargerPowerKw)
+  );
+}
+
 export function isFreshChargingSnapshot(
   snapshot: BydmateLiveSnapshotRow | null | undefined,
   nowMs: number,
