@@ -83,6 +83,45 @@ import type {
   ChargingTariffType,
 } from "@/types/database";
 
+function TariffLocationMapPreview({ lat, lng }: { lat: number; lng: number }) {
+  const latDelta = 0.006;
+  const lngDelta = 0.012;
+  const params = new URLSearchParams({
+    bbox: [
+      lng - lngDelta,
+      lat - latDelta,
+      lng + lngDelta,
+      lat + latDelta,
+    ].join(","),
+    layer: "mapnik",
+    marker: `${lat},${lng}`,
+  });
+  const osmUrl = `https://www.openstreetmap.org/export/embed.html?${params.toString()}`;
+  const externalUrl = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=16/${lat}/${lng}`;
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02]">
+      <iframe
+        title="Tariff location map"
+        src={osmUrl}
+        className="h-64 w-full border-0"
+        loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
+      />
+      <div className="border-t border-white/[0.08] px-3 py-2 text-xs">
+        <a
+          href={externalUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="text-muted-foreground transition hover:text-foreground"
+        >
+          Open in OpenStreetMap
+        </a>
+      </div>
+    </div>
+  );
+}
+
 export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   const router = useRouter();
   const appPath = useAppPath();
@@ -419,6 +458,17 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         toast.success("Location tariff removed");
       });
   };
+
+  const parsedNewLocationLat = Number.parseFloat(newLocationLat);
+  const parsedNewLocationLng = Number.parseFloat(newLocationLng);
+  const hasNewLocationCoords =
+    Number.isFinite(parsedNewLocationLat) && Number.isFinite(parsedNewLocationLng);
+  const tariffMapLat = hasNewLocationCoords
+    ? parsedNewLocationLat
+    : tariffLocations[0]?.lat ?? 53.9023;
+  const tariffMapLng = hasNewLocationCoords
+    ? parsedNewLocationLng
+    : tariffLocations[0]?.lng ?? 27.5619;
 
   const handleCurrencyChange = (value: Currency | null) => {
     if (!value || !isCurrency(value)) return;
@@ -1040,14 +1090,16 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                 </SelectContent>
               </Select>
             </div>
-            {Number.isFinite(Number.parseFloat(newLocationLat)) &&
-            Number.isFinite(Number.parseFloat(newLocationLng)) ? (
-              <p className="text-xs text-muted-foreground">
-                {t("settings.locationTariffs.pointCoords", {
-                  lat: Number.parseFloat(newLocationLat).toFixed(6),
-                  lon: Number.parseFloat(newLocationLng).toFixed(6),
-                })}
-              </p>
+            <TariffLocationMapPreview lat={tariffMapLat} lng={tariffMapLng} />
+            {hasNewLocationCoords ? (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  {t("settings.locationTariffs.pointCoords", {
+                    lat: parsedNewLocationLat.toFixed(6),
+                    lon: parsedNewLocationLng.toFixed(6),
+                  })}
+                </p>
+              </div>
             ) : (
               <p className="text-xs text-muted-foreground">
                 {t("settings.locationTariffs.gpsPending") as string}
