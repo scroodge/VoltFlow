@@ -581,18 +581,19 @@ export function DashboardView() {
   );
   const dashboardDevSnapshot = useDashboardDevSnapshot();
   const latestBydmateSnapshot = useDashboardDevSnapshotOverride(baseBydmateSnapshot);
+  const forceDevMockMode = Boolean(dashboardDevSnapshot);
   const forceDevParkMode = dashboardDevSnapshot?.mode === "park";
 
   const activeSession = useMemo(
     () => {
-      if (forceDevParkMode) return null;
+      if (forceDevMockMode) return null;
       return sessions?.find(
         (s) => s.status === "charging" && (!selectedCar || s.car_id === selectedCar.id),
       ) ??
         sessions?.find((s) => s.status === "charging") ??
         null;
     },
-    [forceDevParkMode, sessions, selectedCar],
+    [forceDevMockMode, sessions, selectedCar],
   );
 
   const nowMs = useTickingClock(Boolean(activeSession) || pageVisible);
@@ -607,19 +608,19 @@ export function DashboardView() {
   const { data: latestTrips = [], isLoading: loadingTrips } = useLatestBydmateTripsQuery(
     tripVehicleId,
     1,
-    Boolean(tripVehicleId),
+    Boolean(tripVehicleId) && !forceDevMockMode,
     vehicleMode !== "driving",
   );
 
   const carSessions = useMemo(() => {
-    if (forceDevParkMode) return [];
+    if (forceDevMockMode) return [];
     if (!sessions) return [];
     if (!selectedCar) return sessions;
     return sessions.filter((s) => s.car_id === selectedCar.id);
-  }, [forceDevParkMode, sessions, selectedCar]);
+  }, [forceDevMockMode, sessions, selectedCar]);
 
   const latestSession = carSessions[0] ?? null;
-  const latestTrip = forceDevParkMode ? null : (latestTrips[0] ?? null);
+  const latestTrip = forceDevMockMode ? null : (latestTrips[0] ?? null);
 
   useEffect(() => {
     if (!cars?.length) return;
@@ -729,11 +730,11 @@ export function DashboardView() {
   );
 
   const rangeEstimate = useVehicleRangeEstimate({
-    baseSnapshot: forceDevParkMode ? latestBydmateSnapshot : baseBydmateSnapshot,
+    baseSnapshot: forceDevMockMode ? latestBydmateSnapshot : baseBydmateSnapshot,
     scopedVehicleId,
     batteryCapacityKwh: selectedCar?.battery_capacity_kwh,
     fallbackSoc: currentPercent,
-    recentTripsOverride: forceDevParkMode ? [] : undefined,
+    recentTripsOverride: forceDevMockMode ? [] : undefined,
   });
   const rangeDetail =
     rangeEstimate?.estimatedRangeKm != null
