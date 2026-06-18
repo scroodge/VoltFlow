@@ -1075,7 +1075,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             <Input
               placeholder={t("settings.locationTariffs.optionalPrice", {
                 currency: currencySymbols[currency],
-              })}
+              }) as string}
               value={newLocationOverridePrice}
               onChange={(event) => setNewLocationOverridePrice(event.target.value)}
               className="h-11 rounded-2xl text-sm"
