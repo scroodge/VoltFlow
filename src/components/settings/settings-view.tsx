@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { Bell, Pencil } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
@@ -83,14 +82,6 @@ import type {
   ChargingTariffLocationRow,
   ChargingTariffType,
 } from "@/types/database";
-
-const TariffLocationMapPicker = dynamic(
-  () =>
-    import("@/components/settings/tariff-location-map-picker").then(
-      (mod) => mod.TariffLocationMapPicker,
-    ),
-  { ssr: false },
-);
 
 export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   const router = useRouter();
@@ -1051,22 +1042,12 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             </div>
             {Number.isFinite(Number.parseFloat(newLocationLat)) &&
             Number.isFinite(Number.parseFloat(newLocationLng)) ? (
-              <div className="space-y-2">
-                <TariffLocationMapPicker
-                  lat={Number.parseFloat(newLocationLat)}
-                  lng={Number.parseFloat(newLocationLng)}
-                  onChange={(lat, lng) => {
-                    setNewLocationLat(String(lat));
-                    setNewLocationLng(String(lng));
-                  }}
-                />
-                <p className="text-xs text-muted-foreground">
-                  {t("settings.locationTariffs.pointCoords", {
-                    lat: Number.parseFloat(newLocationLat).toFixed(6),
-                    lon: Number.parseFloat(newLocationLng).toFixed(6),
-                  })}
-                </p>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                {t("settings.locationTariffs.pointCoords", {
+                  lat: Number.parseFloat(newLocationLat).toFixed(6),
+                  lon: Number.parseFloat(newLocationLng).toFixed(6),
+                })}
+              </p>
             ) : (
               <p className="text-xs text-muted-foreground">
                 {t("settings.locationTariffs.gpsPending") as string}
