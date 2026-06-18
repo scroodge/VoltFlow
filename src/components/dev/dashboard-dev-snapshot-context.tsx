@@ -12,11 +12,15 @@ import {
 import { usePathname } from "next/navigation";
 
 import { buildChargingSnapshot } from "@/app/dev/vehicle-telemetry-fixtures/build-charging-snapshot";
-import { buildDrivingSnapshot } from "@/lib/dev/build-driving-snapshot";
+import {
+  buildDevDashboardSeedSnapshot,
+  buildDrivingSnapshot,
+  buildParkedSnapshot,
+} from "@/lib/dev/build-driving-snapshot";
 import { getDevPathPrefix } from "@/lib/dev/dev-path";
 import type { BydmateLiveSnapshotRow } from "@/types/database";
 
-export type DashboardDevSnapshotMode = "live" | "charge";
+export type DashboardDevSnapshotMode = "live" | "park" | "charge";
 
 type DashboardDevSnapshotContextValue = {
   mode: DashboardDevSnapshotMode;
@@ -29,6 +33,7 @@ const DashboardDevSnapshotContext = createContext<DashboardDevSnapshotContextVal
 );
 
 function parseDevMode(value: string | null): DashboardDevSnapshotMode {
+  if (value === "park") return "park";
   return value === "charge" ? "charge" : "live";
 }
 
@@ -54,9 +59,10 @@ export function DashboardDevSnapshotProvider({ children }: { children: ReactNode
 
   const resolveOverride = useCallback(
     (base: BydmateLiveSnapshotRow | null): BydmateLiveSnapshotRow | null => {
-      if (!devRoute || !base) return null;
+      if (!devRoute) return null;
+      const seed = base ?? buildDevDashboardSeedSnapshot();
       if (mode === "charge") {
-        const charging = buildChargingSnapshot(base, null);
+        const charging = buildChargingSnapshot(seed, null);
         return {
           ...charging,
           telemetry: {
@@ -65,7 +71,8 @@ export function DashboardDevSnapshotProvider({ children }: { children: ReactNode
           },
         };
       }
-      return buildDrivingSnapshot(base);
+      if (mode === "park") return buildParkedSnapshot(seed);
+      return buildDrivingSnapshot(seed);
     },
     [devRoute, mode],
   );
@@ -99,6 +106,6 @@ export function useDashboardDevSnapshotOverride(
     () => true,
     () => false,
   );
-  if (!ctx || !base || !hasMounted) return base;
+  if (!ctx || !hasMounted) return base;
   return ctx.resolveOverride(base) ?? base;
 }

@@ -12,7 +12,10 @@ import { startChargingSession, stopChargingSession } from "@/actions/sessions";
 import { BrandBadge } from "@/components/brand/BrandBadge";
 import { ChargingBolt } from "@/components/brand/ChargingBolt";
 import { LogoFull } from "@/components/brand/LogoFull";
-import { useDashboardDevSnapshotOverride } from "@/components/dev/dashboard-dev-snapshot-context";
+import {
+  useDashboardDevSnapshot,
+  useDashboardDevSnapshotOverride,
+} from "@/components/dev/dashboard-dev-snapshot-context";
 import { BatteryRing } from "@/components/charging/BatteryRing";
 import { ChargingActionButton } from "@/components/charging/ChargingActionButton";
 import { Button } from "@/components/ui/button";
@@ -43,7 +46,10 @@ import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
 import {
   availableBatteryKwh,
+  chargingHoursFromEnergy,
   costFromGridEnergy,
+  energyFromGridKwh,
+  energyNeededKwh,
   formatDuration,
 } from "@/lib/charging-math";
 import { useVehicleRangeEstimate } from "@/hooks/use-vehicle-range-estimate";
@@ -54,9 +60,9 @@ import {
 } from "@/lib/charging-session-sync";
 import { resolveDisplayChargePowerKw, snapshotSoc } from "@/lib/charging-live";
 import { useAppPath } from "@/lib/dev/dev-path";
-import { currencySymbols, formatCurrencyAmount, type TranslationKey } from "@/lib/i18n";
+import { currencySymbols, formatCurrencyAmount, type Currency, type Locale, type TranslationKey } from "@/lib/i18n";
 import { parseDecimalInput } from "@/lib/number-input";
-import { PROVIDER_LABELS } from "@/lib/charging-tariffs";
+import { PROVIDER_LABELS, resolveTariffPrice } from "@/lib/charging-tariffs";
 import { ensureNotificationsPermission, ensurePushSubscription } from "@/lib/push/client";
 import { queryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
@@ -71,9 +77,31 @@ import { useAppPreferences } from "@/stores/use-app-preferences";
 import type {
   BydmateLiveSnapshotRow,
   BydmateTripRow,
+  ChargingProviderType,
   ChargingSessionRow,
   ChargingTariffType,
 } from "@/types/database";
+
+const CHARGE_TYPE_OPTIONS: { value: ChargingTariffType; labelKey: TranslationKey }[] = [
+  { value: "home", labelKey: "dashboard.estimateTypeHome" },
+  { value: "commercial_ac", labelKey: "dashboard.estimateTypeAc" },
+  { value: "fast_dc", labelKey: "dashboard.estimateTypeDc" },
+];
+
+const PROVIDER_OPTIONS: { value: ChargingProviderType; label: string }[] = [
+  { value: "custom", label: PROVIDER_LABELS.custom },
+  { value: "home", label: PROVIDER_LABELS.home },
+  { value: "malanka", label: PROVIDER_LABELS.malanka },
+  { value: "evika", label: PROVIDER_LABELS.evika },
+  { value: "forevo", label: PROVIDER_LABELS.forevo },
+  { value: "zaryadka", label: PROVIDER_LABELS.zaryadka },
+];
+
+function defaultEstimatePowerKw(type: ChargingTariffType) {
+  if (type === "fast_dc") return 65;
+  if (type === "commercial_ac") return 7;
+  return 4.4;
+}
 
 function liveStartPercent(snapshot: BydmateLiveSnapshotRow | null | undefined) {
   const soc = snapshotSoc(snapshot);
@@ -281,6 +309,153 @@ function RangeBadge({ value }: { value: string | null }) {
   );
 }
 
+function ParkChargeEstimatePanel({
+  currency,
+  estimatePowerKw,
+  estimateProviderType,
+  estimateTariffType,
+  locale,
+  parkEstimate,
+  setEstimatePowerKw,
+  setEstimateProviderType,
+  setEstimateTariffType,
+  t,
+}: {
+  currency: Currency;
+  estimatePowerKw: string;
+  estimateProviderType: ChargingProviderType;
+  estimateTariffType: ChargingTariffType;
+  locale: Locale;
+  parkEstimate: {
+    cost: number;
+    durationSeconds: number;
+    gridEnergyKwh: number;
+    pricePerKwh: number;
+  } | null;
+  setEstimatePowerKw: (value: string) => void;
+  setEstimateProviderType: (value: ChargingProviderType) => void;
+  setEstimateTariffType: (value: ChargingTariffType) => void;
+  t: (key: TranslationKey, values?: Record<string, string | number>) => string;
+}) {
+  const durationText = parkEstimate
+    ? formatDuration(Math.round(parkEstimate.durationSeconds))
+    : "—";
+  const costText = parkEstimate
+    ? formatCurrencyAmount(currency, parkEstimate.cost, locale)
+    : "—";
+  const detailText = parkEstimate
+    ? `${fmt(parkEstimate.gridEnergyKwh, 1)} kWh · ${formatCurrencyAmount(
+        currency,
+        parkEstimate.pricePerKwh,
+        locale,
+      )}/kWh`
+    : t("dashboard.estimateUnavailable");
+
+  return (
+    <div className="grid gap-2.5 text-xs">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            {t("dashboard.parkEstimateEyebrow")}
+          </p>
+          <h2 className="mt-0.5 font-heading text-sm font-bold leading-tight tracking-normal">
+            {t("dashboard.parkEstimateTitle")}
+          </h2>
+        </div>
+        <div className="shrink-0 rounded-full border border-[var(--voltflow-green)]/25 bg-[var(--voltflow-green)]/10 px-2 py-0.5 text-[9px] font-bold text-[var(--voltflow-green)]">
+          100%
+        </div>
+      </div>
+
+      <div
+        className="grid grid-cols-3 gap-1 rounded-full border border-border/70 bg-[#12151C]/70 p-0.5"
+        aria-label={t("dashboard.estimateType")}
+      >
+        {CHARGE_TYPE_OPTIONS.map((item) => {
+          const selected = item.value === estimateTariffType;
+          return (
+            <button
+              key={item.value}
+              type="button"
+              onClick={() => {
+                const next = item.value;
+                setEstimateTariffType(next);
+                setEstimatePowerKw(String(defaultEstimatePowerKw(next)));
+              }}
+              className={cn(
+                "rounded-full px-2 py-1 font-heading text-[10px] font-bold uppercase tracking-[0.08em] transition",
+                selected
+                  ? "bg-[var(--voltflow-green)]/18 text-[var(--voltflow-green)]"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              aria-pressed={selected}
+            >
+              {t(item.labelKey)}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-[1fr_4.35rem] gap-2">
+        <div className="space-y-1">
+          <Label htmlFor="park-estimate-provider" className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
+            {t("dashboard.estimateProvider")}
+          </Label>
+          <Select
+            value={estimateProviderType}
+            onValueChange={(value) => setEstimateProviderType(value as ChargingProviderType)}
+            items={PROVIDER_OPTIONS.map((item) => ({
+              value: item.value,
+              label: item.label,
+            }))}
+          >
+            <SelectTrigger id="park-estimate-provider" className="h-8 rounded-xl px-2 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PROVIDER_OPTIONS.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="park-estimate-power" className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
+            kW
+          </Label>
+          <Input
+            id="park-estimate-power"
+            type="text"
+            inputMode="decimal"
+            pattern="[0-9]*[,.]?[0-9]*"
+            value={estimatePowerKw}
+            onChange={(event) => setEstimatePowerKw(event.target.value)}
+            className="h-8 rounded-xl px-2 text-xs"
+          />
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-border/70 bg-[#12151C]/55 px-3 py-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            {t("dashboard.estimateTimeToFull")}
+          </span>
+          <span className="font-heading text-base font-bold tabular-nums">{durationText}</span>
+        </div>
+        <div className="mt-1 flex items-baseline justify-between gap-2">
+          <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            {t("dashboard.estimateCostToFull")}
+          </span>
+          <span className="font-heading text-base font-bold tabular-nums">{costText}</span>
+        </div>
+      </div>
+      <p className="truncate text-[10px] leading-4 text-muted-foreground">{detailText}</p>
+    </div>
+  );
+}
+
 function DashboardLoadingSkeleton() {
   return (
     <>
@@ -330,6 +505,9 @@ export function DashboardView() {
   const selectedCarId = useAppPreferences((s) => s.selectedCarId);
   const setSelectedCarId = useAppPreferences((s) => s.setSelectedCarId);
   const defaultPrice = useAppPreferences((s) => s.defaultPricePerKwh);
+  const homePricePerKwh = useAppPreferences((s) => s.homePricePerKwh);
+  const commercialAcPricePerKwh = useAppPreferences((s) => s.commercialAcPricePerKwh);
+  const fastDcPricePerKwh = useAppPreferences((s) => s.fastDcPricePerKwh);
   const currency = useAppPreferences((s) => s.currency);
   const { locale, t } = useTranslation();
 
@@ -351,16 +529,20 @@ export function DashboardView() {
     () => resolveLiveSnapshotForVehicle(bydmateLive, scopedVehicleId),
     [bydmateLive, scopedVehicleId],
   );
+  const dashboardDevSnapshot = useDashboardDevSnapshot();
   const latestBydmateSnapshot = useDashboardDevSnapshotOverride(baseBydmateSnapshot);
+  const forceDevParkMode = dashboardDevSnapshot?.mode === "park";
 
   const activeSession = useMemo(
-    () =>
-      sessions?.find(
+    () => {
+      if (forceDevParkMode) return null;
+      return sessions?.find(
         (s) => s.status === "charging" && (!selectedCar || s.car_id === selectedCar.id),
       ) ??
-      sessions?.find((s) => s.status === "charging") ??
-      null,
-    [sessions, selectedCar],
+        sessions?.find((s) => s.status === "charging") ??
+        null;
+    },
+    [forceDevParkMode, sessions, selectedCar],
   );
 
   const nowMs = useTickingClock(Boolean(activeSession) || pageVisible);
@@ -380,13 +562,14 @@ export function DashboardView() {
   );
 
   const carSessions = useMemo(() => {
+    if (forceDevParkMode) return [];
     if (!sessions) return [];
     if (!selectedCar) return sessions;
     return sessions.filter((s) => s.car_id === selectedCar.id);
-  }, [sessions, selectedCar]);
+  }, [forceDevParkMode, sessions, selectedCar]);
 
   const latestSession = carSessions[0] ?? null;
-  const latestTrip = latestTrips[0] ?? null;
+  const latestTrip = forceDevParkMode ? null : (latestTrips[0] ?? null);
 
   useEffect(() => {
     if (!cars?.length) return;
@@ -428,6 +611,12 @@ export function DashboardView() {
   const [manualTariffType, setManualTariffType] = useState<"auto" | ChargingTariffType>(
     "auto",
   );
+  const [estimateTariffType, setEstimateTariffType] = useState<ChargingTariffType>("home");
+  const [estimateProviderType, setEstimateProviderType] =
+    useState<ChargingProviderType>("custom");
+  const [estimatePowerKw, setEstimatePowerKw] = useState(
+    String(defaultEstimatePowerKw("home")),
+  );
   const [submitting, setSubmitting] = useState(false);
   const [stopping, setStopping] = useState(false);
   const hasMounted = useSyncExternalStore(
@@ -454,12 +643,13 @@ export function DashboardView() {
     !activeSession &&
     canStartChargingSession(vehicleMode);
 
-  const currentPercent =
-    liveActive?.currentPercent ??
-    activeSession?.current_percent ??
-    latestBydmateSoc ??
-    latestSession?.current_percent ??
-    Number(startPct);
+  const currentPercent = forceDevParkMode
+    ? (latestBydmateSoc ?? 64)
+    : liveActive?.currentPercent ??
+      activeSession?.current_percent ??
+      latestBydmateSoc ??
+      latestSession?.current_percent ??
+      Number(startPct);
 
   const packCapacityKwh = selectedCar?.battery_capacity_kwh;
   const availableKwh = availableBatteryKwh(packCapacityKwh, currentPercent);
@@ -488,15 +678,12 @@ export function DashboardView() {
     fmt,
   );
 
-  useEffect(() => {
-    setRingDisplay("percent");
-  }, [selectedCar?.id]);
-
   const rangeEstimate = useVehicleRangeEstimate({
-    baseSnapshot: baseBydmateSnapshot,
+    baseSnapshot: forceDevParkMode ? latestBydmateSnapshot : baseBydmateSnapshot,
     scopedVehicleId,
     batteryCapacityKwh: selectedCar?.battery_capacity_kwh,
     fallbackSoc: currentPercent,
+    recentTripsOverride: forceDevParkMode ? [] : undefined,
   });
   const rangeDetail =
     rangeEstimate?.estimatedRangeKm != null
@@ -525,6 +712,59 @@ export function DashboardView() {
           }) as string;
         })()
       : null;
+
+  const parkEstimate = useMemo(() => {
+    const capacityKwh =
+      typeof packCapacityKwh === "number" && Number.isFinite(packCapacityKwh) && packCapacityKwh > 0
+        ? packCapacityKwh
+        : null;
+    const soc =
+      typeof currentPercent === "number" && Number.isFinite(currentPercent)
+        ? Math.min(100, Math.max(0, currentPercent))
+        : null;
+    const powerKw = parseDecimalInput(estimatePowerKw);
+    if (capacityKwh == null || soc == null || powerKw == null || powerKw <= 0) {
+      return null;
+    }
+
+    const pricePerKwh = resolveTariffPrice(
+      estimateTariffType,
+      {
+        default_price_per_kwh: defaultPrice,
+        home_price_per_kwh: homePricePerKwh,
+        commercial_ac_price_per_kwh: commercialAcPricePerKwh,
+        fast_dc_price_per_kwh: fastDcPricePerKwh,
+      },
+      estimateProviderType,
+    );
+    const packEnergyKwh = energyNeededKwh(capacityKwh, soc, 100);
+    const gridEnergyKwh = energyFromGridKwh(
+      packEnergyKwh,
+      selectedCar?.default_efficiency_percent ?? 90,
+    );
+    const durationSeconds = chargingHoursFromEnergy(gridEnergyKwh, powerKw) * 3600;
+    const cost = costFromGridEnergy(gridEnergyKwh, pricePerKwh);
+
+    return {
+      cost,
+      durationSeconds,
+      gridEnergyKwh,
+      pricePerKwh,
+    };
+  }, [
+    commercialAcPricePerKwh,
+    currentPercent,
+    defaultPrice,
+    estimatePowerKw,
+    estimateProviderType,
+    estimateTariffType,
+    fastDcPricePerKwh,
+    homePricePerKwh,
+    packCapacityKwh,
+    selectedCar?.default_efficiency_percent,
+  ]);
+
+  const showParkEstimate = vehicleMode === "parked" && !activeSession;
 
   const drivingStats =
     vehicleMode === "driving"
@@ -757,6 +997,19 @@ export function DashboardView() {
                           accent: "green",
                         },
                       ]}
+                    />
+                  ) : showParkEstimate ? (
+                    <ParkChargeEstimatePanel
+                      currency={currency}
+                      estimatePowerKw={estimatePowerKw}
+                      estimateProviderType={estimateProviderType}
+                      estimateTariffType={estimateTariffType}
+                      locale={locale}
+                      parkEstimate={parkEstimate}
+                      setEstimatePowerKw={setEstimatePowerKw}
+                      setEstimateProviderType={setEstimateProviderType}
+                      setEstimateTariffType={setEstimateTariffType}
+                      t={(key, values) => String(t(key, values))}
                     />
                   ) : (
                     <div
