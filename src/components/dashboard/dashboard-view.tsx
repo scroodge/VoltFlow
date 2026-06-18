@@ -103,6 +103,57 @@ function defaultEstimatePowerKw(type: ChargingTariffType) {
   return 4.4;
 }
 
+function cappedPositivePowerKw(powerKw: number, capKw: number) {
+  return Math.max(1, Math.min(powerKw, capKw));
+}
+
+function chargingSecondsToFull({
+  batteryCapacityKwh,
+  currentPercent,
+  efficiencyPercent,
+  powerKw,
+  tariffType,
+}: {
+  batteryCapacityKwh: number;
+  currentPercent: number;
+  efficiencyPercent: number;
+  powerKw: number;
+  tariffType: ChargingTariffType;
+}) {
+  if (tariffType !== "fast_dc") {
+    return (
+      chargingHoursFromEnergy(
+        energyFromGridKwh(
+          energyNeededKwh(batteryCapacityKwh, currentPercent, 100),
+          efficiencyPercent,
+        ),
+        powerKw,
+      ) * 3600
+    );
+  }
+
+  const bands = [
+    { toPercent: 70, powerKw },
+    { toPercent: 90, powerKw: cappedPositivePowerKw(powerKw, 45) },
+    { toPercent: 95, powerKw: cappedPositivePowerKw(powerKw, 25) },
+    { toPercent: 100, powerKw: cappedPositivePowerKw(powerKw, 15) },
+  ];
+
+  let fromPercent = currentPercent;
+  let seconds = 0;
+  for (const band of bands) {
+    if (fromPercent >= band.toPercent) continue;
+    const toPercent = Math.min(100, band.toPercent);
+    const segmentEnergyKwh = energyFromGridKwh(
+      energyNeededKwh(batteryCapacityKwh, fromPercent, toPercent),
+      efficiencyPercent,
+    );
+    seconds += chargingHoursFromEnergy(segmentEnergyKwh, band.powerKw) * 3600;
+    fromPercent = toPercent;
+  }
+  return seconds;
+}
+
 function liveStartPercent(snapshot: BydmateLiveSnapshotRow | null | undefined) {
   const soc = snapshotSoc(snapshot);
   if (soc == null || soc >= 100) return null;
@@ -344,11 +395,10 @@ function ParkChargeEstimatePanel({
     ? formatCurrencyAmount(currency, parkEstimate.cost, locale)
     : "—";
   const detailText = parkEstimate
-    ? `${fmt(parkEstimate.gridEnergyKwh, 1)} kWh · ${formatCurrencyAmount(
-        currency,
-        parkEstimate.pricePerKwh,
-        locale,
-      )}/kWh`
+    ? `${t("dashboard.estimateDetailCompact", {
+        energy: fmt(parkEstimate.gridEnergyKwh, 1),
+        price: formatCurrencyAmount(currency, parkEstimate.pricePerKwh, locale),
+      })}${estimateTariffType === "fast_dc" ? ` · ${t("dashboard.estimateDcTaper")}` : ""}`
     : t("dashboard.estimateUnavailable");
 
   return (
@@ -742,7 +792,13 @@ export function DashboardView() {
       packEnergyKwh,
       selectedCar?.default_efficiency_percent ?? 90,
     );
-    const durationSeconds = chargingHoursFromEnergy(gridEnergyKwh, powerKw) * 3600;
+    const durationSeconds = chargingSecondsToFull({
+      batteryCapacityKwh: capacityKwh,
+      currentPercent: soc,
+      efficiencyPercent: selectedCar?.default_efficiency_percent ?? 90,
+      powerKw,
+      tariffType: estimateTariffType,
+    });
     const cost = costFromGridEnergy(gridEnergyKwh, pricePerKwh);
 
     return {
