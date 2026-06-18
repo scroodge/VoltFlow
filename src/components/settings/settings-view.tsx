@@ -17,7 +17,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { deleteCar } from "@/actions/cars";
@@ -135,6 +135,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   const [linkCountdownSec, setLinkCountdownSec] = useState<number | null>(null);
   const [linkCreating, setLinkCreating] = useState(false);
   const [cloudAdvancedOpen, setCloudAdvancedOpen] = useState(false);
+  const newLocationNameInputRef = useRef<HTMLInputElement>(null);
   const defaultPricePerKwh = useAppPreferences((s) => s.defaultPricePerKwh);
   const homePricePerKwh = useAppPreferences((s) => s.homePricePerKwh);
   const commercialAcPricePerKwh = useAppPreferences((s) => s.commercialAcPricePerKwh);
@@ -146,6 +147,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   const setLocale = useAppPreferences((s) => s.setLocale);
   const [tariffLocations, setTariffLocations] = useState<ChargingTariffLocationRow[]>([]);
   const [newLocationName, setNewLocationName] = useState("");
+  const [newLocationNameError, setNewLocationNameError] = useState(false);
   const [newLocationLat, setNewLocationLat] = useState("");
   const [newLocationLng, setNewLocationLng] = useState("");
   const [newLocationAutoGps, setNewLocationAutoGps] = useState(true);
@@ -390,6 +392,12 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   };
 
   const handleAddTariffLocation = () => {
+    if (!newLocationName.trim()) {
+      setNewLocationNameError(true);
+      newLocationNameInputRef.current?.focus();
+      toast.error(t("settings.locationTariffs.nameRequired") as string);
+      return;
+    }
     if (!profileUserId) {
       toast.error(t("settings.locationTariffs.signInRequired") as string);
       return;
@@ -398,10 +406,6 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
     const lng = parseDecimalInput(newLocationLng);
     const radiusM = parseDecimalInput(newLocationRadius);
     const override = parseDecimalInput(newLocationOverridePrice);
-    if (!newLocationName.trim()) {
-      toast.error(t("settings.locationTariffs.nameRequired") as string);
-      return;
-    }
     if (
       !Number.isFinite(lat) ||
       !Number.isFinite(lng) ||
@@ -437,6 +441,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
           [mapped, ...prev.filter((item) => item.id !== mapped.id)],
         );
         setNewLocationName("");
+        setNewLocationNameError(false);
         setNewLocationOverridePrice("");
         toast.success(t("settings.locationTariffs.saved") as string);
       });
@@ -1013,12 +1018,32 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
               {t("settings.locationTariffs.title") as string}
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Input
-                placeholder={t("settings.locationTariffs.namePlaceholder") as string}
-                value={newLocationName}
-                onChange={(event) => setNewLocationName(event.target.value)}
-                className="h-11 rounded-2xl text-sm"
-              />
+              <div className="space-y-1">
+                <Input
+                  ref={newLocationNameInputRef}
+                  placeholder={t("settings.locationTariffs.namePlaceholder") as string}
+                  value={newLocationName}
+                  onChange={(event) => {
+                    setNewLocationName(event.target.value);
+                    if (event.target.value.trim()) {
+                      setNewLocationNameError(false);
+                    }
+                  }}
+                  aria-invalid={newLocationNameError}
+                  aria-describedby={
+                    newLocationNameError ? "tariff-location-name-error" : undefined
+                  }
+                  className="h-11 rounded-2xl text-sm"
+                />
+                {newLocationNameError ? (
+                  <p
+                    id="tariff-location-name-error"
+                    className="px-1 text-xs font-medium text-destructive"
+                  >
+                    {t("settings.locationTariffs.nameRequired") as string}
+                  </p>
+                ) : null}
+              </div>
               <Button
                 type="button"
                 variant="outline"
