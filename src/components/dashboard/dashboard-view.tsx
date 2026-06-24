@@ -824,7 +824,7 @@ export function DashboardView() {
     selectedCar?.default_efficiency_percent,
   ]);
 
-  const showParkEstimate = vehicleMode === "parked" && !activeSession;
+  const showParkEstimate = (vehicleMode === "parked" || vehicleMode === "stale") && !activeSession;
 
   const drivingStats =
     vehicleMode === "driving"
