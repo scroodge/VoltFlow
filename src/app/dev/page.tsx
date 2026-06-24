@@ -34,6 +34,7 @@ const appRoutes: DevRoute[] = [
   route("Cockpit", "/dashboard", Gauge),
   route("Charging", "/charging", Zap),
   route("Vehicle", "/vehicle", CarFront),
+  route("Service", "/service", Wrench),
   route("History", "/history", LayoutDashboard),
   route("Settings", "/settings", Settings),
   route("New car", "/cars/new", CarFront),
