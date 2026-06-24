@@ -14,10 +14,11 @@ Region `eu-west-1`, userbase dozens–hundreds.
 | 1 | Session poll tiered: 60s / 5s / 1s by SOC | `charging-session-background-sync.tsx` | up to ~60× egress on worst offender | ✅ done |
 | 2 | Gate reconcile to auto-session start/stop | `api/bydmate/telemetry/route.ts` | big CPU + egress | ✅ done |
 | 3 | APK: charging-bulk flush interval | Android app (not this repo) | ~4× CPU on charging phase | ⬜ todo (smaller than first thought) |
-| 4 | Trim `raw_payload` from verify re-read | `api/bydmate/telemetry/route.ts` | server↔DB egress | ⬜ todo |
+| 4 | Trim `raw_payload` from verify re-read | `api/bydmate/telemetry/route.ts` | server↔DB egress | ✅ done |
 | 5 | Retention prune cron for telemetry samples | new migration + cron | DB size + backup egress | ⬜ todo |
 
-Item 3 is by far the largest lever. Items 1–2 are shipped; 4–5 are quick follow-ups.
+Status (2026-06-24): items 1, 2, 4 ✅ done; items 3 (APK) and 5 (prune cron) ⬜ open.
+Test suite green (47/47, `npm run test`). Master plan: `docs/EGRESS_CPU_MASTER_PLAN.md`.
 
 ---
 
@@ -92,7 +93,15 @@ plug-in, auto-stops cleanly, charts API still resolves samples, live status stay
 
 ---
 
-## ⬜ 4 — Trim `raw_payload` from the verify re-read
+## ✅ 4 — Trim `raw_payload` from the verify re-read (done)
+
+**Done:** dropped `raw_payload` from the post-ingest verify `select` and removed the
+`rawPayloadDiplus` helper + the "raw payload diplus missing" branch in
+`persistenceError`. The `diplus` column check still proves persistence. Stops re-reading
+the full echoed blob on every ingest request (the largest column in that read).
+tsc + lint clean; auto-session (4/4) and sanitizer (6/6) tests pass.
+
+Original notes:
 
 `src/app/api/bydmate/telemetry/route.ts` (~line 256). After ingest, the route re-reads
 the persisted row selecting:

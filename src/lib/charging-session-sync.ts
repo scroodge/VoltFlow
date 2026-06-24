@@ -6,13 +6,13 @@ import {
   deriveChargingState,
   type ChargingParams,
   type DerivedChargingState,
-} from "@/lib/charging-math";
+} from "./charging-math.ts";
 import {
   deriveLiveChargingState,
   findFreshChargingSnapshot,
   findFreshSocSnapshot,
-} from "@/lib/charging-live";
-import type { BydmateLiveSnapshotRow, ChargingSessionRow } from "@/types/database";
+} from "./charging-live.ts";
+import type { BydmateLiveSnapshotRow, ChargingSessionRow } from "../types/database.ts";
 
 export function chargingParamsFromSession(row: ChargingSessionRow): ChargingParams {
   return {

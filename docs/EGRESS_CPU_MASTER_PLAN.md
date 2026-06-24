@@ -21,7 +21,7 @@ Fix the read path for egress; fix invocation count + per-request work for CPU.
 |---|------|------|---------|--------|--------|
 | A | VoltFlow | Tiered web session poll (60/5/1 s by SOC) | egress | ~high | ✅ done |
 | B | VoltFlow | Gate reconcile to auto-session start/stop | CPU + egress | high | ✅ done |
-| C | VoltFlow | Trim `raw_payload` from verify re-read | **egress (biggest left)** | high | ⬜ |
+| C | VoltFlow | Trim `raw_payload` from verify re-read | **egress (biggest left)** | high | ✅ done |
 | D | VoltFlow | Retention prune cron (pg_cron) | DB size + backup egress | med | ⬜ |
 | E | APK | Charging-bulk flush interval (~60 s) | CPU (charging phase) | ~4× that phase | ⬜ |
 | — | both | Re-measure + spend/usage alerts | — | gate | ⬜ |
@@ -30,6 +30,17 @@ Fix the read path for egress; fix invocation count + per-request work for CPU.
 Rationale for order: C is the largest remaining egress lever and a small server edit;
 D is cheap and bounds growth; E is the only remaining APK lever (smaller, needs a
 Gradle build/test cycle); F only if A–E don't suffice.
+
+### Current status (2026-06-24)
+
+- **A, B, C done.** A (+ the `useBydmateTelemetryPointsQuery` dead-code removal) was
+  committed by the user as `af51ae9` "unify session polling logic and remove dead code".
+- **Test suite green: 47/47** (`npm run test`). Along the way, fixed a pre-existing
+  break: `charging-session-sync.ts` / `charging-live.ts` used `@/` path aliases that the
+  Node test runner can't resolve — converted to relative `.ts` imports.
+- **Uncommitted working-tree changes:** `src/app/api/bydmate/telemetry/route.ts` (C),
+  `src/lib/charging-session-sync.ts`, `src/lib/charging-live.ts` (test fix).
+- **Next:** D (prune cron), then E (APK), then re-measure + alerts.
 
 ---
 
@@ -50,7 +61,7 @@ through the one helper.
 `src/app/api/bydmate/telemetry/route.ts`. Reconcile (reads sessions + samples back)
 now runs only when an auto session opened/closed; session-list load still reconciles.
 
-### ⬜ C — Trim `raw_payload` from the verify re-read  ← do first
+### ✅ C — Trim `raw_payload` from the verify re-read (done)
 `src/app/api/bydmate/telemetry/route.ts` (~line 256). After ingest the route re-reads
 the persisted row selecting `raw_payload` (the whole echoed blob) just for a sanity
 check — at the per-request rate this is the **largest remaining Supabase egress**.

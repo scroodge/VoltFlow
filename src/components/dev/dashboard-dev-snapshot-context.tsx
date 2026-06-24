@@ -20,7 +20,7 @@ import {
 import { getDevPathPrefix } from "@/lib/dev/dev-path";
 import type { BydmateLiveSnapshotRow } from "@/types/database";
 
-export type DashboardDevSnapshotMode = "live" | "park" | "charge";
+export type DashboardDevSnapshotMode = "live" | "park" | "charge" | "nodata";
 
 type DashboardDevSnapshotContextValue = {
   mode: DashboardDevSnapshotMode;
@@ -34,7 +34,9 @@ const DashboardDevSnapshotContext = createContext<DashboardDevSnapshotContextVal
 
 function parseDevMode(value: string | null): DashboardDevSnapshotMode {
   if (value === "park") return "park";
-  return value === "charge" ? "charge" : "live";
+  if (value === "charge") return "charge";
+  if (value === "nodata") return "nodata";
+  return "live";
 }
 
 function useDevAppRouteFromPath() {
@@ -71,7 +73,7 @@ export function DashboardDevSnapshotProvider({ children }: { children: ReactNode
           },
         };
       }
-      if (mode === "park") return buildParkedSnapshot(seed);
+      if (mode === "park" || mode === "nodata") return buildParkedSnapshot(seed);
       return buildDrivingSnapshot(seed);
     },
     [devRoute, mode],

@@ -21,7 +21,6 @@ type PersistedTelemetryRow = {
   received_at: string;
   device_time: string;
   diplus: unknown;
-  raw_payload: unknown;
   diplus_min_cell_voltage_v: unknown;
   diplus_max_cell_voltage_v: unknown;
   diplus_cell_delta_v: unknown;
@@ -101,14 +100,6 @@ function persistedTelemetry(row: PersistedTelemetryRow): PersistedTelemetryRespo
   };
 }
 
-function rawPayloadDiplus(row: PersistedTelemetryRow) {
-  if (!row.raw_payload || typeof row.raw_payload !== "object" || Array.isArray(row.raw_payload)) {
-    return null;
-  }
-
-  return "diplus" in row.raw_payload ? row.raw_payload.diplus : null;
-}
-
 function persistenceError(
   sample: TelemetryPayload,
   persisted: PersistedTelemetryResponse | null,
@@ -116,12 +107,11 @@ function persistenceError(
 ) {
   if (!persisted || !persistedRow) return "telemetry missing after persist";
 
+  // The `diplus` column check below already proves the sample persisted; we no
+  // longer re-read the full `raw_payload` blob just to re-check its diplus (that
+  // re-read was a large per-request Supabase egress cost).
   if (isNonEmptyRecord(sample.diplus) && !isNonEmptyRecord(persisted.diplus)) {
     return "diplus missing after persist";
-  }
-
-  if (isNonEmptyRecord(sample.diplus) && !isNonEmptyRecord(rawPayloadDiplus(persistedRow))) {
-    return "raw payload diplus missing after persist";
   }
 
   const expected = expectedCellVoltage(sample);
@@ -257,7 +247,7 @@ export async function POST(request: Request) {
       ? await supabase
           .from("bydmate_live_snapshots")
           .select(
-            "vehicle_id, received_at, device_time, diplus, raw_payload, diplus_min_cell_voltage_v, diplus_max_cell_voltage_v, diplus_cell_delta_v",
+            "vehicle_id, received_at, device_time, diplus, diplus_min_cell_voltage_v, diplus_max_cell_voltage_v, diplus_cell_delta_v",
           )
           .eq("user_id", profile.id)
           .eq("vehicle_id", lastSample.vehicle_id)

@@ -13,6 +13,7 @@ const MODES: { id: DashboardDevSnapshotMode; label: string }[] = [
   { id: "live", label: "Live" },
   { id: "park", label: "Park" },
   { id: "charge", label: "Charge" },
+  { id: "nodata", label: "No Data" },
 ];
 
 export function DashboardDevToolbar() {
@@ -37,6 +38,8 @@ export function DashboardDevToolbar() {
                   ? "bg-cyan-300/15 text-cyan-100"
                   : item.id === "park"
                     ? "bg-emerald-300/15 text-emerald-100"
+                  : item.id === "nodata"
+                    ? "bg-rose-300/15 text-rose-100"
                   : "bg-primary/15 text-primary"
                 : "text-muted-foreground hover:bg-white/[0.06] hover:text-foreground")
             }

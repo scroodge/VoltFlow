@@ -5,8 +5,8 @@ import {
   energyNeededKwh,
   type ChargingParams,
   type DerivedChargingState,
-} from "@/lib/charging-math";
-import type { BydmateLiveSnapshotRow } from "@/types/database";
+} from "./charging-math.ts";
+import type { BydmateLiveSnapshotRow } from "../types/database.ts";
 
 export const LIVE_CHARGING_STALE_MS = 90_000;
 /** Speed above this (km/h) treats the vehicle as driving, not finishing a charge. */
