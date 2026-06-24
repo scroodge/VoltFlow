@@ -60,7 +60,7 @@ export function deriveDashboardVehicleMode({
   hasActiveSession: boolean;
   staleMs?: number;
 }): DashboardVehicleMode {
-  if (!snapshot) return hasActiveSession ? "app_charging" : "stale";
+  if (!snapshot) return hasActiveSession ? "app_charging" : "parked";
 
   const fresh = isFreshLiveSnapshot(snapshot, nowMs, staleMs);
   if (fresh && isDriveTelemetry(snapshot)) return "driving";

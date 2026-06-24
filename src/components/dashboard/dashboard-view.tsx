@@ -277,7 +277,7 @@ function liveVehicleSummaryTitle(
   t: (key: TranslationKey, params?: Record<string, string | number>) => string,
   formatNumber: (value: number | null | undefined, digits?: number) => string,
 ) {
-  if (!snapshot) return t("dashboard.noLiveData");
+  if (!snapshot) return t("dashboard.liveVehicleSpeed", { speed: "0" });
 
   const telemetry = snapshot.telemetry;
   if (mode === "app_charging" || mode === "live_charging") {
@@ -1186,7 +1186,7 @@ export function DashboardView() {
               body={
                 latestBydmateSnapshot
                   ? formatClockRange(latestBydmateSnapshot.device_time, null, locale)
-                  : (t("dashboard.openVehicle") as string)
+                  : "—"
               }
               meta={
                 latestBydmateSnapshot
@@ -1194,7 +1194,7 @@ export function DashboardView() {
                       latestBydmateSnapshot.telemetry.power_kw,
                       1,
                     )} kW`
-                  : undefined
+                  : "0 km/h · 0.0 kW"
               }
             />
           </section>
