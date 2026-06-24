@@ -36,9 +36,15 @@ Gradle build/test cycle); F only if A–E don't suffice.
 ## VoltFlow (server — `EvAcChargeTimer`)
 
 ### ✅ A — Tiered web session poll (done)
-`src/components/charging/charging-session-background-sync.tsx`. `< 95%` → 60 s,
-`95–98%` → 5 s, `≥ 98%` → 1 s; not charging → no poll. Removes the dominant egress
-source (a `select("*") limit(100)` hit once/sec/charging user).
+Shared helper `chargingSessionsRefetchInterval` (`src/hooks/use-sessions-query.ts`)
+used by all three `queryKeys.sessions` observers: background-sync, dashboard-view,
+charging-hub-view. `< 95%` → 60 s, `95–98%` → 5 s, `≥ 98%` → 1 s; not charging/visible
+→ no poll. Removes the dominant egress source (`select("*") limit(100)` per charging
+user).
+**Verification caught a defect:** the dashboard kept a separate flat 1 s poll on the
+same shared query; since TanStack refetches at the *shortest* observer interval, it
+overrode the tiering whenever the home screen was open. Fixed by routing all three
+through the one helper.
 
 ### ✅ B — Reconcile gated to auto-session start/stop (done)
 `src/app/api/bydmate/telemetry/route.ts`. Reconcile (reads sessions + samples back)
@@ -97,6 +103,25 @@ After C–E land:
 **Decision:** both metrics comfortably under quota → done, no migration. Still over →
 proceed to `HOSTING_MIGRATION.md` (Phase 1 self-host full Supabase on Hetzner, or
 Phase 2 managed-Postgres split).
+
+## Verification findings (architecture audit)
+
+- **APK posts to the Vercel route**, not the Supabase edge fn
+  (`DEFAULT_CLOUD_SYNC_URL = https://volt-flow-beige.vercel.app/api/bydmate/telemetry`)
+  — so APK ingest does drive Vercel CPU. Edge fn (`supabase/functions/bydmate-telemetry`)
+  is unused by the live APK.
+- **Item C confirmed safe:** route `raw_payload` is used only by the verify check
+  (`rawPayloadDiplus`→`persistenceError`) + the write at the ingest RPC; nothing else.
+- **Item D confirmed:** `public.bydmate_prune_telemetry_samples(p_keep_days default 30)`
+  exists (migration `20260617120000`) — only needs scheduling.
+- **Auto-start rule confirmed:** server tracks `consecutive_charging_samples` from
+  `charge_power_kw` (`src/lib/bydmate/charging-auto-session.ts`).
+- **Dead code:** `useBydmateTelemetryPointsQuery` (`select("*") limit(2000)` from
+  `bydmate_telemetry_points`, ungated 15 s poll) has **no callers** — not a live egress
+  source, but delete it so it can't be wired up later by accident.
+- Other live pollers are reasonable: charging-session samples via
+  `/api/vehicle/charging-sessions/[id]/samples` (15 s, only while session screen open),
+  trips (15 s, page-visible-gated), live snapshot (60 s + Realtime). Leave as-is.
 
 ## Sequencing notes
 

@@ -23,9 +23,19 @@ Item 3 is by far the largest lever. Items 1–2 are shipped; 4–5 are quick fol
 
 ## ✅ 1 — Session poll tiered by SOC: 60 s / 5 s / 1 s (done)
 
-`src/components/charging/charging-session-background-sync.tsx`. The poll fetched
-`charging_sessions` with `select("*") limit(100)` directly from Supabase once per
-second per charging user — the dominant egress source. Now tiered on the max
+Shared helper `chargingSessionsRefetchInterval` in `src/hooks/use-sessions-query.ts`,
+used by **all three** observers of `queryKeys.sessions`:
+`charging-session-background-sync.tsx`, `dashboard/dashboard-view.tsx`, and
+`charging/charging-hub-view.tsx`.
+
+> **Gotcha that made the first attempt ineffective:** TanStack Query refetches a
+> shared query at the *shortest* refetchInterval among mounted observers. The
+> dashboard (home screen) kept a flat 1 s poll, so it silently overrode the tiering
+> whenever it was on screen. All observers now call the one helper so they can't
+> diverge again. The hub was a flat 5 s with no visibility gate — also unified.
+
+The poll fetched `charging_sessions` with `select("*") limit(100)` directly from
+Supabase per charging user — the dominant egress source. Tiered on the max
 `current_percent` of the charging sessions:
 
 - **`< 95%` → 60 s** — long flat phase (hours); coarse refresh is fine.

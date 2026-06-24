@@ -41,7 +41,7 @@ import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useLatestBydmateTripsQuery } from "@/hooks/use-bydmate-trips-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { usePageVisible } from "@/hooks/use-page-visible";
-import { fetchSessions } from "@/hooks/use-sessions-query";
+import { chargingSessionsRefetchInterval, fetchSessions } from "@/hooks/use-sessions-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
 import {
@@ -564,11 +564,14 @@ export function DashboardView() {
   const { data: sessions, isLoading: loadingSessions } = useQuery({
     queryKey: queryKeys.sessions,
     queryFn: fetchSessions,
-    refetchInterval: (query) => {
-      if (!pageVisible) return false;
-      const list = query.state.data as ChargingSessionRow[] | undefined;
-      return list?.some((s) => s.status === "charging") ? 1000 : false;
-    },
+    // Shared cadence — see chargingSessionsRefetchInterval. Was a flat 1s while
+    // charging, which (via shortest-interval-wins on the shared queryKeys.sessions)
+    // silently overrode the tiered background-sync poll whenever this screen mounted.
+    refetchInterval: (query) =>
+      chargingSessionsRefetchInterval(
+        query.state.data as ChargingSessionRow[] | undefined,
+        pageVisible,
+      ),
   });
 
   const selectedCar =

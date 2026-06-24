@@ -12,7 +12,8 @@ import { ChargingSessionScreen } from "@/components/charging/charging-session-sc
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useTranslation } from "@/hooks/use-translation";
-import { fetchSessions } from "@/hooks/use-sessions-query";
+import { usePageVisible } from "@/hooks/use-page-visible";
+import { chargingSessionsRefetchInterval, fetchSessions } from "@/hooks/use-sessions-query";
 import {
   deriveDashboardVehicleMode,
   resolveLiveSnapshotForVehicle,
@@ -44,10 +45,17 @@ export function ChargingHubView() {
   const router = useRouter();
   const appPath = useAppPath();
   const { locale, t } = useTranslation();
+  const pageVisible = usePageVisible();
   const { data: sessions, isLoading } = useQuery({
     queryKey: queryKeys.sessions,
     queryFn: fetchSessions,
-    refetchInterval: 5000,
+    // Shared cadence — see chargingSessionsRefetchInterval. Was a flat 5s; now
+    // tiered + visibility-gated so all queryKeys.sessions observers agree.
+    refetchInterval: (query) =>
+      chargingSessionsRefetchInterval(
+        query.state.data as ChargingSessionRow[] | undefined,
+        pageVisible,
+      ),
   });
   const { data: liveRows = [] } = useBydmateLiveQuery();
   const { data: carsResult } = useCarsQuery();
