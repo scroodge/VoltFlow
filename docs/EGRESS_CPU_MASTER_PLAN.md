@@ -22,7 +22,7 @@ Fix the read path for egress; fix invocation count + per-request work for CPU.
 | A | VoltFlow | Tiered web session poll (60/5/1 s by SOC) | egress | ~high | ✅ done |
 | B | VoltFlow | Gate reconcile to auto-session start/stop | CPU + egress | high | ✅ done |
 | C | VoltFlow | Trim `raw_payload` from verify re-read | **egress (biggest left)** | high | ✅ done |
-| D | VoltFlow | Retention prune cron (pg_cron) | DB size + backup egress | med | ⬜ |
+| D | VoltFlow | Enable pg_cron + register tiered purge | DB size + backup egress | med | ✅ done (cron live; was never registered before) |
 | E | APK | Charging-bulk flush interval (~60 s) | CPU (charging phase) | ~4× that phase | ✅ done |
 | — | both | Re-measure + spend/usage alerts | — | gate | ⬜ |
 | F | fallback | Self-host migration | both caps | escape hatch | deferred |
@@ -40,11 +40,19 @@ Gradle build/test cycle); F only if A–E don't suffice.
   Node test runner can't resolve — converted to relative `.ts` imports.
 - **Uncommitted working-tree changes:** `src/app/api/bydmate/telemetry/route.ts` (C),
   `src/lib/charging-session-sync.ts`, `src/lib/charging-live.ts` (test fix).
-- **E done** (APK, in BYDMate-own working tree): charging-bulk now flushes every 60 s
-  (driving + ≥98% tail stay 15 s). Full debug suite 417/417. Dropped the planned
-  "prompt charging-start flush" — it would reset the batch window and net-delay the
-  first bulk POST; auto-start still fires at ~t+60 s.
-- **Next:** D (prune cron), then re-measure + alerts.
+- **E done & released:** APK charging-bulk 60 s flush (driving + ≥98% tail stay 15 s),
+  debug suite 417/417. Shipped as **v0.4.3 (328)** — committed + tagged `v0.4.3` +
+  GitHub release with `VoltFlow-Mate-v0.4.3.apk` (debug). Supabase `mate_app_releases`
+  publish (in-app update banner) NOT done — needs `tools/publish-mate-release.sh` with
+  service-role creds.
+- **D done:** prod check revealed **no retention cron was ever live** (pg_cron disabled).
+  User enabled pg_cron; migration `20260624130000` applied; `purge-bydmate-telemetry`
+  cron now registered (`0 3 * * *`). Currently 0 rows eligible (all >30 d data is
+  premium-owned, kept 365 d) — verified correct.
+- **All code/infra items A–E + D done.** Migration `20260624130000` is uncommitted in
+  the EvAcChargeTimer working tree (with C + the test fix).
+- **Remaining (user-side):** re-measure Vercel CPU + Supabase egress over a few days,
+  and turn on Vercel Spend Management + a Supabase usage alert.
 
 ---
 
@@ -75,11 +83,41 @@ check — at the per-request rate this is the **largest remaining Supabase egres
 - **Acceptance:** normal charge returns `ok: true`; a simulated broken persist still
   errors. `npm run test` + `charging-auto-session.test.mjs` pass.
 
-### ⬜ D — Retention prune cron
-Schedule the existing telemetry-sample prune (see
-`memory/telemetry-samples-size-reduction.md`) via **pg_cron** (stays in-DB, no egress)
-in a *new* migration; apply with `npm run db:migrations:up`.
-- **Acceptance:** old-sample count trends to ~0 on schedule; charts/trips unaffected.
+### ✅ D — Retention purge cron (done 2026-06-24)
+
+**Resolved:** user enabled pg_cron (1.6.4) via Dashboard; migration `20260624130000`
+applied. `cron.job` now has `purge-bydmate-telemetry` — `0 3 * * *`, active, running
+`select public.purge_old_bydmate_telemetry_by_tier()`. Verified the tiered logic against
+prod: of 373,380 samples (338 MB, 7 users, 3 premium), 10,099 are >30 d old and **all
+belong to premium users** (kept 365 d), so `samples_to_purge = 0` right now — correct.
+The job will purge non-premium data past 30 d and premium past 365 d as it ages. No
+manual delete run (let the 03:00 UTC job handle any future backlog at low traffic).
+
+Original analysis below.
+
+
+**Verification finding (important):** a tiered retention purge *function* already
+exists — `purge_old_bydmate_telemetry_by_tier()` (migrations 20260617133000 /
+20260617135500): deletes `bydmate_telemetry_samples` + `bydmate_trip_track_points`
+older than **365 d (premium) / 30 d (non-premium)**, hourly rollup > 3 y. Migrations
+20260530120000 / 20260617133000 also contain the `cron.schedule(...)` call — **but
+guarded by `if pg_cron exists` with errors swallowed.** Prod check
+(`select … pg_extension where extname='pg_cron'` → empty; `cron.job` missing) confirms
+**pg_cron was never enabled, so the `purge-bydmate-telemetry` job was never registered —
+there is currently NO automated retention.** The 509→258 MB drop was a one-time manual
+prune. (My original plan pointed at the wrong helper, `bydmate_prune_telemetry_samples`,
+which is unscheduled and superseded by the tiered purge — do not schedule that.)
+
+**Fix:** migration `20260624130000_enable_pg_cron_schedule_telemetry_purge.sql` enables
+pg_cron and (idempotently) registers the daily 03:00 UTC tiered purge. It is the only
+pending migration.
+
+**Plan:** user enables pg_cron in Supabase Dashboard (Database → Extensions) first
+(create-extension via pooler may lack permission), then apply with
+`npm run db:migrations:up -- --db-url-from-pooler --password-env=SUPABASE_POSTGRESS_PASSWORD`.
+- **Acceptance:** `select jobname, schedule from cron.job` shows `purge-bydmate-telemetry`
+  at `0 3 * * *`; a manual `select public.purge_old_bydmate_telemetry_by_tier();` returns
+  deletion counts; charts/trips unaffected (purge respects 30/365 d windows + rollup).
 
 ---
 
