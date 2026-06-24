@@ -131,6 +131,14 @@ export function ServiceRecordForm({
     !totalCost && partsCost && laborCost
       ? Number(partsCost) + Number(laborCost)
       : null;
+  const categoryOptions = SERVICE_CATEGORIES.map((value) => ({
+    value,
+    label: (t(`service.category.${value}` as TranslationKey) || value) as string,
+  }));
+  const serviceTypeOptions = SERVICE_TYPES.map((value) => ({
+    value,
+    label: (t(`service.type.${value}` as TranslationKey) || value) as string,
+  }));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -171,14 +179,15 @@ export function ServiceRecordForm({
                 <Select
                   value={watch("category")}
                   onValueChange={(v) => v && setValue("category", v)}
+                  items={categoryOptions}
                 >
                   <SelectTrigger className="min-h-11 w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {SERVICE_CATEGORIES.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {t(`service.category.${c}` as TranslationKey) || c}
+                    {categoryOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -189,14 +198,15 @@ export function ServiceRecordForm({
                 <Select
                   value={watch("serviceType")}
                   onValueChange={(v) => v && setValue("serviceType", v)}
+                  items={serviceTypeOptions}
                 >
                   <SelectTrigger className="min-h-11 w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {SERVICE_TYPES.map((st) => (
-                      <SelectItem key={st} value={st}>
-                        {t(`service.type.${st}` as TranslationKey) || st}
+                    {serviceTypeOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
