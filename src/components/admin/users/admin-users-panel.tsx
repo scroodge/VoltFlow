@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -49,15 +49,24 @@ export function AdminUsersPanel() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [refreshTick, setRefreshTick] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [telemetryFilter, setTelemetryFilter] = useState<"none" | "7d" | "30d">("none");
   const [stats, setStats] = useState<{ connectionsToday: number; registeredUsersTotal: number }>({
     connectionsToday: 0,
     registeredUsersTotal: 0,
   });
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("pageSize", "20");
     if (search.trim()) {
       params.set("search", search.trim());
+    }
+    if (telemetryFilter !== "none") {
+      params.set("telemetry", telemetryFilter);
     }
     fetch(`/api/admin/users?${params.toString()}`, { credentials: "include" })
       .then(async (response) => {
@@ -67,12 +76,13 @@ export function AdminUsersPanel() {
             "error" in payload && payload.error ? payload.error : "Failed to load users",
           );
         }
-        setUsers(payload.users ?? []);
+        setUsers((prev) => (page === 1 ? payload.users : [...prev, ...payload.users]));
+        setHasMore(page * payload.pageSize < payload.total);
         setStats(payload.stats ?? { connectionsToday: 0, registeredUsersTotal: 0 });
-        if (payload.users.length > 0 && !payload.users.find((item) => item.id === selectedId)) {
+        if (page === 1 && payload.users.length > 0) {
           setSelectedId(payload.users[0]?.id ?? null);
         }
-        if (payload.users.length === 0) {
+        if (page === 1 && payload.users.length === 0) {
           setSelectedId(null);
         }
       })
@@ -80,7 +90,22 @@ export function AdminUsersPanel() {
         toast.error(error instanceof Error ? error.message : "Failed to load users");
       })
       .finally(() => setLoading(false));
-  }, [search, refreshTick, selectedId]);
+  }, [page, search, telemetryFilter, refreshTick]);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading) {
+          setPage((prev) => prev + 1);
+        }
+      },
+      { threshold: 0.1 },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loading]);
 
   const selectedUser = useMemo(
     () => users.find((item) => item.id === selectedId) ?? null,
@@ -101,12 +126,39 @@ export function AdminUsersPanel() {
           <Input
             value={search}
             onChange={(event) => {
+              setPage(1);
+              setUsers([]);
+              setSelectedId(null);
               setLoading(true);
               setSearch(event.target.value);
             }}
             placeholder="Search by email or user id"
             className="h-10 rounded-xl"
           />
+          <div className="flex gap-2">
+            {(["none", "7d", "30d"] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => {
+                  if (f !== telemetryFilter) {
+                    setTelemetryFilter(f);
+                    setPage(1);
+                    setUsers([]);
+                    setSelectedId(null);
+                    setLoading(true);
+                  }
+                }}
+                className={`rounded-full px-3 py-1 text-xs border transition ${
+                  telemetryFilter === f
+                    ? "border-[var(--voltflow-cyan)] bg-white/10"
+                    : "border-white/10 bg-white/[0.02] hover:bg-white/[0.05]"
+                }`}
+              >
+                {f === "none" ? "All" : `Telemetry ${f}`}
+              </button>
+            ))}
+          </div>
         </CardHeader>
         <CardContent className="space-y-2">
           {loading ? (
@@ -144,6 +196,10 @@ export function AdminUsersPanel() {
               </button>
             ))
           )}
+          {loading && users.length > 0 && (
+            <p className="text-sm text-muted-foreground">Loading more...</p>
+          )}
+          {hasMore && <div ref={sentinelRef} className="h-4" />}
         </CardContent>
       </Card>
       <Card size="sm" className="border-white/10">

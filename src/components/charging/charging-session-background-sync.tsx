@@ -9,7 +9,7 @@ import { useChargingSessionLiveSync } from "@/hooks/use-charging-session-live-sy
 import { useChargingSessionAutoTariff } from "@/hooks/use-charging-session-auto-tariff";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
-import { fetchSessions } from "@/hooks/use-sessions-query";
+import { chargingSessionsRefetchInterval, fetchSessions } from "@/hooks/use-sessions-query";
 import { usePageVisible } from "@/hooks/use-page-visible";
 import { queryKeys } from "@/lib/query-keys";
 import { useAppPreferences } from "@/stores/use-app-preferences";
@@ -32,11 +32,13 @@ export function ChargingSessionBackgroundSync() {
   const { data: sessions } = useQuery({
     queryKey: queryKeys.sessions,
     queryFn: fetchSessions,
-    refetchInterval: (query) => {
-      if (!pageVisible) return false;
-      const list = query.state.data as ChargingSessionRow[] | undefined;
-      return list?.some((s) => s.status === "charging") ? 1000 : false;
-    },
+    // Shared cadence (chargingSessionsRefetchInterval): every observer of
+    // queryKeys.sessions must agree, or the shortest mounted interval wins.
+    refetchInterval: (query) =>
+      chargingSessionsRefetchInterval(
+        query.state.data as ChargingSessionRow[] | undefined,
+        pageVisible,
+      ),
   });
 
   const activeSession = useMemo(

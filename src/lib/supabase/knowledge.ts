@@ -81,6 +81,11 @@ export async function isCurrentUserAdmin() {
   const user = await getCurrentUser();
   if (!user) return false;
 
+  if (process.env.NODE_ENV !== "production" && process.env.DEV_ADMIN_EMAIL) {
+    const emails = process.env.DEV_ADMIN_EMAIL.split(",").map((e) => e.trim().toLowerCase());
+    if (user.email && emails.includes(user.email.toLowerCase())) return true;
+  }
+
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("admin_users")

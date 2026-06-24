@@ -18,6 +18,7 @@ const PUBLIC_METADATA_PATHS = new Set([
 ]);
 const DEV_AUTH_PREFIXES = [
   "/admin",
+  "/api/admin",
   "/cars",
   "/charging",
   "/dashboard",

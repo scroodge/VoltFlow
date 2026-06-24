@@ -312,17 +312,24 @@ export async function POST(request: Request) {
       autoChargingSessions = { started: 0, stopped: 0, sessionIds: [], error: message };
     }
 
+    // Only reconcile when auto-session processing actually opened/closed a row.
+    // Reconcile reads sessions + samples back from Supabase, so running it on
+    // every ~1Hz sample was a large, mostly-redundant CPU + egress cost. The
+    // session-list load path (/api/vehicle/sessions) still reconciles, so any
+    // rows broken while no auto event fired are repaired when the list loads.
     let chargingSessionReconcile = { reconciled: 0, sessionIds: [] as string[] };
-    try {
-      chargingSessionReconcile = await reconcileChargingSessionsForUser({
-        supabase,
-        userId: profile.id,
-        vehicleIds: [headerVehicleId],
-      });
-    } catch (reconcileError) {
-      const message =
-        reconcileError instanceof Error ? reconcileError.message : "Reconcile failed";
-      console.error("charging session reconcile:", message);
+    if (autoChargingSessions.started || autoChargingSessions.stopped) {
+      try {
+        chargingSessionReconcile = await reconcileChargingSessionsForUser({
+          supabase,
+          userId: profile.id,
+          vehicleIds: [headerVehicleId],
+        });
+      } catch (reconcileError) {
+        const message =
+          reconcileError instanceof Error ? reconcileError.message : "Reconcile failed";
+        console.error("charging session reconcile:", message);
+      }
     }
 
     return Response.json({

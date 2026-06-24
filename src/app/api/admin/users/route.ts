@@ -34,15 +34,40 @@ export async function GET(request: NextRequest) {
   const page = Math.max(1, Number.parseInt(params.get("page") ?? "1", 10) || 1);
   const pageSize = clampPageSize(params.get("pageSize"));
   const search = (params.get("search") ?? "").trim().toLowerCase();
+  const telemetry = params.get("telemetry") ?? "";
 
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
+
+  let telemetryUserIds: string[] | undefined;
+  if (telemetry === "7d" || telemetry === "30d") {
+    const days = telemetry === "7d" ? 7 : 30;
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const { data: samples } = await supabaseAdmin
+      .from("bydmate_telemetry_samples")
+      .select("user_id")
+      .gte("device_time", since);
+    telemetryUserIds = [
+      ...new Set((samples ?? []).map((r) => String(r.user_id)).filter(Boolean)),
+    ];
+    if (telemetryUserIds.length === 0) {
+      return NextResponse.json({
+        ok: true,
+        page,
+        pageSize,
+        total: 0,
+        stats: await loadAdminStats(),
+        users: [],
+      });
+    }
+  }
 
   const primary = await runProfilesQuery({
     includePremiumUntil: true,
     from,
     to,
     search,
+    telemetryUserIds,
   });
   const fallback =
     primary.error &&
@@ -124,6 +149,7 @@ async function runProfilesQuery(params: {
   from: number;
   to: number;
   search: string;
+  telemetryUserIds?: string[];
 }) {
   let query = supabaseAdmin
     .from("profiles")
@@ -142,6 +168,10 @@ async function runProfilesQuery(params: {
     } else {
       query = query.ilike("email", `%${params.search}%`);
     }
+  }
+
+  if (params.telemetryUserIds && params.telemetryUserIds.length > 0) {
+    query = query.in("id", params.telemetryUserIds);
   }
 
   return query;
