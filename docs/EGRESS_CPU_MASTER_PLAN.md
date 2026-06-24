@@ -23,7 +23,7 @@ Fix the read path for egress; fix invocation count + per-request work for CPU.
 | B | VoltFlow | Gate reconcile to auto-session start/stop | CPU + egress | high | ✅ done |
 | C | VoltFlow | Trim `raw_payload` from verify re-read | **egress (biggest left)** | high | ✅ done |
 | D | VoltFlow | Retention prune cron (pg_cron) | DB size + backup egress | med | ⬜ |
-| E | APK | Charging-bulk flush interval (~60 s) | CPU (charging phase) | ~4× that phase | ⬜ |
+| E | APK | Charging-bulk flush interval (~60 s) | CPU (charging phase) | ~4× that phase | ✅ done |
 | — | both | Re-measure + spend/usage alerts | — | gate | ⬜ |
 | F | fallback | Self-host migration | both caps | escape hatch | deferred |
 
@@ -40,7 +40,11 @@ Gradle build/test cycle); F only if A–E don't suffice.
   Node test runner can't resolve — converted to relative `.ts` imports.
 - **Uncommitted working-tree changes:** `src/app/api/bydmate/telemetry/route.ts` (C),
   `src/lib/charging-session-sync.ts`, `src/lib/charging-live.ts` (test fix).
-- **Next:** D (prune cron), then E (APK), then re-measure + alerts.
+- **E done** (APK, in BYDMate-own working tree): charging-bulk now flushes every 60 s
+  (driving + ≥98% tail stay 15 s). Full debug suite 417/417. Dropped the planned
+  "prompt charging-start flush" — it would reset the batch window and net-delay the
+  first bulk POST; auto-start still fires at ~t+60 s.
+- **Next:** D (prune cron), then re-measure + alerts.
 
 ---
 

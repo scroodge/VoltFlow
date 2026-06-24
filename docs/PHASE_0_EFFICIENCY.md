@@ -13,12 +13,12 @@ Region `eu-west-1`, userbase dozens–hundreds.
 |---|------|-------|--------|--------|
 | 1 | Session poll tiered: 60s / 5s / 1s by SOC | `charging-session-background-sync.tsx` | up to ~60× egress on worst offender | ✅ done |
 | 2 | Gate reconcile to auto-session start/stop | `api/bydmate/telemetry/route.ts` | big CPU + egress | ✅ done |
-| 3 | APK: charging-bulk flush interval | Android app (not this repo) | ~4× CPU on charging phase | ⬜ todo (smaller than first thought) |
+| 3 | APK: charging-bulk flush interval | Android app (BYDMate-own) | ~4× CPU on charging phase | ✅ done (smaller than first thought) |
 | 4 | Trim `raw_payload` from verify re-read | `api/bydmate/telemetry/route.ts` | server↔DB egress | ✅ done |
 | 5 | Retention prune cron for telemetry samples | new migration + cron | DB size + backup egress | ⬜ todo |
 
-Status (2026-06-24): items 1, 2, 4 ✅ done; items 3 (APK) and 5 (prune cron) ⬜ open.
-Test suite green (47/47, `npm run test`). Master plan: `docs/EGRESS_CPU_MASTER_PLAN.md`.
+Status (2026-06-24): items 1, 2, 3 (APK), 4 ✅ done; item 5 (prune cron) ⬜ open.
+Web suite 47/47; APK debug suite 417/417. Master plan: `docs/EGRESS_CPU_MASTER_PLAN.md`.
 
 ---
 
