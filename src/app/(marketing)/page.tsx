@@ -96,11 +96,11 @@ export default function LandingPage() {
         : (t("landing.geoUnavailable") as string);
 
   return (
-    <main className="relative isolate min-h-dvh overflow-hidden bg-background text-foreground">
+    <main className="relative isolate min-h-dvh overflow-x-clip bg-background text-foreground">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,rgba(0,209,255,0.28),transparent_34rem),radial-gradient(circle_at_10%_20%,rgba(0,230,118,0.18),transparent_24rem),linear-gradient(180deg,rgba(18,21,28,0)_0%,#12151C_88%)]" />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px voltflow-gradient" />
 
-      <div className="mobile-page relative">
+      <div className="mobile-page relative !h-auto min-h-dvh">
         <section className="relative flex min-h-[calc(100dvh-4rem)] w-full flex-col px-5 pb-8 pt-[calc(env(safe-area-inset-top)+1.25rem)]">
           <header className="flex items-center justify-between gap-3">
             <LogoFull />
