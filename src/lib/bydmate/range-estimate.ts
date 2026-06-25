@@ -37,6 +37,29 @@ function resolveUsableBatteryKwh(
   return capacity * (soh != null ? clamp(soh, 70, 105) / 100 : 1);
 }
 
+function userMedianConsumption(trips: BydmateTripRow[]): number {
+  const consumptions = trips
+    .filter((trip) => {
+      const c = trip.avg_consumption_kwh_100km;
+      const d = trip.distance_km;
+      return (
+        c != null &&
+        c >= MIN_FORECAST_CONSUMPTION_KWH_100KM &&
+        c <= MAX_FORECAST_CONSUMPTION_KWH_100KM &&
+        d != null &&
+        d >= 1 &&
+        trip.sample_count >= 3
+      );
+    })
+    .map((trip) => trip.avg_consumption_kwh_100km!);
+
+  if (consumptions.length === 0) return DEFAULT_CONSUMPTION_KWH_100KM;
+
+  const sorted = [...consumptions].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
 export type VehicleRangeEstimateOptions = {
   batteryCapacityKwh?: number | null;
 };
@@ -98,7 +121,7 @@ export function estimateRangeFromSoc({
       );
     }),
   );
-  const consumptionKwh100Km = tripAverage ?? DEFAULT_CONSUMPTION_KWH_100KM;
+  const consumptionKwh100Km = tripAverage ?? userMedianConsumption(recentTrips);
   const usableBatteryKwh = validNumber(batteryCapacityKwh) ?? DEFAULT_USABLE_BATTERY_KWH;
   const usableEnergyKwh = usableBatteryKwh * (clamp(validSoc, 0, 100) / 100);
 
@@ -115,9 +138,8 @@ function estimateConsumptionKwh100Km(
 ) {
   const usableBatteryKwh = validNumber(options.batteryCapacityKwh) ?? DEFAULT_USABLE_BATTERY_KWH;
   const telemetry = snapshot.telemetry;
-  const estimates: WeightedConsumption[] = [
-    { value: DEFAULT_CONSUMPTION_KWH_100KM, weight: 0.8 },
-  ];
+  const estimates: WeightedConsumption[] = [];
+  let reliableCount = 0;
 
   const currentTripConsumption = validNumber(telemetry.current_trip_consumption_kwh_100km);
   const currentTripDistance = validNumber(telemetry.current_trip_distance_km);
@@ -130,6 +152,7 @@ function estimateConsumptionKwh100Km(
       value: currentTripConsumption,
       weight: currentTripDistance != null ? clamp(currentTripDistance / 12, 0.25, 1.8) : 0.7,
     });
+    reliableCount += 1;
   }
 
   const tripAverage = averageTripConsumption(
@@ -148,6 +171,21 @@ function estimateConsumptionKwh100Km(
   );
   if (tripAverage != null) {
     estimates.push({ value: tripAverage, weight: 1.2 });
+    reliableCount += 1;
+  }
+
+  const energyAverage = averageEnergyConsumption(
+    recentTrips.filter((trip) => {
+      const distance = validNumber(trip.distance_km);
+      return distance != null && distance >= 1;
+    }),
+  );
+  if (energyAverage != null) {
+    estimates.push({
+      value: energyAverage.value,
+      weight: clamp(energyAverage.totalDistanceKm / 20, 0.3, 2.0),
+    });
+    reliableCount += 1;
   }
 
   const speedKmh = validNumber(telemetry.speed_kmh);
@@ -170,6 +208,10 @@ function estimateConsumptionKwh100Km(
       estimates.push({ value: reportedConsumption, weight: 0.35 });
     }
   }
+
+  const userDefault = userMedianConsumption(recentTrips);
+  const fallbackWeight = reliableCount >= 2 ? 0.15 : reliableCount >= 1 ? 0.35 : 0.8;
+  estimates.push({ value: userDefault, weight: fallbackWeight });
 
   const weightedConsumption =
     estimates.reduce((sum, estimate) => sum + estimate.value * estimate.weight, 0) /
@@ -252,4 +294,33 @@ export function averageTripConsumption(trips: BydmateTripRow[]) {
 
   if (weightedDistance > 0) return weightedConsumption / weightedDistance;
   return sampleCount > 0 ? sampleConsumption / sampleCount : null;
+}
+
+function averageEnergyConsumption(
+  trips: BydmateTripRow[],
+): { value: number; totalDistanceKm: number } | null {
+  let weightedConsumption = 0;
+  let totalDistance = 0;
+
+  for (const trip of trips) {
+    const regen = validNumber(trip.regen_energy_kwh);
+    const traction = validNumber(trip.traction_energy_kwh);
+    const distance = validNumber(trip.distance_km);
+    if (regen == null || traction == null || distance == null || distance < 1) continue;
+
+    const netEnergy = traction - regen;
+    if (netEnergy <= 0) continue;
+
+    const consumption = (netEnergy / distance) * 100;
+    if (
+      consumption < MIN_FORECAST_CONSUMPTION_KWH_100KM ||
+      consumption > MAX_FORECAST_CONSUMPTION_KWH_100KM
+    ) continue;
+
+    weightedConsumption += consumption * distance;
+    totalDistance += distance;
+  }
+
+  if (totalDistance <= 0) return null;
+  return { value: weightedConsumption / totalDistance, totalDistanceKm: totalDistance };
 }

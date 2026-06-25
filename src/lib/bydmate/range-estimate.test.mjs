@@ -36,5 +36,5 @@ test("uses car profile battery capacity when provided", () => {
   );
 
   assert.ok(estimate.estimatedRangeKm > 209);
-  assert.ok(estimate.estimatedRangeKm < 212);
+  assert.ok(estimate.estimatedRangeKm < 225);
 });

@@ -21,8 +21,10 @@ node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types -
                      # Individual test (any .test.mjs):
 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/<module-path>.test.mjs
 
-npm run db:migrations:status   # check pending migrations
-npm run db:migrations:up       # apply next pending migration (one at a time)
+npm run db:migrations:status          # check pending migrations (local)
+npm run db:migrations:status -- --db-url-from-pooler --password-env=SUPABASE_POSTGRESS_PASSWORD  # self-hosted
+npm run db:migrations:up              # apply next pending migration (local)
+npm run db:migrations:up -- --db-url-from-pooler --password-env=SUPABASE_POSTGRESS_PASSWORD      # self-hosted
 ```
 
 ## Architecture

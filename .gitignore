@@ -22,6 +22,7 @@
 
 # misc
 .DS_Store
+docs/HOSTING_MIGRATION.md
 *.pem
 supabase/.temp/
 
@@ -46,3 +47,12 @@ package-lock.json
 
 /screenshots
 opencode.json
+
+/docs
+.claude/
+.codegraph/
+.cursor/
+
+AGENTS.md
+CLAUDE.md
+SKILLS.md

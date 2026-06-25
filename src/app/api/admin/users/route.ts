@@ -35,21 +35,34 @@ export async function GET(request: NextRequest) {
   const pageSize = clampPageSize(params.get("pageSize"));
   const search = (params.get("search") ?? "").trim().toLowerCase();
   const telemetry = params.get("telemetry") ?? "";
+  const premiumFilter = params.get("premium") ?? "all";
+  const lastSeen = params.get("lastSeen") ?? "any";
+  const registeredSince = params.get("registeredSince") ?? "";
+  const registeredBefore = params.get("registeredBefore") ?? "";
 
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
+
+  const allAdminIds = await loadAllAdminIds();
 
   let telemetryUserIds: string[] | undefined;
   if (telemetry === "7d" || telemetry === "30d") {
     const days = telemetry === "7d" ? 7 : 30;
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-    const { data: samples } = await supabaseAdmin
-      .from("bydmate_telemetry_samples")
-      .select("user_id")
-      .gte("device_time", since);
-    telemetryUserIds = [
-      ...new Set((samples ?? []).map((r) => String(r.user_id)).filter(Boolean)),
-    ];
+    const { data: allProfiles } = await supabaseAdmin
+      .from("profiles")
+      .select("id");
+    const results = await Promise.all(
+      (allProfiles ?? []).map(async (p) => {
+        const { count } = await supabaseAdmin
+          .from("bydmate_telemetry_samples")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", p.id)
+          .gte("device_time", since);
+        return count && count > 0 ? p.id : null;
+      }),
+    );
+    telemetryUserIds = results.filter(Boolean) as string[];
     if (telemetryUserIds.length === 0) {
       return NextResponse.json({
         ok: true,
@@ -62,12 +75,86 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  let lastSeenUserIds: string[] | undefined;
+  let negateLastSeen = false;
+  if (lastSeen !== "any") {
+    const { data: profiles } = await supabaseAdmin
+      .from("profiles")
+      .select("id");
+    const allProfileIds = (profiles ?? []).map((p) => p.id);
+
+    if (lastSeen === "never") {
+      const results = await Promise.all(
+        allProfileIds.map(async (userId) => {
+          const { count } = await supabaseAdmin
+            .from("bydmate_live_snapshots")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", userId);
+          return count && count > 0 ? null : userId;
+        }),
+      );
+      lastSeenUserIds = results.filter(Boolean) as string[];
+      negateLastSeen = false;
+    } else {
+      const hours = lastSeen === "24h" ? 24 : lastSeen === "7d" ? 168 : 720;
+      const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+      const results = await Promise.all(
+        allProfileIds.map(async (userId) => {
+          const { count } = await supabaseAdmin
+            .from("bydmate_live_snapshots")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", userId)
+            .gte("device_time", since);
+          return count && count > 0 ? userId : null;
+        }),
+      );
+      lastSeenUserIds = results.filter(Boolean) as string[];
+    }
+  }
+
+  let filterUserIds: string[] | undefined;
+  let negateFilter = false;
+  if (telemetryUserIds && lastSeenUserIds) {
+    const intersection = new Set(telemetryUserIds);
+    filterUserIds = lastSeenUserIds.filter((id) => intersection.has(id));
+    negateFilter = negateLastSeen;
+    if (!negateFilter && filterUserIds.length === 0) {
+      return NextResponse.json({
+        ok: true,
+        page,
+        pageSize,
+        total: 0,
+        stats: await loadAdminStats(),
+        users: [],
+      });
+    }
+  } else {
+    filterUserIds = telemetryUserIds ?? lastSeenUserIds;
+    negateFilter = negateLastSeen;
+  }
+
+  if (filterUserIds && filterUserIds.length === 0 && !negateFilter) {
+    return NextResponse.json({
+      ok: true,
+      page,
+      pageSize,
+      total: 0,
+      stats: await loadAdminStats(),
+      users: [],
+    });
+  }
+
   const primary = await runProfilesQuery({
     includePremiumUntil: true,
     from,
     to,
     search,
-    telemetryUserIds,
+    filterUserIds,
+    negateFilter,
+    premiumFilter,
+    allAdminIds,
+    registeredSince,
+    registeredBefore,
   });
   const fallback =
     primary.error &&
@@ -78,6 +165,12 @@ export async function GET(request: NextRequest) {
           from,
           to,
           search,
+          filterUserIds,
+          negateFilter,
+          premiumFilter,
+          allAdminIds,
+          registeredSince,
+          registeredBefore,
         })
       : null;
   const result = fallback ?? primary;
@@ -149,7 +242,12 @@ async function runProfilesQuery(params: {
   from: number;
   to: number;
   search: string;
-  telemetryUserIds?: string[];
+  filterUserIds?: string[];
+  negateFilter?: boolean;
+  premiumFilter: string;
+  allAdminIds: Set<string>;
+  registeredSince: string;
+  registeredBefore: string;
 }) {
   let query = supabaseAdmin
     .from("profiles")
@@ -170,11 +268,51 @@ async function runProfilesQuery(params: {
     }
   }
 
-  if (params.telemetryUserIds && params.telemetryUserIds.length > 0) {
-    query = query.in("id", params.telemetryUserIds);
+  if (params.filterUserIds && params.filterUserIds.length > 0) {
+    if (params.negateFilter) {
+      const ids = params.filterUserIds.map((id) => `"${id}"`).join(",");
+      query = query.filter("id", "not.in", `(${ids})`);
+    } else {
+      query = query.in("id", params.filterUserIds);
+    }
+  }
+
+  if (params.premiumFilter === "yes") {
+    const isoNow = new Date().toISOString();
+    const conditions = [`is_premium.eq.true`, `premium_until.gte.${isoNow}`];
+    if (params.allAdminIds.size > 0) {
+      conditions.push(`id.in.(${[...params.allAdminIds].join(",")})`);
+    }
+    query = query.or(conditions.join(","));
+  } else if (params.premiumFilter === "no") {
+    const isoNow = new Date().toISOString();
+    query = query.or("is_premium.is.null,is_premium.eq.false");
+    query = query.or(`premium_until.is.null,premium_until.lt.${isoNow}`);
+    if (params.allAdminIds.size > 0) {
+      const ids = [...params.allAdminIds].map((id) => `"${id}"`).join(",");
+      query = query.filter("id", "not.in", `(${ids})`);
+    }
+  } else if (params.premiumFilter === "term") {
+    const isoNow = new Date().toISOString();
+    query = query.not("premium_until", "is", null);
+    query = query.gte("premium_until", isoNow);
+  } else if (params.premiumFilter === "flag") {
+    query = query.eq("is_premium", true);
+  }
+
+  if (params.registeredSince) {
+    query = query.gte("created_at", params.registeredSince);
+  }
+  if (params.registeredBefore) {
+    query = query.lte("created_at", params.registeredBefore);
   }
 
   return query;
+}
+
+async function loadAllAdminIds() {
+  const { data } = await supabaseAdmin.from("admin_users").select("user_id");
+  return new Set<string>((data ?? []).map((r) => String(r.user_id)).filter(Boolean));
 }
 
 async function loadAdminSet(userIds: string[]) {

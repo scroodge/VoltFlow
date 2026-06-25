@@ -1,8 +1,13 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { AdminUsersPanel } from "@/components/admin/users/admin-users-panel";
 import { requireAdmin } from "@/lib/supabase/knowledge";
+
+export const metadata: Metadata = {
+  title: "Users & Activity",
+};
 
 export default async function AdminUsersPage() {
   const guard = await requireAdmin();
@@ -34,15 +39,21 @@ export default async function AdminUsersPage() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4">
-      <header className="rounded-2xl border border-white/10 bg-card px-4 py-4">
-        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Admin</p>
-        <h1 className="text-xl font-semibold">Premium users</h1>
-        <p className="text-sm text-muted-foreground">
-          Manual premium upgrades, premium duration, activity counters, and Mate app versions.
-        </p>
-      </header>
-      <AdminUsersPanel />
-    </main>
+    <div className="mobile-page">
+      <div className="flex h-dvh min-h-dvh w-full flex-col overflow-hidden bg-background shadow-[0_0_80px_rgba(0,0,0,0.45)]">
+        <main className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain pt-[env(safe-area-inset-top)]">
+          <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4">
+            <header className="rounded-2xl border border-white/10 bg-card px-4 py-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Admin</p>
+              <h1 className="text-xl font-semibold">Users &amp; Activity</h1>
+              <p className="text-sm text-muted-foreground">
+                Monitor activity, premium status, and Mate versions across all users.
+              </p>
+            </header>
+            <AdminUsersPanel />
+          </div>
+        </main>
+      </div>
+    </div>
   );
 }

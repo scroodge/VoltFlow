@@ -1,7 +1,7 @@
 # Hosting & cost plan — escaping Vercel Fluid CPU + Supabase egress limits
 
-Status: planning. Context: hit Vercel Fluid Active-CPU cap **and** Supabase **egress**
-cap. Userbase: dozens–hundreds. Region: `eu-west-1`.
+Status: ✅ completed 2026-06-25. Supabase Cloud decommissioned.
+Context: hit Vercel Fluid Active-CPU cap **and** Supabase **egress** cap. Userbase: dozens–hundreds. Region: `eu-west-1`.
 
 ## Root cause (read this before migrating)
 
@@ -32,10 +32,10 @@ Do **not** drop to bare Postgres — the app depends on Supabase Auth + RLS
 (`auth.uid()`) + Realtime everywhere. Self-hosting the whole stack keeps those APIs
 identical, so app code changes are limited to env vars.
 
-**Box (Hetzner, EU, `eu-west-1`-adjacent):**
-- Start: CPX31 (4 vCPU / 8 GB, ~€15/mo). DB is ~258 MB, so this is comfortable for
-  hundreds of users at the post-Phase-0 write rate.
-- Egress: Hetzner includes ~20 TB/mo — effectively removes the metering that bit us.
+**Box (Contabo VPS):**
+- Existing Contabo VPS used instead of Hetzner. 6 vCPU / 16 GB RAM.
+- Supabase stack via Docker Compose, nginx reverse proxy at own domain.
+- Grafana + Prometheus monitoring stack.
 
 **Stack:** Supabase self-hosted via Docker Compose
 (`https://supabase.com/docs/guides/self-hosting/docker`). Components: Postgres, GoTrue
@@ -47,15 +47,22 @@ identical, so app code changes are limited to env vars.
   self-host `.env` (JWT secret you generate)
 - Keep Next.js on Vercel (fine after Phase 0) **or** run it on the same VPS to consolidate.
 
-**Migration steps:**
-1. Stand up the Docker stack on the VPS; put Caddy/Traefik in front for TLS.
-2. `pg_dump` from Supabase Cloud → restore into the self-hosted Postgres. Re-apply the
-   migration chain if needed (`npm run db:migrations:status`).
-3. Recreate auth users: export `auth.users` (Supabase supports auth schema dump) so
-   existing logins keep working — **verify before cutover**, this is the riskiest part.
-4. Point a staging build at the new URL; smoke-test login, telemetry POST, session
-   live-sync, Realtime.
-5. Cutover: flip env vars, redeploy, watch logs.
+**Actual migration (completed 2026-06-25):**
+1. Supabase Docker stack deployed at `/opt/supabase/` on Contabo (12 containers, Kong on :8000).
+2. nginx reverse proxy + LetsEncrypt TLS at own domain.
+3. Database dumped via Supabase CLI (`supabase db dump --linked`) and restored to self-hosted Postgres.
+   28 auth users, 70 charging sessions, 389k telemetry samples migrated. Sequences updated.
+4. 48 Storage objects migrated across 4 buckets (`knowledge-*`, `cluster-backgrounds`).
+5. Google OAuth configured in self-hosted `.env`, redirect URI updated in Google Cloud Console.
+6. Preview deployment tested on Vercel, then production env vars promoted and `main` redeployed.
+7. Nightly backup cron: `0 3 * * * /opt/supabase-dump/backup.sh` → `/backups/supabase/`, 30-day retention.
+8. Grafana + Prometheus monitoring stack at `/opt/monitoring/`:
+   - Postgres metrics (postgres_exporter)
+   - Kong request rate & connections
+   - Per-container CPU/memory (cAdvisor)
+   - System CPU/memory/disk (node_exporter)
+   - Docker logs (Loki + Promtail)
+   - Dashboard: "Supabase Self-Hosted" at Grafana URL (admin/your-password)
 
 **What you now own (budget for it):**
 - Automated backups: nightly `pg_dump` → object storage (Hetzner Storage Box / S3),

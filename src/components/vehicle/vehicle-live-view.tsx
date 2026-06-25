@@ -98,11 +98,6 @@ function fmt(value: number | null | undefined, digits = 0) {
   return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
 }
 
-function fmtBool(value: boolean | null | undefined, t: Translator) {
-  if (value == null) return "—";
-  return value ? t("common.yes") : t("common.no");
-}
-
 function fmtTemp(value: number | null | undefined, digits = 1) {
   if (typeof value !== "number" || !Number.isFinite(value) || value < -50 || value > 90) {
     return "—";
@@ -388,6 +383,12 @@ function VehicleLiveContent({
     rangeEstimate.estimatedRangeKm != null
       ? `≈ ${fmt(rangeEstimate.estimatedRangeKm, 0)} km`
       : "—";
+  const soc = snapshot.telemetry.soc;
+  const mathRangeKm: number | null =
+    typeof soc === "number" && heroDriveMetrics.kmPerPercentSoc != null
+      ? heroDriveMetrics.kmPerPercentSoc * soc
+      : null;
+  const mathRangeLabel = mathRangeKm != null ? `≈ ${fmt(mathRangeKm, 0)} km` : "—";
   const [selectedTripId, setSelectedTripId] = useState<string | null | undefined>(
     initialTripId ?? undefined,
   );
@@ -406,6 +407,7 @@ function VehicleLiveContent({
         isStale={isStale}
         isCharging={isCharging}
         rangeLabel={rangeLabel}
+        mathRangeLabel={mathRangeLabel}
         vehicleLabel={vehicleLabel}
         hasMounted={hasMounted}
         distanceSinceChargeKm={heroDriveMetrics.distanceSinceChargeKm}
@@ -499,6 +501,7 @@ function Hero({
   isStale,
   isCharging,
   rangeLabel,
+  mathRangeLabel,
   vehicleLabel,
   hasMounted,
   distanceSinceChargeKm,
@@ -510,6 +513,7 @@ function Hero({
   isStale: boolean;
   isCharging: boolean;
   rangeLabel: string;
+  mathRangeLabel: string;
   vehicleLabel: string;
   hasMounted: boolean;
   distanceSinceChargeKm: number | null;
@@ -521,12 +525,19 @@ function Hero({
   const coreMetrics = heroCoreMetrics(snapshot, t, locale);
   const primaryMetrics = [
     {
-      key: "range",
+      key: "aiRange",
       icon: Route,
-      label: t("vehicle.metrics.range"),
+      label: t("vehicle.metrics.aiRange"),
       value: rangeLabel,
     },
-    ...coreMetrics,
+    {
+      key: "mathRange",
+      icon: Activity,
+      label: t("vehicle.metrics.mathRange"),
+      value: mathRangeLabel,
+    },
+    coreMetrics[0],
+    ...coreMetrics.slice(1),
   ];
   const sinceChargeValue = formatHeroDistanceKm(distanceSinceChargeKm);
   const kmPerPercentValue = formatKmPerPercent(kmPerPercentSoc);
@@ -595,12 +606,6 @@ function Hero({
           modeMetrics.push(...driveMetrics);
         } else if (isCharging) {
           modeMetrics.push(
-            {
-              key: "charging",
-              icon: BatteryCharging,
-              label: t("vehicle.telemetry.charging"),
-              value: fmtBool(telemetry.is_charging, t),
-            },
             {
               key: "chargePower",
               icon: Zap,
