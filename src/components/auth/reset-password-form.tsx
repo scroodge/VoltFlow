@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { EmailOtpType } from "@supabase/supabase-js";
 import { useTranslation } from "@/hooks/use-translation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -37,6 +38,27 @@ export function ResetPasswordForm() {
 
     const supabase = createClient();
     setLoading(true);
+
+    // Prefetch-proof recovery: the email links to this page with a token_hash
+    // instead of an auto-verifying magic link. We only exchange the token for a
+    // session here, on the user's submit — so email scanners (Apple Mail
+    // Privacy, Telegram, etc.) that GET the link can't consume the one-time
+    // token before the user does.
+    const params = new URLSearchParams(window.location.search);
+    const tokenHash = params.get("token_hash");
+    if (tokenHash) {
+      const type = (params.get("type") as EmailOtpType | null) ?? "recovery";
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        type,
+        token_hash: tokenHash,
+      });
+      if (verifyError) {
+        setLoading(false);
+        toast.error(verifyError.message);
+        return;
+      }
+    }
+
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
 
