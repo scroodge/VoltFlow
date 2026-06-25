@@ -175,7 +175,7 @@ export async function POST(request: Request) {
     const supabase = createServiceClient();
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("id")
+      .select("id, vehicle_connected_at")
       .eq("bydmate_cloud_api_key", apiKey)
       .maybeSingle();
 
@@ -240,6 +240,17 @@ export async function POST(request: Request) {
 
     if (ingestError) {
       return Response.json({ ok: false, error: "Telemetry ingest failed" }, { status: 500 });
+    }
+
+    // First-ever telemetry for this user → mark the car connected so the
+    // post-login onboarding gate clears. The null guard keeps this a one-time
+    // write; once set the column is non-null and we skip on every later ingest.
+    if (!profile.vehicle_connected_at) {
+      await supabase
+        .from("profiles")
+        .update({ vehicle_connected_at: new Date().toISOString() })
+        .eq("id", profile.id)
+        .is("vehicle_connected_at", null);
     }
 
     const lastSample = samples.at(-1);

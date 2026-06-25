@@ -17,6 +17,7 @@ export type PersistedAppPreferences = {
   fastDcPricePerKwh: number;
   currency: Currency;
   locale: Locale;
+  onboardingSkipped: boolean;
 };
 
 type StorageLike = {
@@ -76,6 +77,10 @@ export function parsePersistedAppPreferences(
       preferences.locale = state.locale;
     }
 
+    if (typeof state.onboardingSkipped === "boolean") {
+      preferences.onboardingSkipped = state.onboardingSkipped;
+    }
+
     return preferences;
   } catch {
     return null;
@@ -98,4 +103,5 @@ export const initialAppPreferences: PersistedAppPreferences = {
   fastDcPricePerKwh: 0.12,
   currency: defaultCurrency,
   locale: defaultLocale,
+  onboardingSkipped: false,
 };

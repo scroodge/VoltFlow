@@ -20,6 +20,7 @@ type AppPreferencesState = {
   fastDcPricePerKwh: number;
   currency: Currency;
   locale: Locale;
+  onboardingSkipped: boolean;
   setSelectedCarId: (id: string | null) => void;
   setDefaultPricePerKwh: (n: number) => void;
   setTariffPrices: (input: {
@@ -29,6 +30,7 @@ type AppPreferencesState = {
   }) => void;
   setCurrency: (currency: Currency) => void;
   setLocale: (locale: Locale) => void;
+  setOnboardingSkipped: (skipped: boolean) => void;
 };
 
 const noopStorage = {
@@ -57,6 +59,7 @@ export const useAppPreferences = create(
         }),
       setCurrency: (currency) => set({ currency }),
       setLocale: (locale) => set({ locale }),
+      setOnboardingSkipped: (onboardingSkipped) => set({ onboardingSkipped }),
     }),
     {
       name: appPreferencesStorageKey,
@@ -97,6 +100,10 @@ export const useAppPreferences = create(
             saved?.locale && isLocale(saved.locale)
               ? saved.locale
               : current.locale,
+          onboardingSkipped:
+            typeof saved?.onboardingSkipped === "boolean"
+              ? saved.onboardingSkipped
+              : current.onboardingSkipped,
         };
       },
       /* zustand typings expect the full store; we only persist primitives. */
@@ -108,6 +115,7 @@ export const useAppPreferences = create(
         fastDcPricePerKwh: s.fastDcPricePerKwh,
         currency: s.currency,
         locale: s.locale,
+        onboardingSkipped: s.onboardingSkipped,
       }) as unknown as AppPreferencesState,
     },
   ),
