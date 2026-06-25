@@ -26,21 +26,33 @@ export function ForgotPasswordForm() {
 
     if (!email) return;
 
-    const supabase = createClient();
+    let supabase;
+    try {
+      supabase = createClient();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to initialize");
+      return;
+    }
+
     const redirectTo =
       typeof window !== "undefined"
-        ? `${window.location.origin}/auth/callback?next=${encodeURIComponent("/reset-password")}`
+        ? `${window.location.origin}/auth/callback/recovery?next=${encodeURIComponent("/reset-password")}`
         : undefined;
 
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo,
-    });
-    setLoading(false);
-
-    if (error) {
-      toast.error(error.message);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo,
+      });
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Something went wrong");
       return;
+    } finally {
+      setLoading(false);
     }
 
     setSent(true);
