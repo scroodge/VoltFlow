@@ -30,7 +30,7 @@ export function VehicleControlDevClient({
   apiKey,
   telemetryEndpoint,
 }: VehicleControlDevClientProps) {
-  const { data: commands, refetch } = useVehicleCommandsQuery(vehicleId);
+  const { data: commands, refetch } = useVehicleCommandsQuery(vehicleId, { enabled: true });
   const [agentLog, setAgentLog] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 

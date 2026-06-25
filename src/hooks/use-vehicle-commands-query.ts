@@ -4,6 +4,7 @@ import { useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { devFetch, isDevAppRoute } from "@/lib/dev/dev-fetch";
+import { usePageVisible } from "@/hooks/use-page-visible";
 import { createClient } from "@/lib/supabase/client";
 import { queryKeys } from "@/lib/query-keys";
 import type { VehicleCommandRow } from "@/types/database";
@@ -17,10 +18,16 @@ async function fetchVehicleCommands(vehicleId: string | null): Promise<VehicleCo
   return payload.commands ?? [];
 }
 
-export function useVehicleCommandsQuery(vehicleId: string | null) {
+export function useVehicleCommandsQuery(
+  vehicleId: string | null,
+  options?: { enabled?: boolean },
+) {
   const queryClient = useQueryClient();
   const supabase = useMemo(() => createClient(), []);
   const devRoute = isDevAppRoute();
+  const pageVisible = usePageVisible();
+
+  const enabled = (options?.enabled ?? true) && Boolean(vehicleId) && pageVisible;
 
   useEffect(() => {
     if (!vehicleId || devRoute) return;
@@ -58,8 +65,8 @@ export function useVehicleCommandsQuery(vehicleId: string | null) {
   return useQuery({
     queryKey: queryKeys.vehicleCommands(vehicleId),
     queryFn: () => fetchVehicleCommands(vehicleId),
-    enabled: Boolean(vehicleId),
-    refetchInterval: devRoute ? 3_000 : 15_000,
+    enabled,
+    refetchInterval: enabled ? (devRoute ? 3_000 : 15_000) : false,
   });
 }
 

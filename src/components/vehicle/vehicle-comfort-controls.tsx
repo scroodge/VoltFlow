@@ -174,10 +174,12 @@ export function VehicleComfortControls({
   defaultExpanded = false,
 }: VehicleComfortControlsProps) {
   const { data: liveRows } = useBydmateLiveQuery();
-  const { data: commands } = useVehicleCommandsQuery(vehicleId);
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const { data: commands } = useVehicleCommandsQuery(vehicleId, {
+    enabled: !collapsible || expanded,
+  });
   const sendCommand = useSendVehicleCommand(vehicleId);
   const [pendingId, setPendingId] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState(defaultExpanded);
 
   const snapshot = useMemo(() => {
     if (!vehicleId) return undefined;
