@@ -16,6 +16,8 @@ import {
   staticDerivedFromSession,
 } from "@/lib/charging-session-sync";
 import {
+  CHARGING_PERSIST_SLACK_MS,
+  chargingPersistIntervalMs,
   findFreshSocSnapshot,
   shouldAllowMathAutoComplete,
   shouldAutoStopOnDriveAway,
@@ -205,7 +207,10 @@ export function useChargingSessionLiveSync({
         return;
       }
 
-      if (now - lastPush >= 950) {
+      const persistIntervalMs =
+        chargingPersistIntervalMs(stateToPersist.currentPercent) -
+        CHARGING_PERSIST_SLACK_MS;
+      if (now - lastPush >= persistIntervalMs) {
         lastPush = now;
         const { error: upErr } = await supabase
           .from("charging_sessions")

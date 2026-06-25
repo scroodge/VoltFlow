@@ -10,6 +10,9 @@ import { createClient } from "@/lib/supabase/client";
 import { queryKeys } from "@/lib/query-keys";
 import type { BydmateLiveSnapshotRow } from "@/types/database";
 
+/** Coalesce a burst of ~1Hz ingest Realtime events into one heavy refetch. */
+const BYDMATE_LIVE_REFETCH_DEBOUNCE_MS = 5_000;
+
 async function fetchBydmateLiveDev(): Promise<BydmateLiveSnapshotRow[]> {
   const response = await devFetch("/api/vehicle/live");
   if (!response.ok) throw new Error("Unauthorized");
@@ -52,6 +55,18 @@ export function useBydmateLiveQuery() {
     if (devRoute) return;
 
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    // During charging, ingest fires ~1Hz and each event would force a heavy
+    // select("*") refetch (full telemetry + diplus JSON) — a large egress
+    // repeater. The live hero metrics don't need 1Hz freshness, so coalesce a
+    // burst of events into a single trailing refetch every BYDMATE_LIVE_REFETCH_DEBOUNCE_MS.
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleInvalidate = () => {
+      if (debounceTimer) return;
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null;
+        void queryClient.invalidateQueries({ queryKey: queryKeys.bydmateLive });
+      }, BYDMATE_LIVE_REFETCH_DEBOUNCE_MS);
+    };
 
     void supabase.auth.getUser().then(({ data: userData }) => {
       const user = userData.user;
@@ -67,14 +82,13 @@ export function useBydmateLiveQuery() {
             table: "bydmate_live_snapshots",
             filter: `user_id=eq.${user.id}`,
           },
-          () => {
-            void queryClient.invalidateQueries({ queryKey: queryKeys.bydmateLive });
-          },
+          scheduleInvalidate,
         )
         .subscribe();
     });
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       if (channel) {
         void supabase.removeChannel(channel);
       }

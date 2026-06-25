@@ -11,6 +11,35 @@ import type { BydmateLiveSnapshotRow } from "../types/database.ts";
 export const LIVE_CHARGING_STALE_MS = 90_000;
 /** Speed above this (km/h) treats the vehicle as driving, not finishing a charge. */
 export const CHARGING_DRIVE_SPEED_KMH = 5;
+
+/**
+ * How often the foreground live-sync persists steady-state progress
+ * (current_percent / energy / cost) back to `charging_sessions`, tiered by SOC.
+ *
+ * The live UI is recomputed every tick from `onDerived` regardless of this — the
+ * persisted row only needs to be fresh enough for when the PWA is closed. So we
+ * throttle the write the same way reads are tiered (see chargingSessionsRefetchInterval):
+ *   <95%   → 30s (long flat phase, hours — SOC barely moves)
+ *   95–98% → 5s  (approaching the tail)
+ *   ≥98%   → 1s  (balance tail: fine resolution to catch exact completion)
+ * Completion / drive-away writes are NOT throttled — they fire on the tick that
+ * detects the event, independent of this interval.
+ *
+ * This turns a flat ~1Hz write (≈28.8k writes per 8h AC charge) into ~1k, with
+ * no visible change. The 50ms slack mirrors the old `>= 950` persist guard so a
+ * 1000ms tick still passes its own tier threshold.
+ */
+export function chargingPersistIntervalMs(currentPercent: number | null | undefined) {
+  const pct = typeof currentPercent === "number" && Number.isFinite(currentPercent)
+    ? currentPercent
+    : 0;
+  if (pct >= 98) return 1_000;
+  if (pct >= 95) return 5_000;
+  return 30_000;
+}
+
+/** Persist-cadence slack so a tick landing slightly early still clears its tier. */
+export const CHARGING_PERSIST_SLACK_MS = 50;
 /** When live SOC diverges from math/persisted progress beyond this, prefer live on persist. */
 export const LIVE_SOC_RECONCILE_TOLERANCE_PERCENT = 1;
 
