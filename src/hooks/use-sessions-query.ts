@@ -8,6 +8,15 @@ import { mapChargingSession } from "@/lib/db-map";
 import { queryKeys } from "@/lib/query-keys";
 import type { ChargingSessionRow } from "@/types/database";
 
+/**
+ * Only the columns `mapChargingSession` actually reads. The list is polled at up
+ * to 1Hz during the balance tail (see chargingSessionsRefetchInterval), so every
+ * unused column is wasted egress on every poll — `select("*")` also pulled the
+ * three home/commercial/fast_dc price columns this mapper never touches.
+ */
+const SESSION_COLUMNS =
+  "id,user_id,car_id,start_percent,current_percent,target_percent,battery_capacity_kwh,charger_power_kw,efficiency_percent,tariff_type,provider_type,tariff_manual,price_per_kwh,charged_energy_kwh,estimated_cost,status,started_at,stopped_at,created_at,updated_at" as const;
+
 export async function fetchSessions(): Promise<ChargingSessionRow[]> {
   if (isDevAppRoute()) {
     const response = await devFetch("/api/vehicle/sessions");
@@ -23,7 +32,7 @@ export async function fetchSessions(): Promise<ChargingSessionRow[]> {
 
   const { data, error } = await supabase
     .from("charging_sessions")
-    .select("*")
+    .select(SESSION_COLUMNS)
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
     .limit(100);
