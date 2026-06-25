@@ -44,18 +44,29 @@ export function ResetPasswordForm() {
     // session here, on the user's submit — so email scanners (Apple Mail
     // Privacy, Telegram, etc.) that GET the link can't consume the one-time
     // token before the user does.
-    const params = new URLSearchParams(window.location.search);
-    const tokenHash = params.get("token_hash");
-    if (tokenHash) {
-      const type = (params.get("type") as EmailOtpType | null) ?? "recovery";
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        type,
-        token_hash: tokenHash,
-      });
-      if (verifyError) {
-        setLoading(false);
-        toast.error(verifyError.message);
-        return;
+    //
+    // The token_hash is single-use: the first verifyOtp consumes it and creates
+    // the session. If updateUser then fails (e.g. the user typed their old
+    // password), we must NOT re-verify on retry — the token is already spent.
+    // So only verify when there's no session yet; subsequent submits reuse it.
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      const params = new URLSearchParams(window.location.search);
+      const tokenHash = params.get("token_hash");
+      if (tokenHash) {
+        const type = (params.get("type") as EmailOtpType | null) ?? "recovery";
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          type,
+          token_hash: tokenHash,
+        });
+        if (verifyError) {
+          setLoading(false);
+          toast.error(verifyError.message);
+          return;
+        }
       }
     }
 
