@@ -53,18 +53,22 @@ import {
   formatDuration,
 } from "@/lib/charging-math";
 import { useVehicleRangeEstimate } from "@/hooks/use-vehicle-range-estimate";
+import { resolveTariffLocationMatch } from "@/lib/charging-gps-location";
 import {
   chargingParamsFromSession,
   deriveChargingSessionLiveBundle,
   filterLiveSnapshotsForVehicle,
 } from "@/lib/charging-session-sync";
 import { resolveDisplayChargePowerKw, snapshotSoc } from "@/lib/charging-live";
+import { mapChargingTariffLocation } from "@/lib/db-map";
+import { isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { useAppPath } from "@/lib/dev/dev-path";
 import { currencySymbols, formatCurrencyAmount, type Currency, type Locale, type TranslationKey } from "@/lib/i18n";
 import { parseDecimalInput } from "@/lib/number-input";
 import { PROVIDER_LABELS, resolveTariffPrice } from "@/lib/charging-tariffs";
 import { ensureNotificationsPermission, ensurePushSubscription } from "@/lib/push/client";
 import { queryKeys } from "@/lib/query-keys";
+import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import {
   canStartChargingSession,
@@ -574,6 +578,25 @@ export function DashboardView() {
       ),
   });
 
+  const { data: tariffLocations = [] } = useQuery({
+    queryKey: queryKeys.tariffLocations,
+    queryFn: async () => {
+      if (isDevAppRoute()) return [];
+      const supabase = createClient();
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData.user;
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from("charging_tariff_locations")
+        .select("*")
+        .eq("user_id", user.id);
+      if (error) throw error;
+      return (data ?? []).map((row) =>
+        mapChargingTariffLocation(row as Record<string, unknown>),
+      );
+    },
+  });
+
   const selectedCar =
     cars?.find((c) => c.id === selectedCarId) ?? cars?.[0] ?? null;
   const scopedVehicleId = selectedCar?.vehicle_alias ?? null;
@@ -667,10 +690,13 @@ export function DashboardView() {
   );
   const [estimateTariffType, setEstimateTariffType] = useState<ChargingTariffType>("home");
   const [estimateProviderType, setEstimateProviderType] =
-    useState<ChargingProviderType>("custom");
+    useState<ChargingProviderType>("home");
   const [estimatePowerKw, setEstimatePowerKw] = useState(
     String(defaultEstimatePowerKw("home")),
   );
+  const [estimateTariffTouched, setEstimateTariffTouched] = useState(false);
+  const [estimateProviderTouched, setEstimateProviderTouched] = useState(false);
+  const [estimatePowerTouched, setEstimatePowerTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [stopping, setStopping] = useState(false);
   const hasMounted = useSyncExternalStore(
@@ -743,6 +769,39 @@ export function DashboardView() {
     rangeEstimate?.estimatedRangeKm != null
       ? `≈ ${fmt(rangeEstimate.estimatedRangeKm)} km`
       : null;
+
+  const estimateLocation = useMemo(() => {
+    const lat = latestBydmateSnapshot?.location?.lat;
+    const lon = latestBydmateSnapshot?.location?.lon;
+    return typeof lat === "number" && typeof lon === "number" ? { lat, lon } : null;
+  }, [latestBydmateSnapshot?.location?.lat, latestBydmateSnapshot?.location?.lon]);
+
+  const estimateTariffLocationMatch = useMemo(
+    () => resolveTariffLocationMatch(estimateLocation, tariffLocations),
+    [estimateLocation, tariffLocations],
+  );
+
+  useEffect(() => {
+    const matchedPreset = estimateTariffLocationMatch?.preset;
+    const nextTariffType = matchedPreset?.tariff_type ?? "home";
+    const nextProviderType = matchedPreset?.provider_type ?? "home";
+
+    if (!estimateTariffTouched) {
+      setEstimateTariffType(nextTariffType);
+    }
+    if (!estimateProviderTouched) {
+      setEstimateProviderType(nextProviderType);
+    }
+    if (!estimatePowerTouched) {
+      setEstimatePowerKw(String(defaultEstimatePowerKw(nextTariffType)));
+    }
+  }, [
+    estimatePowerTouched,
+    estimateProviderTouched,
+    estimateTariffLocationMatch?.preset?.provider_type,
+    estimateTariffLocationMatch?.preset?.tariff_type,
+    estimateTariffTouched,
+  ]);
 
   const chargingProgressLine =
     activeSession && liveActive
@@ -1066,9 +1125,18 @@ export function DashboardView() {
                       estimateTariffType={estimateTariffType}
                       locale={locale}
                       parkEstimate={parkEstimate}
-                      setEstimatePowerKw={setEstimatePowerKw}
-                      setEstimateProviderType={setEstimateProviderType}
-                      setEstimateTariffType={setEstimateTariffType}
+                      setEstimatePowerKw={(value) => {
+                        setEstimatePowerTouched(true);
+                        setEstimatePowerKw(value);
+                      }}
+                      setEstimateProviderType={(value) => {
+                        setEstimateProviderTouched(true);
+                        setEstimateProviderType(value);
+                      }}
+                      setEstimateTariffType={(value) => {
+                        setEstimateTariffTouched(true);
+                        setEstimateTariffType(value);
+                      }}
                       t={(key, values) => String(t(key, values))}
                     />
                   ) : (
