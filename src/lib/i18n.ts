@@ -139,6 +139,12 @@ export const dictionaries = {
       offlineBody:
         "Charging math derives from anchored timestamps stored in Postgres — reopen the PWA anytime and timelines stay truthful.",
       stack: "Stack · Next.js · Supabase auth · Postgres · Realtime broadcast",
+      installTitle: "Install VoltFlow",
+      installSubtitle: "Add it to your home screen — works offline, sends charge alerts.",
+      installAction: "Install app",
+      installIosStep1: "Tap the Share button in Safari",
+      installIosStep2: "Choose “Add to Home Screen”",
+      installGenericStep1: "Open your browser menu",
     },
     auth: {
       title: "VoltFlow identity",
@@ -1059,6 +1065,12 @@ export const dictionaries = {
       offlineBody:
         "Разлікі зарадкі ідуць ад часавых метак у Postgres — адкрыйце PWA зноў, і лінія часу застанецца дакладнай.",
       stack: "Стэк · Next.js · Supabase auth · Postgres · Realtime broadcast",
+      installTitle: "Усталяваць VoltFlow",
+      installSubtitle: "Дадайце на хатні экран — працуе афлайн, дасылае апавяшчэнні аб зарадцы.",
+      installAction: "Усталяваць праграму",
+      installIosStep1: "Націсніце кнопку «Падзяліцца» ў Safari",
+      installIosStep2: "Выберыце «На галоўны экран»",
+      installGenericStep1: "Адкрыйце меню браўзера",
     },
     auth: {
       title: "Ідэнтыфікацыя Charge VoltFlow",
@@ -1981,6 +1993,12 @@ export const dictionaries = {
       offlineBody:
         "Расчеты зарядки идут от временных меток в Postgres — откройте PWA снова, и таймлайн останется точным.",
       stack: "Стек · Next.js · Supabase auth · Postgres · Realtime broadcast",
+      installTitle: "Установить VoltFlow",
+      installSubtitle: "Добавьте на главный экран — работает офлайн, шлёт уведомления о зарядке.",
+      installAction: "Установить приложение",
+      installIosStep1: "Нажмите кнопку «Поделиться» в Safari",
+      installIosStep2: "Выберите «На экран „Домой“»",
+      installGenericStep1: "Откройте меню браузера",
     },
     auth: {
       title: "Идентификация VoltFlow",

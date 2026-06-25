@@ -18,6 +18,7 @@ import { BatteryRing } from "@/components/charging/BatteryRing";
 import { ChargingStatsGrid } from "@/components/charging/ChargingStatsGrid";
 import { LegalFooterLinks } from "@/components/legal/legal-document-view";
 import { LocaleSwitcher } from "@/components/locale-switcher";
+import { InstallPrompt } from "@/components/pwa/install-prompt";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
 
@@ -140,30 +141,34 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="mt-8 flex gap-3">
-            <Button
-              size="lg"
-              className="h-14 flex-1 rounded-full bg-[linear-gradient(90deg,#00E676_0%,#00D1FF_100%)] font-heading text-base font-bold text-[#06110B] voltflow-glow"
-              asChild
-            >
-              <Link href="/login">
-                {t("landing.start")}
-                <ArrowRight className="size-5" aria-hidden />
-              </Link>
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="h-14 rounded-full border-border bg-white/[0.03] px-5"
-              asChild
-            >
-              <Link
-                href="/dashboard"
-                aria-label={t("landing.dashboardAria") as string}
+          <div className="mt-8 space-y-3">
+            <InstallPrompt />
+            <div className="flex gap-3">
+              <Button
+                size="lg"
+                variant="outline"
+                className="h-12 flex-1 rounded-full border-border bg-white/[0.03] font-heading text-sm font-bold"
+                asChild
               >
-                <Gauge className="size-5" aria-hidden />
-              </Link>
-            </Button>
+                <Link href="/login">
+                  {t("landing.start")}
+                  <ArrowRight className="size-4" aria-hidden />
+                </Link>
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="h-12 rounded-full border-border bg-white/[0.03] px-5"
+                asChild
+              >
+                <Link
+                  href="/dashboard"
+                  aria-label={t("landing.dashboardAria") as string}
+                >
+                  <Gauge className="size-5" aria-hidden />
+                </Link>
+              </Button>
+            </div>
           </div>
 
           <div className="mt-8 voltflow-card overflow-hidden p-5">
