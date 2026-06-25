@@ -2,18 +2,30 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { AdminUsersPanel } from "@/components/admin/users/admin-users-panel";
 import { requireAdmin } from "@/lib/supabase/knowledge";
 
 export const metadata: Metadata = {
-  title: "Users & Activity",
+  title: "Admin",
 };
 
-export default async function AdminUsersPage() {
+const sections = [
+  {
+    href: "/admin/users",
+    label: "Users & Activity",
+    description: "Monitor activity, premium status, and Mate versions across all users. Manage admin roles.",
+  },
+  {
+    href: "/admin/knowledge",
+    label: "Knowledge CMS",
+    description: "Manage articles, FAQ, accessories, spare parts, and categories for the knowledge base.",
+  },
+] as const;
+
+export default async function AdminPage() {
   const guard = await requireAdmin();
 
   if (!guard.ok && guard.reason === "unauthenticated") {
-    redirect("/login?next=/admin/users");
+    redirect("/login?next=/admin");
   }
 
   if (!guard.ok) {
@@ -44,21 +56,29 @@ export default async function AdminUsersPage() {
         <main className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain pt-[env(safe-area-inset-top)]">
           <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4">
             <header className="rounded-2xl border border-white/10 bg-card px-4 py-4">
-              <a
-                href="/admin"
-                className="inline-flex items-center gap-1 text-xs uppercase tracking-[0.18em] text-muted-foreground transition hover:text-foreground"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M15 18l-6-6 6-6" />
-                </svg>
-                Admin
-              </a>
-              <h1 className="text-xl font-semibold">Users &amp; Activity</h1>
+              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Admin</p>
+              <h1 className="text-xl font-semibold">Dashboard</h1>
               <p className="text-sm text-muted-foreground">
-                Monitor activity, premium status, and Mate versions across all users.
+                Manage users and the knowledge base.
               </p>
             </header>
-            <AdminUsersPanel />
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              {sections.map((section) => (
+                <Link
+                  key={section.href}
+                  href={section.href}
+                  className="group rounded-2xl border border-white/10 bg-card p-5 transition hover:border-[var(--voltflow-cyan)]/40 hover:bg-white/[0.03]"
+                >
+                  <h2 className="text-lg font-semibold group-hover:text-[var(--voltflow-cyan)]">
+                    {section.label}
+                  </h2>
+                  <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
+                    {section.description}
+                  </p>
+                </Link>
+              ))}
+            </div>
           </div>
         </main>
       </div>

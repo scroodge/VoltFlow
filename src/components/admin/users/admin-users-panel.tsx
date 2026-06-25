@@ -271,6 +271,7 @@ function FilterPill({
 
 function UserCard({ user, onUpdated }: { user: AdminUser; onUpdated: () => void }) {
   const [showEditor, setShowEditor] = useState(false);
+  const [showAdminEditor, setShowAdminEditor] = useState(false);
 
   return (
     <div className="space-y-3 rounded-xl border border-white/10 bg-card p-3">
@@ -327,7 +328,7 @@ function UserCard({ user, onUpdated }: { user: AdminUser; onUpdated: () => void 
               </>
             )}
           </div>
-          {!user.is_admin && (
+          {!user.is_admin ? (
             <button
               type="button"
               onClick={() => setShowEditor(!showEditor)}
@@ -340,9 +341,23 @@ function UserCard({ user, onUpdated }: { user: AdminUser; onUpdated: () => void 
                 <ChevronDown className="size-3" />
               )}
             </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowAdminEditor(!showAdminEditor)}
+              className="flex items-center gap-1 rounded-full border border-red-500/30 px-2.5 py-1 text-[11px] font-medium text-red-400 transition hover:bg-red-500/[0.08]"
+            >
+              {showAdminEditor ? "Hide" : "Revoke"} admin
+              {showAdminEditor ? (
+                <ChevronUp className="size-3" />
+              ) : (
+                <ChevronDown className="size-3" />
+              )}
+            </button>
           )}
         </div>
         {showEditor && <PremiumEditor user={user} onUpdated={onUpdated} />}
+        {showAdminEditor && <AdminRevoker user={user} onUpdated={onUpdated} />}
       </div>
     </div>
   );
@@ -503,6 +518,49 @@ function PremiumEditor({ user, onUpdated }: { user: AdminUser; onUpdated: () => 
         >
           Clear term
         </Button>
+      </div>
+    </div>
+  );
+}
+
+function AdminRevoker({ user, onUpdated }: { user: AdminUser; onUpdated: () => void }) {
+  const [busy, setBusy] = useState(false);
+
+  const revoke = async () => {
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/admin/users/${user.id}/admin`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const body = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok || !body.ok) {
+        throw new Error(body.error ?? "Could not revoke admin");
+      }
+      toast.success("Admin role revoked");
+      onUpdated();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not revoke admin");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 space-y-3 rounded-lg border border-red-500/20 bg-red-500/[0.03] p-3">
+      <p className="text-xs leading-5 text-muted-foreground">
+        This will remove <span className="font-medium text-foreground">{user.email ?? "this user"}</span>{" "}
+        from the admin list. Their premium entitlement will switch to their current premium term/flag.
+      </p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => void revoke()}
+          disabled={busy}
+          className="inline-flex min-h-8 items-center rounded-lg border border-red-500/40 bg-red-500/10 px-3 text-xs font-semibold text-red-400 transition hover:bg-red-500/20 disabled:opacity-50"
+        >
+          {busy ? "Revoking..." : "Confirm revoke"}
+        </button>
       </div>
     </div>
   );
