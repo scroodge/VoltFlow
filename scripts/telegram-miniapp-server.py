@@ -249,6 +249,7 @@ class TelegramApiHandler(BaseHTTPRequestHandler):
 
     def write_cors_headers(self):
         self.send_header("access-control-allow-origin", CORS_ORIGIN)
+        self.send_header("access-control-allow-credentials", "true")
         self.send_header("vary", "Origin")
         self.send_header("access-control-allow-methods", "GET,POST,OPTIONS")
         self.send_header(

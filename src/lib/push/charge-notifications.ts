@@ -11,6 +11,9 @@ import {
   type ChargeNotificationState,
 } from "@/lib/push/charge-thresholds";
 import { sendPushToUser } from "@/lib/push/web-push";
+import { sendTelegramMessage } from "@/lib/telegram/bot-send";
+
+type NotifyChannel = "web_push" | "telegram" | "both";
 
 type ChargeNotificationStateRow = {
   user_id: string;
@@ -22,6 +25,18 @@ type ChargeNotificationStateRow = {
   notified_thresholds: number[] | null;
 };
 
+type NotificationProfile = {
+  telegram_id: number | string | null;
+  notify_channel: string | null;
+};
+
+type ChargeNotificationPayload = {
+  title: string;
+  body: string;
+  url: string;
+  tag: string;
+};
+
 function stateFromRow(row: ChargeNotificationStateRow): ChargeNotificationState {
   return {
     chargeStartedAt: row.charge_started_at,
@@ -29,6 +44,10 @@ function stateFromRow(row: ChargeNotificationStateRow): ChargeNotificationState 
     lastIsCharging: row.last_is_charging === true,
     notifiedThresholds: Array.isArray(row.notified_thresholds) ? row.notified_thresholds : [],
   };
+}
+
+function normalizeNotifyChannel(value: string | null | undefined): NotifyChannel {
+  return value === "telegram" || value === "both" ? value : "web_push";
 }
 
 function stateToRow(
@@ -48,7 +67,11 @@ function stateToRow(
   };
 }
 
-function notificationPayload(vehicleId: string, threshold: number, chargeStartedAt: string | null) {
+function notificationPayload(
+  vehicleId: string,
+  threshold: number,
+  chargeStartedAt: string | null,
+): ChargeNotificationPayload {
   return {
     title: `Charging: ${threshold}%`,
     body:
@@ -60,6 +83,77 @@ function notificationPayload(vehicleId: string, threshold: number, chargeStarted
     url: "/vehicle",
     tag: `bydmate-charge:${vehicleId}:${threshold}:${chargeStartedAt ?? "active"}`,
   };
+}
+
+function telegramNotificationText(payload: ChargeNotificationPayload) {
+  return `${payload.title}\n${payload.body}`;
+}
+
+async function loadNotificationProfile(supabase: SupabaseClient, userId: string) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("telegram_id,notify_channel")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+
+  const profile = data as NotificationProfile | null;
+  const channel = normalizeNotifyChannel(profile?.notify_channel);
+  const telegramId = profile?.telegram_id ?? null;
+
+  return {
+    channel,
+    telegramId,
+  };
+}
+
+async function sendChargeNotificationToUser({
+  supabase,
+  userId,
+  payload,
+  channel,
+  telegramId,
+}: {
+  supabase: SupabaseClient;
+  userId: string;
+  payload: ChargeNotificationPayload;
+  channel: NotifyChannel;
+  telegramId: number | string | null;
+}) {
+  const shouldSendTelegram = (channel === "telegram" || channel === "both") && telegramId != null;
+  const shouldSendWebPush = channel === "web_push" || channel === "both" || !shouldSendTelegram;
+
+  let sent = 0;
+
+  if (shouldSendWebPush) {
+    const pushResult = await sendPushToUser(supabase, userId, payload);
+    sent += pushResult.sent;
+  }
+
+  if (shouldSendTelegram) {
+    const telegramResult = await sendTelegramMessage(
+      telegramId,
+      telegramNotificationText(payload),
+      {
+        replyMarkup: {
+          inline_keyboard: [
+            [
+              {
+                text: "Открыть VoltFlow",
+                web_app: {
+                  url: withPath(process.env.NEXT_PUBLIC_SITE_URL, payload.url),
+                },
+              },
+            ],
+          ],
+        },
+      },
+    );
+    if (telegramResult.ok) sent += 1;
+  }
+
+  return { sent };
 }
 
 export async function processBydmateChargeNotifications({
@@ -75,6 +169,8 @@ export async function processBydmateChargeNotifications({
 }) {
   const vehicleIds = Array.from(new Set(samples.map((sample) => sample.vehicle_id)));
   if (!vehicleIds.length) return { sent: 0, thresholds: [] as number[] };
+
+  const notificationProfile = await loadNotificationProfile(supabase, userId);
 
   const { data: rows, error } = await supabase
     .from("bydmate_charge_notification_state")
@@ -111,12 +207,14 @@ export async function processBydmateChargeNotifications({
 
     for (const threshold of result.thresholdsToNotify) {
       thresholds.push(threshold);
-      const pushResult = await sendPushToUser(
+      const deliveryResult = await sendChargeNotificationToUser({
         supabase,
         userId,
-        notificationPayload(sample.vehicle_id, threshold, result.nextState.chargeStartedAt),
-      );
-      sent += pushResult.sent;
+        payload: notificationPayload(sample.vehicle_id, threshold, result.nextState.chargeStartedAt),
+        channel: notificationProfile.channel,
+        telegramId: notificationProfile.telegramId,
+      });
+      sent += deliveryResult.sent;
     }
   }
 
@@ -137,4 +235,8 @@ export async function processBydmateChargeNotifications({
   }
 
   return { sent, thresholds };
+}
+
+function withPath(base: string | undefined, path: string) {
+  return `${(base ?? "https://volt-flow-beige.vercel.app").replace(/\/$/, "")}${path}`;
 }
