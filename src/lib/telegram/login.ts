@@ -55,8 +55,16 @@ export async function loginWithTelegram(): Promise<TelegramLoginResult> {
     };
   }
 
+  const responseText = await response.text();
+  if (response.headers.get("x-vercel-mitigated") === "challenge") {
+    return { ok: false, error: "vercel_security_challenge" };
+  }
+  if (/Vercel Security Checkpoint/i.test(responseText)) {
+    return { ok: false, error: "vercel_security_challenge" };
+  }
+
   try {
-    payload = (await response.json()) as TelegramAuthResponse;
+    payload = JSON.parse(responseText) as TelegramAuthResponse;
   } catch {
     return { ok: false, error: `http_${response.status}:non_json_response` };
   }
