@@ -2,7 +2,7 @@
 
 import Script from "next/script";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { TelegramWelcome } from "@/components/telegram/TelegramWelcome";
@@ -14,7 +14,15 @@ import { telegramApiUrl } from "@/lib/telegram/api-url";
 /**
  * Context-aware gate for the `/telegram` Mini App entry.
  *
- * State machine (runs after the Telegram SDK onReady fires):
+ * Detection runs in two places:
+ *   1. useEffect on mount — Telegram pre-injects window.Telegram.WebApp before
+ *      the page loads, so initData is already available at hydration time.
+ *      This is the primary path and fires every time inside the Mini App.
+ *   2. Script onReady — fallback for environments where the SDK is not
+ *      pre-injected (e.g. Telegram Desktop beta, browser dev testing).
+ *   A ref guard prevents double-execution when both fire.
+ *
+ * State machine:
  *   • Not in Telegram → renders nothing; SSR'd KB shows through (SEO preserved).
  *   • In Telegram + already authenticated → silently links telegram_id to the
  *     existing profile (idempotent) and navigates to /dashboard. Covers the
@@ -32,14 +40,13 @@ export function TelegramEntryGate() {
   const [inTelegram, setInTelegram] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [busy, setBusy] = useState(false);
-
-  const detectTelegram = () => {
-    void detectTelegramAsync();
-  };
+  const detected = useRef(false);
 
   const detectTelegramAsync = async () => {
+    if (detected.current) return;
     const webApp = typeof window !== "undefined" ? window.Telegram?.WebApp : undefined;
     if (!webApp?.initData) return;
+    detected.current = true;
     webApp.ready?.();
     webApp.expand?.();
 
@@ -75,6 +82,12 @@ export function TelegramEntryGate() {
     setInTelegram(true);
   };
 
+  // Primary detection: runs on mount. Telegram pre-injects window.Telegram.WebApp
+  // before the page loads so initData is already available at hydration time —
+  // no need to wait for the Script's onReady callback.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void detectTelegramAsync(); }, []);
+
   const handleOpenApp = async () => {
     setBusy(true);
     const result = await loginWithTelegram();
@@ -101,7 +114,7 @@ export function TelegramEntryGate() {
       <Script
         src="https://telegram.org/js/telegram-web-app.js"
         strategy="afterInteractive"
-        onReady={detectTelegram}
+        onReady={() => void detectTelegramAsync()}
       />
       {inTelegram && !dismissed ? (
         <TelegramWelcome
