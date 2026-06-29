@@ -4,12 +4,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
-import { SERVICE_CATEGORIES, SERVICE_TYPES } from "@/types/service";
+import { SERVICE_TYPES } from "@/types/service";
 
 const serviceRecordSchema = z.object({
   carId: z.string().uuid(),
   title: z.string().min(1).max(300),
-  category: z.enum(SERVICE_CATEGORIES as [string, ...string[]]),
+  category: z.string().min(1).max(80),
   serviceType: z.enum(SERVICE_TYPES as [string, ...string[]]),
   performedDate: z.string(),
   odometerKm: z.coerce.number().min(0).max(9_999_999).nullable().optional(),

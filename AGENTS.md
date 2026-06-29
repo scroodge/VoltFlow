@@ -22,9 +22,18 @@ node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types -
 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/<module-path>.test.mjs
 
 npm run db:migrations:status          # check pending migrations (local)
-npm run db:migrations:status -- --db-url-from-pooler --password-env=SUPABASE_POSTGRESS_PASSWORD  # self-hosted
 npm run db:migrations:up              # apply next pending migration (local)
-npm run db:migrations:up -- --db-url-from-pooler --password-env=SUPABASE_POSTGRESS_PASSWORD      # self-hosted
+
+# Self-hosted PROD (supabase.mykid.life): the `db:migrations:* -- --db-url-from-pooler`
+# CLI commands do NOT work — the supabase CLI forces TLS but the Supavisor pooler has
+# no TLS (errors: "tls error (server refused TLS connection)"). Apply migrations with
+# psql directly. It's a Supavisor pooler: tenant `voltflow` → user `postgres.voltflow`,
+# sslmode=disable, port 6543 (txn/DDL) or 5432 (session). There is NO
+# supabase_migrations.schema_migrations table on self-hosted, so keep every migration
+# `IF NOT EXISTS`-idempotent; the repo file is the only history.
+PW=$(grep -E '^SUPABASE_POSTGRESS_PASSWORD=' .env.local | cut -d= -f2- | tr -d '"'"'"'"')
+psql "postgresql://postgres.voltflow:$PW@supabase.mykid.life:6543/postgres?sslmode=disable" \
+  -v ON_ERROR_STOP=1 -f supabase/migrations/<file>.sql
 ```
 
 ## Architecture
@@ -68,7 +77,7 @@ Priority: **fresh live SOC (≤90s) > in-session telemetry > wall-clock math**. 
 
 ### Migrations
 
-- Apply one at a time via `npm run db:migrations:up`. Script: `scripts/supabase-migrate-one.mjs`.
+- Apply one at a time. **Local:** `npm run db:migrations:up` (script `scripts/supabase-migrate-one.mjs`). **Self-hosted prod:** the CLI can't connect (forces TLS vs the no-TLS Supavisor pooler) — apply with `psql -f` instead (see the self-hosted block under Commands). Keep every migration `IF NOT EXISTS`-idempotent; self-hosted has no `schema_migrations` tracking table, so the repo file is the only record.
 - Never delete old migration files; keep as active history until a deliberate squash.
 - See `supabase/MIGRATIONS_AUDIT.md` for the full chain and pooler-based apply commands.
 

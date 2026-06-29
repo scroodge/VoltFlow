@@ -671,7 +671,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         </CardContent>
       </Card>
 
-      <FreeRetentionNotice accountEmail={email} userId={profileUserId} />
+      <FreeRetentionNotice />
 
       {isAdmin ? <PushDiagnostics /> : null}
 

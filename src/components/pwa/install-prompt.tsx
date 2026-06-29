@@ -5,6 +5,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
+import { isIos, isStandalone, noopSubscribe, subscribeDisplayMode } from "@/lib/pwa";
 
 // Chrome/Edge/Android fire this before showing their own install banner. We
 // capture it, suppress the default mini-infobar, and drive a first-class button.
@@ -12,39 +13,6 @@ type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
-
-function isStandalone(): boolean {
-  if (typeof window === "undefined") return false;
-  return (
-    window.matchMedia?.("(display-mode: standalone)").matches ||
-    // iOS Safari exposes this non-standard flag instead of display-mode.
-    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
-  );
-}
-
-function isIos(): boolean {
-  if (typeof navigator === "undefined") return false;
-  const ua = navigator.userAgent;
-  const iOSDevice = /iphone|ipad|ipod/i.test(ua);
-  // iPadOS 13+ reports as Mac; detect via touch points.
-  const iPadOS = /macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
-  return iOSDevice || iPadOS;
-}
-
-// External-store flags so the client snapshot is read after hydration without a
-// mismatch, and without synchronously setting state inside an effect.
-function subscribeDisplayMode(onChange: () => void): () => void {
-  if (typeof window === "undefined") return () => {};
-  const mq = window.matchMedia("(display-mode: standalone)");
-  mq.addEventListener?.("change", onChange);
-  window.addEventListener("appinstalled", onChange);
-  return () => {
-    mq.removeEventListener?.("change", onChange);
-    window.removeEventListener("appinstalled", onChange);
-  };
-}
-
-const noopSubscribe = () => () => {};
 
 /**
  * Landing-page install funnel. Renders nothing once the app runs installed.

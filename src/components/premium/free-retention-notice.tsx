@@ -1,9 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { useTranslation } from "@/hooks/use-translation";
-import { buildPremiumUpgradeMailto } from "@/lib/premium-upgrade-mailto";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -16,14 +16,8 @@ type RetentionStatusPayload = {
   upgradeEmail: string;
 };
 
-export function FreeRetentionNotice({
-  accountEmail,
-  userId,
-}: {
-  accountEmail: string | null;
-  userId: string | null;
-}) {
-  const { t, locale } = useTranslation();
+export function FreeRetentionNotice() {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<RetentionStatusPayload | null>(null);
 
@@ -54,13 +48,6 @@ export function FreeRetentionNotice({
 
   if (loading || status?.isPremium) return null;
 
-  const mailtoHref = buildPremiumUpgradeMailto({
-    accountEmail,
-    userId,
-    locale,
-    desiredTerm: "1 year",
-  });
-
   return (
     <Card size="sm" className="border-amber-300/30 bg-amber-400/5">
       <CardHeader>
@@ -74,7 +61,7 @@ export function FreeRetentionNotice({
           {t("settings.retentionNotice.nextDeletion", { date: nextDeletionText })}
         </p>
         <Button asChild size="lg" className="h-11 w-full rounded-full text-sm font-semibold">
-          <a href={mailtoHref}>{t("settings.retentionNotice.upgradeCta")}</a>
+          <Link href="/support">{t("settings.retentionNotice.upgradeCta")}</Link>
         </Button>
         <p className="text-xs text-muted-foreground">
           {t("settings.retentionNotice.emailHelp", { email: status?.upgradeEmail ?? "" })}

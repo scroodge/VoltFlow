@@ -1,14 +1,8 @@
 "use client";
 
-import {
-  ArrowRight,
-  Gauge,
-  LocateFixed,
-  ShieldCheck,
-  Smartphone,
-  Zap,
-} from "lucide-react";
+import { Gauge, LocateFixed, ShieldCheck, Smartphone, Zap } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { AppIcon } from "@/components/brand/AppIcon";
@@ -19,8 +13,10 @@ import { ChargingStatsGrid } from "@/components/charging/ChargingStatsGrid";
 import { LegalFooterLinks } from "@/components/legal/legal-document-view";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { InstallPrompt } from "@/components/pwa/install-prompt";
+import { StartTrackingButton } from "@/components/pwa/start-tracking-button";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
+import { createClient } from "@/lib/supabase/client";
 
 type IpLocation = {
   city?: string;
@@ -36,7 +32,30 @@ export default function LandingPage() {
   const [locationStatus, setLocationStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   );
+  const router = useRouter();
   const year = new Date().getFullYear();
+
+  // Already-signed-in visitors shouldn't sit on the marketing page. This also
+  // rescues the self-hosted OAuth case where GoTrue drops the user on `/?code=`
+  // instead of /auth/callback: the browser client exchanges the code on mount,
+  // fires SIGNED_IN, and we forward into the app (the onboarding gate takes over).
+  useEffect(() => {
+    const supabase = createClient();
+    let active = true;
+
+    void supabase.auth.getSession().then(({ data }) => {
+      if (active && data.session) router.replace("/dashboard");
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) router.replace("/dashboard");
+    });
+
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
+  }, [router]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -144,17 +163,7 @@ export default function LandingPage() {
           <div className="mt-8 space-y-3">
             <InstallPrompt />
             <div className="flex gap-3">
-              <Button
-                size="lg"
-                variant="outline"
-                className="h-12 flex-1 rounded-full border-border bg-white/[0.03] font-heading text-sm font-bold"
-                asChild
-              >
-                <Link href="/login">
-                  {t("landing.start")}
-                  <ArrowRight className="size-4" aria-hidden />
-                </Link>
-              </Button>
+              <StartTrackingButton className="h-12 flex-1 rounded-full border border-border bg-white/[0.03] font-heading text-sm font-bold" />
               <Button
                 size="lg"
                 variant="outline"

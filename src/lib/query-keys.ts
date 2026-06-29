@@ -24,4 +24,5 @@ export const queryKeys = {
   serviceRecords: (carId: string) => ["service-records", carId] as const,
   serviceRecord: (id: string) => ["service-record", id] as const,
   serviceReminders: (carId: string) => ["service-reminders", carId] as const,
+  userServiceCategories: () => ["user-service-categories"] as const,
 };
