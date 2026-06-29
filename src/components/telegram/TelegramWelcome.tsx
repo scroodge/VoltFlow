@@ -7,6 +7,7 @@ import { useTranslation } from "@/hooks/use-translation";
 type TelegramWelcomeProps = {
   busy?: boolean;
   onOpenApp: () => void;
+  onHaveAccount: () => void;
   onOpenKnowledge: () => void;
 };
 
@@ -18,7 +19,7 @@ type TelegramWelcomeProps = {
  * Primary action ("Open the app") runs the silent Telegram login; secondary
  * action drops into the public knowledge base.
  */
-export function TelegramWelcome({ busy = false, onOpenApp, onOpenKnowledge }: TelegramWelcomeProps) {
+export function TelegramWelcome({ busy = false, onOpenApp, onHaveAccount, onOpenKnowledge }: TelegramWelcomeProps) {
   const { t } = useTranslation();
 
   const features = [
@@ -83,6 +84,14 @@ export function TelegramWelcome({ busy = false, onOpenApp, onOpenKnowledge }: Te
         >
           {busy ? t("telegram.openingApp") : t("telegram.openApp")}
           {!busy ? <ArrowRight className="size-5" aria-hidden /> : null}
+        </button>
+
+        <button
+          type="button"
+          onClick={onHaveAccount}
+          className="mt-2 w-full text-center text-xs text-muted-foreground underline-offset-2 hover:underline"
+        >
+          {t("telegram.haveAccount")}
         </button>
 
         <div className="my-3 flex items-center gap-3 text-[11px] uppercase tracking-[0.3em] text-muted-foreground">

@@ -97,6 +97,7 @@ export const dictionaries = {
       footer: "Sign in with Telegram · free access",
       openingApp: "Opening the app…",
       loginError: "Could not sign in. Please try again.",
+      haveAccount: "Already have a VoltFlow account? Sign in",
     },
     locale: {
       label: "Language",
@@ -1097,6 +1098,7 @@ export const dictionaries = {
       footer: "Уваход праз Telegram · бясплатны доступ",
       openingApp: "Адкрываем дадатак…",
       loginError: "Не атрымалася ўвайсці. Паспрабуйце яшчэ раз.",
+      haveAccount: "Ужо ёсць акаўнт VoltFlow? Увайсці",
     },
     locale: {
       label: "Мова",
@@ -2099,6 +2101,7 @@ export const dictionaries = {
       footer: "Вход через Telegram · бесплатный доступ",
       openingApp: "Открываем приложение…",
       loginError: "Не удалось войти. Попробуйте ещё раз.",
+      haveAccount: "Уже есть аккаунт VoltFlow? Войти",
     },
     locale: {
       label: "Язык",

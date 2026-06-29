@@ -8,19 +8,22 @@ import { toast } from "sonner";
 import { TelegramWelcome } from "@/components/telegram/TelegramWelcome";
 import { useTranslation } from "@/hooks/use-translation";
 import { loginWithTelegram } from "@/lib/telegram/login";
+import { createClient } from "@/lib/supabase/client";
 
 /**
  * Context-aware gate for the `/telegram` Mini App entry.
  *
- * - In a plain browser → renders nothing; the SSR'd knowledge base shows through
- *   (preserves SEO / shareable links).
- * - Inside Telegram (real `initData` after the SDK loads) → shows the welcome /
- *   onboarding overlay. "Open the app" runs the silent Telegram login (lazy
- *   account creation) and routes to /dashboard; "Knowledge base" dismisses the
- *   overlay to reveal the KB underneath.
- *
- * Detection runs from the SDK script's onReady callback (not a useEffect) to
- * avoid the react-hooks/set-state-in-effect rule.
+ * State machine (runs after the Telegram SDK onReady fires):
+ *   • Not in Telegram → renders nothing; SSR'd KB shows through (SEO preserved).
+ *   • In Telegram + already authenticated → silently links telegram_id to the
+ *     existing profile (idempotent) and navigates to /dashboard. Covers the
+ *     "existing PWA user" case after they log in via "Already have account?"
+ *     and return to /telegram.
+ *   • In Telegram + not authenticated → shows TelegramWelcome overlay:
+ *       - "Open the app" → loginWithTelegram() (silent new account) → /dashboard
+ *       - "Already have account?" → /login?next=/telegram (email/password in
+ *         WebView → callback → back here → auto-link path above)
+ *       - "Knowledge base" → dismiss overlay to reveal KB underneath
  */
 export function TelegramEntryGate() {
   const router = useRouter();
@@ -30,10 +33,33 @@ export function TelegramEntryGate() {
   const [busy, setBusy] = useState(false);
 
   const detectTelegram = () => {
+    void detectTelegramAsync();
+  };
+
+  const detectTelegramAsync = async () => {
     const webApp = typeof window !== "undefined" ? window.Telegram?.WebApp : undefined;
     if (!webApp?.initData) return;
     webApp.ready?.();
     webApp.expand?.();
+
+    // Check for an existing session — happens when an existing PWA user signed
+    // in via "Already have account?" and was redirected back to /telegram.
+    const supabase = createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (session) {
+      // Link telegram_id onto the authenticated profile (idempotent).
+      await fetch("/api/telegram/link", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ initData: webApp.initData }),
+      });
+      router.push("/dashboard");
+      return;
+    }
+
     setInTelegram(true);
   };
 
@@ -48,6 +74,10 @@ export function TelegramEntryGate() {
     setBusy(false);
   };
 
+  const handleHaveAccount = () => {
+    router.push("/login?next=/telegram");
+  };
+
   return (
     <>
       <Script
@@ -59,6 +89,7 @@ export function TelegramEntryGate() {
         <TelegramWelcome
           busy={busy}
           onOpenApp={handleOpenApp}
+          onHaveAccount={handleHaveAccount}
           onOpenKnowledge={() => setDismissed(true)}
         />
       ) : null}
