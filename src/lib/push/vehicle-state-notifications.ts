@@ -120,7 +120,11 @@ export async function processBydmateVehicleStateNotifications({
   if (!vehicleIds.length) return { connected: 0, parked: 0, disconnected: 0 };
 
   const profile = await loadTelegramProfile(supabase, userId);
-  const shouldSendTelegram = (profile.channel === "telegram" || profile.channel === "both") && profile.telegramId != null;
+  const shouldSendTelegram = profile.telegramId != null;
+
+  if (!shouldSendTelegram && samples.length > 0) {
+    console.log("vehicle state: skipped — no telegram_id for user", userId);
+  }
 
   const { data: stateRows } = await supabase
     .from("bydmate_vehicle_state_notifications")
@@ -161,6 +165,10 @@ export async function processBydmateVehicleStateNotifications({
 
     const { soc, odometer, lat, lon } = extractVehicleInfo(lastSample);
     const isParked = isGearP(lastSample);
+
+    if (shouldSendTelegram) {
+      console.log("vehicle state:", vehicleId, "prevState:", !!prevState, "parked:", isParked, "soc:", soc, "odo:", odometer);
+    }
 
     if (prevState?.last_received_at) {
       const lastReceived = new Date(prevState.last_received_at).getTime();

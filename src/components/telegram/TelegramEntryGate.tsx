@@ -34,10 +34,14 @@ import { telegramApiUrl } from "@/lib/telegram/api-url";
  *         WebView → callback → back here → auto-link path above)
  *       - "Knowledge base" → dismiss overlay to reveal KB underneath
  */
-export function TelegramEntryGate() {
+export function TelegramEntryGate({ initiallyDetecting = false }: { initiallyDetecting?: boolean }) {
   const router = useRouter();
   const { t } = useTranslation();
   const [inTelegram, setInTelegram] = useState(false);
+  // detecting=true renders an opaque cover over the KB until we know the context.
+  // Seeded from the server-side UA check so the cover is in the SSR HTML — the KB
+  // never flashes before the welcome overlay or dashboard redirect completes.
+  const [detecting, setDetecting] = useState(initiallyDetecting);
   const [dismissed, setDismissed] = useState(false);
   const [busy, setBusy] = useState(false);
   const detected = useRef(false);
@@ -45,7 +49,10 @@ export function TelegramEntryGate() {
   const detectTelegramAsync = async () => {
     if (detected.current) return;
     const webApp = typeof window !== "undefined" ? window.Telegram?.WebApp : undefined;
-    if (!webApp?.initData) return;
+    if (!webApp?.initData) {
+      setDetecting(false); // plain browser — reveal the KB
+      return;
+    }
     detected.current = true;
     webApp.ready?.();
     webApp.expand?.();
@@ -73,13 +80,15 @@ export function TelegramEntryGate() {
           | null;
         toast.error(payload?.error ?? "telegram_link_failed");
         setInTelegram(true);
+        setDetecting(false);
         return;
       }
       router.push("/dashboard");
-      return;
+      return; // component unmounts on navigation — no state cleanup needed
     }
 
     setInTelegram(true);
+    setDetecting(false);
   };
 
   // Primary detection: runs on mount. Telegram pre-injects window.Telegram.WebApp
@@ -117,6 +126,11 @@ export function TelegramEntryGate() {
         strategy="afterInteractive"
         onReady={() => void detectTelegramAsync()}
       />
+      {/* Opaque cover rendered while we detect context — prevents KB flash in Telegram.
+          z-40 is below TelegramWelcome (z-50) so the transition is seamless. */}
+      {detecting && !inTelegram ? (
+        <div className="fixed inset-0 z-40 bg-background" aria-hidden />
+      ) : null}
       {inTelegram && !dismissed ? (
         <TelegramWelcome
           busy={busy}
