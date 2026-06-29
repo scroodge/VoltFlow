@@ -39,6 +39,40 @@ function finiteOdometer(value: unknown): number | null {
   return n != null && n >= 0 ? Math.round(n) : null;
 }
 
+/** Fallback: last trip's last track point when live snapshot has no GPS. */
+async function fallbackLocation(
+  supabase: SupabaseClient,
+  userId: string,
+  vehicleId: string,
+): Promise<{ lat: number; lon: number } | null> {
+  const { data } = await supabase
+    .from("bydmate_trips")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("vehicle_id", vehicleId)
+    .not("ended_at", "is", null)
+    .order("ended_at", { ascending: false })
+    .limit(1);
+
+  const tripId = (data as { id: string }[] | null)?.[0]?.id;
+  if (!tripId) return null;
+
+  const { data: points } = await supabase
+    .from("bydmate_trip_track_points")
+    .select("lat, lon")
+    .eq("user_id", userId)
+    .eq("trip_id", tripId)
+    .order("device_time", { ascending: false })
+    .limit(1);
+
+  const last = (points as { lat: number; lon: number }[] | null)?.[0];
+  if (!last) return null;
+
+  const lat = finiteTelemetryNumber(last.lat);
+  const lon = finiteTelemetryNumber(last.lon);
+  return lat != null && lon != null ? { lat, lon } : null;
+}
+
 async function loadTelegramProfile(supabase: SupabaseClient, userId: string) {
   const { data, error } = await supabase
     .from("profiles")
@@ -70,17 +104,17 @@ function notificationText(
   let prefix: string;
   switch (event) {
     case "connected":
-      prefix = `${namePart} подключился к сети`;
+      prefix = `Ваш автомобиль ${namePart} подключился к сети`;
       break;
     case "disconnected":
-      prefix = `${namePart} отключен от сети`;
+      prefix = `Ваш автомобиль ${namePart} отключен от сети`;
       break;
     case "parked":
-      prefix = `${namePart} в режиме стоянки`;
+      prefix = `Ваш автомобиль ${namePart} в режиме стоянки`;
       break;
   }
   const parts: string[] = [prefix];
-  if (odometer != null) parts.push(`${odometer} км`);
+  if (odometer != null) parts.push(`Пробег ${odometer} км`);
   if (soc != null) parts.push(`Батарея ${soc}%`);
   return parts.join("\n");
 }
@@ -153,6 +187,7 @@ export async function processBydmateVehicleStateNotifications({
   let connected = 0;
   let parked = 0;
   let disconnected = 0;
+  const fallbackCache = new Map<string, { lat: number; lon: number } | null>();
 
   const now = new Date(receivedAt).getTime();
 
@@ -163,11 +198,26 @@ export async function processBydmateVehicleStateNotifications({
     const prevState = states.get(vehicleId) ?? null;
     const carName = carNames.get(vehicleId) ?? "Автомобиль";
 
-    const { soc, odometer, lat, lon } = extractVehicleInfo(lastSample);
+    const { soc, odometer, lat: sampleLat, lon: sampleLon } = extractVehicleInfo(lastSample);
+    let lat = sampleLat;
+    let lon = sampleLon;
+
+    // GPS fallback: live sample → trip track point
+    if (lat == null || lon == null) {
+      if (!fallbackCache.has(vehicleId)) {
+        fallbackCache.set(vehicleId, await fallbackLocation(supabase, userId, vehicleId));
+      }
+      const fb = fallbackCache.get(vehicleId);
+      if (fb) {
+        lat = fb.lat;
+        lon = fb.lon;
+      }
+    }
+
     const isParked = isGearP(lastSample);
 
     if (shouldSendTelegram) {
-      console.log("vehicle state:", vehicleId, "prevState:", !!prevState, "parked:", isParked, "soc:", soc, "odo:", odometer);
+      console.log("vehicle state:", vehicleId, "prevState:", !!prevState, "parked:", isParked, "soc:", soc, "odo:", odometer, "gps:", lat, lon);
     }
 
     if (prevState?.last_received_at) {
@@ -188,8 +238,10 @@ export async function processBydmateVehicleStateNotifications({
             prevState.last_soc != null ? Math.round(prevState.last_soc) : null,
           );
           await sendTelegramMessage(profile.telegramId, discText);
-          if (prevState.last_lat != null && prevState.last_lon != null) {
-            await sendTelegramLocation(profile.telegramId, prevState.last_lat, prevState.last_lon);
+          const discoLat = prevState.last_lat ?? lat;
+          const discoLon = prevState.last_lon ?? lon;
+          if (discoLat != null && discoLon != null) {
+            await sendTelegramLocation(profile.telegramId, discoLat, discoLon);
           }
           disconnected++;
         }

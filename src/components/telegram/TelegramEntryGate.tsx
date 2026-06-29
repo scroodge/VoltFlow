@@ -22,26 +22,33 @@ import { telegramApiUrl } from "@/lib/telegram/api-url";
  *      pre-injected (e.g. Telegram Desktop beta, browser dev testing).
  *   A ref guard prevents double-execution when both fire.
  *
+ * The KB is hidden pre-paint by an inline guard script in page.tsx whenever
+ * Telegram context is present, so it never flashes. This gate then either
+ * navigates away or reveals the KB via revealKnowledgeBase().
+ *
  * State machine:
- *   • Not in Telegram → renders nothing; SSR'd KB shows through (SEO preserved).
- *   • In Telegram + already authenticated → silently links telegram_id to the
- *     existing profile (idempotent) and navigates to /dashboard. Covers the
+ *   • Not in Telegram → renders nothing; KB was never hidden (SEO preserved).
+ *   • In Telegram + already authenticated → navigates to /dashboard immediately
+ *     and stamps telegram_id in the background (idempotent). Covers the
  *     "existing PWA user" case after they log in via "Already have account?"
  *     and return to /telegram.
  *   • In Telegram + not authenticated → shows TelegramWelcome overlay:
  *       - "Open the app" → loginWithTelegram() (silent new account) → /dashboard
  *       - "Already have account?" → /login?next=/telegram (email/password in
  *         WebView → callback → back here → auto-link path above)
- *       - "Knowledge base" → dismiss overlay to reveal KB underneath
+ *       - "Knowledge base" → reveal the KB and dismiss the overlay
  */
-export function TelegramEntryGate({ initiallyDetecting = false }: { initiallyDetecting?: boolean }) {
+/** Reveal the KB hidden by the pre-paint guard in src/app/telegram/page.tsx. */
+function revealKnowledgeBase() {
+  if (typeof document !== "undefined") {
+    document.getElementById("tg-kb-cover-style")?.remove();
+  }
+}
+
+export function TelegramEntryGate() {
   const router = useRouter();
   const { t } = useTranslation();
   const [inTelegram, setInTelegram] = useState(false);
-  // detecting=true renders an opaque cover over the KB until we know the context.
-  // Seeded from the server-side UA check so the cover is in the SSR HTML — the KB
-  // never flashes before the welcome overlay or dashboard redirect completes.
-  const [detecting, setDetecting] = useState(initiallyDetecting);
   const [dismissed, setDismissed] = useState(false);
   const [busy, setBusy] = useState(false);
   const detected = useRef(false);
@@ -49,10 +56,7 @@ export function TelegramEntryGate({ initiallyDetecting = false }: { initiallyDet
   const detectTelegramAsync = async () => {
     if (detected.current) return;
     const webApp = typeof window !== "undefined" ? window.Telegram?.WebApp : undefined;
-    if (!webApp?.initData) {
-      setDetecting(false); // plain browser — reveal the KB
-      return;
-    }
+    if (!webApp?.initData) return; // plain browser — KB was never hidden
     detected.current = true;
     webApp.ready?.();
     webApp.expand?.();
@@ -65,30 +69,23 @@ export function TelegramEntryGate({ initiallyDetecting = false }: { initiallyDet
     } = await supabase.auth.getSession();
 
     if (session) {
-      // Link telegram_id onto the authenticated profile (idempotent).
-      const response = await fetch(telegramApiUrl("/api/telegram/link"), {
+      // Returning user: navigate immediately so they never see the KB cover or
+      // wait on the link round-trip. Stamp telegram_id in the background — it is
+      // idempotent and retried on every authenticated open if this call fails.
+      void fetch(telegramApiUrl("/api/telegram/link"), {
         method: "POST",
         headers: {
           "content-type": "application/json",
           authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ initData: webApp.initData }),
-      });
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        toast.error(payload?.error ?? "telegram_link_failed");
-        setInTelegram(true);
-        setDetecting(false);
-        return;
-      }
-      router.push("/dashboard");
-      return; // component unmounts on navigation — no state cleanup needed
+        keepalive: true,
+      }).catch(() => {});
+      router.replace("/dashboard");
+      return;
     }
 
     setInTelegram(true);
-    setDetecting(false);
   };
 
   // Primary detection: runs on mount. Telegram pre-injects window.Telegram.WebApp
@@ -126,17 +123,15 @@ export function TelegramEntryGate({ initiallyDetecting = false }: { initiallyDet
         strategy="afterInteractive"
         onReady={() => void detectTelegramAsync()}
       />
-      {/* Opaque cover rendered while we detect context — prevents KB flash in Telegram.
-          z-40 is below TelegramWelcome (z-50) so the transition is seamless. */}
-      {detecting && !inTelegram ? (
-        <div className="fixed inset-0 z-40 bg-background" aria-hidden />
-      ) : null}
       {inTelegram && !dismissed ? (
         <TelegramWelcome
           busy={busy}
           onOpenApp={handleOpenApp}
           onHaveAccount={handleHaveAccount}
-          onOpenKnowledge={() => setDismissed(true)}
+          onOpenKnowledge={() => {
+            revealKnowledgeBase();
+            setDismissed(true);
+          }}
         />
       ) : null}
     </>

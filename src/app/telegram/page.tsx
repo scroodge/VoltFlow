@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import { Suspense } from "react";
 
 import { TelegramEntryGate } from "@/components/telegram/TelegramEntryGate";
@@ -19,19 +18,25 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function TelegramPage() {
-  const ua = (await headers()).get("user-agent") ?? "";
-  // Telegram Mobile WebView includes "Telegram-iOS" or "Telegram-Android" in the UA.
-  // When true the gate renders an opaque cover in the SSR HTML so the KB never flashes
-  // before the welcome overlay or dashboard redirect completes.
-  const isTelegramWebView = /\bTelegram\b/i.test(ua);
+// Pre-paint guard: Telegram injects window.Telegram.WebApp before the page is
+// parsed, so this inline script can detect the Mini App context and inject a
+// style that hides the KB BEFORE the browser paints it — no flash, regardless
+// of User-Agent (Android/Desktop WebViews send a plain Chrome UA). Placed ahead
+// of #tg-kb-root in document order so it runs before that markup is parsed.
+// TelegramEntryGate removes #tg-kb-cover-style when the user chooses to browse
+// the KB. Plain browsers have no initData → KB renders normally (SEO preserved).
+const KB_PREPAINT_GUARD = `try{if(window.Telegram&&window.Telegram.WebApp&&window.Telegram.WebApp.initData){var s=document.createElement('style');s.id='tg-kb-cover-style';s.textContent='#tg-kb-root{display:none!important}';document.head.appendChild(s);}}catch(e){}`;
 
+export default async function TelegramPage() {
   const data = await getTelegramKnowledgeDataWithFallback(staticTelegramKnowledgeData);
 
   return (
     <Suspense fallback={null}>
-      <TelegramShell data={data} />
-      <TelegramEntryGate initiallyDetecting={isTelegramWebView} />
+      <script dangerouslySetInnerHTML={{ __html: KB_PREPAINT_GUARD }} />
+      <div id="tg-kb-root">
+        <TelegramShell data={data} />
+      </div>
+      <TelegramEntryGate />
     </Suspense>
   );
 }
