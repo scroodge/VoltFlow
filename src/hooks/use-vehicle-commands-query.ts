@@ -32,9 +32,11 @@ export function useVehicleCommandsQuery(
   useEffect(() => {
     if (!vehicleId || devRoute) return;
 
+    let cancelled = false;
     let channel: ReturnType<typeof supabase.channel> | null = null;
 
     void supabase.auth.getUser().then(({ data: userData }) => {
+      if (cancelled) return;
       const user = userData.user;
       if (!user) return;
 
@@ -58,6 +60,7 @@ export function useVehicleCommandsQuery(
     });
 
     return () => {
+      cancelled = true;
       if (channel) void supabase.removeChannel(channel);
     };
   }, [queryClient, supabase, vehicleId, devRoute]);

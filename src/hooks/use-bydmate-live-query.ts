@@ -54,11 +54,8 @@ export function useBydmateLiveQuery() {
   useEffect(() => {
     if (devRoute) return;
 
+    let cancelled = false;
     let channel: ReturnType<typeof supabase.channel> | null = null;
-    // During charging, ingest fires ~1Hz and each event would force a heavy
-    // select("*") refetch (full telemetry + diplus JSON) — a large egress
-    // repeater. The live hero metrics don't need 1Hz freshness, so coalesce a
-    // burst of events into a single trailing refetch every BYDMATE_LIVE_REFETCH_DEBOUNCE_MS.
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const scheduleInvalidate = () => {
       if (debounceTimer) return;
@@ -69,6 +66,7 @@ export function useBydmateLiveQuery() {
     };
 
     void supabase.auth.getUser().then(({ data: userData }) => {
+      if (cancelled) return;
       const user = userData.user;
       if (!user) return;
 
@@ -88,6 +86,7 @@ export function useBydmateLiveQuery() {
     });
 
     return () => {
+      cancelled = true;
       if (debounceTimer) clearTimeout(debounceTimer);
       if (channel) {
         void supabase.removeChannel(channel);

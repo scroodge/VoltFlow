@@ -10,7 +10,16 @@
 
 ## Pending plan
 
-### 🔵 Partition `bydmate_telemetry_samples` by time (proposed 2026-06-29)
+### 🟡 Partition `bydmate_telemetry_samples` by time (B done 2026-06-30, A pending)
+
+**Status:** Plan **B (BRIN interim) — DONE.** Migration
+`20260630130000_telemetry_samples_brin_device_time.sql` applied to prod: BRIN
+index on `device_time` (72 kB vs 10–42 MB btrees); planner confirmed using it
+for time-range scans (was seq scan). **Plan A (full partitioning) still pending.**
+
+---
+
+#### Original plan (A vs B vs C):
 
 **Problem:** `bydmate_telemetry_samples` is the high-volume, append-only ~1 Hz
 time-series table (hit 500 MB+ before the diplus-blob drop). Retention is
