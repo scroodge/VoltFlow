@@ -227,19 +227,17 @@ function notificationText(
   let result = line1;
   if (line2) result += `\n${line2}`;
 
-  if (event === "disconnected") return result;
-
   // connected: third line = map link only (no charging calc)
   if (event === "connected") {
     if (lat != null && lon != null) result += `\nhttps://www.google.com/maps?q=${lat},${lon}`;
     return result;
   }
 
-  // parked: third line = charging calc + map link
+  // disconnected / parked: third line = charging calc + map link
   const isCharging = chargePowerKw != null && chargePowerKw > 0;
   if (isCharging) {
     const kw = chargePowerKw!.toFixed(1);
-    let line3 = `Время Зарядки при мощности ${kw} кВт.`;
+    let line3 = `Время Зарядки при ${kw} кВт.`;
     if (timeToFull) line3 += ` составит ${timeToFull} до 100%`;
     if (cost != null && cost > 0) {
       const sym = currency === "EUR" ? "€" : currency === "USD" ? "$" : currency === "BYN" ? "Br" : currency === "RUB" ? "₽" : "";
