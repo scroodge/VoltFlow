@@ -54,7 +54,10 @@ export async function POST(request: Request) {
     .eq("telegram_id", tg.id)
     .maybeSingle();
   if (linkedErr) {
-    return NextResponse.json({ ok: false, error: "lookup_failed" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: "lookup_failed", detail: linkedErr.message },
+      { status: 500 },
+    );
   }
 
   let userId: string;
@@ -87,7 +90,10 @@ export async function POST(request: Request) {
         },
       });
       if (createErr || !created?.user) {
-        return NextResponse.json({ ok: false, error: "create_failed" }, { status: 500 });
+        return NextResponse.json(
+          { ok: false, error: "create_failed", detail: createErr?.message ?? "missing_user" },
+          { status: 500 },
+        );
       }
       userId = created.user.id;
       userEmail = email;
@@ -99,7 +105,10 @@ export async function POST(request: Request) {
       .update({ telegram_id: tg.id, telegram_username: username })
       .eq("id", userId);
     if (updateErr) {
-      return NextResponse.json({ ok: false, error: "link_failed" }, { status: 500 });
+      return NextResponse.json(
+        { ok: false, error: "link_failed", detail: updateErr.message },
+        { status: 500 },
+      );
     }
   }
 
@@ -111,7 +120,10 @@ export async function POST(request: Request) {
   });
   const tokenHash = link?.properties?.hashed_token;
   if (genErr || !tokenHash) {
-    return NextResponse.json({ ok: false, error: "session_failed" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: "session_failed", detail: genErr?.message ?? "missing_token_hash" },
+      { status: 500 },
+    );
   }
 
   const redeemClient = createClient(url, anonKey, {
@@ -122,7 +134,10 @@ export async function POST(request: Request) {
     type: "magiclink",
   });
   if (verifyErr || !session?.session) {
-    return NextResponse.json({ ok: false, error: "verify_failed" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: "verify_failed", detail: verifyErr?.message ?? "missing_session" },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({

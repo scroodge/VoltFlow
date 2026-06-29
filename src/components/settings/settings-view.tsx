@@ -562,10 +562,11 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       toast.message("Dev preview — sign out disabled");
       return;
     }
+    const returnPath = isTelegramWebView() ? "/telegram" : "/login";
     const supabase = createClient();
     await supabase.auth.signOut();
     toast.success(t("settings.signedOut") as string);
-    router.replace("/login");
+    router.replace(returnPath);
     router.refresh();
   };
 
@@ -1467,6 +1468,12 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       <AboutSection />
     </div>
   );
+}
+
+function isTelegramWebView() {
+  if (typeof window === "undefined") return false;
+  if (window.Telegram?.WebApp?.initData) return true;
+  return /\bTelegram\b/i.test(window.navigator.userAgent);
 }
 
 /**

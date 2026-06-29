@@ -8,6 +8,7 @@ type TelegramAuthResponse = {
   refresh_token?: string;
   telegram_id?: number;
   error?: string;
+  detail?: string;
 };
 
 export type TelegramLoginResult =
@@ -35,19 +36,34 @@ export async function loginWithTelegram(): Promise<TelegramLoginResult> {
   if (!initData) return { ok: false, error: "not_in_telegram" };
 
   let payload: TelegramAuthResponse;
+  let response: Response;
   try {
-    const response = await fetch("/api/telegram/auth", {
+    response = await fetch("/api/telegram/auth", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      cache: "no-store",
+      credentials: "include",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json",
+      },
       body: JSON.stringify({ initData }),
     });
+  } catch (error) {
+    return {
+      ok: false,
+      error: `network_error:${error instanceof Error ? error.message : "fetch_failed"}`,
+    };
+  }
+
+  try {
     payload = (await response.json()) as TelegramAuthResponse;
   } catch {
-    return { ok: false, error: "network_error" };
+    return { ok: false, error: `http_${response.status}:non_json_response` };
   }
 
   if (!payload.ok || !payload.access_token || !payload.refresh_token) {
-    return { ok: false, error: payload.error ?? "auth_failed" };
+    const detail = payload.detail ? `:${payload.detail}` : "";
+    return { ok: false, error: `${payload.error ?? "auth_failed"}${detail}` };
   }
 
   const supabase = createClient();
