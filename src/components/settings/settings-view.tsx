@@ -599,9 +599,17 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
 
     setTelegramBusy(true);
     try {
+      const {
+        data: { session },
+      } = await createClient().auth.getSession();
       const response = await fetch("/api/telegram/link", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          ...(session?.access_token
+            ? { authorization: `Bearer ${session.access_token}` }
+            : {}),
+        },
         body: JSON.stringify({ initData }),
       });
       const payload = (await response.json().catch(() => null)) as

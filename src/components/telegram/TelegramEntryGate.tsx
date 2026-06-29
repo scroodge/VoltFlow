@@ -51,11 +51,22 @@ export function TelegramEntryGate() {
 
     if (session) {
       // Link telegram_id onto the authenticated profile (idempotent).
-      await fetch("/api/telegram/link", {
+      const response = await fetch("/api/telegram/link", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ initData: webApp.initData }),
       });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        toast.error(payload?.error ?? "telegram_link_failed");
+        setInTelegram(true);
+        return;
+      }
       router.push("/dashboard");
       return;
     }

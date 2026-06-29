@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
  * Mini App open.
  *
  * Body: { initData: string }
- * Auth: Supabase session cookie (set by the prior login flow)
+ * Auth: Supabase session cookie, or Authorization: Bearer <access_token>.
  */
 export async function POST(request: Request) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -25,12 +25,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "not_configured" }, { status: 500 });
   }
 
+  const bearerToken = readBearerToken(request);
   const supabase = await createClient();
   const {
-    data: { user },
+    data: { user: cookieUser },
     error: userErr,
   } = await supabase.auth.getUser();
-  if (userErr || !user) {
+
+  const bearerUser =
+    cookieUser || !bearerToken
+      ? null
+      : (await supabaseAdmin.auth.getUser(bearerToken)).data.user;
+  const user = cookieUser ?? bearerUser;
+
+  if ((userErr && !bearerToken) || !user) {
     return NextResponse.json({ ok: false, error: "not_authenticated" }, { status: 401 });
   }
 
@@ -60,4 +68,10 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ ok: true, telegram_id: verified.user.id });
+}
+
+function readBearerToken(request: Request) {
+  const value = request.headers.get("authorization") ?? "";
+  const match = /^Bearer\s+(.+)$/i.exec(value);
+  return match?.[1] ?? null;
 }
