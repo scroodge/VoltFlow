@@ -21,6 +21,7 @@ declare global {
         contentSafeAreaInset?: TelegramSafeAreaInset;
         ready?: () => void;
         expand?: () => void;
+        openLink?: (url: string) => void;
         onEvent?: (eventType: "viewportChanged", callback: () => void) => void;
         offEvent?: (eventType: "viewportChanged", callback: () => void) => void;
       };

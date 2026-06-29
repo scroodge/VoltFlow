@@ -10,8 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { useTranslation } from "@/hooks/use-translation";
+import { sendPasswordResetEmail } from "@/lib/auth/password-reset";
 
 export function ForgotPasswordForm() {
   const [loading, setLoading] = useState(false);
@@ -26,32 +26,11 @@ export function ForgotPasswordForm() {
 
     if (!email) return;
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !supabaseKey) {
-      toast.error("Supabase is not configured");
-      return;
-    }
-
-    const redirectTo =
-      typeof window !== "undefined"
-        ? `${window.location.origin}/auth/callback/recovery?next=${encodeURIComponent("/reset-password")}`
-        : undefined;
-
-    // Use implicit flow for password reset (self-hosted Supabase often
-    // doesn't support PKCE for recovery). Tokens arrive in the URL hash
-    // fragment, which the client-side /auth/callback/recovery page handles.
-    const supabase = createSupabaseClient(supabaseUrl, supabaseKey, {
-      auth: { flowType: "implicit" },
-    });
-
     setLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo,
-      });
-      if (error) {
-        toast.error(error.message);
+      const result = await sendPasswordResetEmail(email);
+      if (!result.ok) {
+        toast.error(result.error);
         return;
       }
     } catch (e) {

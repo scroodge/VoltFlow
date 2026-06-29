@@ -17,6 +17,7 @@ export const BUILT_IN_SERVICE_CATEGORIES = [
   "insurance",
   "detailing",
   "parts_purchase",
+  "oil_change",
   "other",
 ] as const;
 
@@ -108,5 +109,6 @@ export const BUILT_IN_CATEGORY_COLORS: Record<string, string> = {
   insurance: "#FB7185",
   detailing: "#A3E635",
   parts_purchase: "#FDBA74",
+  oil_change: "#D97706",
   other: "#9CA3AF",
 };

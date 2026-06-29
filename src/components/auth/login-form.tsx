@@ -1,6 +1,8 @@
 "use client";
 
+import { ExternalLink, MessageCircle } from "lucide-react";
 import Link from "next/link";
+import Script from "next/script";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
@@ -21,7 +23,26 @@ export function LoginForm() {
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/dashboard";
   const [loading, setLoading] = useState(false);
+  const [telegramLogin, setTelegramLogin] = useState(false);
   const { t } = useTranslation();
+  const wantsTelegramReturn = next === "/telegram";
+
+  const detectTelegramLogin = () => {
+    if (!wantsTelegramReturn) return;
+    const webApp = typeof window !== "undefined" ? window.Telegram?.WebApp : undefined;
+    setTelegramLogin(Boolean(webApp?.initData));
+  };
+
+  const openVoltFlowInBrowser = () => {
+    if (typeof window === "undefined") return;
+    const url = `${window.location.origin}/login?next=${encodeURIComponent("/settings")}`;
+    const webApp = window.Telegram?.WebApp;
+    if (webApp?.openLink) {
+      webApp.openLink(url);
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
 
   const handleGoogle = async () => {
     const supabase = createClient();
@@ -96,6 +117,13 @@ export function LoginForm() {
 
   return (
     <Card className="w-full border-white/[0.1] pt-10 shadow-xl shadow-teal-500/25 backdrop-blur">
+      {wantsTelegramReturn ? (
+        <Script
+          src="https://telegram.org/js/telegram-web-app.js"
+          strategy="afterInteractive"
+          onReady={detectTelegramLogin}
+        />
+      ) : null}
       <div className="flex justify-center px-6 pb-8">
         <LocaleSwitcher />
       </div>
@@ -152,6 +180,40 @@ export function LoginForm() {
           </form>
         </TabsContent>
       </Tabs>
+
+      {telegramLogin ? (
+        <CardContent className="pt-6">
+          <div className="space-y-4 rounded-2xl border border-[var(--voltflow-cyan)]/30 bg-[var(--voltflow-cyan)]/10 p-4 text-sm">
+            <div className="flex items-start gap-3">
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[var(--voltflow-cyan)]/15 text-[var(--voltflow-cyan)]">
+                <MessageCircle className="size-5" aria-hidden />
+              </span>
+              <div className="space-y-1">
+                <p className="font-semibold tracking-tight">
+                  {t("auth.telegramGoogleTitle")}
+                </p>
+                <p className="text-muted-foreground leading-relaxed">
+                  {t("auth.telegramGoogleBody")}
+                </p>
+              </div>
+            </div>
+            <ol className="text-muted-foreground list-decimal space-y-2 pl-5 leading-relaxed">
+              {(t("auth.telegramGoogleSteps") as readonly string[]).map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-11 w-full justify-between rounded-full px-4 text-sm font-semibold"
+              onClick={openVoltFlowInBrowser}
+            >
+              <span>{t("auth.telegramOpenBrowser")}</span>
+              <ExternalLink className="size-4" aria-hidden />
+            </Button>
+          </div>
+        </CardContent>
+      ) : null}
 
       <CardFooter className="flex flex-col gap-6 pt-2 text-base">
         <div className="flex flex-col gap-3">

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId } from "react";
+import { useEffect, useId, useState } from "react";
+import { Plus, X } from "lucide-react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
@@ -63,6 +64,7 @@ export function ServiceRecordForm({
   const { t } = useTranslation();
   const { data: userCategories = [] } = useUserServiceCategoriesQuery();
   const isEdit = record !== null;
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
 
   const {
     register,
@@ -91,6 +93,7 @@ export function ServiceRecordForm({
 
   useEffect(() => {
     if (open) {
+      setIsCustomCategory(false);
       if (record) {
         reset({
           title: record.title,
@@ -186,39 +189,75 @@ export function ServiceRecordForm({
             <div className="grid grid-cols-2 gap-3">
               <Field>
                 <Label>{t("service.form.category") as string}</Label>
-                <Select
-                  value={watch("category")}
-                  onValueChange={(v) => v && setValue("category", v)}
-                  items={categoryOptions}
-                >
-                  <SelectTrigger className="min-h-11 w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectLabel>{t("service.builtInCategories") as string}</SelectLabel>
-                      {builtInOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                    {userOptions.length > 0 && (
+                {isCustomCategory ? (
+                  <div className="flex gap-2">
+                    <Input
+                      value={watch("category")}
+                      onChange={(e) => setValue("category", e.target.value)}
+                      placeholder={t("service.newCategoryPlaceholder") as string}
+                      className="min-h-11 flex-1"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCustomCategory(false);
+                        setValue("category", "other");
+                      }}
+                      className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] text-muted-foreground hover:bg-white/[0.06] hover:text-foreground"
+                    >
+                      <X className="size-5" />
+                    </button>
+                  </div>
+                ) : (
+                  <Select
+                    value={watch("category")}
+                    onValueChange={(v) => {
+                      if (v == null) return;
+                      if (v === "__add_custom__") {
+                        setIsCustomCategory(true);
+                        setValue("category", "");
+                      } else {
+                        setValue("category", v);
+                      }
+                    }}
+                    items={categoryOptions}
+                  >
+                    <SelectTrigger className="min-h-11 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
                       <SelectGroup>
-                        <SelectLabel>{t("service.myCategories") as string}</SelectLabel>
-                        {userOptions.map((option) => (
+                        <SelectLabel>{t("service.builtInCategories") as string}</SelectLabel>
+                        {builtInOptions.map((option) => (
                           <SelectItem key={option.value} value={option.value}>
-                            <span
-                              className="mr-2 inline-block size-2 rounded-full"
-                              style={{ backgroundColor: option.color }}
-                            />
                             {option.label}
                           </SelectItem>
                         ))}
                       </SelectGroup>
-                    )}
-                  </SelectContent>
-                </Select>
+                      {userOptions.length > 0 && (
+                        <SelectGroup>
+                          <SelectLabel>{t("service.myCategories") as string}</SelectLabel>
+                          {userOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              <span
+                                className="mr-2 inline-block size-2 rounded-full"
+                                style={{ backgroundColor: option.color }}
+                              />
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      )}
+                      <SelectGroup>
+                        <SelectItem value="__add_custom__">
+                          <Plus className="mr-2 size-4" />
+                          {t("service.addCustomCategory") as string}
+                        </SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                )}
               </Field>
               <Field>
                 <Label>{t("service.form.serviceType") as string}</Label>

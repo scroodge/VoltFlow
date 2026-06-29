@@ -46,6 +46,7 @@ import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useMateReleaseQuery } from "@/hooks/use-mate-release-query";
 import { useTranslation } from "@/hooks/use-translation";
 import { compareMateVersions, isMateUpdateAvailable } from "@/lib/mate-version";
+import { sendPasswordResetEmail } from "@/lib/auth/password-reset";
 import {
   MATE_GITHUB_RELEASES_LATEST_URL,
   summarizeReleaseNotes,
@@ -82,6 +83,14 @@ import type {
   ChargingTariffLocationRow,
   ChargingTariffType,
 } from "@/types/database";
+
+type NotifyChannel = "web_push" | "telegram" | "both";
+
+const notifyChannels = ["web_push", "telegram", "both"] as const;
+
+function isNotifyChannel(value: unknown): value is NotifyChannel {
+  return typeof value === "string" && notifyChannels.includes(value as NotifyChannel);
+}
 
 function TariffLocationMapPreview({ lat, lng }: { lat: number; lng: number }) {
   const latDelta = 0.006;
@@ -129,14 +138,19 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   const cars = carsResult?.cars;
   const [email, setEmail] = useState<string | null>(null);
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
+  const [telegramId, setTelegramId] = useState<number | null>(null);
+  const [telegramUsername, setTelegramUsername] = useState<string | null>(null);
+  const [notifyChannel, setNotifyChannel] = useState<NotifyChannel>("web_push");
+  const [telegramInstructionsOpen, setTelegramInstructionsOpen] = useState(false);
+  const [securityBusy, setSecurityBusy] = useState(false);
+  const [telegramBusy, setTelegramBusy] = useState(false);
   const [bydmateCloudApiKey, setBydmateCloudApiKey] = useState("");
   const [linkCode, setLinkCode] = useState<string | null>(null);
   const [linkExpiresAt, setLinkExpiresAt] = useState<number | null>(null);
-  const [linkCountdownSec, setLinkCountdownSec] = useState<number | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [linkCreating, setLinkCreating] = useState(false);
   const [cloudAdvancedOpen, setCloudAdvancedOpen] = useState(false);
   const newLocationNameInputRef = useRef<HTMLInputElement>(null);
-  const defaultPricePerKwh = useAppPreferences((s) => s.defaultPricePerKwh);
   const homePricePerKwh = useAppPreferences((s) => s.homePricePerKwh);
   const commercialAcPricePerKwh = useAppPreferences((s) => s.commercialAcPricePerKwh);
   const fastDcPricePerKwh = useAppPreferences((s) => s.fastDcPricePerKwh);
@@ -188,12 +202,26 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             commercial_ac_price_per_kwh?: number;
             fast_dc_price_per_kwh?: number;
             bydmate_cloud_api_key?: string | null;
+            telegram_id?: number | null;
+            telegram_username?: string | null;
+            notify_channel?: string | null;
           } | null;
           tariffLocations?: Record<string, unknown>[];
         };
 
         setEmail(payload.email ?? null);
         setProfileUserId(payload.profile?.id ?? null);
+        setTelegramId(
+          typeof payload.profile?.telegram_id === "number" ? payload.profile.telegram_id : null,
+        );
+        setTelegramUsername(
+          typeof payload.profile?.telegram_username === "string"
+            ? payload.profile.telegram_username
+            : null,
+        );
+        if (isNotifyChannel(payload.profile?.notify_channel)) {
+          setNotifyChannel(payload.profile.notify_channel);
+        }
 
         const preferredCurrency = payload.profile?.preferred_currency;
         if (typeof preferredCurrency === "string" && isCurrency(preferredCurrency)) {
@@ -255,13 +283,21 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       const [{ data: profile, error }, { data: locationRows }] = await Promise.all([
         supabase
         .from("profiles")
-        .select("preferred_currency, default_price_per_kwh, home_price_per_kwh, commercial_ac_price_per_kwh, fast_dc_price_per_kwh, bydmate_cloud_api_key")
+        .select("preferred_currency, default_price_per_kwh, home_price_per_kwh, commercial_ac_price_per_kwh, fast_dc_price_per_kwh, bydmate_cloud_api_key, telegram_id, telegram_username, notify_channel")
         .eq("id", user.id)
         .single(),
         supabase.from("charging_tariff_locations").select("*").eq("user_id", user.id),
       ]);
 
       if (!mounted || error) return;
+
+      setTelegramId(typeof profile?.telegram_id === "number" ? profile.telegram_id : null);
+      setTelegramUsername(
+        typeof profile?.telegram_username === "string" ? profile.telegram_username : null,
+      );
+      if (isNotifyChannel(profile?.notify_channel)) {
+        setNotifyChannel(profile.notify_channel);
+      }
 
       const preferredCurrency = profile?.preferred_currency;
       if (typeof preferredCurrency === "string" && isCurrency(preferredCurrency)) {
@@ -533,6 +569,88 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
     router.refresh();
   };
 
+  const handleAddPassword = async () => {
+    if (!email) {
+      toast.error(t("settings.security.emailMissing") as string);
+      return;
+    }
+
+    setSecurityBusy(true);
+    try {
+      const result = await sendPasswordResetEmail(email);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(t("settings.security.resetSent") as string);
+    } finally {
+      setSecurityBusy(false);
+    }
+  };
+
+  const handleConnectTelegram = async () => {
+    const webApp = typeof window !== "undefined" ? window.Telegram?.WebApp : undefined;
+    const initData = webApp?.initData ?? "";
+    if (!initData) {
+      setTelegramInstructionsOpen(true);
+      toast.message(t("settings.telegramConnect.openInTelegram") as string);
+      return;
+    }
+
+    setTelegramBusy(true);
+    try {
+      const response = await fetch("/api/telegram/link", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ initData }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; telegram_id?: number; error?: string }
+        | null;
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error ?? "link_failed");
+      }
+      setTelegramId(payload.telegram_id ?? webApp?.initDataUnsafe?.user?.id ?? null);
+      setTelegramUsername(webApp?.initDataUnsafe?.user?.username ?? null);
+      setTelegramInstructionsOpen(false);
+      toast.success(t("settings.telegramConnect.linked") as string);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(t("settings.telegramConnect.linkFailed")));
+    } finally {
+      setTelegramBusy(false);
+    }
+  };
+
+  const handleNotifyChannelChange = (value: string | null) => {
+    if (!isNotifyChannel(value)) return;
+    if ((value === "telegram" || value === "both") && !telegramId) {
+      setTelegramInstructionsOpen(true);
+      toast.error(t("settings.telegramConnect.connectFirst") as string);
+      return;
+    }
+
+    const previous = notifyChannel;
+    setNotifyChannel(value);
+
+    if (!profileUserId) {
+      toast.success(t("settings.telegramConnect.channelSaved") as string);
+      return;
+    }
+
+    void createClient()
+      .from("profiles")
+      .update({ notify_channel: value })
+      .eq("id", profileUserId)
+      .then(({ error }) => {
+        if (error) {
+          setNotifyChannel(previous);
+          toast.error(error.message);
+          return;
+        }
+        toast.success(t("settings.telegramConnect.channelSaved") as string);
+      });
+  };
+
   const handleGenerateBydmateKey = () => {
     if (!profileUserId) {
       toast.error("Sign in before generating a BYDMate key");
@@ -566,24 +684,14 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   };
 
   useEffect(() => {
-    if (!linkExpiresAt) {
-      setLinkCountdownSec(null);
-      return;
-    }
-
-    const tick = () => {
-      const remainingMs = linkExpiresAt - Date.now();
-      if (remainingMs <= 0) {
-        setLinkCountdownSec(0);
-        return;
-      }
-      setLinkCountdownSec(Math.ceil(remainingMs / 1000));
-    };
-
-    tick();
-    const id = window.setInterval(tick, 1000);
+    if (!linkExpiresAt) return;
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, [linkExpiresAt]);
+
+  const linkCountdownSec = linkExpiresAt
+    ? Math.max(0, Math.ceil((linkExpiresAt - nowMs) / 1000))
+    : null;
 
   const formatLinkCountdown = (totalSec: number) => {
     const min = Math.floor(totalSec / 60);
@@ -614,6 +722,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
           throw new Error(payload.error ?? String(t("settings.cloud.linkCodeFailed")));
         }
         setLinkCode(payload.code);
+        setNowMs(Date.now());
         setLinkExpiresAt(new Date(payload.expires_at).getTime());
       })
       .catch((error: unknown) => {
@@ -668,6 +777,120 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
           >
             {t("settings.signOut")}
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card size="sm" className="border-white/[0.08]">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <KeyRound className="size-5" aria-hidden />
+            {t("settings.security.title")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            {t("settings.security.body")}
+          </p>
+          <Button
+            type="button"
+            variant="secondary"
+            size="lg"
+            className="h-11 w-full rounded-full text-sm font-semibold"
+            disabled={securityBusy || !email}
+            onClick={() => void handleAddPassword()}
+          >
+            {securityBusy ? t("settings.security.sending") : t("settings.security.addPassword")}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card size="sm" className="border-white/[0.08]">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MessageCircle className="size-5" aria-hidden />
+            {t("settings.telegramConnect.title")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-3">
+            <p className="text-muted-foreground text-xs uppercase tracking-[0.25em]">
+              {t("settings.telegramConnect.status")}
+            </p>
+            <p className="mt-2 text-sm font-medium">
+              {telegramId
+                ? t("settings.telegramConnect.connected", {
+                    username: telegramUsername ? `@${telegramUsername}` : String(telegramId),
+                  })
+                : t("settings.telegramConnect.notConnected")}
+            </p>
+          </div>
+
+          <Button
+            type="button"
+            variant={telegramId ? "outline" : "secondary"}
+            size="lg"
+            className="h-11 w-full rounded-full text-sm font-semibold"
+            disabled={telegramBusy}
+            onClick={() => void handleConnectTelegram()}
+          >
+            {telegramBusy
+              ? t("settings.telegramConnect.connecting")
+              : telegramId
+                ? t("settings.telegramConnect.reconnect")
+                : t("settings.telegramConnect.connect")}
+          </Button>
+
+          {telegramInstructionsOpen ? (
+            <div className="space-y-3 rounded-2xl border border-[var(--voltflow-cyan)]/25 bg-[var(--voltflow-cyan)]/10 p-4">
+              <p className="text-sm font-semibold">
+                {t("settings.telegramConnect.instructionsTitle")}
+              </p>
+              <ol className="text-muted-foreground list-decimal space-y-2 pl-5 text-sm leading-relaxed">
+                {(t("settings.telegramConnect.instructions") as readonly string[]).map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+              <Button
+                asChild
+                variant="outline"
+                size="lg"
+                className="h-11 w-full justify-between rounded-full px-4 text-sm font-semibold"
+              >
+                <a href="https://t.me/Voltflowscr_bot" target="_blank" rel="noreferrer">
+                  <span>{t("settings.telegramConnect.openBot")}</span>
+                  <ExternalLink className="size-4" aria-hidden />
+                </a>
+              </Button>
+            </div>
+          ) : null}
+
+          <div className="space-y-2">
+            <Label htmlFor="notify-channel">
+              {t("settings.telegramConnect.channelLabel")}
+            </Label>
+            <Select
+              value={notifyChannel}
+              onValueChange={handleNotifyChannelChange}
+              items={notifyChannels.map((channel) => ({
+                value: channel,
+                label: t(`settings.telegramConnect.channels.${channel}` as TranslationKey) as string,
+              }))}
+            >
+              <SelectTrigger id="notify-channel" className="h-11 w-full rounded-2xl text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {notifyChannels.map((channel) => (
+                  <SelectItem key={channel} value={channel}>
+                    {t(`settings.telegramConnect.channels.${channel}` as TranslationKey)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-muted-foreground text-sm">
+              {t("settings.telegramConnect.channelHelp")}
+            </p>
+          </div>
         </CardContent>
       </Card>
 
