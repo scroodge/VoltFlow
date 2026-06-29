@@ -10,6 +10,84 @@
 
 ## Pending plan
 
+### 🔵 Partition `bydmate_telemetry_samples` by time (proposed 2026-06-29)
+
+**Problem:** `bydmate_telemetry_samples` is the high-volume, append-only ~1 Hz
+time-series table (hit 500 MB+ before the diplus-blob drop). Retention is
+`DELETE`-based via `bydmate_prune_telemetry_samples()` + pg_cron. Mass deletes
+leave dead tuples → bloat → autovacuum pressure, and the only space reclamation
+is a vacuum (not a truncate). The btree indexes on `(user_id, vehicle_id,
+device_time)` are also large for time-ordered data.
+
+**Current state (verified):**
+- PK is `id uuid`. Postgres requires the partition key to be part of every
+  unique constraint / PK → partitioning by `device_time` forces the PK to become
+  composite `(id, device_time)` (or `(device_time, id)`).
+- Unique index `bydmate_telemetry_samples_user_vehicle_device_unique` is on
+  `(user_id, vehicle_id, device_time)` — already includes `device_time`, so it
+  remains valid as a partitioned unique index. ✅
+- Ingest inserts use `on conflict (user_id, vehicle_id, device_time) do nothing`
+  for idempotency — must keep working.
+- `diplus` jsonb blob already dropped; `diplus_*` typed columns remain.
+
+**Options:**
+
+| | Approach | Pros | Cons |
+|---|---|---|---|
+| A | **Declarative RANGE partitioning by `device_time`** (monthly) + BRIN on `device_time` | Retention = `DROP PARTITION` (instant, no bloat); smaller indexes; partition pruning speeds time-range reads | Requires new partitioned table + data migration + cutover; composite PK; pg_partman or a cron to pre-create partitions |
+| B | **Keep heap table, add BRIN on `device_time`, switch retention to batched deletes** | No cutover; smaller time index; less lock risk | Still `DELETE`-based bloat; doesn't fix the core problem |
+| C | **Do nothing** | Zero effort | Bloat/vacuum cost grows with userbase |
+
+**Cutover plan for A (idempotent, self-hosted-safe — apply via `psql -f`):**
+1. `create table bydmate_telemetry_samples_part (… , primary key (id, device_time)) partition by range (device_time);`
+2. Recreate indexes (incl. partitioned unique on `(user_id, vehicle_id, device_time)`) + RLS policy on the new table.
+3. Pre-create partitions covering existing data range + next few months (or install `pg_partman`).
+4. `insert into …_part select * from bydmate_telemetry_samples;` (in batches if large).
+5. In one transaction: `alter table … rename` swap, repoint the ingest RPC(s) and `bydmate_prune_telemetry_samples()` (now `drop partition` instead of `delete`).
+6. Add a monthly pg_cron job to create the next partition.
+
+**Trade-off note:** ingest RPC (`bydmate_ingest_telemetry`) and the prune
+function both reference the table by name — renaming is transparent to them, but
+the prune logic should be rewritten to drop whole partitions where possible
+(premium/admin rows in the same time range complicate pure DROP — may need a
+hybrid: DROP old partitions globally only past the longest retention tier, plus
+per-user DELETE within retained partitions for free-tier users).
+
+**Recommendation:** **A**, but it's the higher-effort option and the prune
+rewrite is the subtle part (mixed retention tiers in one time partition). Worth
+doing before the userbase grows; not urgent at current scale. **B** is a cheap
+interim win (BRIN index) if we want lower risk now.
+
+**→ Should I build A (full partitioning + prune rewrite), or B (BRIN-only interim)?**
+
+---
+
+### 🔵 Promote `vehicle_id` to a real FK (proposed 2026-06-29)
+
+**Problem:** `vehicle_id` is a soft `text` key across telemetry, trips,
+snapshots, commands, and notifications (36 occurrences). The link is
+`cars.vehicle_alias` (text) → `*.vehicle_id` (text) by string equality, with
+**no referential integrity**. A typo or alias change silently orphans data;
+nothing constrains the vehicle dimension the way RLS constrains `user_id`.
+
+**Options:**
+
+| | Approach | Pros | Cons |
+|---|---|---|---|
+| A | **New `vehicles` table (uuid PK), FK from all telemetry/trip/command tables; keep `vehicle_alias` as the external device id on it** | True integrity; clean model; one place for per-vehicle metadata | Large migration; backfill mapping alias→uuid; every RPC that joins on `vehicle_id` must change; risk |
+| B | **FK `vehicle_id (text) → cars.vehicle_alias` with a unique index on `vehicle_alias`** | Smaller change; adds integrity without new table | `vehicle_alias` is nullable + per-user; text FK is awkward; still no per-vehicle entity |
+| C | **Do nothing, document the invariant** | Zero risk | Integrity stays app-enforced only |
+
+**Recommendation:** **A** is the correct long-term model but it's a big,
+multi-RPC migration touching the hottest write path (ingest). Given current
+scale and that the invariant is app-enforced today, **C now / A later** is
+defensible. Do **A** only when we're already opening up the telemetry tables for
+another reason (e.g. the partitioning cutover above — natural moment to combine).
+
+**→ Lower priority than partitioning. Build only if explicitly prioritized.**
+
+---
+
 ### ✅ Settings — GPS permission prompt on every open (resolved 2026-06-29)
 
 **Problem:** Every time Settings opens, `useEffect` in `settings-view.tsx:178` calls
