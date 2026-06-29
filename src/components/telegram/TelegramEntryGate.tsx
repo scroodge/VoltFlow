@@ -84,8 +84,9 @@ export function TelegramEntryGate() {
 
   // Primary detection: runs on mount. Telegram pre-injects window.Telegram.WebApp
   // before the page loads so initData is already available at hydration time —
-  // no need to wait for the Script's onReady callback.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // no need to wait for the Script's onReady callback. setState only runs after
+  // async awaits inside detectTelegramAsync, so no synchronous cascade occurs.
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
   useEffect(() => { void detectTelegramAsync(); }, []);
 
   const handleOpenApp = async () => {
