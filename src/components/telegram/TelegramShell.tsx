@@ -1,8 +1,9 @@
 "use client";
 
-import { Zap } from "lucide-react";
+import { ArrowRight, Zap } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { BottomTabs, type TelegramTab } from "@/components/telegram/BottomTabs";
 import { ArticleList } from "@/components/telegram/ArticleList";
@@ -18,15 +19,20 @@ import {
   normalizeModelGenerations,
 } from "@/lib/telegram/generation";
 import { getTelegramThemeStyle } from "@/lib/telegram/theme";
+import { loginWithTelegram } from "@/lib/telegram/login";
 import { useTelegramWebApp } from "@/lib/telegram/useTelegramWebApp";
 import type { TelegramKnowledgeData } from "@/types/knowledge";
+import { useTranslation } from "@/hooks/use-translation";
+import { cn } from "@/lib/utils";
 
 export function TelegramShell({ data }: { data?: TelegramKnowledgeData }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TelegramTab>("home");
   const [guideCategory, setGuideCategory] = useState<string | "All">("All");
+  const [openAppBusy, setOpenAppBusy] = useState(false);
   const [generation, setGeneration] = useTelegramGeneration();
   const articleCategories = useMemo(() => {
     const categoryMap = new Map<string, string>();
@@ -91,9 +97,35 @@ export function TelegramShell({ data }: { data?: TelegramKnowledgeData }) {
     router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }
 
+  async function openAppFromKnowledge() {
+    if (!telegram.isTelegram) {
+      router.push("/login?next=/dashboard");
+      return;
+    }
+
+    setOpenAppBusy(true);
+    const result = await loginWithTelegram();
+    if (result.ok) {
+      router.push("/dashboard");
+      return;
+    }
+
+    toast.error(`${t("telegram.loginError") as string} (${result.error})`, {
+      description: t("telegram.loginExistingHint") as string,
+      action: {
+        label: t("telegram.loginExistingAction") as string,
+        onClick: () => router.push("/login?next=/telegram"),
+      },
+    });
+    setOpenAppBusy(false);
+  }
+
   return (
     <main
-      className="relative isolate min-h-dvh overflow-x-hidden scroll-smooth bg-background text-foreground"
+      className={cn(
+        "relative isolate min-h-dvh overflow-x-hidden scroll-smooth bg-background text-foreground",
+        telegram.isTelegram && "telegram-webview",
+      )}
       style={themeStyle}
     >
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_-8%,rgba(0,209,255,0.16),transparent_22rem),linear-gradient(180deg,rgba(18,21,28,0)_0%,#12151C_72%)]" />
@@ -116,9 +148,26 @@ export function TelegramShell({ data }: { data?: TelegramKnowledgeData }) {
               </div>
             </div>
 
-            <span className="shrink-0 rounded-full border border-border bg-white/[0.04] px-2.5 py-1 text-[11px] font-bold text-[var(--voltflow-cyan)]">
-              {telegram.isTelegram ? "Telegram" : "Веб"}
-            </span>
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="rounded-full border border-border bg-white/[0.04] px-2.5 py-1 text-[11px] font-bold text-[var(--voltflow-cyan)]">
+                {telegram.isTelegram ? "Telegram" : "Веб"}
+              </span>
+              <button
+                type="button"
+                onClick={() => void openAppFromKnowledge()}
+                disabled={openAppBusy}
+                className="flex min-h-9 max-w-[8.75rem] items-center gap-1.5 rounded-full border border-[var(--voltflow-green)]/35 bg-[var(--voltflow-green)] px-3 text-xs font-bold text-[#08130C] transition-opacity disabled:opacity-60"
+              >
+                <span className="truncate">
+                  {openAppBusy
+                    ? t("telegram.openingApp")
+                    : telegram.isTelegram
+                      ? t("telegram.openApp")
+                      : t("telegram.openFullApp")}
+                </span>
+                {!openAppBusy ? <ArrowRight className="size-3.5" aria-hidden /> : null}
+              </button>
+            </div>
           </div>
 
           <section className="rounded-lg border border-border bg-white/[0.03] p-1.5" aria-label="Поколение автомобиля">

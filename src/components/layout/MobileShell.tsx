@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode } from "react";
+import { useMemo } from "react";
 
 import { MateUpdateBanner } from "@/components/dashboard/mate-update-banner";
 import { ChargingSessionBackgroundSync } from "@/components/charging/charging-session-background-sync";
@@ -13,6 +14,9 @@ import {
   OnboardingGate,
 } from "@/components/onboarding/onboarding-gate";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
+import { getTelegramThemeStyle } from "@/lib/telegram/theme";
+import { useTelegramWebApp } from "@/lib/telegram/useTelegramWebApp";
+import { cn } from "@/lib/utils";
 
 function MateUpdateBannerHost() {
   const { data: bydmateLive = [] } = useBydmateLiveQuery();
@@ -27,6 +31,12 @@ function MateUpdateBannerHost() {
 }
 
 export function MobileShell({ children }: { children: ReactNode }) {
+  const telegram = useTelegramWebApp();
+  const telegramThemeStyle = useMemo(
+    () => (telegram.isTelegram ? getTelegramThemeStyle(telegram.themeParams) : undefined),
+    [telegram.isTelegram, telegram.themeParams],
+  );
+
   return (
     <DashboardDevSnapshotProvider>
       <VehicleDevSnapshotProvider>
@@ -34,7 +44,13 @@ export function MobileShell({ children }: { children: ReactNode }) {
       <ChargingSessionBackgroundSync />
       <OnboardingGate />
       <div className="mobile-page">
-        <div className="flex h-dvh min-h-dvh w-full flex-col overflow-hidden bg-background shadow-[0_0_80px_rgba(0,0,0,0.45)]">
+        <div
+          className={cn(
+            "flex h-dvh min-h-dvh w-full flex-col overflow-hidden bg-background shadow-[0_0_80px_rgba(0,0,0,0.45)]",
+            telegram.isTelegram && "telegram-webview",
+          )}
+          style={telegramThemeStyle}
+        >
           <main className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain pt-[env(safe-area-inset-top)]">
             <ConnectCarBanner />
             <MateUpdateBannerHost />

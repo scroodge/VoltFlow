@@ -6,6 +6,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
 import { isIos, isStandalone, noopSubscribe, subscribeDisplayMode } from "@/lib/pwa";
+import { isTelegramWebView } from "@/lib/telegram/environment";
 
 // Chrome/Edge/Android fire this before showing their own install banner. We
 // capture it, suppress the default mini-infobar, and drive a first-class button.
@@ -25,6 +26,7 @@ export function InstallPrompt() {
   const installed = useSyncExternalStore(subscribeDisplayMode, isStandalone, () => false);
   const ios = useSyncExternalStore(noopSubscribe, isIos, () => false);
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
+  const telegramWebView = useSyncExternalStore(noopSubscribe, isTelegramWebView, () => false);
   const [hidden, setHidden] = useState(false);
 
   useEffect(() => {
@@ -46,7 +48,7 @@ export function InstallPrompt() {
 
   // Already installed (or just finished installing) → the landing CTA stack
   // handles "open app"; nothing to show here.
-  if (installed || hidden) return null;
+  if (installed || hidden || telegramWebView) return null;
 
   async function handleInstall() {
     if (!deferred) return;

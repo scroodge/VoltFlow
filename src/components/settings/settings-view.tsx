@@ -48,6 +48,7 @@ import { useTranslation } from "@/hooks/use-translation";
 import { compareMateVersions, isMateUpdateAvailable } from "@/lib/mate-version";
 import { sendPasswordResetEmail } from "@/lib/auth/password-reset";
 import { telegramApiUrl } from "@/lib/telegram/api-url";
+import { isTelegramWebView } from "@/lib/telegram/environment";
 import {
   MATE_GITHUB_RELEASES_LATEST_URL,
   summarizeReleaseNotes,
@@ -1469,12 +1470,6 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       <AboutSection />
     </div>
   );
-}
-
-function isTelegramWebView() {
-  if (typeof window === "undefined") return false;
-  if (window.Telegram?.WebApp?.initData) return true;
-  return /\bTelegram\b/i.test(window.navigator.userAgent);
 }
 
 /**
