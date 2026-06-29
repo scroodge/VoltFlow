@@ -23,6 +23,7 @@ import {
   useDeleteServiceRecordMutation,
   useInsertServiceRecordMutation,
   useServiceRecordsQuery,
+  useUpdateServiceRecordMutation,
 } from "@/hooks/use-service-records";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import type { ServiceRecordRow } from "@/types/service";
@@ -102,6 +103,7 @@ export function ServiceView() {
 
   const { data: records = [], isLoading } = useServiceRecordsQuery(activeCarId);
   const insertMutation = useInsertServiceRecordMutation();
+  const updateMutation = useUpdateServiceRecordMutation();
   const deleteMutation = useDeleteServiceRecordMutation();
 
   const [viewTab, setViewTab] = useState<ViewTab>("timeline");
@@ -125,31 +127,36 @@ export function ServiceView() {
     nextDueKm: string;
   }) => {
     if (!activeCarId) return;
-    insertMutation.mutate(
-      {
-        carId: activeCarId,
-        title: data.title,
-        category: data.category,
-        serviceType: data.serviceType,
-        performedDate: data.performedDate,
-        odometerKm: data.odometerKm ? Number(data.odometerKm) : undefined,
-        vendorName: data.vendorName || undefined,
-        vendorLocation: data.vendorLocation || undefined,
-        partsCost: data.partsCost ? Number(data.partsCost) : 0,
-        laborCost: data.laborCost ? Number(data.laborCost) : 0,
-        totalCost: data.totalCost ? Number(data.totalCost) : 0,
-        currency,
-        notes: data.notes || undefined,
-        nextDueDate: data.nextDueDate || undefined,
-        nextDueKm: data.nextDueKm ? Number(data.nextDueKm) : undefined,
-      },
-      {
-        onSuccess: () => {
-          setFormOpen(false);
-          setEditingRecord(null);
-        },
-      },
-    );
+
+    const base = {
+      carId: activeCarId,
+      title: data.title,
+      category: data.category,
+      serviceType: data.serviceType,
+      performedDate: data.performedDate,
+      odometerKm: data.odometerKm ? Number(data.odometerKm) : undefined,
+      vendorName: data.vendorName || undefined,
+      vendorLocation: data.vendorLocation || undefined,
+      partsCost: data.partsCost ? Number(data.partsCost) : 0,
+      laborCost: data.laborCost ? Number(data.laborCost) : 0,
+      totalCost: data.totalCost ? Number(data.totalCost) : 0,
+      currency,
+      notes: data.notes || undefined,
+      nextDueDate: data.nextDueDate || undefined,
+      nextDueKm: data.nextDueKm ? Number(data.nextDueKm) : undefined,
+    };
+
+    if (editingRecord) {
+      updateMutation.mutate(
+        { id: editingRecord.id, ...base },
+        { onSuccess: () => { setFormOpen(false); setEditingRecord(null); } },
+      );
+    } else {
+      insertMutation.mutate(
+        base,
+        { onSuccess: () => { setFormOpen(false); setEditingRecord(null); } },
+      );
+    }
   };
 
   const handleDelete = (id: string) => {

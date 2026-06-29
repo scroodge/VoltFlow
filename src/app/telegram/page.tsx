@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
+import { TelegramEntryGate } from "@/components/telegram/TelegramEntryGate";
 import { TelegramShell } from "@/components/telegram/TelegramShell";
 import { getTelegramKnowledgeDataWithFallback } from "@/lib/supabase/knowledge";
 import { staticTelegramKnowledgeData } from "@/lib/telegram/knowledge";
@@ -23,6 +24,7 @@ export default async function TelegramPage() {
   return (
     <Suspense fallback={null}>
       <TelegramShell data={data} />
+      <TelegramEntryGate />
     </Suspense>
   );
 }
