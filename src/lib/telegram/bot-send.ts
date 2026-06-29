@@ -24,6 +24,39 @@ type SendOptions = {
   disableNotification?: boolean;
 };
 
+export async function sendTelegramLocation(
+  chatId: number | string,
+  lat: number,
+  lon: number,
+): Promise<TelegramSendResult> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return { ok: false, error: "missing_bot_token" };
+
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${token}/sendLocation`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        latitude: lat,
+        longitude: lon,
+      }),
+    });
+
+    const payload = (await response.json().catch(() => null)) as
+      | { ok?: boolean; description?: string; error_code?: number }
+      | null;
+
+    if (response.ok && payload?.ok) return { ok: true };
+
+    const description = payload?.description ?? `http_${response.status}`;
+    const blocked = response.status === 403 || /blocked|chat not found/i.test(description);
+    return { ok: false, error: description, blocked };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "fetch_failed" };
+  }
+}
+
 export async function sendTelegramMessage(
   chatId: number | string,
   text: string,
