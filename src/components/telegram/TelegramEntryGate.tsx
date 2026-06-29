@@ -1,7 +1,6 @@
 "use client";
 
 import Script from "next/script";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -10,28 +9,31 @@ import { useTranslation } from "@/hooks/use-translation";
 import { loginWithTelegram } from "@/lib/telegram/login";
 import { createClient } from "@/lib/supabase/client";
 import { telegramApiUrl } from "@/lib/telegram/api-url";
+import { readTelegramInitData } from "@/lib/telegram/init-data";
 
 /**
  * Context-aware gate for the `/telegram` Mini App entry.
  *
- * Detection runs in two places:
- *   1. useEffect on mount — Telegram pre-injects window.Telegram.WebApp before
- *      the page loads, so initData is already available at hydration time.
- *      This is the primary path and fires every time inside the Mini App.
- *   2. Script onReady — fallback for environments where the SDK is not
- *      pre-injected (e.g. Telegram Desktop beta, browser dev testing).
- *   A ref guard prevents double-execution when both fire.
+ * Detection reads initData via readTelegramInitData(), which prefers the SDK
+ * but falls back to the URL hash (#tgWebAppData=…) — so it works even when
+ * telegram-web-app.js fails to load (CSP/network/WebView). It runs on mount and
+ * again on Script onReady; a ref guard prevents double-execution.
  *
  * The KB is hidden pre-paint by an inline guard script in page.tsx whenever
  * Telegram context is present, so it never flashes. This gate then either
  * navigates away or reveals the KB via revealKnowledgeBase().
  *
+ * Navigations out of /telegram use HARD loads (window.location), not the Next
+ * router. Soft RSC navigations fetch `/<route>?_rsc=…` from Vercel, which the
+ * Vercel Security Checkpoint challenges inside the Telegram WebView — the router
+ * then silently fails and the user is left on a blank /telegram. A full page
+ * load goes through the same path as the initial /telegram load that succeeded.
+ *
  * State machine:
  *   • Not in Telegram → renders nothing; KB was never hidden (SEO preserved).
- *   • In Telegram + already authenticated → navigates to /dashboard immediately
- *     and stamps telegram_id in the background (idempotent). Covers the
- *     "existing PWA user" case after they log in via "Already have account?"
- *     and return to /telegram.
+ *   • In Telegram + already authenticated → loads /dashboard immediately and
+ *     stamps telegram_id in the background (idempotent). Covers the "existing
+ *     PWA user" case after they log in via "Already have account?".
  *   • In Telegram + not authenticated → shows TelegramWelcome overlay:
  *       - "Open the app" → loginWithTelegram() (silent new account) → /dashboard
  *       - "Already have account?" → /login?next=/telegram (email/password in
@@ -45,8 +47,12 @@ function revealKnowledgeBase() {
   }
 }
 
+/** Hard navigation — survives the Vercel Security Checkpoint inside the WebView. */
+function hardNavigate(path: string) {
+  if (typeof window !== "undefined") window.location.assign(path);
+}
+
 export function TelegramEntryGate() {
-  const router = useRouter();
   const { t } = useTranslation();
   const [inTelegram, setInTelegram] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -55,11 +61,12 @@ export function TelegramEntryGate() {
 
   const detectTelegramAsync = async () => {
     if (detected.current) return;
-    const webApp = typeof window !== "undefined" ? window.Telegram?.WebApp : undefined;
-    if (!webApp?.initData) return; // plain browser — KB was never hidden
+    const initData = readTelegramInitData();
+    if (!initData) return; // plain browser — KB was never hidden
     detected.current = true;
-    webApp.ready?.();
-    webApp.expand?.();
+    const webApp = typeof window !== "undefined" ? window.Telegram?.WebApp : undefined;
+    webApp?.ready?.();
+    webApp?.expand?.();
 
     // Check for an existing session — happens when an existing PWA user signed
     // in via "Already have account?" and was redirected back to /telegram.
@@ -78,23 +85,22 @@ export function TelegramEntryGate() {
           "content-type": "application/json",
           authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ initData: webApp.initData }),
+        body: JSON.stringify({ initData }),
         keepalive: true,
       }).catch(() => {});
-      router.replace("/dashboard");
+      hardNavigate("/dashboard");
       return;
     }
 
     setInTelegram(true);
   };
 
-  // Primary detection: runs on mount. The SDK may not be ready yet (mobile builds
-  // window.Telegram.WebApp only after telegram-web-app.js loads), in which case
-  // this no-ops and the Script's onReady callback runs detection once it loads.
-  // Safety timeout: if detection never resolves (SDK fails to load) but the
-  // pre-paint guard hid the KB, reveal it so the user is never stuck on a blank
-  // screen. detected.current is true once we've committed to an overlay/redirect,
-  // so the timeout only fires in the genuinely-stuck case.
+  // Primary detection: runs on mount. readTelegramInitData() reads the URL hash
+  // so it resolves even before (or without) the SDK; onReady re-runs it as a
+  // belt-and-suspenders trigger. Safety timeout: if detection never resolves but
+  // the pre-paint guard hid the KB, reveal it so the user is never stuck blank.
+  // detected.current is true once we've committed to an overlay/redirect, so the
+  // timeout only fires in the genuinely-stuck case.
   useEffect(() => {
     // setState only runs after async awaits inside detectTelegramAsync, so there
     // is no synchronous render cascade despite the rule's static analysis.
@@ -104,28 +110,27 @@ export function TelegramEntryGate() {
       if (!detected.current) revealKnowledgeBase();
     }, 5000);
     return () => clearTimeout(fallback);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleOpenApp = async () => {
     setBusy(true);
     const result = await loginWithTelegram();
     if (result.ok) {
-      router.push("/dashboard");
+      hardNavigate("/dashboard");
       return;
     }
     toast.error(`${t("telegram.loginError") as string} (${result.error})`, {
       description: t("telegram.loginExistingHint") as string,
       action: {
         label: t("telegram.loginExistingAction") as string,
-        onClick: () => router.push("/login?next=/telegram"),
+        onClick: () => hardNavigate("/login?next=/telegram"),
       },
     });
     setBusy(false);
   };
 
   const handleHaveAccount = () => {
-    router.push("/login?next=/telegram");
+    hardNavigate("/login?next=/telegram");
   };
 
   return (

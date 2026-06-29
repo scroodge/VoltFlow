@@ -22,6 +22,7 @@ type SendOptions = {
   /** Inline keyboard / reply markup, passed through verbatim to the Bot API. */
   replyMarkup?: unknown;
   disableNotification?: boolean;
+  disableWebPagePreview?: boolean;
 };
 
 export async function sendTelegramLocation(
@@ -75,7 +76,7 @@ export async function sendTelegramMessage(
         parse_mode: options.parseMode,
         reply_markup: options.replyMarkup,
         disable_notification: options.disableNotification,
-        disable_web_page_preview: true,
+        disable_web_page_preview: options.disableWebPagePreview ?? true,
       }),
     });
 

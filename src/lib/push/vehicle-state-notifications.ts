@@ -5,10 +5,7 @@ import { finiteTelemetryNumber } from "@/lib/bydmate/telemetry-charging";
 import {
   gearIsPark,
 } from "@/lib/bydmate/gear";
-import {
-  sendTelegramLocation,
-  sendTelegramMessage,
-} from "@/lib/telegram/bot-send";
+import { sendTelegramMessage } from "@/lib/telegram/bot-send";
 
 const DISCONNECTED_AFTER_MS = 10 * 60 * 1000;
 const CONNECTED_GAP_MS = 5 * 60 * 1000;
@@ -37,6 +34,99 @@ function finiteSoc(value: unknown): number | null {
 function finiteOdometer(value: unknown): number | null {
   const n = finiteTelemetryNumber(value);
   return n != null && n >= 0 ? Math.round(n) : null;
+}
+
+function formatDurationHoursMinutes(totalHours: number): string {
+  if (totalHours <= 0 || !Number.isFinite(totalHours)) return "";
+  const h = Math.floor(totalHours);
+  const m = Math.round((totalHours - h) * 60);
+  if (h > 0 && m > 0) return `~${h}ч ${m}м`;
+  if (h > 0) return `~${h}ч`;
+  return `~${m}м`;
+}
+
+function chargeTimeToFull(
+  soc: number | null,
+  chargePowerKw: number | null,
+  batteryCapacityKwh: number | null,
+  efficiencyPercent: number | null,
+): string | null {
+  if (soc == null || chargePowerKw == null || batteryCapacityKwh == null || chargePowerKw <= 0 || soc >= 100) return null;
+  const eff = (efficiencyPercent ?? 90) / 100;
+  const remainingKwh = (batteryCapacityKwh * (100 - soc)) / 100 / eff;
+  const hours = remainingKwh / chargePowerKw;
+  return formatDurationHoursMinutes(hours);
+}
+
+function calcChargeCost(
+  soc: number | null,
+  batteryCapacityKwh: number | null,
+  efficiencyPercent: number | null,
+  pricePerKwh: number | null,
+): number | null {
+  if (soc == null || batteryCapacityKwh == null || pricePerKwh == null || pricePerKwh <= 0) return null;
+  const eff = (efficiencyPercent ?? 90) / 100;
+  const remainingKwh = (batteryCapacityKwh * (100 - soc)) / 100 / eff;
+  return remainingKwh * pricePerKwh;
+}
+
+async function resolvePricePerKwh(
+  supabase: SupabaseClient,
+  userId: string,
+  lat: number | null,
+  lon: number | null,
+  chargePowerKw: number,
+): Promise<number> {
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("default_price_per_kwh, home_price_per_kwh, commercial_ac_price_per_kwh, fast_dc_price_per_kwh")
+    .eq("id", userId)
+    .maybeSingle();
+
+  const p = profile as Record<string, unknown> | null;
+  const defaultPrice = p != null ? Number(p.default_price_per_kwh ?? 0) : 0;
+  const homePrice = p != null ? Number(p.home_price_per_kwh ?? defaultPrice) : defaultPrice;
+  const acPrice = p != null ? Number(p.commercial_ac_price_per_kwh ?? defaultPrice) : defaultPrice;
+  const dcPrice = p != null ? Number(p.fast_dc_price_per_kwh ?? defaultPrice) : defaultPrice;
+
+  // If GPS available, try tariff location match
+  if (lat != null && lon != null) {
+    const { data: presets } = await supabase
+      .from("charging_tariff_locations")
+      .select("lat, lng, radius_m, tariff_type, price_per_kwh_override")
+      .eq("user_id", userId);
+
+    for (const loc of (presets ?? []) as Record<string, unknown>[]) {
+      const radius = Number(loc.radius_m ?? 150);
+      const locLat = Number(loc.lat);
+      const locLng = Number(loc.lng);
+      if (!Number.isFinite(radius) || !Number.isFinite(locLat) || !Number.isFinite(locLng)) continue;
+      const d = haversineM(lat, lon, locLat, locLng);
+      if (d <= radius) {
+        const override = Number(loc.price_per_kwh_override ?? 0);
+        if (override > 0) return override;
+        const tType = String(loc.tariff_type ?? "");
+        if (tType === "home") return homePrice;
+        if (tType === "commercial_ac") return acPrice;
+        if (tType === "fast_dc") return dcPrice;
+        return defaultPrice;
+      }
+    }
+  }
+
+  // Power-based fallback
+  if (chargePowerKw < 4) return homePrice;
+  if (chargePowerKw < 10) return acPrice;
+  return dcPrice;
+}
+
+function haversineM(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6_371_000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
 /** Fallback: last trip's last track point when live snapshot has no GPS. */
@@ -99,24 +189,68 @@ function notificationText(
   event: "connected" | "disconnected" | "parked",
   odometer: number | null,
   soc: number | null,
+  deviceTime?: string,
+  lat?: number | null,
+  lon?: number | null,
+  timeToFull?: string | null,
+  cost?: number | null,
+  currency?: string,
+  chargePowerKw?: number | null,
 ): string {
   const namePart = carName || "Автомобиль";
   let prefix: string;
   switch (event) {
     case "connected":
-      prefix = `Ваш автомобиль ${namePart} подключился к сети`;
+      prefix = `ℹ️ Ваш автомобиль ${namePart} подключился к сети`;
       break;
     case "disconnected":
-      prefix = `Ваш автомобиль ${namePart} отключен от сети`;
+      prefix = `ℹ️ Ваш автомобиль ${namePart} отключен от сети`;
       break;
     case "parked":
-      prefix = `Ваш автомобиль ${namePart} в режиме стоянки`;
+      prefix = `ℹ️ Ваш автомобиль ${namePart} в режиме стоянки`;
       break;
   }
-  const parts: string[] = [prefix];
-  if (odometer != null) parts.push(`Пробег ${odometer} км`);
-  if (soc != null) parts.push(`Батарея ${soc}%`);
-  return parts.join("\n");
+  const line1 = `${prefix}.`;
+  const statusParts: string[] = [];
+  if (odometer != null) statusParts.push(`Пробег ${odometer} км`);
+  if (soc != null) statusParts.push(`🔋 ${soc}%`);
+  if (deviceTime) {
+    const d = new Date(deviceTime);
+    if (!Number.isNaN(d.getTime())) {
+      const hh = String(d.getUTCHours()).padStart(2, "0");
+      const mm = String(d.getUTCMinutes()).padStart(2, "0");
+      statusParts.push(`Время ${hh}:${mm}`);
+    }
+  }
+  const line2 = statusParts.join(". ");
+
+  let result = line1;
+  if (line2) result += `\n${line2}`;
+
+  if (event === "disconnected") return result;
+
+  // connected: third line = map link only (no charging calc)
+  if (event === "connected") {
+    if (lat != null && lon != null) result += `\nhttps://www.google.com/maps?q=${lat},${lon}`;
+    return result;
+  }
+
+  // parked: third line = charging calc + map link
+  const isCharging = chargePowerKw != null && chargePowerKw > 0;
+  if (isCharging) {
+    const kw = chargePowerKw!.toFixed(1);
+    let line3 = `Время Зарядки при мощности ${kw} кВт.`;
+    if (timeToFull) line3 += ` составит ${timeToFull} до 100%`;
+    if (cost != null && cost > 0) {
+      const sym = currency === "EUR" ? "€" : currency === "USD" ? "$" : currency === "BYN" ? "Br" : currency === "RUB" ? "₽" : "";
+      line3 += `. 💰 ${cost.toFixed(2)}${sym}`;
+    }
+    if (lat != null && lon != null) line3 += `. https://www.google.com/maps?q=${lat},${lon}`;
+    result += `\n${line3}`;
+  } else if (lat != null && lon != null) {
+    result += `\nhttps://www.google.com/maps?q=${lat},${lon}`;
+  }
+  return result;
 }
 
 function extractVehicleInfo(sample: TelemetryPayload) {
@@ -173,21 +307,38 @@ export async function processBydmateVehicleStateNotifications({
 
   const { data: carRows } = await supabase
     .from("cars")
-    .select("name, vehicle_alias")
+    .select("name, vehicle_alias, battery_capacity_kwh, default_charger_power_kw, default_efficiency_percent")
     .eq("user_id", userId)
     .in("vehicle_alias", vehicleIds);
 
   const carNames = new Map<string, string>();
-  for (const row of (carRows ?? []) as { name: string; vehicle_alias: string | null }[]) {
-    if (row.vehicle_alias) {
-      carNames.set(row.vehicle_alias, row.name);
+  const carData = new Map<string, { batteryCapacityKwh: number; chargerPowerKw: number; efficiencyPercent: number }>();
+  for (const row of (carRows ?? []) as Record<string, unknown>[]) {
+    const alias = String(row.vehicle_alias ?? "");
+    if (alias) {
+      carNames.set(alias, String(row.name ?? "Автомобиль"));
+      carData.set(alias, {
+        batteryCapacityKwh: Number(row.battery_capacity_kwh ?? 0),
+        chargerPowerKw: Number(row.default_charger_power_kw ?? 4.4),
+        efficiencyPercent: Number(row.default_efficiency_percent ?? 90),
+      });
     }
   }
+
+  // Profile: currency + price info (loaded once for all vehicles)
+  const profileExt = await supabase
+    .from("profiles")
+    .select("preferred_currency, default_price_per_kwh")
+    .eq("id", userId)
+    .maybeSingle();
+  const currency = (profileExt.data as Record<string, unknown> | null)?.preferred_currency as string ?? "EUR";
 
   let connected = 0;
   let parked = 0;
   let disconnected = 0;
   const fallbackCache = new Map<string, { lat: number; lon: number } | null>();
+  let pricePerKwhCache: number | null = null;
+  let priceCacheResolved = false;
 
   const now = new Date(receivedAt).getTime();
 
@@ -197,6 +348,7 @@ export async function processBydmateVehicleStateNotifications({
 
     const prevState = states.get(vehicleId) ?? null;
     const carName = carNames.get(vehicleId) ?? "Автомобиль";
+    const carInfo = carData.get(vehicleId);
 
     const { soc, odometer, lat: sampleLat, lon: sampleLon } = extractVehicleInfo(lastSample);
     let lat = sampleLat;
@@ -216,6 +368,25 @@ export async function processBydmateVehicleStateNotifications({
 
     const isParked = isGearP(lastSample);
 
+    // Charging info: time to 100% + cost (computed once per call)
+    const isCharging = String(lastSample.telemetry.is_charging ?? "").toLowerCase() === "true" || 
+      (finiteTelemetryNumber(lastSample.telemetry.charge_power_kw) ?? 0) > 0.1;
+    let chargePowerKw = finiteTelemetryNumber(lastSample.telemetry.charge_power_kw);
+    if ((chargePowerKw == null || chargePowerKw <= 0) && isCharging && carInfo) {
+      chargePowerKw = carInfo.chargerPowerKw;
+    }
+    const timeToFull = chargeTimeToFull(soc, chargePowerKw, carInfo?.batteryCapacityKwh ?? null, carInfo?.efficiencyPercent ?? null);
+    if (!priceCacheResolved) {
+      priceCacheResolved = true;
+      if (chargePowerKw != null && chargePowerKw > 0 && soc != null && soc < 100) {
+        pricePerKwhCache = await resolvePricePerKwh(supabase, userId, lat, lon, chargePowerKw);
+      }
+    }
+    let chargeCost: number | null = null;
+    if (pricePerKwhCache != null) {
+      chargeCost = calcChargeCost(soc, carInfo?.batteryCapacityKwh ?? null, carInfo?.efficiencyPercent ?? null, pricePerKwhCache);
+    }
+
     if (shouldSendTelegram) {
       console.log("vehicle state:", vehicleId, "prevState:", !!prevState, "parked:", isParked, "soc:", soc, "odo:", odometer, "gps:", lat, lon);
     }
@@ -231,39 +402,37 @@ export async function processBydmateVehicleStateNotifications({
         const alreadyNotified = discoNotifiedAt >= lastReceived;
 
         if (!alreadyNotified && shouldSendTelegram && profile.telegramId != null) {
+          const discoLat = prevState.last_lat ?? lat;
+          const discoLon = prevState.last_lon ?? lon;
           const discText = notificationText(
             carName,
             "disconnected",
             prevState.last_odometer_km != null ? Math.round(prevState.last_odometer_km) : null,
             prevState.last_soc != null ? Math.round(prevState.last_soc) : null,
+            prevState.last_device_time ?? lastSample.device_time,
+            discoLat,
+            discoLon,
+            timeToFull,
+            chargeCost,
+            currency,
+            chargePowerKw,
           );
-          await sendTelegramMessage(profile.telegramId, discText);
-          const discoLat = prevState.last_lat ?? lat;
-          const discoLon = prevState.last_lon ?? lon;
-          if (discoLat != null && discoLon != null) {
-            await sendTelegramLocation(profile.telegramId, discoLat, discoLon);
-          }
+          await sendTelegramMessage(profile.telegramId, discText, { disableWebPagePreview: false });
           disconnected++;
         }
       }
 
       if (gapMs > CONNECTED_GAP_MS) {
         if (shouldSendTelegram && profile.telegramId != null) {
-          const connText = notificationText(carName, "connected", odometer, soc);
-          await sendTelegramMessage(profile.telegramId, connText);
-          if (lat != null && lon != null) {
-            await sendTelegramLocation(profile.telegramId, lat, lon);
-          }
+          const connText = notificationText(carName, "connected", odometer, soc, lastSample.device_time, lat, lon, timeToFull, chargeCost, currency, chargePowerKw);
+          await sendTelegramMessage(profile.telegramId, connText, { disableWebPagePreview: false });
           connected++;
         }
       }
     } else if (!prevState) {
       if (shouldSendTelegram && profile.telegramId != null) {
-        const connText = notificationText(carName, "connected", odometer, soc);
-        await sendTelegramMessage(profile.telegramId, connText);
-        if (lat != null && lon != null) {
-          await sendTelegramLocation(profile.telegramId, lat, lon);
-        }
+        const connText = notificationText(carName, "connected", odometer, soc, lastSample.device_time, lat, lon, timeToFull, chargeCost, currency, chargePowerKw);
+        await sendTelegramMessage(profile.telegramId, connText, { disableWebPagePreview: false });
         connected++;
       }
     }
@@ -273,11 +442,8 @@ export async function processBydmateVehicleStateNotifications({
         || now - new Date(prevState.last_park_notified_at).getTime() > PARK_NOTIFICATION_COOLDOWN_MS;
 
       if (parkCooldownOk && shouldSendTelegram && profile.telegramId != null) {
-        const parkText = notificationText(carName, "parked", odometer, soc);
-        await sendTelegramMessage(profile.telegramId, parkText);
-        if (lat != null && lon != null) {
-          await sendTelegramLocation(profile.telegramId, lat, lon);
-        }
+        const parkText = notificationText(carName, "parked", odometer, soc, lastSample.device_time, lat, lon, timeToFull, chargeCost, currency, chargePowerKw);
+        await sendTelegramMessage(profile.telegramId, parkText, { disableWebPagePreview: false });
         parked++;
       }
     }

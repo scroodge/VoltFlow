@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { telegramApiUrl } from "@/lib/telegram/api-url";
+import { readTelegramInitData } from "@/lib/telegram/init-data";
 
 type TelegramAuthResponse = {
   ok: boolean;
@@ -16,12 +17,6 @@ export type TelegramLoginResult =
   | { ok: true; telegramId: number | null }
   | { ok: false; error: string };
 
-/** Read the raw, server-verifiable initData string from the Telegram WebView. */
-function readInitData(): string {
-  if (typeof window === "undefined") return "";
-  return window.Telegram?.WebApp?.initData ?? "";
-}
-
 /**
  * Exchange the Telegram Mini App `initData` for a Supabase session.
  *
@@ -33,7 +28,7 @@ function readInitData(): string {
  * browser) so callers can fall back to the standard Google/email login.
  */
 export async function loginWithTelegram(): Promise<TelegramLoginResult> {
-  const initData = readInitData();
+  const initData = readTelegramInitData();
   if (!initData) return { ok: false, error: "not_in_telegram" };
 
   let payload: TelegramAuthResponse;
