@@ -11,6 +11,7 @@ import {
 } from "@/components/telegram/BottomTabs";
 import { GenerationFilter } from "@/components/telegram/GenerationFilter";
 import { KnowledgeView } from "@/components/knowledge/knowledge-view";
+import { useAutoDetectCarGeneration } from "@/hooks/use-auto-detect-car-generation";
 import { useTelegramGeneration } from "@/hooks/use-telegram-generation";
 import { useTranslation } from "@/hooks/use-translation";
 import { getTelegramThemeStyle } from "@/lib/telegram/theme";
@@ -58,6 +59,10 @@ export function TelegramShell({ data }: { data?: TelegramKnowledgeData }) {
     },
     [searchParams, pathname, router],
   );
+
+  const urlGeneration = searchParams.get("gen");
+
+  useAutoDetectCarGeneration(setGeneration, urlGeneration);
 
   async function openAppFromKnowledge() {
     if (!telegram.isTelegram) {

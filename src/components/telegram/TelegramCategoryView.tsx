@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 import { AccessoryCard } from "@/components/telegram/ArticleCard";
 import { GenerationFilter } from "@/components/telegram/GenerationFilter";
 import { GenerationFilteredArticles } from "@/components/telegram/GenerationFilteredArticles";
 import { SparePartsCatalog } from "@/components/telegram/SparePartsCatalog";
+import { useAutoDetectCarGeneration } from "@/hooks/use-auto-detect-car-generation";
 import { useTelegramGeneration } from "@/hooks/use-telegram-generation";
 import {
   filterArticlesByGeneration,
@@ -30,6 +32,8 @@ type TelegramCategoryViewProps = {
 
 export function TelegramCategoryView({ category, content }: TelegramCategoryViewProps) {
   const [generation, setGeneration] = useTelegramGeneration();
+  const searchParams = useSearchParams();
+  useAutoDetectCarGeneration(setGeneration, searchParams.get("gen"));
   const accessories = filterArticlesByGeneration(content.accessories, generation);
   const spareParts = content.spareParts.filter((item) =>
     normalizeModelGenerations(item.model_generations).includes(generation),
