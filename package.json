@@ -18,6 +18,7 @@
     "db:migrations:status": "node scripts/supabase-migrate-one.mjs status",
     "db:migrations:plan": "node scripts/supabase-migrate-one.mjs plan",
     "db:migrations:up": "node scripts/supabase-migrate-one.mjs up",
+    "telegram:configure": "node scripts/configure-telegram-bot.mjs",
     "db:migrations:down": "node scripts/supabase-migrate-one.mjs down"
   },
   "dependencies": {
