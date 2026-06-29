@@ -12,14 +12,20 @@ create table if not exists public.user_service_categories (
 
 alter table public.user_service_categories enable row level security;
 
+-- Idempotent policy setup: self-hosted has no schema_migrations tracking, so this
+-- file must be safe to re-run. Postgres lacks CREATE POLICY IF NOT EXISTS, so
+-- drop-then-create each policy.
+drop policy if exists "user_service_categories_select_own" on public.user_service_categories;
 create policy "user_service_categories_select_own"
   on public.user_service_categories for select
   using (auth.uid() = user_id);
 
+drop policy if exists "user_service_categories_insert_own" on public.user_service_categories;
 create policy "user_service_categories_insert_own"
   on public.user_service_categories for insert
   with check (auth.uid() = user_id);
 
+drop policy if exists "user_service_categories_delete_own" on public.user_service_categories;
 create policy "user_service_categories_delete_own"
   on public.user_service_categories for delete
   using (auth.uid() = user_id);
