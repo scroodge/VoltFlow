@@ -1,17 +1,5 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { ChargingHubView } from "@/components/charging/charging-hub-view";
-import { ChargingDevToolbar } from "@/components/dev/charging-dev-toolbar";
-
-export const metadata: Metadata = {
-  title: "Charging bay",
-};
-
-export default function ChargingIndexPage() {
-  return (
-    <>
-      <ChargingDevToolbar />
-      <ChargingHubView />
-    </>
-  );
+export default function ChargingRedirect() {
+  redirect("/vehicle?tab=charge");
 }

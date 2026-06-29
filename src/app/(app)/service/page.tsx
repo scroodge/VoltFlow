@@ -1,16 +1,5 @@
-import type { Metadata } from "next";
-import { Suspense } from "react";
+import { redirect } from "next/navigation";
 
-import { ServiceView } from "@/components/service/service-view";
-
-export const metadata: Metadata = {
-  title: "Service",
-};
-
-export default function ServicePage() {
-  return (
-    <Suspense fallback={null}>
-      <ServiceView />
-    </Suspense>
-  );
+export default function ServiceRedirect() {
+  redirect("/vehicle?tab=service");
 }

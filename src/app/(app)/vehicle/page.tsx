@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
-import { VehicleDevToolbar } from "@/components/dev/vehicle-dev-toolbar";
-import { VehicleLiveView } from "@/components/vehicle/vehicle-live-view";
+import { VehicleHub } from "@/components/vehicle/vehicle-hub";
 import { isCurrentUserAdmin } from "@/lib/supabase/knowledge";
 
 export const metadata: Metadata = {
@@ -13,11 +12,8 @@ export default async function VehiclePage() {
   const isAdmin = await isCurrentUserAdmin();
 
   return (
-    <>
-      <VehicleDevToolbar />
-      <Suspense fallback={null}>
-        <VehicleLiveView isAdmin={isAdmin} />
-      </Suspense>
-    </>
+    <Suspense fallback={null}>
+      <VehicleHub isAdmin={isAdmin} />
+    </Suspense>
   );
 }

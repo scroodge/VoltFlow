@@ -78,6 +78,7 @@ export const dictionaries = {
       vehicle: "Vehicle",
       history: "History",
       service: "Service",
+      knowledge: "Knowledge",
       settings: "Settings",
     },
     telegram: {
@@ -493,6 +494,11 @@ export const dictionaries = {
     },
     vehicle: {
       badge: "BYDMate live",
+      tab: {
+        live: "Live",
+        charge: "Charge",
+        service: "Service",
+      },
       lastUpdate: "Last update {value}",
       timeAgoSeconds: "{value}s ago",
       timeAgoMinutes: "{value}m ago",
@@ -1133,6 +1139,7 @@ export const dictionaries = {
       vehicle: "Аўто",
       history: "Гісторыя",
       service: "Сэрвіс",
+      knowledge: "Веды",
       settings: "Налады",
     },
     telegram: {
@@ -1550,6 +1557,11 @@ export const dictionaries = {
     },
     vehicle: {
       badge: "BYDMate live",
+      tab: {
+        live: "Live",
+        charge: "Зарад",
+        service: "Сэрвіс",
+      },
       lastUpdate: "Апошняе абнаўленне {value}",
       timeAgoSeconds: "{value} с таму",
       timeAgoMinutes: "{value} хв таму",
@@ -2191,6 +2203,7 @@ export const dictionaries = {
       vehicle: "Авто",
       history: "История",
       service: "Сервис",
+      knowledge: "База знаний",
       settings: "Настройки",
     },
     telegram: {
@@ -2607,6 +2620,11 @@ export const dictionaries = {
     },
     vehicle: {
       badge: "BYDMate live",
+      tab: {
+        live: "Live",
+        charge: "Зарядка",
+        service: "Сервис",
+      },
       lastUpdate: "Последнее обновление {value}",
       timeAgoSeconds: "{value} с назад",
       timeAgoMinutes: "{value} мин назад",

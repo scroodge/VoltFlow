@@ -2,27 +2,21 @@
 
 import { ArrowRight, Zap } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { BottomTabs, type TelegramTab } from "@/components/telegram/BottomTabs";
-import { ArticleList } from "@/components/telegram/ArticleList";
-import { BuyCatalog } from "@/components/telegram/BuyCatalog";
-import { Calculators } from "@/components/telegram/Calculators";
-import { CategoryFilter } from "@/components/telegram/CategoryFilter";
-import { GenerationFilter } from "@/components/telegram/GenerationFilter";
-import { KnowledgeHome } from "@/components/telegram/KnowledgeHome";
-import { SmartFAQ } from "@/components/telegram/SmartFAQ";
-import { useTelegramGeneration } from "@/hooks/use-telegram-generation";
 import {
-  filterArticlesByGeneration,
-  normalizeModelGenerations,
-} from "@/lib/telegram/generation";
+  BottomTabs,
+  type TelegramTab,
+} from "@/components/telegram/BottomTabs";
+import { GenerationFilter } from "@/components/telegram/GenerationFilter";
+import { KnowledgeView } from "@/components/knowledge/knowledge-view";
+import { useTelegramGeneration } from "@/hooks/use-telegram-generation";
+import { useTranslation } from "@/hooks/use-translation";
 import { getTelegramThemeStyle } from "@/lib/telegram/theme";
 import { loginWithTelegram } from "@/lib/telegram/login";
 import { useTelegramWebApp } from "@/lib/telegram/useTelegramWebApp";
 import type { TelegramKnowledgeData } from "@/types/knowledge";
-import { useTranslation } from "@/hooks/use-translation";
 import { cn } from "@/lib/utils";
 
 export function TelegramShell({ data }: { data?: TelegramKnowledgeData }) {
@@ -30,44 +24,9 @@ export function TelegramShell({ data }: { data?: TelegramKnowledgeData }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<TelegramTab>("home");
-  const [guideCategory, setGuideCategory] = useState<string | "All">("All");
-  const [openAppBusy, setOpenAppBusy] = useState(false);
   const [generation, setGeneration] = useTelegramGeneration();
-  const articleCategories = useMemo(() => {
-    const categoryMap = new Map<string, string>();
-    for (const article of data?.articles ?? []) {
-      categoryMap.set(article.categorySlug, article.category);
-    }
-    return Array.from(categoryMap.entries()).map(([slug, title]) => ({ slug, title }));
-  }, [data?.articles]);
-  const filteredArticles = useMemo(
-    () => filterArticlesByGeneration(data?.articles ?? [], generation),
-    [data?.articles, generation],
-  );
-  const filteredAccessories = useMemo(
-    () => filterArticlesByGeneration(data?.accessories ?? [], generation),
-    [data?.accessories, generation],
-  );
-  const filteredSpareParts = useMemo(
-    () =>
-      (data?.spareParts ?? []).filter((item) =>
-        normalizeModelGenerations(item.model_generations).includes(generation),
-      ),
-    [data?.spareParts, generation],
-  );
-  const filteredData = useMemo(
-    () =>
-      data
-        ? {
-            ...data,
-            articles: filteredArticles,
-            accessories: filteredAccessories,
-            spareParts: filteredSpareParts,
-          }
-        : undefined,
-    [data, filteredAccessories, filteredArticles, filteredSpareParts],
-  );
+  const [activeTab, setActiveTab] = useState<TelegramTab>("home");
+  const [openAppBusy, setOpenAppBusy] = useState(false);
   const telegram = useTelegramWebApp();
   const themeStyle = useMemo(
     () => getTelegramThemeStyle(telegram.themeParams),
@@ -85,17 +44,20 @@ export function TelegramShell({ data }: { data?: TelegramKnowledgeData }) {
     }, 0);
   }, [searchParams]);
 
-  function changeTab(tab: TelegramTab) {
-    setActiveTab(tab);
-    const params = new URLSearchParams(searchParams);
-    if (tab === "home") {
-      params.delete("tab");
-    } else {
-      params.set("tab", tab);
-    }
-    const query = params.toString();
-    router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
-  }
+  const changeTab = useCallback(
+    (tab: TelegramTab) => {
+      setActiveTab(tab);
+      const params = new URLSearchParams(searchParams);
+      if (tab === "home") {
+        params.delete("tab");
+      } else {
+        params.set("tab", tab);
+      }
+      const query = params.toString();
+      router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [searchParams, pathname, router],
+  );
 
   async function openAppFromKnowledge() {
     if (!telegram.isTelegram) {
@@ -170,75 +132,20 @@ export function TelegramShell({ data }: { data?: TelegramKnowledgeData }) {
             </div>
           </div>
 
-          <section className="rounded-lg border border-border bg-white/[0.03] p-1.5" aria-label="Поколение автомобиля">
+          <section
+            className="rounded-lg border border-border bg-white/[0.03] p-1.5"
+            aria-label="Поколение автомобиля"
+          >
             <GenerationFilter value={generation} onChange={setGeneration} />
           </section>
         </header>
 
-        <div className="mt-3">
-          {activeTab === "home" ? (
-            <KnowledgeHome
-              key={generation}
-              isTelegram={telegram.isTelegram}
-              onNavigate={changeTab}
-              generation={generation}
-              data={filteredData}
-            />
-          ) : null}
-          {activeTab === "guides" ? (
-            <div className="space-y-4">
-              <CategoryFilter
-                categories={articleCategories.map((category) => category.slug)}
-                activeCategory={guideCategory}
-                onChange={setGuideCategory}
-                labels={Object.fromEntries(
-                  articleCategories.map((category) => [category.slug, category.title]),
-                )}
-              />
-              {guideCategory === "All" ? (
-                <ArticleList articles={filteredArticles} generation={generation} />
-              ) : null}
-              {guideCategory !== "All" ? (
-                <ArticleList
-                  articles={filteredArticles.filter(
-                    (article) => article.categorySlug === guideCategory,
-                  )}
-                  generation={generation}
-                  semanticCategory={guideCategory}
-                  eyebrow={
-                    articleCategories.find((category) => category.slug === guideCategory)
-                      ?.title ?? "Гайды"
-                  }
-                  title="Статьи раздела"
-                />
-              ) : null}
-              {!filteredArticles.length ? (
-                <p className="text-sm leading-6 text-muted-foreground">
-                  Для выбранного поколения статей пока нет. Попробуйте другое поколение или
-                  загляните позже.
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-          {activeTab === "faq" ? <SmartFAQ generation={generation} items={data?.faq} /> : null}
-          {activeTab === "buy" ? (
-            <BuyCatalog
-              accessories={data?.accessories}
-              generation={generation}
-              spareParts={data?.spareParts}
-            />
-          ) : null}
-          {activeTab === "more" ? (
-            <div className="space-y-5">
-              <Calculators />
-              <div className="voltflow-card p-4 text-sm leading-6 text-muted-foreground">
-                Следующие фазы пока намеренно не включены: импорт из Telegram,
-                семантический поиск, AI-помощник, embeddings, аналитика и
-                дополнительные интеграции VoltFlow.
-              </div>
-            </div>
-          ) : null}
-        </div>
+        <KnowledgeView
+          data={data}
+          generation={generation}
+          activeTab={activeTab}
+          onTabChange={changeTab}
+        />
       </div>
 
       <BottomTabs activeTab={activeTab} onTabChange={changeTab} />
