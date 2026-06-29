@@ -88,12 +88,24 @@ export function TelegramEntryGate() {
     setInTelegram(true);
   };
 
-  // Primary detection: runs on mount. Telegram pre-injects window.Telegram.WebApp
-  // before the page loads so initData is already available at hydration time —
-  // no need to wait for the Script's onReady callback. setState only runs after
-  // async awaits inside detectTelegramAsync, so no synchronous cascade occurs.
-  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
-  useEffect(() => { void detectTelegramAsync(); }, []);
+  // Primary detection: runs on mount. The SDK may not be ready yet (mobile builds
+  // window.Telegram.WebApp only after telegram-web-app.js loads), in which case
+  // this no-ops and the Script's onReady callback runs detection once it loads.
+  // Safety timeout: if detection never resolves (SDK fails to load) but the
+  // pre-paint guard hid the KB, reveal it so the user is never stuck on a blank
+  // screen. detected.current is true once we've committed to an overlay/redirect,
+  // so the timeout only fires in the genuinely-stuck case.
+  useEffect(() => {
+    // setState only runs after async awaits inside detectTelegramAsync, so there
+    // is no synchronous render cascade despite the rule's static analysis.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void detectTelegramAsync();
+    const fallback = setTimeout(() => {
+      if (!detected.current) revealKnowledgeBase();
+    }, 5000);
+    return () => clearTimeout(fallback);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleOpenApp = async () => {
     setBusy(true);

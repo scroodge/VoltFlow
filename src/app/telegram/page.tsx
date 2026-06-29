@@ -18,14 +18,17 @@ export const metadata: Metadata = {
   },
 };
 
-// Pre-paint guard: Telegram injects window.Telegram.WebApp before the page is
-// parsed, so this inline script can detect the Mini App context and inject a
-// style that hides the KB BEFORE the browser paints it — no flash, regardless
-// of User-Agent (Android/Desktop WebViews send a plain Chrome UA). Placed ahead
-// of #tg-kb-root in document order so it runs before that markup is parsed.
-// TelegramEntryGate removes #tg-kb-cover-style when the user chooses to browse
-// the KB. Plain browsers have no initData → KB renders normally (SEO preserved).
-const KB_PREPAINT_GUARD = `try{if(window.Telegram&&window.Telegram.WebApp&&window.Telegram.WebApp.initData){var s=document.createElement('style');s.id='tg-kb-cover-style';s.textContent='#tg-kb-root{display:none!important}';document.head.appendChild(s);}}catch(e){}`;
+// Pre-paint guard: hides the KB BEFORE the browser paints it when opened inside
+// Telegram, so it never flashes. The reliable synchronous signal is the URL hash
+// — Telegram appends "#tgWebAppData=...&tgWebAppVersion=..." to the Mini App URL,
+// readable at parse time with no SDK. (window.Telegram.WebApp is NOT pre-injected
+// on mobile; it's built by telegram-web-app.js after load, so checking it here
+// races the paint.) We also OR in the SDK object in case it is already present.
+// Placed ahead of #tg-kb-root so it runs before that markup is parsed.
+// TelegramEntryGate removes #tg-kb-cover-style when the user browses the KB, and
+// a safety timeout there reveals it if detection never completes. Plain browsers
+// have no tgWebApp hash → KB renders normally (SEO preserved).
+const KB_PREPAINT_GUARD = `try{var h=location.hash||'';if(h.indexOf('tgWebApp')>-1||(window.Telegram&&window.Telegram.WebApp&&window.Telegram.WebApp.initData)){var s=document.createElement('style');s.id='tg-kb-cover-style';s.textContent='#tg-kb-root{display:none!important}';document.head.appendChild(s);}}catch(e){}`;
 
 export default async function TelegramPage() {
   const data = await getTelegramKnowledgeDataWithFallback(staticTelegramKnowledgeData);
