@@ -1,6 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
+import { telegramApiUrl } from "@/lib/telegram/api-url";
 
 type TelegramAuthResponse = {
   ok: boolean;
@@ -38,7 +39,7 @@ export async function loginWithTelegram(): Promise<TelegramLoginResult> {
   let payload: TelegramAuthResponse;
   let response: Response;
   try {
-    response = await fetch("/api/telegram/auth", {
+    response = await fetch(telegramApiUrl("/api/telegram/auth"), {
       method: "POST",
       cache: "no-store",
       credentials: "include",

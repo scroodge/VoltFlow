@@ -47,6 +47,7 @@ import { useMateReleaseQuery } from "@/hooks/use-mate-release-query";
 import { useTranslation } from "@/hooks/use-translation";
 import { compareMateVersions, isMateUpdateAvailable } from "@/lib/mate-version";
 import { sendPasswordResetEmail } from "@/lib/auth/password-reset";
+import { telegramApiUrl } from "@/lib/telegram/api-url";
 import {
   MATE_GITHUB_RELEASES_LATEST_URL,
   summarizeReleaseNotes,
@@ -603,7 +604,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       const {
         data: { session },
       } = await createClient().auth.getSession();
-      const response = await fetch("/api/telegram/link", {
+      const response = await fetch(telegramApiUrl("/api/telegram/link"), {
         method: "POST",
         headers: {
           "content-type": "application/json",

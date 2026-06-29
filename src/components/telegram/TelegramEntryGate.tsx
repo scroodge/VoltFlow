@@ -9,6 +9,7 @@ import { TelegramWelcome } from "@/components/telegram/TelegramWelcome";
 import { useTranslation } from "@/hooks/use-translation";
 import { loginWithTelegram } from "@/lib/telegram/login";
 import { createClient } from "@/lib/supabase/client";
+import { telegramApiUrl } from "@/lib/telegram/api-url";
 
 /**
  * Context-aware gate for the `/telegram` Mini App entry.
@@ -51,7 +52,7 @@ export function TelegramEntryGate() {
 
     if (session) {
       // Link telegram_id onto the authenticated profile (idempotent).
-      const response = await fetch("/api/telegram/link", {
+      const response = await fetch(telegramApiUrl("/api/telegram/link"), {
         method: "POST",
         headers: {
           "content-type": "application/json",

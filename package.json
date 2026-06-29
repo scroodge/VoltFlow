@@ -19,6 +19,7 @@
     "db:migrations:plan": "node scripts/supabase-migrate-one.mjs plan",
     "db:migrations:up": "node scripts/supabase-migrate-one.mjs up",
     "telegram:configure": "node scripts/configure-telegram-bot.mjs",
+    "telegram:server": "python3 scripts/telegram-miniapp-server.py",
     "db:migrations:down": "node scripts/supabase-migrate-one.mjs down"
   },
   "dependencies": {
