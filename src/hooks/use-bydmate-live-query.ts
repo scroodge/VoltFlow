@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { usePageVisible } from "@/hooks/use-page-visible";
@@ -50,6 +50,7 @@ export function useBydmateLiveQuery() {
   const supabase = useMemo(() => createClient(), []);
   const devRoute = isDevAppRoute();
   const pageVisible = usePageVisible();
+  const mountId = useRef(crypto.randomUUID()).current;
 
   useEffect(() => {
     if (devRoute) return;
@@ -71,7 +72,7 @@ export function useBydmateLiveQuery() {
       if (!user) return;
 
       channel = supabase
-        .channel(`bydmate-live:${user.id}`)
+        .channel(`bydmate-live:${user.id}:${mountId}`)
         .on(
           "postgres_changes",
           {

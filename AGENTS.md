@@ -15,7 +15,9 @@
 **Status:** Plan **B (BRIN interim) — DONE.** Migration
 `20260630130000_telemetry_samples_brin_device_time.sql` applied to prod: BRIN
 index on `device_time` (72 kB vs 10–42 MB btrees); planner confirmed using it
-for time-range scans (was seq scan). **Plan A (full partitioning) still pending.**
+for time-range scans (was seq scan). **Plan A (full partitioning) still pending** —
+reviewable draft at `docs/PLAN_A_PARTITION_DRAFT.sql` (annotated, NOT applied,
+NOT in migrations/). Needs user go-ahead + pg_dump/host backup before applying.
 
 ---
 

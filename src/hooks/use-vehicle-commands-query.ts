@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { devFetch, isDevAppRoute } from "@/lib/dev/dev-fetch";
@@ -26,6 +26,7 @@ export function useVehicleCommandsQuery(
   const supabase = useMemo(() => createClient(), []);
   const devRoute = isDevAppRoute();
   const pageVisible = usePageVisible();
+  const mountId = useRef(crypto.randomUUID()).current;
 
   const enabled = (options?.enabled ?? true) && Boolean(vehicleId) && pageVisible;
 
@@ -41,7 +42,7 @@ export function useVehicleCommandsQuery(
       if (!user) return;
 
       channel = supabase
-        .channel(`vehicle-commands:${user.id}:${vehicleId}`)
+        .channel(`vehicle-commands:${user.id}:${vehicleId}:${mountId}`)
         .on(
           "postgres_changes",
           {
