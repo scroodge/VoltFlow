@@ -15,14 +15,17 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { useTranslation } from "@/hooks/use-translation";
+import { useUserServiceCategoriesQuery } from "@/hooks/use-service-categories";
 import type { TranslationKey } from "@/lib/i18n";
 import {
-  SERVICE_CATEGORIES,
+  BUILT_IN_SERVICE_CATEGORIES,
   SERVICE_TYPES,
   type ServiceRecordRow,
 } from "@/types/service";
@@ -58,6 +61,7 @@ export function ServiceRecordForm({
 }) {
   const id = useId();
   const { t } = useTranslation();
+  const { data: userCategories = [] } = useUserServiceCategoriesQuery();
   const isEdit = record !== null;
 
   const {
@@ -131,10 +135,16 @@ export function ServiceRecordForm({
     !totalCost && partsCost && laborCost
       ? Number(partsCost) + Number(laborCost)
       : null;
-  const categoryOptions = SERVICE_CATEGORIES.map((value) => ({
+  const builtInOptions = BUILT_IN_SERVICE_CATEGORIES.map((value) => ({
     value,
     label: (t(`service.category.${value}` as TranslationKey) || value) as string,
   }));
+  const userOptions = userCategories.map((c) => ({
+    value: c.name,
+    label: c.name,
+    color: c.color,
+  }));
+  const categoryOptions = [...builtInOptions, ...userOptions];
   const serviceTypeOptions = SERVICE_TYPES.map((value) => ({
     value,
     label: (t(`service.type.${value}` as TranslationKey) || value) as string,
@@ -185,11 +195,28 @@ export function ServiceRecordForm({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {categoryOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
+                    <SelectGroup>
+                      <SelectLabel>{t("service.builtInCategories") as string}</SelectLabel>
+                      {builtInOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                    {userOptions.length > 0 && (
+                      <SelectGroup>
+                        <SelectLabel>{t("service.myCategories") as string}</SelectLabel>
+                        {userOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            <span
+                              className="mr-2 inline-block size-2 rounded-full"
+                              style={{ backgroundColor: option.color }}
+                            />
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )}
                   </SelectContent>
                 </Select>
               </Field>
@@ -219,14 +246,10 @@ export function ServiceRecordForm({
                 <Label>{t("service.form.date") as string} *</Label>
                 <Input
                   type="date"
-                  {...register("performedDate", { required: "Required" })}
+                  value={watch("performedDate")}
+                  onChange={(e) => setValue("performedDate", e.target.value)}
                   className="min-h-11"
                 />
-                {errors.performedDate && (
-                  <p className="text-xs text-red-400">
-                    {errors.performedDate.message}
-                  </p>
-                )}
               </Field>
               <Field>
                 <Label>{t("service.form.odometer") as string}</Label>
@@ -330,7 +353,8 @@ export function ServiceRecordForm({
                   <Label>{t("service.form.nextDueDate") as string}</Label>
                   <Input
                     type="date"
-                    {...register("nextDueDate")}
+                    value={watch("nextDueDate")}
+                    onChange={(e) => setValue("nextDueDate", e.target.value)}
                     className="min-h-11"
                   />
                 </Field>

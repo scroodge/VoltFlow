@@ -2,19 +2,12 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { z } from "zod";
 
-const SERVICE_CATEGORIES = [
-  "tires", "brakes", "battery_12v", "battery_hv", "coolant",
-  "cabin_filter", "wipers", "washer_fluid", "hvac", "electrical",
-  "suspension", "charging_port", "software", "inspection",
-  "registration", "insurance", "detailing", "parts_purchase", "other",
-];
-
 const SERVICE_TYPES = ["maintenance", "repair", "modification", "parts_purchase"];
 
 const serviceRecordSchema = z.object({
   carId: z.string().uuid(),
   title: z.string().min(1).max(300),
-  category: z.string().refine((v) => SERVICE_CATEGORIES.includes(v), { message: "Invalid category" }),
+  category: z.string().min(1).max(80),
   serviceType: z.string().refine((v) => SERVICE_TYPES.includes(v), { message: "Invalid service type" }),
   performedDate: z.string(),
   odometerKm: z.coerce.number().min(0).max(9_999_999).nullable().optional(),
@@ -70,9 +63,9 @@ describe("serviceRecordSchema", () => {
     assert.equal(result.success, false);
   });
 
-  it("rejects invalid category", () => {
+  it("accepts custom category (e.g. oil_change)", () => {
     const result = serviceRecordSchema.safeParse({ ...valid, category: "oil_change" });
-    assert.equal(result.success, false);
+    assert.equal(result.success, true);
   });
 
   it("rejects invalid serviceType", () => {

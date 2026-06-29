@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Wrench } from "lucide-react";
+import { Plus, Settings2, Wrench } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +14,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { ServiceRecordCard } from "@/components/service/service-record-card";
 import { ServiceRecordForm } from "@/components/service/service-record-form";
+import { CategoryManager } from "@/components/service/category-manager";
 import { ServiceStats } from "@/components/service/service-stats";
 import { useTranslation } from "@/hooks/use-translation";
 import type { TranslationKey } from "@/lib/i18n";
@@ -106,6 +107,7 @@ export function ServiceView() {
   const [viewTab, setViewTab] = useState<ViewTab>("timeline");
   const [formOpen, setFormOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<ServiceRecordRow | null>(null);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
 
   const handleSave = (data: {
     title: string;
@@ -181,16 +183,26 @@ export function ServiceView() {
             {t("service.title") as string}
           </h1>
         </div>
-        <Button
-          onClick={() => {
-            setEditingRecord(null);
-            setFormOpen(true);
-          }}
-          className="size-11 rounded-full p-0"
-          aria-label={t("service.add") as string}
-        >
-          <Plus className="size-5" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setCategoriesOpen(true)}
+            className="size-11 rounded-full p-0"
+            aria-label={t("service.manageCategories") as string}
+          >
+            <Settings2 className="size-5" />
+          </Button>
+          <Button
+            onClick={() => {
+              setEditingRecord(null);
+              setFormOpen(true);
+            }}
+            className="size-11 rounded-full p-0"
+            aria-label={t("service.add") as string}
+          >
+            <Plus className="size-5" />
+          </Button>
+        </div>
       </div>
 
       {cars.length > 1 && (
@@ -295,6 +307,11 @@ export function ServiceView() {
         record={editingRecord}
         onSave={handleSave}
         saving={insertMutation.isPending}
+      />
+
+      <CategoryManager
+        open={categoriesOpen}
+        onOpenChange={setCategoriesOpen}
       />
     </div>
   );

@@ -4,32 +4,25 @@ import { useMemo } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTranslation } from "@/hooks/use-translation";
+import { useUserServiceCategoriesQuery } from "@/hooks/use-service-categories";
 import { formatCurrencyAmount } from "@/lib/i18n";
 import type { Currency, Locale, TranslationKey } from "@/lib/i18n";
-import { SERVICE_CATEGORIES } from "@/types/service";
+import {
+  BUILT_IN_SERVICE_CATEGORIES,
+  BUILT_IN_CATEGORY_COLORS,
+} from "@/types/service";
 import type { ServiceRecordRow } from "@/types/service";
 
-const CATEGORY_BAR: Record<string, string> = {
-  tires: "bg-blue-400",
-  brakes: "bg-red-400",
-  battery_12v: "bg-yellow-400",
-  battery_hv: "bg-green-400",
-  coolant: "bg-cyan-400",
-  cabin_filter: "bg-purple-400",
-  wipers: "bg-slate-400",
-  washer_fluid: "bg-sky-400",
-  hvac: "bg-orange-400",
-  electrical: "bg-amber-400",
-  suspension: "bg-pink-400",
-  charging_port: "bg-emerald-400",
-  software: "bg-indigo-400",
-  inspection: "bg-teal-400",
-  registration: "bg-violet-400",
-  insurance: "bg-rose-400",
-  detailing: "bg-lime-400",
-  parts_purchase: "bg-orange-300",
-  other: "bg-gray-400",
-};
+function categoryBarColor(
+  cat: string,
+  userCatMap: Map<string, string>,
+): { className?: string; style?: React.CSSProperties } {
+  if ((BUILT_IN_SERVICE_CATEGORIES as readonly string[]).includes(cat)) {
+    return { className: BUILT_IN_CATEGORY_COLORS[cat] ?? "bg-gray-400" };
+  }
+  const color = userCatMap.get(cat) ?? "#6B7280";
+  return { style: { backgroundColor: color } };
+}
 
 export function ServiceStats({
   records,
@@ -41,6 +34,13 @@ export function ServiceStats({
   locale: Locale;
 }) {
   const { t } = useTranslation();
+  const { data: userCategories = [] } = useUserServiceCategoriesQuery();
+
+  const userCatMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of userCategories) m.set(c.name, c.color);
+    return m;
+  }, [userCategories]);
 
   const totalSpent = useMemo(
     () => records.reduce((sum, r) => sum + (r.total_cost > 0 ? r.total_cost : r.parts_cost + r.labor_cost), 0),
@@ -122,26 +122,31 @@ export function ServiceStats({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {byCategory.map(([cat, { count, total }]) => (
-            <div key={cat}>
-              <div className="mb-1 flex justify-between text-xs">
-                <span>
-                  {t(`service.category.${cat}` as TranslationKey) || cat}
-                </span>
-                <span className="text-muted-foreground">
-                  {t("service.stats.count", { count })}
-                  {" · "}
-                  {formatCurrencyAmount(currency, total, locale)}
-                </span>
+          {byCategory.map(([cat, { count, total }]) => {
+            const bar = categoryBarColor(cat, userCatMap);
+            return (
+              <div key={cat}>
+                <div className="mb-1 flex justify-between text-xs">
+                  <span>
+                    {(BUILT_IN_SERVICE_CATEGORIES as readonly string[]).includes(cat)
+                      ? (t(`service.category.${cat}` as TranslationKey) as string) || cat
+                      : cat}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {t("service.stats.count", { count })}
+                    {" · "}
+                    {formatCurrencyAmount(currency, total, locale)}
+                  </span>
+                </div>
+                <div className="h-2 rounded-full bg-white/[0.06]">
+                  <div
+                    className={bar.className ? `h-full rounded-full ${bar.className}` : "h-full rounded-full"}
+                    style={{ width: `${(total / maxTotal) * 100}%`, ...bar.style }}
+                  />
+                </div>
               </div>
-              <div className="h-2 rounded-full bg-white/[0.06]">
-                <div
-                  className={`h-full rounded-full ${CATEGORY_BAR[cat] ?? "bg-gray-400"}`}
-                  style={{ width: `${(total / maxTotal) * 100}%` }}
-                />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </CardContent>
       </Card>
     </div>

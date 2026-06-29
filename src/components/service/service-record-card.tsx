@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -12,35 +12,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useTranslation } from "@/hooks/use-translation";
+import { useUserServiceCategoriesQuery } from "@/hooks/use-service-categories";
 import { formatCurrencyAmount } from "@/lib/i18n";
 import type { Currency, Locale, TranslationKey } from "@/lib/i18n";
-import type { ServiceRecordRow } from "@/types/service";
-
-const CATEGORY_DOT: Record<string, string> = {
-  tires: "bg-blue-400",
-  brakes: "bg-red-400",
-  battery_12v: "bg-yellow-400",
-  battery_hv: "bg-green-400",
-  coolant: "bg-cyan-400",
-  cabin_filter: "bg-purple-400",
-  wipers: "bg-slate-400",
-  washer_fluid: "bg-sky-400",
-  hvac: "bg-orange-400",
-  electrical: "bg-amber-400",
-  suspension: "bg-pink-400",
-  charging_port: "bg-emerald-400",
-  software: "bg-indigo-400",
-  inspection: "bg-teal-400",
-  registration: "bg-violet-400",
-  insurance: "bg-rose-400",
-  detailing: "bg-lime-400",
-  parts_purchase: "bg-orange-300",
-  other: "bg-gray-400",
-};
-
-function categoryDot(cat: string) {
-  return CATEGORY_DOT[cat] ?? "bg-gray-400";
-}
+import {
+  BUILT_IN_SERVICE_CATEGORIES,
+  BUILT_IN_CATEGORY_COLORS,
+  type ServiceRecordRow,
+} from "@/types/service";
 
 function fmtKm(v: number | null | undefined) {
   if (v == null) return null;
@@ -67,10 +46,22 @@ export function ServiceRecordCard({
 }) {
   const id = useId();
   const { t } = useTranslation();
+  const { data: userCategories = [] } = useUserServiceCategoriesQuery();
   const [deleting, setDeleting] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
 
   const total = record.total_cost > 0 ? record.total_cost : record.parts_cost + record.labor_cost;
+
+  const userCatMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of userCategories) m.set(c.name, c.color);
+    return m;
+  }, [userCategories]);
+
+  const isBuiltIn = (BUILT_IN_SERVICE_CATEGORIES as readonly string[]).includes(record.category);
+  const dotColor = isBuiltIn
+    ? BUILT_IN_CATEGORY_COLORS[record.category] ?? "#6B7280"
+    : userCatMap.get(record.category) ?? "#6B7280";
 
   return (
     <>
@@ -78,7 +69,8 @@ export function ServiceRecordCard({
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-start gap-3">
             <span
-              className={`mt-2 size-2.5 shrink-0 rounded-full ${categoryDot(record.category)}`}
+              className="mt-2 size-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: dotColor }}
               aria-hidden
             />
             <div className="min-w-0">
@@ -148,8 +140,13 @@ export function ServiceRecordCard({
         )}
 
         <div className="mt-2 flex flex-wrap gap-1.5">
-          <span className="rounded-full border border-white/[0.08] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            {t(`service.category.${record.category}` as TranslationKey) || record.category}
+          <span
+            className="rounded-full border border-white/[0.08] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+            style={!isBuiltIn ? { borderColor: dotColor, color: dotColor } : undefined}
+          >
+            {isBuiltIn
+              ? (t(`service.category.${record.category}` as TranslationKey) || record.category)
+              : record.category}
           </span>
           <span className="rounded-full border border-white/[0.08] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             {t(`service.type.${record.service_type}` as TranslationKey) || record.service_type}
