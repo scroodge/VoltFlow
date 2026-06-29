@@ -89,10 +89,13 @@ export function TelegramWelcome({ busy = false, onOpenApp, onHaveAccount, onOpen
         <button
           type="button"
           onClick={onHaveAccount}
-          className="mt-2 w-full text-center text-xs text-muted-foreground underline-offset-2 hover:underline"
+          className="mt-3 flex min-h-[48px] w-full items-center justify-center rounded-2xl border border-white/[0.12] bg-white/[0.03] px-4 text-sm font-semibold text-foreground transition-colors hover:bg-white/[0.06]"
         >
           {t("telegram.haveAccount")}
         </button>
+        <p className="mt-2 text-center text-[11px] leading-5 text-muted-foreground">
+          {t("telegram.haveAccountHint")}
+        </p>
 
         <div className="my-3 flex items-center gap-3 text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
           <span className="h-px flex-1 bg-white/10" />

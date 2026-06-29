@@ -70,7 +70,13 @@ export function TelegramEntryGate() {
       router.push("/dashboard");
       return;
     }
-    toast.error(t("telegram.loginError") as string);
+    toast.error(`${t("telegram.loginError") as string} (${result.error})`, {
+      description: t("telegram.loginExistingHint") as string,
+      action: {
+        label: t("telegram.loginExistingAction") as string,
+        onClick: () => router.push("/login?next=/telegram"),
+      },
+    });
     setBusy(false);
   };
 

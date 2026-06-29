@@ -98,6 +98,9 @@ export const dictionaries = {
       openingApp: "Opening the app…",
       loginError: "Could not sign in. Please try again.",
       haveAccount: "Already have a VoltFlow account? Sign in",
+      haveAccountHint: "Use this after adding a password to a Google account.",
+      loginExistingHint: "If you added a password to a Google account, sign in with email and password.",
+      loginExistingAction: "Sign in",
     },
     locale: {
       label: "Language",
@@ -1149,6 +1152,10 @@ export const dictionaries = {
       openingApp: "Адкрываем дадатак…",
       loginError: "Не атрымалася ўвайсці. Паспрабуйце яшчэ раз.",
       haveAccount: "Ужо ёсць акаўнт VoltFlow? Увайсці",
+      haveAccountHint: "Выкарыстоўвайце гэта пасля дадання пароля да Google-акаўнта.",
+      loginExistingHint:
+        "Калі вы дадалі пароль да Google-акаўнта, увайдзіце праз email і пароль.",
+      loginExistingAction: "Увайсці",
     },
     locale: {
       label: "Мова",
@@ -2202,6 +2209,10 @@ export const dictionaries = {
       openingApp: "Открываем приложение…",
       loginError: "Не удалось войти. Попробуйте ещё раз.",
       haveAccount: "Уже есть аккаунт VoltFlow? Войти",
+      haveAccountHint: "Используйте это после добавления пароля к Google-аккаунту.",
+      loginExistingHint:
+        "Если вы добавили пароль к Google-аккаунту, войдите через email и пароль.",
+      loginExistingAction: "Войти",
     },
     locale: {
       label: "Язык",
