@@ -101,10 +101,11 @@ const PROVIDER_OPTIONS: { value: ChargingProviderType; label: string }[] = [
   { value: "zaryadka", label: PROVIDER_LABELS.zaryadka },
 ];
 
-function defaultEstimatePowerKw(type: ChargingTariffType) {
+function defaultEstimatePowerKw(type: ChargingTariffType, homePowerKw?: number | null) {
   if (type === "fast_dc") return 65;
   if (type === "commercial_ac") return 7;
-  return 4.4;
+  // Home charging defaults to the user's per-car configured charger power.
+  return typeof homePowerKw === "number" && homePowerKw > 0 ? homePowerKw : 4.4;
 }
 
 function cappedPositivePowerKw(powerKw: number, capKw: number) {
@@ -369,6 +370,7 @@ function ParkChargeEstimatePanel({
   estimatePowerKw,
   estimateProviderType,
   estimateTariffType,
+  homeChargerPowerKw,
   locale,
   parkEstimate,
   setEstimatePowerKw,
@@ -380,6 +382,7 @@ function ParkChargeEstimatePanel({
   estimatePowerKw: string;
   estimateProviderType: ChargingProviderType;
   estimateTariffType: ChargingTariffType;
+  homeChargerPowerKw?: number | null;
   locale: Locale;
   parkEstimate: {
     cost: number;
@@ -434,7 +437,7 @@ function ParkChargeEstimatePanel({
               onClick={() => {
                 const next = item.value;
                 setEstimateTariffType(next);
-                setEstimatePowerKw(String(defaultEstimatePowerKw(next)));
+                setEstimatePowerKw(String(defaultEstimatePowerKw(next, homeChargerPowerKw)));
               }}
               className={cn(
                 "rounded-full px-2 py-1 font-heading text-[10px] font-bold uppercase tracking-[0.08em] transition",
@@ -692,7 +695,7 @@ export function DashboardView() {
   const [estimateProviderType, setEstimateProviderType] =
     useState<ChargingProviderType>("home");
   const [estimatePowerKw, setEstimatePowerKw] = useState(
-    String(defaultEstimatePowerKw("home")),
+    String(defaultEstimatePowerKw("home", selectedCar?.default_charger_power_kw)),
   );
   const [estimateTariffTouched, setEstimateTariffTouched] = useState(false);
   const [estimateProviderTouched, setEstimateProviderTouched] = useState(false);
@@ -793,7 +796,9 @@ export function DashboardView() {
       setEstimateProviderType(nextProviderType);
     }
     if (!estimatePowerTouched) {
-      setEstimatePowerKw(String(defaultEstimatePowerKw(nextTariffType)));
+      setEstimatePowerKw(
+        String(defaultEstimatePowerKw(nextTariffType, selectedCar?.default_charger_power_kw)),
+      );
     }
   }, [
     estimatePowerTouched,
@@ -801,6 +806,7 @@ export function DashboardView() {
     estimateTariffLocationMatch?.preset?.provider_type,
     estimateTariffLocationMatch?.preset?.tariff_type,
     estimateTariffTouched,
+    selectedCar?.default_charger_power_kw,
   ]);
 
   const chargingProgressLine =
@@ -1123,6 +1129,7 @@ export function DashboardView() {
                       estimatePowerKw={estimatePowerKw}
                       estimateProviderType={estimateProviderType}
                       estimateTariffType={estimateTariffType}
+                      homeChargerPowerKw={selectedCar?.default_charger_power_kw}
                       locale={locale}
                       parkEstimate={parkEstimate}
                       setEstimatePowerKw={(value) => {
