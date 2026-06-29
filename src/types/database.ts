@@ -6,6 +6,7 @@ export type ChargingProviderType =
   | "evika"
   | "forevo"
   | "zaryadka"
+  | "batterfly"
   | "custom";
 
 export type Profile = {

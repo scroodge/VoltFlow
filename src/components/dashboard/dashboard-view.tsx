@@ -99,6 +99,7 @@ const PROVIDER_OPTIONS: { value: ChargingProviderType; label: string }[] = [
   { value: "evika", label: PROVIDER_LABELS.evika },
   { value: "forevo", label: PROVIDER_LABELS.forevo },
   { value: "zaryadka", label: PROVIDER_LABELS.zaryadka },
+  { value: "batterfly", label: PROVIDER_LABELS.batterfly },
 ];
 
 function defaultEstimatePowerKw(type: ChargingTariffType, homePowerKw?: number | null) {
@@ -686,7 +687,7 @@ export function DashboardView() {
   const [chargerKw, setChargerKw] = useState("");
   const [price, setPrice] = useState(String(defaultPrice));
   const [manualProviderType, setManualProviderType] = useState<
-    "custom" | "home" | "malanka" | "evika" | "forevo" | "zaryadka"
+    "custom" | "home" | "malanka" | "evika" | "forevo" | "zaryadka" | "batterfly"
   >("custom");
   const [manualTariffType, setManualTariffType] = useState<"auto" | ChargingTariffType>(
     "auto",
@@ -1345,7 +1346,8 @@ export function DashboardView() {
                       | "malanka"
                       | "evika"
                       | "forevo"
-                      | "zaryadka",
+                      | "zaryadka"
+                      | "batterfly",
                   )
                 }
                 items={[
@@ -1355,6 +1357,7 @@ export function DashboardView() {
                   { value: "evika", label: PROVIDER_LABELS.evika },
                   { value: "forevo", label: PROVIDER_LABELS.forevo },
                   { value: "zaryadka", label: PROVIDER_LABELS.zaryadka },
+                  { value: "batterfly", label: PROVIDER_LABELS.batterfly },
                 ]}
               >
                 <SelectTrigger id="session-provider-type" className="h-[52px] rounded-xl text-lg">
@@ -1367,6 +1370,7 @@ export function DashboardView() {
                   <SelectItem value="evika">{PROVIDER_LABELS.evika}</SelectItem>
                   <SelectItem value="forevo">{PROVIDER_LABELS.forevo}</SelectItem>
                   <SelectItem value="zaryadka">{PROVIDER_LABELS.zaryadka}</SelectItem>
+                  <SelectItem value="batterfly">{PROVIDER_LABELS.batterfly}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

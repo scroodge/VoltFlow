@@ -21,7 +21,7 @@ const startSchema = z.object({
   pricePerKwh: z.coerce.number().min(0).max(999).optional(),
   tariffType: z.enum(["home", "commercial_ac", "fast_dc"]).optional(),
   providerType: z
-    .enum(["home", "malanka", "evika", "forevo", "zaryadka", "custom"])
+    .enum(["home", "malanka", "evika", "forevo", "zaryadka", "batterfly", "custom"])
     .optional(),
   chargerPowerKw: z.coerce.number().positive().max(350).optional(),
 });
@@ -189,7 +189,7 @@ export async function stopChargingSession(sessionId: string) {
 const updateTariffSchema = z.object({
   sessionId: z.string().uuid(),
   tariffType: z.enum(["home", "commercial_ac", "fast_dc"]),
-  providerType: z.enum(["home", "malanka", "evika", "forevo", "zaryadka", "custom"]),
+  providerType: z.enum(["home", "malanka", "evika", "forevo", "zaryadka", "batterfly", "custom"]),
   pricePerKwh: z.coerce.number().min(0).max(999),
 });
 

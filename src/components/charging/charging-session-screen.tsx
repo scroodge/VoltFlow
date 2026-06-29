@@ -585,6 +585,7 @@ export function ChargingSessionScreen({
                   "evika",
                   "forevo",
                   "zaryadka",
+                  "batterfly",
                   "custom",
                 ] as const
               ).map((value) => ({
@@ -596,7 +597,7 @@ export function ChargingSessionScreen({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="z-[200]">
-                {(["home", "malanka", "evika", "forevo", "zaryadka", "custom"] as const).map(
+                {(["home", "malanka", "evika", "forevo", "zaryadka", "batterfly", "custom"] as const).map(
                   (value) => (
                     <SelectItem key={value} value={value}>
                       {t(tariffProviderKey(value))}

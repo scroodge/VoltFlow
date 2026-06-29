@@ -1,3 +1,47 @@
+## Agent workflow rule
+
+**Always plan first, never build unasked.**
+1. Research the problem.
+2. Write the plan here under `## Pending plan` (options, trade-offs, recommendation).
+3. Show a short summary and ask the user: "Should I build this?"
+4. Wait for explicit go-ahead before writing any code or migrations.
+
+---
+
+## Pending plan
+
+### ✅ Settings — GPS permission prompt on every open (resolved 2026-06-29)
+
+**Problem:** Every time Settings opens, `useEffect` in `settings-view.tsx:178` calls
+`navigator.geolocation.getCurrentPosition()` unconditionally (because `newLocationLat/Lng`
+start as empty strings on every mount). This triggers the OS GPS notification/prompt on
+every visit.
+
+**Options:**
+
+| | Approach | Pros | Cons |
+|---|---|---|---|
+| A | **DB `profiles.last_gps_lat/lon`** *(already coded)* | Syncs across devices | Location in DB (privacy concern); coords stale after user moves; needs migration + DB write per GPS call; location is device-local anyway |
+| B | **`localStorage`** | No migration; instant read; per-device (correct — GPS is device-specific); no privacy concern in DB | Cleared if user wipes storage; not cross-device (acceptable) |
+| C | **Permissions API check** | Uses browser's own permission memory; no storage at all; semantically correct | `navigator.permissions` has limited iOS Safari support; OS location indicator still shows if granted |
+| D | **Remove auto-GPS on mount entirely** | Simplest; zero storage; no prompt ever on open | Form not pre-filled automatically; user must tap "Use Current GPS" |
+
+**Recommendation:** **D + B** — remove the mount-time `getCurrentPosition()` call entirely;
+when the user explicitly taps "Use Current GPS" or "Auto GPS On", get position and save to
+`localStorage`; on next open, pre-fill from `localStorage`. Zero migration, zero DB privacy
+concern, zero prompt on mount.
+
+Current coded approach (A — DB) can be reverted and replaced with B+D.
+
+**Summary:** The DB approach works but stores device-local, potentially stale location data
+in the database. `localStorage` is a better fit. The cleanest version removes auto-GPS-on-mount
+entirely and only fetches when the user asks for it, saving the result in `localStorage` for
+next time.
+
+**→ Should I build the D+B approach (revert DB changes, use localStorage instead)?**
+
+---
+
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
 

@@ -82,7 +82,7 @@ export function mapChargingSession(
     ) as ChargingTariffType,
     provider_type: enumValue(
       raw.provider_type,
-      ["home", "malanka", "evika", "forevo", "zaryadka", "custom"] as const,
+      ["home", "malanka", "evika", "forevo", "zaryadka", "batterfly", "custom"] as const,
       "custom",
     ) as ChargingProviderType,
     tariff_manual: raw.tariff_manual === true,
@@ -114,7 +114,7 @@ export function mapChargingTariffLocation(
     ) as ChargingTariffType,
     provider_type: enumValue(
       raw.provider_type,
-      ["home", "malanka", "evika", "forevo", "zaryadka", "custom"] as const,
+      ["home", "malanka", "evika", "forevo", "zaryadka", "batterfly", "custom"] as const,
       "custom",
     ) as ChargingProviderType,
     price_per_kwh_override:

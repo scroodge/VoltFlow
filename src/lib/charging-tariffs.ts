@@ -31,6 +31,7 @@ export const PROVIDER_LABELS: Record<ChargingProviderType, string> = {
   evika: "Evika!",
   forevo: "forEVo",
   zaryadka: "Zaryadka",
+  batterfly: "BatteryFly",
   custom: "Custom",
 };
 
@@ -43,6 +44,7 @@ export const PROVIDER_TARIFF_PRESETS: Record<
   evika: { home: 0.54, commercial_ac: 0.54, fast_dc: 0.72 },
   forevo: { home: 0.46, commercial_ac: 0.46, fast_dc: 0.61 },
   zaryadka: { home: 0.48, commercial_ac: 0.48, fast_dc: 0.61 },
+  batterfly: { home: 0.50, commercial_ac: 0.50, fast_dc: 0.45 },
 };
 
 export function normalizeTariffType(value: unknown): ChargingTariffType {
@@ -57,6 +59,7 @@ export function normalizeProviderType(value: unknown): ChargingProviderType {
     value === "evika" ||
     value === "forevo" ||
     value === "zaryadka" ||
+    value === "batterfly" ||
     value === "custom"
     ? value
     : "custom";

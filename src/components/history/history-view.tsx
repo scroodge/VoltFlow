@@ -374,9 +374,11 @@ function SessionStatsBlock({
           ? "forEVo"
           : session.provider_type === "zaryadka"
             ? "Zaryadka"
-            : session.provider_type === "home"
-              ? "Home"
-              : "Custom";
+            : session.provider_type === "batterfly"
+              ? "BatteryFly"
+              : session.provider_type === "home"
+                ? "Home"
+                : "Custom";
   return (
     <dl className="divide-y divide-border border-b border-border">
       <CompactStatRow

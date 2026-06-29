@@ -176,18 +176,23 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   const { t } = useTranslation();
 
   useEffect(() => {
-    if (!newLocationAutoGps) return;
-    if (!navigator.geolocation) return;
-    if (newLocationLat.trim() !== "" && newLocationLng.trim() !== "") return;
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setNewLocationLat(String(position.coords.latitude));
-        setNewLocationLng(String(position.coords.longitude));
-      },
-      () => {},
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
-    );
-  }, [newLocationAutoGps, newLocationLat, newLocationLng]);
+    try {
+      const stored = localStorage.getItem("voltflow:last_gps");
+      if (!stored) return;
+      const parsed = JSON.parse(stored) as unknown;
+      if (
+        parsed !== null &&
+        typeof parsed === "object" &&
+        "lat" in parsed &&
+        "lon" in parsed &&
+        typeof (parsed as Record<string, unknown>).lat === "number" &&
+        typeof (parsed as Record<string, unknown>).lon === "number"
+      ) {
+        setNewLocationLat(String((parsed as { lat: number; lon: number }).lat));
+        setNewLocationLng(String((parsed as { lat: number; lon: number }).lon));
+      }
+    } catch {}
+  }, []);
   useEffect(() => {
     let mounted = true;
 
@@ -336,6 +341,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
           mapChargingTariffLocation(row as Record<string, unknown>),
         ),
       );
+
     });
 
     return () => {
@@ -421,8 +427,11 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
     }
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setNewLocationLat(String(position.coords.latitude));
-        setNewLocationLng(String(position.coords.longitude));
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+        setNewLocationLat(String(lat));
+        setNewLocationLng(String(lon));
+        try { localStorage.setItem("voltflow:last_gps", JSON.stringify({ lat, lon })); } catch {}
       },
       (error) => toast.error(error.message),
       { enableHighAccuracy: true, timeout: 12_000, maximumAge: 30_000 },
@@ -1171,6 +1180,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                   { value: "evika", label: PROVIDER_LABELS.evika },
                   { value: "forevo", label: PROVIDER_LABELS.forevo },
                   { value: "zaryadka", label: PROVIDER_LABELS.zaryadka },
+                  { value: "batterfly", label: PROVIDER_LABELS.batterfly },
                 ]}
               >
                 <SelectTrigger id="provider-preset" className="h-11 w-full rounded-2xl text-sm">
@@ -1183,6 +1193,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                   <SelectItem value="evika">{PROVIDER_LABELS.evika}</SelectItem>
                   <SelectItem value="forevo">{PROVIDER_LABELS.forevo}</SelectItem>
                   <SelectItem value="zaryadka">{PROVIDER_LABELS.zaryadka}</SelectItem>
+                  <SelectItem value="batterfly">{PROVIDER_LABELS.batterfly}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1290,7 +1301,23 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                 type="button"
                 variant={newLocationAutoGps ? "secondary" : "outline"}
                 className="h-11 rounded-full text-sm"
-                onClick={() => setNewLocationAutoGps((value) => !value)}
+                onClick={() => {
+                    const next = !newLocationAutoGps;
+                    setNewLocationAutoGps(next);
+                    if (next && navigator.geolocation) {
+                      navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                          const lat = position.coords.latitude;
+                          const lon = position.coords.longitude;
+                          setNewLocationLat(String(lat));
+                          setNewLocationLng(String(lon));
+                          try { localStorage.setItem("voltflow:last_gps", JSON.stringify({ lat, lon })); } catch {}
+                        },
+                        () => {},
+                        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
+                      );
+                    }
+                  }}
               >
                 {newLocationAutoGps
                   ? (t("settings.locationTariffs.autoGpsOn") as string)
@@ -1329,7 +1356,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                   setNewLocationProviderType(value as ChargingProviderType)
                 }
                 items={(
-                  ["custom", "home", "malanka", "evika", "forevo", "zaryadka"] as const
+                  ["custom", "home", "malanka", "evika", "forevo", "zaryadka", "batterfly"] as const
                 ).map((value) => ({
                   value,
                   label: t(`charging.tariff.providers.${value}` as TranslationKey),
@@ -1339,7 +1366,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {(["custom", "home", "malanka", "evika", "forevo", "zaryadka"] as const).map(
+                  {(["custom", "home", "malanka", "evika", "forevo", "zaryadka", "batterfly"] as const).map(
                     (value) => (
                       <SelectItem key={value} value={value}>
                         {t(`charging.tariff.providers.${value}` as TranslationKey)}
