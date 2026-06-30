@@ -521,8 +521,8 @@ export function ChargingSessionScreen({
           size="lg"
           className="min-h-[44px] rounded-full border-border bg-white/[0.03] font-heading text-sm font-bold"
         >
-          <Link href={appPath(historyMode ? "/history" : "/dashboard")}>
-            {historyMode ? t("history.title") : t("charging.dashboard")}
+          <Link href={appPath(historyMode ? "/history?tab=charging" : "/dashboard")}>
+            {historyMode ? (locale === "ru" ? "Назад" : "Back") : t("charging.dashboard")}
           </Link>
         </Button>
       </div>
