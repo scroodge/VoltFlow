@@ -59,5 +59,8 @@ test("no math completion while fresh live SOC below target", () => {
   });
   assert.equal(bundle.completionSource, null);
   assert.equal(bundle.completionState, null);
-  assert.ok(bundle.mathState.isComplete);
+  // Math is now clamped to the last real SOC (71%), so it can no longer claim completion
+  // while a fresh reading sits below target — this is the finish-detection overshoot fix.
+  assert.equal(bundle.mathState.isComplete, false);
+  assert.ok(bundle.mathState.currentPercent <= 71 + 0.01);
 });

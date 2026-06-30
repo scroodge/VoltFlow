@@ -6,8 +6,10 @@ import {
   chargingPersistIntervalMs,
   deriveChargePowerFromEnergyDeltaKw,
   deriveLiveChargingState,
+  latestSnapshotSocReading,
   snapshotKwhCharged,
 } from "./charging-live.ts";
+import { clampDerivedToSocCeiling, deriveChargingState } from "./charging-math.ts";
 
 const NOW = 1_900_000_000_000;
 const CHARGING_PARAMS = {
@@ -98,4 +100,61 @@ test("slack keeps a 1Hz tick clearing the ≥98% tier", () => {
   // tick landing a few ms early still persists at the balance tail.
   assert.ok(chargingPersistIntervalMs(99) - CHARGING_PERSIST_SLACK_MS < 1_000);
   assert.ok(CHARGING_PERSIST_SLACK_MS > 0);
+});
+
+const CLAMP_PARAMS = {
+  startPercent: 32,
+  targetPercent: 100,
+  batteryCapacityKwh: 45.1,
+  chargerPowerKw: 4.4,
+  efficiencyPercent: 100,
+  pricePerKwh: 0.3265,
+};
+
+test("latestSnapshotSocReading picks the newest snapshot carrying a SOC", () => {
+  const reading = latestSnapshotSocReading([
+    { received_at: new Date(NOW - 120_000).toISOString(), telemetry: { soc: 60 } },
+    { received_at: new Date(NOW - 60_000).toISOString(), telemetry: { soc: 64 } },
+    { received_at: new Date(NOW - 30_000).toISOString(), telemetry: { speed_kmh: 0 } },
+  ]);
+  assert.equal(reading.soc, 64);
+  assert.equal(reading.receivedMs, NOW - 60_000);
+});
+
+test("latestSnapshotSocReading is null when no snapshot has SOC", () => {
+  assert.equal(latestSnapshotSocReading([{ received_at: new Date(NOW).toISOString(), telemetry: {} }]), null);
+});
+
+test("clampDerivedToSocCeiling caps runaway math at the last real SOC + bridge", () => {
+  // Session left open ~8h after charging ended; math projects all the way to target, but
+  // the last real SOC was 64% only 30s ago. The ceiling is 64 + tiny bridge, so the
+  // persisted value stays ~64 instead of the runaway value.
+  const math = deriveChargingState(CLAMP_PARAMS, NOW - 8 * 3600_000, NOW);
+  assert.ok(math.currentPercent > 70); // unclamped runaway (hits target)
+  const clamped = clampDerivedToSocCeiling(math, CLAMP_PARAMS, 64, 30);
+  assert.ok(clamped.currentPercent < 65, `expected ~64, got ${clamped.currentPercent}`);
+  assert.ok(clamped.currentPercent >= 64);
+  // energy rebuilt from the clamped SOC (~64% + tiny bridge): ≈(64-32)% * 45.1 = 14.43 kWh
+  assert.ok(Math.abs(clamped.chargedEnergyKwh - 14.45) < 0.05);
+  assert.equal(clamped.isComplete, false);
+});
+
+test("clampDerivedToSocCeiling leaves a non-overshooting state untouched", () => {
+  const math = deriveChargingState(CLAMP_PARAMS, NOW - 5 * 60_000, NOW);
+  const clamped = clampDerivedToSocCeiling(math, CLAMP_PARAMS, 90, 30);
+  assert.deepEqual(clamped, math);
+});
+
+test("clampDerivedToSocCeiling is a no-op without a SOC anchor", () => {
+  const math = deriveChargingState(CLAMP_PARAMS, NOW - 200 * 60_000, NOW);
+  assert.deepEqual(clampDerivedToSocCeiling(math, CLAMP_PARAMS, null, 0), math);
+});
+
+test("clampDerivedToSocCeiling allows completion when bridge reaches target (offline)", () => {
+  // Last SOC 96% seen 1 hour ago, car offline since: bridge at 4.4kW/45.1kWh ~9.75%/h
+  // lifts the ceiling past 100, so a genuinely-finished offline session can complete.
+  const math = deriveChargingState(CLAMP_PARAMS, NOW - 8 * 3600_000, NOW);
+  const clamped = clampDerivedToSocCeiling(math, CLAMP_PARAMS, 96, 3600);
+  assert.equal(clamped.currentPercent, 100);
+  assert.equal(clamped.isComplete, true);
 });

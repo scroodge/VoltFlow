@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { isMateAutoSessionCharging, isTelemetryCharging } from "./telemetry-charging.ts";
+import {
+  isMateAutoSessionCharging,
+  isTelemetryCharging,
+  sanitizeChargerPowerKw,
+} from "./telemetry-charging.ts";
 
 test("traction power_kw alone is not auto-session charging", () => {
   assert.equal(
@@ -56,4 +60,26 @@ test("gun connected (AC) is charging even without power yet", () => {
 
 test("charge_power_kw above threshold is charging", () => {
   assert.equal(isTelemetryCharging({ is_charging: false, charge_power_kw: 7.2 }), true);
+});
+
+test("sanitizeChargerPowerKw keeps a plausible AC reading", () => {
+  assert.equal(sanitizeChargerPowerKw(4, "AC", 4.4), 4);
+});
+
+test("sanitizeChargerPowerKw rejects di+ AC spike, falls back to car default", () => {
+  // 64 kW glitch on a 4.4 kW AC car → use the default, not the spike
+  assert.equal(sanitizeChargerPowerKw(64, "AC", 4.4), 4.4);
+});
+
+test("sanitizeChargerPowerKw treats unknown gun as AC (conservative cap)", () => {
+  assert.equal(sanitizeChargerPowerKw(48, null, 4.4), 4.4);
+});
+
+test("sanitizeChargerPowerKw allows real DC power", () => {
+  assert.equal(sanitizeChargerPowerKw(64, "DC", 11), 64);
+});
+
+test("sanitizeChargerPowerKw falls back when reading and default are both bad", () => {
+  assert.equal(sanitizeChargerPowerKw(null, "AC", 0), 7.2);
+  assert.equal(sanitizeChargerPowerKw(999, "DC", 0), 50);
 });

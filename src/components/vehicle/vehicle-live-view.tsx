@@ -59,7 +59,6 @@ import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useSessionsQuery } from "@/hooks/use-sessions-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
-import { useFloatChargePowerKw } from "@/hooks/use-float-charge-power-kw";
 import { useAppPath } from "@/lib/dev/dev-path";
 import { gearIsPark, readGear } from "@/lib/bydmate/gear";
 import { isTelemetryCharging } from "@/lib/bydmate/telemetry-charging";
@@ -523,7 +522,6 @@ function Hero({
   const { locale, t: translate } = useTranslation();
   const t = translate as Translator;
   const telemetry = snapshot.telemetry;
-  const floatChargePowerKw = useFloatChargePowerKw(snapshot);
   const coreMetrics = heroCoreMetrics(snapshot, t, locale);
   const primaryMetrics = [
     {
@@ -612,7 +610,7 @@ function Hero({
               key: "chargePower",
               icon: Zap,
               label: t("vehicle.telemetry.chargePower"),
-              value: `${fmt(floatChargePowerKw ?? telemetry.charge_power_kw, floatChargePowerKw != null ? 2 : 1)} kW`,
+              value: `${fmt(telemetry.charge_power_kw, 1)} kW`,
             },
           );
         } else {
@@ -669,9 +667,8 @@ function ChargingModeCard({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
   const { t } = useTranslation();
   const tx = t as Translator;
   const telemetry = snapshot.telemetry;
-  const floatChargePowerKw = useFloatChargePowerKw(snapshot);
   const items = [
-    { icon: Zap, label: tx("vehicle.telemetry.chargePower"), value: `${fmt(floatChargePowerKw ?? telemetry.charge_power_kw, floatChargePowerKw != null ? 2 : 1)} kW` },
+    { icon: Zap, label: tx("vehicle.telemetry.chargePower"), value: `${fmt(telemetry.charge_power_kw, 1)} kW` },
     { icon: Activity, label: tx("vehicle.telemetry.chargeType"), value: telemetry.charge_type ?? "—" },
     { icon: Thermometer, label: tx("vehicle.telemetry.batteryTemp"), value: fmtTemp(telemetry.battery_temp_c) },
     { icon: Thermometer, label: tx("vehicle.telemetry.outsideTemp"), value: fmtTemp(telemetry.outside_temp_c) },

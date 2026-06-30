@@ -58,7 +58,6 @@ import {
   staticDerivedFromSession,
 } from "@/lib/charging-session-sync";
 import { deriveLiveChargingState, findFreshChargingSnapshot, snapshotChargePowerKw } from "@/lib/charging-live";
-import { useFloatChargePowerKw } from "@/hooks/use-float-charge-power-kw";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import { useAppPath } from "@/lib/dev/dev-path";
 import { useChargingUi } from "@/stores/use-charging-ui";
@@ -231,12 +230,14 @@ export function ChargingSessionScreen({
     () => snapshotChargePowerKw(freshChargingSnapshot),
     [freshChargingSnapshot],
   );
-  const floatChargePowerKw = useFloatChargePowerKw(freshChargingSnapshot);
+  // Power display uses the di+ integer (grid-side, matches the car's own display). The BMS
+  // float (deriveChargePowerFromEnergyDeltaKw) is cell-side — ~2 kW below the car's reading
+  // because of thermal-management draw — so it's misleading here. See AGENTS.md §FINDING.
   const displayAcPowerKw =
     session?.status === "charging"
-      ? (floatChargePowerKw ?? liveChargePowerKw ?? session.charger_power_kw ?? 0)
+      ? (liveChargePowerKw ?? session.charger_power_kw ?? 0)
       : (session?.charger_power_kw ?? 0);
-  const displayAcPowerDecimals = floatChargePowerKw != null ? 2 : 1;
+  const displayAcPowerDecimals = 1;
 
   const pctForBar =
     session && derived ? derived.currentPercent : session?.current_percent ?? 0;

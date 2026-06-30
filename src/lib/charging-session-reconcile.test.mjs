@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 
 import {
   buildReconciledSessionPatch,
+  buildSilenceClosePatch,
   measuredSocFromMate,
+  OPEN_SESSION_SILENCE_MS,
   sessionNeedsReconcile,
   summarizeSessionTelemetry,
 } from "./charging-session-reconcile-logic.ts";
@@ -187,4 +189,104 @@ test("buildReconciledSessionPatch falls back to SOC estimate when no kwh_charged
   assert.ok(patch);
   // SOC estimate: 45 * (49-30)/100 = 8.55
   assert.ok(Math.abs(patch.charged_energy_kwh - 8.55) < 1e-9);
+});
+
+const NOW2 = Date.parse("2026-06-19T17:56:00Z");
+const openSession = {
+  ...baseSession,
+  status: "charging",
+  start_percent: 32,
+  current_percent: 77.9, // wall-clock overshoot
+  target_percent: 100,
+  battery_capacity_kwh: 45.1,
+  charger_power_kw: 4.4,
+  efficiency_percent: 100,
+  price_per_kwh: 0.3265,
+  energy_overridden: false,
+  started_at: "2026-06-19T07:52:00Z",
+  stopped_at: null,
+};
+
+test("buildSilenceClosePatch closes a silent open session at last real SOC", () => {
+  const lastSampleMs = NOW2 - 60 * 60_000; // last telemetry 1h ago
+  const summary = summarizeSessionTelemetry(
+    [{ device_time: new Date(lastSampleMs).toISOString(), telemetry: { soc: 64 } }],
+    openSession,
+  );
+  const patch = buildSilenceClosePatch({
+    session: openSession,
+    summary,
+    lastSampleMs,
+    liveSocFresh: false,
+    liveSoc: null,
+    nowMs: NOW2,
+  });
+  assert.ok(patch);
+  assert.equal(patch.status, "stopped");
+  assert.equal(patch.current_percent, 64); // last real SOC, not the 77.9 overshoot
+  // energy from SOC: (64-32)% * 45.1 = 14.432
+  assert.ok(Math.abs(patch.charged_energy_kwh - 14.432) < 0.01);
+  assert.equal(patch.stopped_at, new Date(lastSampleMs).toISOString());
+});
+
+test("buildSilenceClosePatch completes when last SOC reached target", () => {
+  const lastSampleMs = NOW2 - 60 * 60_000;
+  const summary = summarizeSessionTelemetry(
+    [{ device_time: new Date(lastSampleMs).toISOString(), telemetry: { soc: 100 } }],
+    openSession,
+  );
+  const patch = buildSilenceClosePatch({
+    session: openSession, summary, lastSampleMs, liveSocFresh: false, liveSoc: null, nowMs: NOW2,
+  });
+  assert.equal(patch.status, "completed");
+  assert.equal(patch.current_percent, 100);
+});
+
+test("buildSilenceClosePatch is a no-op while telemetry is still fresh", () => {
+  const lastSampleMs = NOW2 - 60_000; // 1 min ago, well within silence window
+  assert.ok(NOW2 - lastSampleMs < OPEN_SESSION_SILENCE_MS);
+  const summary = summarizeSessionTelemetry([], openSession);
+  assert.equal(
+    buildSilenceClosePatch({
+      session: openSession, summary, lastSampleMs, liveSocFresh: false, liveSoc: null, nowMs: NOW2,
+    }),
+    null,
+  );
+});
+
+test("buildSilenceClosePatch is a no-op while live SOC is fresh (car awake)", () => {
+  const lastSampleMs = NOW2 - 60 * 60_000;
+  const summary = summarizeSessionTelemetry([], openSession);
+  assert.equal(
+    buildSilenceClosePatch({
+      session: openSession, summary, lastSampleMs, liveSocFresh: true, liveSoc: 64, nowMs: NOW2,
+    }),
+    null,
+  );
+});
+
+test("buildSilenceClosePatch is a no-op for an already-closed session", () => {
+  const summary = summarizeSessionTelemetry([], baseSession);
+  assert.equal(
+    buildSilenceClosePatch({
+      session: baseSession, summary, lastSampleMs: NOW2 - 60 * 60_000, liveSocFresh: false, liveSoc: null, nowMs: NOW2,
+    }),
+    null,
+  );
+});
+
+test("buildSilenceClosePatch preserves overridden energy", () => {
+  const lastSampleMs = NOW2 - 60 * 60_000;
+  const summary = summarizeSessionTelemetry(
+    [{ device_time: new Date(lastSampleMs).toISOString(), telemetry: { soc: 64 } }],
+    openSession,
+  );
+  const patch = buildSilenceClosePatch({
+    session: { ...openSession, energy_overridden: true },
+    summary, lastSampleMs, liveSocFresh: false, liveSoc: null, nowMs: NOW2,
+  });
+  assert.ok(patch);
+  assert.equal("charged_energy_kwh" in patch, false);
+  assert.equal("estimated_cost" in patch, false);
+  assert.equal(patch.current_percent, 64);
 });

@@ -11,6 +11,7 @@ import {
 import {
   finiteTelemetryNumber,
   isMateAutoSessionCharging,
+  sanitizeChargerPowerKw,
   telemetrySpeedKmh,
 } from "@/lib/bydmate/telemetry-charging";
 
@@ -113,7 +114,15 @@ async function startSessionFromTelemetry({
 }) {
   const startedAt = sample.device_time;
   await closeOpenChargingSessions(supabase, userId, startedAt);
-  const chargerPower = Math.min(350, Math.max(chargerPowerKw, 0.1));
+  const chargeType =
+    typeof (sample.telemetry as Record<string, unknown>).charge_type === "string"
+      ? ((sample.telemetry as Record<string, unknown>).charge_type as string)
+      : null;
+  const chargerPower = sanitizeChargerPowerKw(
+    chargerPowerKw,
+    chargeType,
+    car.default_charger_power_kw,
+  );
   const tariff = await resolveTariffForTelemetry(
     supabase,
     userId,

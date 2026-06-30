@@ -37,8 +37,15 @@ export type ReconcileChargingSession = {
 
 const RECONCILE_LOOKBACK_DAYS = 14;
 const TELEMETRY_SOC_TOLERANCE = 0.5;
+/**
+ * An open ("charging") session with no telemetry for this long has really ended: the car
+ * slept, di+ HTTP stopped responding, the Mate daemon went silent — so the
+ * 2-consecutive-unplug auto-stop never received its samples and the session sits open
+ * forever (observed: a 58 h "charging" session on car `way`). Close it at the last real SOC.
+ */
+const OPEN_SESSION_SILENCE_MS = 15 * 60_000;
 
-export { RECONCILE_LOOKBACK_DAYS, TELEMETRY_SOC_TOLERANCE };
+export { RECONCILE_LOOKBACK_DAYS, TELEMETRY_SOC_TOLERANCE, OPEN_SESSION_SILENCE_MS };
 
 /** Mate telemetry/live SOC is truth; persisted wall-clock fields are not used here. */
 export function measuredSocFromMate(
@@ -166,6 +173,55 @@ export function summarizeSessionTelemetry(
     lastAcChargeAt,
     lastSocAt,
     maxKwhCharged,
+  };
+}
+
+/**
+ * Close an open session whose telemetry has gone silent (see OPEN_SESSION_SILENCE_MS).
+ * The final state is the last real SOC seen — never a wall-clock projection past the last
+ * sample. Returns null when the session is not open, telemetry is still fresh (let the
+ * normal auto-stop handle it), or live SOC is still fresh (car is present/awake).
+ */
+export function buildSilenceClosePatch({
+  session,
+  summary,
+  lastSampleMs,
+  liveSocFresh,
+  liveSoc,
+  nowMs,
+}: {
+  session: ReconcileChargingSession;
+  summary: ReturnType<typeof summarizeSessionTelemetry>;
+  lastSampleMs: number | null;
+  liveSocFresh: boolean;
+  liveSoc: number | null;
+  nowMs: number;
+}) {
+  if (session.status !== "charging" || !session.started_at) return null;
+  if (liveSocFresh) return null; // car still reporting → not silent
+  if (lastSampleMs != null && nowMs - lastSampleMs < OPEN_SESSION_SILENCE_MS) return null;
+
+  const startMs = Date.parse(session.started_at);
+  if (!Number.isFinite(startMs)) return null;
+
+  const measuredSoc = measuredSocFromMate(session, summary, liveSoc);
+  const reachedTarget = measuredSoc + TELEMETRY_SOC_TOLERANCE >= session.target_percent;
+  const finalSoc = reachedTarget
+    ? session.target_percent
+    : Math.min(session.target_percent, measuredSoc);
+  const progress = deriveSessionProgressFromSoc(chargingParamsFromSession(session), finalSoc);
+  const stopMs = Math.max(startMs, lastSampleMs ?? startMs);
+
+  return {
+    current_percent: progress.currentPercent,
+    ...(session.energy_overridden
+      ? {}
+      : {
+          charged_energy_kwh: progress.chargedEnergyKwh,
+          estimated_cost: progress.estimatedCost,
+        }),
+    status: reachedTarget ? ("completed" as const) : ("stopped" as const),
+    stopped_at: new Date(stopMs).toISOString(),
   };
 }
 

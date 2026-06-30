@@ -98,6 +98,35 @@ export function isAcWallboxCharging(
   return isMateAutoSessionCharging(telemetry, speedKmh ?? null);
 }
 
+/** Plausible AC wallbox ceiling; di+ charge_power_kw spikes above this are glitches, not real. */
+export const MAX_PLAUSIBLE_AC_CHARGER_KW = 22;
+/** DC fast-charge ceiling. */
+export const MAX_PLAUSIBLE_DC_CHARGER_KW = 350;
+const FALLBACK_AC_CHARGER_KW = 7.2;
+const FALLBACK_DC_CHARGER_KW = 50;
+
+/**
+ * di+ `charge_power_kw` is noisy — observed spikes of 22–64 kW on a 4 kW AC charger (car
+ * `way`). The auto-session captures one sample as the session's fixed charger power, which
+ * then drives wall-clock math; a single spike makes the rate ~15× too fast and the SOC
+ * overshoots instantly. Reject implausible readings (cap by gun type) and fall back to the
+ * car default. `chargeType` comes from `telemetry.charge_type` ("AC"|"DC"); unknown is
+ * treated as AC (the conservative, lower cap).
+ */
+export function sanitizeChargerPowerKw(
+  rawKw: number | null | undefined,
+  chargeType: string | null | undefined,
+  defaultKw: number | null | undefined,
+): number {
+  const isDc = chargeType === "DC";
+  const cap = isDc ? MAX_PLAUSIBLE_DC_CHARGER_KW : MAX_PLAUSIBLE_AC_CHARGER_KW;
+  const raw = finiteTelemetryNumber(rawKw);
+  if (raw != null && raw > 0 && raw <= cap) return raw;
+  const def = finiteTelemetryNumber(defaultKw);
+  if (def != null && def > 0 && def <= cap) return def;
+  return isDc ? FALLBACK_DC_CHARGER_KW : FALLBACK_AC_CHARGER_KW;
+}
+
 export function telemetrySpeedKmh(telemetry: Pick<BydmateTelemetry, "speed_kmh">) {
   const speed = finiteTelemetryNumber(telemetry.speed_kmh);
   return speed != null && speed >= 0 ? speed : null;

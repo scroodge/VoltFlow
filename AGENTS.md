@@ -10,6 +10,55 @@
 
 ## Pending plan
 
+### 🟢 Charge-session finish detection — overshoot/stuck fixes (BUILT 2026-06-30)
+
+**Status:** **BUILT** (server-side + live sync, EvAcChargeTimer). Tests green
+(69/69 glob + 4/4 auto-session), `tsc --noEmit` clean. Repair migration applied to prod.
+Uncommitted working tree.
+
+**Problem (researched on car `way`):** finish detection failed four compounding ways:
+1. **Wall-clock math overshoot** — `deriveChargingState` projects `current_percent` from
+   `start_percent` across the *full* elapsed time at the assumed rate, clamped only to
+   target. An open session whose finish wasn't detected inflated toward 100% while real SOC
+   was frozen (persisted **80.3%** while BMS read **64%**).
+2. **Garbage `charge_power_kw`** — di+ spiked 22–64 kW on a 4.4 kW AC car; the auto-session
+   captured the first sample as the session's fixed charger power → wall-clock rate ~15×
+   too fast → instant overshoot.
+3. **Stuck-open sessions** — auto-stop needs 2 consecutive unplug samples, but the car
+   sleeps → di+/daemon go silent → those samples never arrive (observed a **58 h** open
+   session). Reconcile also explicitly skipped `status='charging'`.
+4. **`energy_overridden=t` locked in wrong values** — reconcile skipped overridden rows.
+
+**Built:**
+- **A — SOC clamp** ([charging-math.ts](src/lib/charging-math.ts) `clampDerivedToSocCeiling`):
+  math `current_percent` can't exceed `latestSoc + rate × secondsSinceLatestSoc`
+  (re-anchors to the last real SOC each reading). Wired via
+  [charging-live.ts](src/lib/charging-live.ts) `latestSnapshotSocReading` into
+  `deriveChargingSessionLiveBundle` ([charging-session-sync.ts](src/lib/charging-session-sync.ts)),
+  so display/persist/completion all use the clamped math.
+- **B — charger-power sanity** ([telemetry-charging.ts](src/lib/bydmate/telemetry-charging.ts)
+  `sanitizeChargerPowerKw`): reject AC readings > 22 kW (DC > 350), fall back to car default;
+  used at capture in `startSessionFromTelemetry`. Uses daemon `telemetry.charge_type`.
+- **C — stop-on-silence** ([charging-session-reconcile-logic.ts](src/lib/charging-session-reconcile-logic.ts)
+  `buildSilenceClosePatch`, `OPEN_SESSION_SILENCE_MS=15min`): reconcile now also loads open
+  sessions; if telemetry silent ≥15 min AND live SOC stale, close at last real SOC. No-op
+  while the car is awake/reporting.
+- **D — repair migration** `20260630150000_repair_math_overshoot_sessions.sql` (applied
+  prod, `UPDATE 1`): clears `energy_overridden` on rows with fractional `current_percent`
+  (the math-overshoot fingerprint; real SOC is integer) so reconcile re-repairs them.
+- Tests: +6 clamp/latest-SOC ([charging-live.test.mjs](src/lib/charging-live.test.mjs)),
+  +6 sanitize ([telemetry-charging.test.mjs](src/lib/bydmate/telemetry-charging.test.mjs)),
+  +6 silence-close ([charging-session-reconcile.test.mjs](src/lib/charging-session-reconcile.test.mjs)).
+
+**Caveats / follow-ups:**
+- Staleness window is 90 s vs daemon's 60 s push — one slow push flips to (now-clamped)
+  math. Clamp makes that safe; didn't widen the window (would delay drive-away detection).
+- The `energy_overridden=t` writer was never found in app code (only the column migration);
+  D's repair handles the existing poisoned row. If a measured-source writer is added later,
+  ensure it never fires from wall-clock math.
+
+---
+
 ### 🟢 BMS-measured charge energy + derived float charge power (BUILT 2026-06-30)
 
 **Status:** Core **BUILT** (server-side, EvAcChargeTimer). Tests green (57/57 glob +

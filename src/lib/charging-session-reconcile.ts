@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
   buildReconciledSessionPatch,
+  buildSilenceClosePatch,
   RECONCILE_LOOKBACK_DAYS,
   sessionNeedsReconcile,
   summarizeSessionTelemetry,
@@ -71,7 +72,11 @@ async function reconcileOneSession({
   nowMs: number;
 }): Promise<string | null> {
   const vehicleId = car.vehicle_alias?.trim();
-  if (!vehicleId || !sessionNeedsReconcile(session, nowMs)) return null;
+  if (!vehicleId) return null;
+  // Open sessions take the silence-close path (auto-stop never got its unplug samples);
+  // closed sessions take the normal value-repair path.
+  const isOpen = session.status === "charging";
+  if (!isOpen && !sessionNeedsReconcile(session, nowMs)) return null;
 
   const [samples, liveResult] = await Promise.all([
     loadSessionTelemetry(supabase, userId, vehicleId, session, nowMs),
@@ -85,10 +90,20 @@ async function reconcileOneSession({
 
   const summary = summarizeSessionTelemetry(samples, session);
   const liveRow = liveResult.data as BydmateLiveSnapshotRow | null;
-  const liveSoc =
-    liveRow && isFreshLiveSnapshot(liveRow, nowMs) ? snapshotSoc(liveRow) : null;
+  const liveSocFresh = liveRow != null && isFreshLiveSnapshot(liveRow, nowMs);
+  const liveSoc = liveSocFresh ? snapshotSoc(liveRow) : null;
 
-  const patch = buildReconciledSessionPatch({ session, summary, liveSoc, nowMs });
+  const patch = isOpen
+    ? buildSilenceClosePatch({
+        session,
+        summary,
+        lastSampleMs:
+          samples.length > 0 ? Date.parse(samples[samples.length - 1]!.device_time) : null,
+        liveSocFresh,
+        liveSoc,
+        nowMs,
+      })
+    : buildReconciledSessionPatch({ session, summary, liveSoc, nowMs });
   if (!patch) return null;
 
   const { error } = await supabase
@@ -130,8 +145,7 @@ export async function reconcileChargingSessionsForUser({
     .select("*")
     .eq("user_id", userId)
     .in("car_id", carIds)
-    .gte("started_at", since)
-    .neq("status", "charging");
+    .gte("started_at", since);
 
   if (sessionsError) throw new Error(sessionsError.message);
 

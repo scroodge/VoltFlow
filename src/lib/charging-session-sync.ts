@@ -78,7 +78,16 @@ export function deriveChargingSessionLiveBundle({
         requireCharging: false,
       })
     : null;
-  const mathState = deriveChargingState(params, startedAtMs, nowMs);
+  // Wall-clock math, clamped so it can't project past the last real SOC reading (+ a
+  // time-bounded bridge). Without this, an open session whose finish wasn't detected
+  // inflates current_percent toward target while the true SOC is frozen.
+  const latestSoc = latestSnapshotSocReading(snapshots);
+  const mathState = clampDerivedToSocCeiling(
+    deriveChargingState(params, startedAtMs, nowMs),
+    params,
+    latestSoc?.soc ?? null,
+    latestSoc ? (nowMs - latestSoc.receivedMs) / 1000 : 0,
+  );
   const display = liveChargingState ?? liveCompletionState ?? mathState;
   const liveComplete =
     hasFreshLiveSocSource && liveCompletionState?.isComplete === true;

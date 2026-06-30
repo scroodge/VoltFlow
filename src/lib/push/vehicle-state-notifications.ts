@@ -262,6 +262,12 @@ function extractVehicleInfo(sample: TelemetryPayload) {
 }
 
 function isGearP(sample: TelemetryPayload): boolean {
+  // Check explicit parked flag from APK telemetry first
+  const isParked = sample.telemetry.is_parked;
+  if (isParked === true || isParked === "true") return true;
+  if (isParked === false || isParked === "false") return false;
+
+  // Fall back to diplus gear
   const gear = sample.diplus?.gear;
   if (gear == null) return false;
   const speed = finiteTelemetryNumber(sample.telemetry.speed_kmh);
