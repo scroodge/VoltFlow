@@ -62,6 +62,45 @@ export function snapshotChargePowerKw(snapshot: BydmateLiveSnapshotRow | null | 
   return power != null && power > 0 ? power : null;
 }
 
+/**
+ * BMS-measured per-session charge energy (battery-side kWh) from the live snapshot.
+ * Source: BYD autoservice `FID_CHARGING_CAPACITY` → Mate `telemetry.kwh_charged`. This
+ * is directly measured (3-decimal float), independent of the integer-% SOC step and the
+ * user's hand-entered battery capacity. Intermittent — only present while the app is
+ * sending with autoservice on (≈10% of samples), so callers must fall back. Returns
+ * null when absent or ≤ 0 (≤ 0 means "nothing measured yet" → prefer the estimate).
+ */
+export function snapshotKwhCharged(snapshot: BydmateLiveSnapshotRow | null | undefined) {
+  const kwh = finiteNumber(snapshot?.telemetry?.kwh_charged);
+  return kwh != null && kwh > 0 ? kwh : null;
+}
+
+/**
+ * Float charge power (kW) derived by differentiating the BMS energy counter between two
+ * samples: `Δkwh / (Δt/3600)`. Battery-side average over the window — far finer than di+'s
+ * 1 kW integer. Returns null unless both readings are valid, the window is ≥ MIN window
+ * (shorter windows quantize on the counter's own step), and energy increased (counter
+ * resets to 0 on a new session → negative delta is a reset, not real power).
+ */
+export const MIN_CHARGE_POWER_WINDOW_MS = 20_000;
+export function deriveChargePowerFromEnergyDeltaKw(
+  prevKwh: number | null | undefined,
+  prevMs: number | null | undefined,
+  curKwh: number | null | undefined,
+  curMs: number | null | undefined,
+): number | null {
+  const p = finiteNumber(prevKwh);
+  const c = finiteNumber(curKwh);
+  const pt = finiteNumber(prevMs);
+  const ct = finiteNumber(curMs);
+  if (p == null || c == null || pt == null || ct == null) return null;
+  const dtMs = ct - pt;
+  if (dtMs < MIN_CHARGE_POWER_WINDOW_MS) return null;
+  const dKwh = c - p;
+  if (dKwh <= 0) return null; // counter reset or no progress
+  return dKwh / (dtMs / 3_600_000);
+}
+
 function positiveChargerKw(value: unknown): number | null {
   const power = finiteNumber(value);
   return power != null && power > 0 ? power : null;
@@ -121,6 +160,25 @@ export function findFreshSocSnapshot(
   ) ?? null;
 }
 
+/**
+ * Most recent snapshot carrying a valid SOC, by `received_at`, regardless of staleness.
+ * Used as the re-anchor point for wall-clock math (clampDerivedToSocCeiling): even a stale
+ * SOC is the last truth we have, so math must not project past it without a time-bounded
+ * bridge. Returns null when no snapshot has a SOC.
+ */
+export function latestSnapshotSocReading(
+  snapshots: BydmateLiveSnapshotRow[],
+): { soc: number; receivedMs: number } | null {
+  let best: { soc: number; receivedMs: number } | null = null;
+  for (const snapshot of snapshots) {
+    const soc = snapshotSoc(snapshot);
+    const receivedMs = Date.parse(snapshot.received_at);
+    if (soc == null || !Number.isFinite(receivedMs)) continue;
+    if (!best || receivedMs > best.receivedMs) best = { soc, receivedMs };
+  }
+  return best;
+}
+
 export function deriveLiveChargingState({
   snapshot,
   params,
@@ -144,11 +202,15 @@ export function deriveLiveChargingState({
   if (soc == null) return null;
 
   const currentPercent = Math.min(params.targetPercent, Math.max(params.startPercent, soc));
+  // Energy/cost always from SOC×capacity — the BMS kwh_charged counter is cell-only,
+  // missing thermal management load (≈1.7 kW during DC). SOC is calibrated against
+  // charger input and matches grid truth within 2%.
   const batteryEnergyKwh = energyNeededKwh(
     params.batteryCapacityKwh,
     params.startPercent,
     currentPercent,
   );
+  const chargedEnergySource: "estimate" = "estimate";
   const chargedEnergyKwh = energyFromGridKwh(batteryEnergyKwh, params.efficiencyPercent);
   const estimatedCost = costFromGridEnergy(chargedEnergyKwh, params.pricePerKwh);
   const elapsedSeconds = Math.max(0, (nowMs - startedAtMs) / 1000);
@@ -169,6 +231,7 @@ export function deriveLiveChargingState({
         ? (remainingGridEnergyKwh / chargePowerKw) * 3600
         : 0,
     isComplete,
+    chargedEnergySource,
   };
 }
 

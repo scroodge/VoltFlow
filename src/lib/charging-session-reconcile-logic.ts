@@ -1,4 +1,9 @@
-import { deriveSessionProgressFromSoc, type ChargingParams } from "./charging-math.ts";
+import {
+  costFromGridEnergy,
+  deriveSessionProgressFromSoc,
+  energyFromGridKwh,
+  type ChargingParams,
+} from "./charging-math.ts";
 
 const CHARGE_POWER_THRESHOLD_KW = 0.1;
 
@@ -22,6 +27,7 @@ export type ReconcileChargingSession = {
   charger_power_kw: number;
   efficiency_percent: number;
   price_per_kwh: number;
+  energy_overridden: boolean;
   charged_energy_kwh: number;
   estimated_cost: number;
   status: string;
@@ -86,6 +92,7 @@ function socFromTelemetry(telemetry: Record<string, unknown> | null | undefined)
 }
 
 export function sessionNeedsReconcile(session: ReconcileChargingSession, nowMs: number): boolean {
+  if (session.energy_overridden) return false;
   if (!session.started_at) return false;
   const startMs = Date.parse(session.started_at);
   if (!Number.isFinite(startMs)) return false;
@@ -126,6 +133,10 @@ export function summarizeSessionTelemetry(
   let firstTargetSocAt: string | null = null;
   let lastAcChargeAt: string | null = null;
   let lastSocAt: string | null = null;
+  // BMS-measured per-session energy (battery-side kWh) seen across the window. The
+  // counter is monotonic within a charging session, so its max is the energy added —
+  // robust to its intermittency (only ~10% of samples carry it). null = never seen.
+  let maxKwhCharged: number | null = null;
 
   for (const row of samples) {
     const soc = socFromTelemetry(row.telemetry);
@@ -136,6 +147,10 @@ export function summarizeSessionTelemetry(
       if (soc + TELEMETRY_SOC_TOLERANCE >= session.target_percent && !firstTargetSocAt) {
         firstTargetSocAt = row.device_time;
       }
+    }
+    const kwhCharged = finiteTelemetryNumber(row.telemetry?.kwh_charged);
+    if (kwhCharged != null && kwhCharged > 0) {
+      maxKwhCharged = Math.max(maxKwhCharged ?? 0, kwhCharged);
     }
     if (row.telemetry && isAcWallboxCharging(row.telemetry)) {
       if (!firstAcChargeAt) firstAcChargeAt = row.device_time;
@@ -150,6 +165,7 @@ export function summarizeSessionTelemetry(
     firstTargetSocAt,
     lastAcChargeAt,
     lastSocAt,
+    maxKwhCharged,
   };
 }
 
@@ -174,10 +190,21 @@ export function buildReconciledSessionPatch({
   const params = chargingParamsFromSession(session);
   const progress = deriveSessionProgressFromSoc(params, finalSoc);
 
+  // Energy/cost: always use SOC×capacity (the user's configured battery size), never
+  // the BMS kwh_charged counter — BYD BMS only measures cell energy, missing thermal
+  // management load (~1.7 kW during DC charging). SOC×capacity matches grid truth
+  // within 2% on AC and DC (BYD calibrates SOC against charger input). The BMS
+  // counter is display-only (see AGENTS.md §FINDING 2026-06-30).
+  const measuredKwh = null;
+  const chargedEnergyKwh = progress.chargedEnergyKwh;
+  const estimatedCost = progress.estimatedCost;
+
   const socMatches =
     Math.abs(session.current_percent - progress.currentPercent) <= TELEMETRY_SOC_TOLERANCE;
-  const energyMatches = Math.abs(session.charged_energy_kwh - progress.chargedEnergyKwh) <= 0.05;
-  const costMatches = Math.abs(session.estimated_cost - progress.estimatedCost) <= 0.05;
+  const energyMatches =
+    session.energy_overridden || Math.abs(session.charged_energy_kwh - chargedEnergyKwh) <= 0.05;
+  const costMatches =
+    session.energy_overridden || Math.abs(session.estimated_cost - estimatedCost) <= 0.05;
 
   if (
     socMatches &&
@@ -203,8 +230,9 @@ export function buildReconciledSessionPatch({
 
   return {
     current_percent: progress.currentPercent,
-    charged_energy_kwh: progress.chargedEnergyKwh,
-    estimated_cost: progress.estimatedCost,
+    ...(session.energy_overridden
+      ? {}
+      : { charged_energy_kwh: chargedEnergyKwh, estimated_cost: estimatedCost }),
     status: reachedTarget ? ("completed" as const) : ("stopped" as const),
     stopped_at: new Date(stoppedAtMs).toISOString(),
   };

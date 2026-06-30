@@ -14,8 +14,14 @@ import {
   telemetrySpeedKmh,
 } from "@/lib/bydmate/telemetry-charging";
 
-/** Auto-start only from recent samples in a batch (avoids replaying old driving buffers). */
+  /** Auto-start only from recent samples in a batch (avoids replaying old driving buffers). */
 const AUTO_START_MAX_SAMPLE_AGE_MS = 3 * 60_000;
+/**
+ * If the Mate was silent longer than this and then resumes charging while an
+ * active session exists, the old session is stopped and a new one started.
+ * Catches: DC → drive → AC without intermediate telemetry.
+ */
+const CHARGING_RESUME_GAP_MS = 5 * 60_000;
 import type { Car, ChargingSessionRow } from "@/types/database";
 
 const DEFAULT_TARGET_PERCENT = 100;
@@ -240,8 +246,10 @@ export async function processBydmateAutoChargingSessions({
   }
 
   const states = new Map<string, AutoChargingSessionState>();
+  const lastDeviceTimeByVehicle = new Map<string, string | null>();
   for (const row of (stateRows ?? []) as AutoChargingStateRow[]) {
     states.set(row.vehicle_id, stateFromRow(row));
+    lastDeviceTimeByVehicle.set(row.vehicle_id, row.last_device_time);
   }
 
   let started = 0;
@@ -273,16 +281,36 @@ export async function processBydmateAutoChargingSessions({
       continue;
     }
 
+    // Gap detection: if Mate was silent during driving between charges, close the
+    // old session so the AC charge below starts a fresh session with correct power.
+    const lastDeviceTime = lastDeviceTimeByVehicle.get(sample.vehicle_id) ?? null;
+    const sampleMs = Date.parse(sample.device_time);
+    const lastMs = lastDeviceTime ? Date.parse(lastDeviceTime) : null;
+    const gapMs = lastMs != null && Number.isFinite(sampleMs) ? sampleMs - lastMs : 0;
+    if (activeSession && isCharging && gapMs > CHARGING_RESUME_GAP_MS && soc != null) {
+      await stopSessionFromTelemetry({
+        supabase,
+        session: activeSession,
+        car,
+        currentPercent: soc,
+        stoppedAt: sample.device_time,
+      });
+      activeByCarId.delete(car.id);
+      states.delete(sample.vehicle_id);
+      lastDeviceTimeByVehicle.delete(sample.vehicle_id);
+    }
+
     const step = nextAutoChargingSessionStep({
       state: states.get(sample.vehicle_id) ?? null,
       isCharging,
       soc,
       speedKmh,
-      hasActiveSession: Boolean(activeSession),
+      hasActiveSession: activeByCarId.has(car.id),
       chargerPowerKw: chargePowerKw ?? car.default_charger_power_kw,
     });
 
     states.set(sample.vehicle_id, step.state);
+    lastDeviceTimeByVehicle.set(sample.vehicle_id, sample.device_time);
 
     if (step.action.type === "start") {
       const sampleMs = Date.parse(sample.device_time);

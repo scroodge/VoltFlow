@@ -119,3 +119,72 @@ test("sessionNeedsReconcile detects completed session with math-only grid energy
   };
   assert.equal(sessionNeedsReconcile(completed, Date.parse("2026-06-04T12:00:00Z")), true);
 });
+
+const bmsSession = {
+  ...baseSession,
+  start_percent: 30,
+  current_percent: 30,
+  target_percent: 100,
+  battery_capacity_kwh: 45,
+  efficiency_percent: 100, // grid == battery so the BMS kWh maps 1:1
+  price_per_kwh: 0.2,
+  charged_energy_kwh: 0,
+  estimated_cost: 0,
+  status: "stopped",
+  started_at: "2026-06-03T07:00:00.000+00:00",
+  stopped_at: "2026-06-03T07:00:00.000+00:00", // < started? equal — needs reconcile via energy<=0
+};
+
+test("summarizeSessionTelemetry extracts the max BMS kwh_charged over the window", () => {
+  const summary = summarizeSessionTelemetry(
+    [
+      { device_time: "2026-06-03T07:10:00Z", telemetry: { soc: 40, charge_power_kw: 4, kwh_charged: 1.2 } },
+      { device_time: "2026-06-03T07:20:00Z", telemetry: { soc: 49, charge_power_kw: 4 } }, // intermittent: no kwh
+      { device_time: "2026-06-03T07:30:00Z", telemetry: { soc: 49, charge_power_kw: 4, kwh_charged: 2.559 } },
+    ],
+    bmsSession,
+  );
+  assert.equal(summary.maxKwhCharged, 2.559);
+  assert.equal(summary.maxSoc, 49);
+});
+
+test("buildReconciledSessionPatch uses SOC estimate, ignores BMS kwh_charged", () => {
+  const summary = summarizeSessionTelemetry(
+    [
+      { device_time: "2026-06-03T07:10:00Z", telemetry: { soc: 40, charge_power_kw: 4, kwh_charged: 1.2 } },
+      { device_time: "2026-06-03T07:30:00Z", telemetry: { soc: 49, charge_power_kw: 4, kwh_charged: 2.559 } },
+    ],
+    bmsSession,
+  );
+  const patch = buildReconciledSessionPatch({
+    session: bmsSession,
+    summary,
+    liveSoc: null,
+    nowMs: Date.parse("2026-06-03T08:00:00Z"),
+  });
+  assert.ok(patch);
+  // SOC estimate: 45 * (49-30)/100 = 8.55 — BMS counter is cell-only, not used for cost/grid energy.
+  assert.ok(Math.abs(patch.charged_energy_kwh - 8.55) < 1e-9);
+  assert.ok(Math.abs(patch.estimated_cost - 8.55 * 0.2) < 1e-9);
+  assert.equal(patch.current_percent, 49);
+});
+
+test("buildReconciledSessionPatch falls back to SOC estimate when no kwh_charged present", () => {
+  const summary = summarizeSessionTelemetry(
+    [
+      { device_time: "2026-06-03T07:10:00Z", telemetry: { soc: 40, charge_power_kw: 4 } },
+      { device_time: "2026-06-03T07:30:00Z", telemetry: { soc: 49, charge_power_kw: 4 } },
+    ],
+    bmsSession,
+  );
+  assert.equal(summary.maxKwhCharged, null);
+  const patch = buildReconciledSessionPatch({
+    session: bmsSession,
+    summary,
+    liveSoc: null,
+    nowMs: Date.parse("2026-06-03T08:00:00Z"),
+  });
+  assert.ok(patch);
+  // SOC estimate: 45 * (49-30)/100 = 8.55
+  assert.ok(Math.abs(patch.charged_energy_kwh - 8.55) < 1e-9);
+});

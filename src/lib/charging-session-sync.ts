@@ -3,6 +3,7 @@
  * See AGENTS.md (Active charging session sync) and SKILLS.md (Charging Skill).
  */
 import {
+  clampDerivedToSocCeiling,
   deriveChargingState,
   type ChargingParams,
   type DerivedChargingState,
@@ -11,6 +12,7 @@ import {
   deriveLiveChargingState,
   findFreshChargingSnapshot,
   findFreshSocSnapshot,
+  latestSnapshotSocReading,
 } from "./charging-live.ts";
 import type { BydmateLiveSnapshotRow, ChargingSessionRow } from "../types/database.ts";
 

@@ -87,6 +87,7 @@ export function mapChargingSession(
     ) as ChargingProviderType,
     tariff_manual: raw.tariff_manual === true,
     price_per_kwh: num(raw.price_per_kwh),
+    energy_overridden: raw.energy_overridden === true,
     charged_energy_kwh: num(raw.charged_energy_kwh),
     estimated_cost: num(raw.estimated_cost),
     status: raw.status as ChargingSessionRow["status"],

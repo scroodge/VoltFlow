@@ -58,6 +58,7 @@ import {
   staticDerivedFromSession,
 } from "@/lib/charging-session-sync";
 import { deriveLiveChargingState, findFreshChargingSnapshot, snapshotChargePowerKw } from "@/lib/charging-live";
+import { useFloatChargePowerKw } from "@/hooks/use-float-charge-power-kw";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import { useAppPath } from "@/lib/dev/dev-path";
 import { useChargingUi } from "@/stores/use-charging-ui";
@@ -222,11 +223,20 @@ export function ChargingSessionScreen({
     );
   }, [session, effectiveBydmateLive, nowMs]);
 
-  const liveChargePowerKw = useMemo(
-    () => snapshotChargePowerKw(findFreshChargingSnapshot(effectiveBydmateLive, nowMs)),
+  const freshChargingSnapshot = useMemo(
+    () => findFreshChargingSnapshot(effectiveBydmateLive, nowMs),
     [effectiveBydmateLive, nowMs],
   );
-  const displayAcPowerKw = liveChargePowerKw ?? session?.charger_power_kw ?? 0;
+  const liveChargePowerKw = useMemo(
+    () => snapshotChargePowerKw(freshChargingSnapshot),
+    [freshChargingSnapshot],
+  );
+  const floatChargePowerKw = useFloatChargePowerKw(freshChargingSnapshot);
+  const displayAcPowerKw =
+    session?.status === "charging"
+      ? (floatChargePowerKw ?? liveChargePowerKw ?? session.charger_power_kw ?? 0)
+      : (session?.charger_power_kw ?? 0);
+  const displayAcPowerDecimals = floatChargePowerKw != null ? 2 : 1;
 
   const pctForBar =
     session && derived ? derived.currentPercent : session?.current_percent ?? 0;
@@ -355,6 +365,9 @@ export function ChargingSessionScreen({
 
   const charging = session.status === "charging";
   const historyMode = mode === "history";
+  const avgPowerKw = !charging && derived && derived.elapsedSeconds > 0
+    ? (session?.charged_energy_kwh ?? 0) / (derived.elapsedSeconds / 3600)
+    : 0;
   const effectivePricePerKwh =
     session.price_per_kwh > 0 ? session.price_per_kwh : defaultPricePerKwh;
   const effectiveTariffTypeDraft = tariffTypeDraft ?? session.tariff_type;
@@ -389,6 +402,10 @@ export function ChargingSessionScreen({
           locale,
         )
       : "—";
+  const displayFinalCost =
+    session.estimated_cost > 0
+      ? formatCurrencyAmount(currency, session.estimated_cost, locale)
+      : "—";
 
   const chargeParams = toParams(session);
   const startedAtMs = session.started_at ? Date.parse(session.started_at) : null;
@@ -413,35 +430,46 @@ export function ChargingSessionScreen({
     locale === "be" ? "be-BY" : locale === "ru" ? "ru-RU" : "en-US";
   const chargingStats: ChargingStat[] = [
     {
-      label: t("charging.elapsed") as string,
+      label: historyMode ? (t("history.duration") as string) : (t("charging.elapsed") as string),
       value: formatDuration(derived.elapsedSeconds),
     },
-    {
-      label: t("charging.remaining") as string,
-      value: charging ? formatDuration(derived.remainingSeconds) : "—",
-      accent: "cyan",
-    },
+    ...(!historyMode
+      ? [
+          {
+            label: t("charging.remaining") as string,
+            value: charging ? formatDuration(derived.remainingSeconds) : "—",
+            accent: "cyan" as const,
+          },
+        ]
+      : []),
     {
       label: t("charging.energyDelivered") as string,
       value: `${derived.chargedEnergyKwh.toFixed(2)} kWh`,
       accent: "green",
     },
+    ...(historyMode
+      ? [
+          {
+            label: t("charging.finalCost") as string,
+            value: displayFinalCost,
+          },
+        ]
+      : [
+          {
+            label: t("charging.currentCost") as string,
+            value: displayCurrentCost,
+          },
+          {
+            label: t("charging.fullCost") as string,
+            value: displayCostAtFull,
+          },
+        ]),
     {
-      label: t("charging.currentCost") as string,
-      value: displayCurrentCost,
-    },
-    {
-      label: t("charging.fullCost") as string,
-      value: displayCostAtFull,
-    },
-    {
-      label: t("charging.acPower") as string,
-      value: `${displayAcPowerKw.toFixed(1)} kW`,
+      label: historyMode ? (t("charging.avgPower") as string) : (t("charging.acPower") as string),
+      value: historyMode
+        ? `${avgPowerKw.toFixed(2)} kW`
+        : `${displayAcPowerKw.toFixed(displayAcPowerDecimals)} kW`,
       accent: "blue",
-    },
-    {
-      label: t("charging.batteryPack") as string,
-      value: `${session.battery_capacity_kwh} kWh`,
     },
   ];
 
@@ -564,7 +592,7 @@ export function ChargingSessionScreen({
           <p className="text-xs text-muted-foreground">
             {t("charging.tariff.noMatchInRadius", {
               tariffType: t(tariffTypeKey(powerTariffFallback)) as string,
-              power: displayAcPowerKw.toFixed(1),
+              power: displayAcPowerKw.toFixed(displayAcPowerDecimals),
             })}
           </p>
         ) : null}

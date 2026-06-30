@@ -58,6 +58,7 @@ export type ChargingSessionRow = {
   provider_type: ChargingProviderType;
   tariff_manual: boolean;
   price_per_kwh: number;
+  energy_overridden: boolean;
   charged_energy_kwh: number;
   estimated_cost: number;
   status: SessionStatus;

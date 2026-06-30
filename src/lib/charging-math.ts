@@ -83,6 +83,14 @@ export type DerivedChargingState = {
   elapsedSeconds: number;
   remainingSeconds: number;
   isComplete: boolean;
+  /**
+   * Where `chargedEnergyKwh` came from:
+   *   "bms"      — BMS-measured per-session energy counter (FID_CHARGING_CAPACITY,
+   *                arrives as telemetry.kwh_charged); directly measured, accurate.
+   *   "estimate" — SOC-delta × battery_capacity ÷ efficiency fallback.
+   * Optional so existing consumers are unaffected.
+   */
+  chargedEnergySource?: "bms" | "estimate";
 };
 
 /** Final session progress from a measured SOC (live/telemetry), not wall-clock math. */
@@ -140,6 +148,42 @@ export function deriveChargingState(
       ? remainingSeconds
       : 0,
     isComplete,
+  };
+}
+
+/**
+ * Clamp a wall-clock-math state so `currentPercent` can never run ahead of reality.
+ *
+ * `deriveChargingState` projects SOC from `startPercent` across the *full* elapsed time at
+ * the assumed charger rate, bounded only by `targetPercent`. When a session stays open after
+ * charging actually ended (finish not yet detected), that projection runs away — observed on
+ * car `way`: 77.9% persisted while the BMS read 64% (AGENTS.md §finish-detection 2026-06-30).
+ *
+ * The ceiling is the most recent *real* SOC reading plus a time-bounded bridge
+ * (`latestSoc + rate × secondsSinceLatestSoc`): math may fill the gap between SOC samples,
+ * but re-anchors to the last reading each time, so a frozen SOC can never be outrun. When the
+ * state exceeds the ceiling, energy/cost are rebuilt from the clamped SOC and `isComplete`
+ * recomputed. No-op when `latestSoc` is null (no SOC ever seen — nothing to anchor to) or the
+ * state is already at/below the ceiling.
+ */
+export function clampDerivedToSocCeiling(
+  state: DerivedChargingState,
+  params: ChargingParams,
+  latestSoc: number | null,
+  secondsSinceLatestSoc: number,
+): DerivedChargingState {
+  if (latestSoc == null) return state;
+  const rate = percentPerSecond(params);
+  const bridge = rate > 0 ? rate * Math.max(0, secondsSinceLatestSoc) : 0;
+  const ceiling = Math.min(params.targetPercent, latestSoc + bridge);
+  if (state.currentPercent <= ceiling) return state;
+  const progress = deriveSessionProgressFromSoc(params, ceiling);
+  return {
+    ...state,
+    currentPercent: progress.currentPercent,
+    chargedEnergyKwh: progress.chargedEnergyKwh,
+    estimatedCost: progress.estimatedCost,
+    isComplete: progress.currentPercent >= params.targetPercent,
   };
 }
 

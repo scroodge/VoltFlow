@@ -26,6 +26,7 @@ export function buildMockChargingSession(nowMs = Date.now()): ChargingSessionRow
     provider_type: "home",
     tariff_manual: false,
     price_per_kwh: 0.15,
+    energy_overridden: false,
     charged_energy_kwh: 0,
     estimated_cost: 0,
     status: "charging",

@@ -10,6 +10,116 @@
 
 ## Pending plan
 
+### 🟢 BMS-measured charge energy + derived float charge power (BUILT 2026-06-30)
+
+**Status:** Core **BUILT** (server-side, EvAcChargeTimer). Tests green (57/57 glob +
+4/4 auto-session, `tsc --noEmit` clean). Uncommitted working tree.
+
+**Built:**
+- `charging-live.ts` `deriveLiveChargingState` — prefers BMS `telemetry.kwh_charged`
+  (battery-side) for energy/cost, falls back to the SOC estimate; adds
+  `chargedEnergySource: "bms"|"estimate"` to `DerivedChargingState`. New accessor
+  `snapshotKwhCharged`. (Feeds live display + ~1 Hz persist via `resolveStateToPersist`.)
+- `charging-session-reconcile-logic.ts` — `summarizeSessionTelemetry` now returns
+  `maxKwhCharged` (max over the session window, robust to its ~10% intermittency);
+  `buildReconciledSessionPatch` uses it as authoritative energy/cost so completed
+  sessions are NOT reverted to SOC-math (SOC still drives the % field).
+- `deriveChargePowerFromEnergyDeltaKw` (in `charging-live.ts`) — pure, tested helper:
+  float charge power = Δkwh_charged ÷ Δt, with a ≥20 s window guard + counter-reset guard.
+- Step 1 (ingest persist) was NOT needed — `kwh_charged` already rides the telemetry
+  jsonb (verified: 18,258/190,740 `way` samples carry it).
+- Tests: +4 in `charging-live.test.mjs`, +3 in `charging-session-reconcile.test.mjs`.
+
+**⚠️ FINDING (2026-06-30) — BMS counter is cell-energy only, NOT suitable for cost:**
+
+Live session validation on car `way` (45.1 kWh pack, AC charging at 4.6 kW per car display):
+
+| Source | kWh / 36 min | vs grid truth |
+|---|---|---|
+| Car display (4.6 kW × 36 min) | 2.760 kWh | truth |
+| **SOC × 45.1 kWh** (6% × 45.1) | **2.706 kWh** | **−2%** ✅ |
+| di+ integral (4 kW × 36 min) | 2.400 kWh | −13% |
+| BMS `kwh_charged` delta | 1.451 kWh | **−47%** ❌ |
+
+`kwh_charged` = energy into battery **cells only**. ~1.7 kW goes to active battery
+thermal management (cooling during charging); this draws from the OBC output but never
+reaches the cells and is NOT captured by the BMS counter. Applying `÷efficiency` to the
+BMS counter makes cost even more wrong (2.46 kW ÷ 0.9 = 2.73 kW vs truth 4.6 kW).
+
+**Correct formula for cost/grid energy:** `SOC_delta% × user_battery_capacity_kwh / 100`
+with **efficiency ≈ 100%**. BYD calibrates their SOC display against charger input (not
+net cell energy), so the user's configured capacity already implies grid-side accounting.
+Capacity is **per-user** (from `user_service_categories.battery_capacity_kwh` or
+equivalent profile field) — never hardcode.
+
+**Implications for built code:**
+- `buildReconciledSessionPatch` using `maxKwhCharged` for energy/cost → **understates by
+  ~47%**. Should revert to SOC×capacity for cost; BMS counter is display-only.
+- `deriveChargePowerFromEnergyDeltaKw` → shows cell-side power (~2.5 kW) while car display
+  shows 4.6 kW (grid-side). Misleading on the power display. Wired into
+  `useFloatChargePowerKw` in `vehicle-live-view.tsx` + `charging-session-screen.tsx` →
+  **revert those UI wires**; keep di+ integer for the power display.
+- `kwh_charged` remains useful for: monitoring thermal management load, tracking actual
+  cell energy vs grid energy, cell degradation research. Keep it in telemetry/display.
+- `chargedEnergySource: "bms"|"estimate"` field — keep for debugging; but don't let "bms"
+  path drive cost.
+
+**Remaining / caveats:**
+- **Intermittent source:** `kwh_charged` only arrives when autoservice is ON + charging.
+  When absent → SOC estimate (unchanged behavior, and SOC×capacity IS the right formula).
+- `storedProgressMismatch` (reconcile trigger) still SOC-based → harmless.
+
+**Problem:** A charging session's `charged_energy_kwh` and cost are computed from a
+triple estimate in [`charging-live.ts:147-153`](src/lib/charging-live.ts):
+`(currentPercent − startPercent)/100 × battery_capacity_kwh ÷ efficiency`. Every input
+is lossy: SOC is **integer %** (≈0.451 kWh steps on a 45.1 kWh pack), `battery_capacity_kwh`
+is **hand-entered** (wrong for most users), efficiency is a **guessed constant** — but
+with correct capacity and efficiency≈100% the formula is within 2% of truth.
+
+**Key fact (verified on car `way`):** the BYD BMS keeps a **measured per-session energy
+counter** (`FID_CHARGING_CAPACITY`, float — read live = **2.559 kWh**). The Android app
+**already reads it and already sends it** as `telemetry.kwh_charged`
+(`BYDMate-own TelemetrySnapshot.kt:93`). The cloud **receives it but only displays it**
+([`vehicle-live-view.tsx:766`](src/components/vehicle/vehicle-live-view.tsx)) — it is
+never used for the session total or cost. So the accurate number is already arriving;
+the cloud just ignores it. (di+ untouched — keep-awake + actuation preserved.)
+
+**Bonus — float charge power, finally:** instantaneous power is integer-only at the BYD
+hardware layer (proven; see `BYDMate-own/docs/DIPLUS_DATA.md`), BUT differentiating the
+float energy counter yields fractional **average** power:
+`power_kw = Δkwh_charged / (Δt_seconds/3600)`. At ~30–60 s windows that's ~0.06 kW
+resolution — far better than di+'s 1 kW integer (battery-side; apply efficiency for grid;
+don't use windows <~20 s or the counter quantizes). This is charging-only (no clean
+per-session energy counter exists for driving).
+
+**Plan (server-side, EvAcChargeTimer):**
+1. **Ingest:** persist `telemetry.kwh_charged` so the session logic can read it — add it
+   to the live snapshot row (`bydmate_live_snapshots`, column or existing telemetry jsonb)
+   in `src/app/api/bydmate/telemetry/route.ts` + `BydmateLiveSnapshotRow`.
+2. **Energy:** in `deriveChargingState` (`charging-live.ts`), when a fresh `kwh_charged`
+   is present prefer it as the battery-side energy (then the same efficiency→grid→cost
+   chain), else fall back to the SOC×capacity estimate. Mirror in
+   `charging-session-finalize.ts` / `charging-session-reconcile-logic.ts` for the
+   persisted total.
+3. **Float charge power (optional):** compute `chargePowerKw` from the Δ of the last two
+   `kwh_charged` samples over Δt when both fresh; fall back to di+ integer `charge_power_kw`.
+
+| | Approach | Pros | Cons |
+|---|---|---|---|
+| A | **Use BMS `kwh_charged` for energy/cost (+ derived float power)** | Directly measured kWh/cost; float charge power; di+ untouched; data already arrives | Ingest must carry `kwh_charged`; staleness guard; reconcile so total doesn't jump estimate→measured mid-session |
+| B | Full nativestack port (Android di+→autoservice) | one data source | **rejected** — no new data, per-vehicle FID risk, di+ still required |
+| C | Do nothing | zero effort | charge kWh/cost stay triple-estimated; power stays integer |
+
+**Recommendation:** **A.** Open questions before building: (1) carry `kwh_charged` via a
+new column vs telemetry jsonb; (2) staleness/sentinel guard + monotonic-within-session
+check (counter resets on gun reconnect); (3) reconcile running total so switching
+estimate→measured mid-session doesn't cause a visible jump; (4) min window for the
+power derivative.
+
+**→ Build A (server-side BMS energy + derived float charge power), or leave as C?**
+
+---
+
 ### 🟡 Partition `bydmate_telemetry_samples` by time (B done 2026-06-30, A pending)
 
 **Status:** Plan **B (BRIN interim) — DONE.** Migration
