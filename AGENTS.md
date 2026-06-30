@@ -10,6 +10,49 @@
 
 ## Pending plan
 
+### 🟡 Inline charging on /vehicle Live + remove Charge tab (PLANNED 2026-06-30)
+
+**Goal:** when `state = charging`, show the charging params + SOC graph inline on the Live
+`/vehicle` view (below the charging section), and remove the Charge tab. Scope chosen by
+user: **params + graph only** (no stop/tariff controls inline — those stay on `/charging/[id]`).
+
+**Why:** today the Charge tab isn't an inline view — when charging it *redirects* to a
+separate full page `/charging/[id]`; when idle it lists sessions (redundant with `/history`).
+So you watch the car charge on Live, tap Charge, and get bounced to another page. Folding
+the details into Live (state-driven) removes the redirect.
+
+**Current structure (verified):**
+- `/vehicle` → `vehicle-hub.tsx` tabs: live / charge / service (charge hidden while driving).
+- Charge tab → `charging-hub-view.tsx`: active → redirect `/charging/[id]`; idle → session list.
+- `/charging/[id]` → `ChargingSessionScreen` — full UI + the only owner of
+  `useChargingSessionLiveSync` (~1 Hz persist + auto-complete + push). Computes the 3 params
+  already: time-left `formatDuration(derived.remainingSeconds)`, delivered
+  `derived.chargedEnergyKwh.toFixed(2) kWh`, cost-to-100% via `charging.fullCost` +
+  `formatCurrencyAmount(currency, …)` where `currency` = `useAppPreferences(s=>s.currency)`
+  (BYN per user pref — do NOT hardcode).
+- `/history` route already exists for past sessions.
+
+**Plan:**
+1. New `ChargingLiveSummary` component (params + graph): finds the active session for the
+   car, owns `useChargingSessionLiveSync` (single sync owner), renders time-left / delivered
+   / cost-to-100% (currency from prefs) + the session SOC chart (reuse the chart + the
+   `/api/vehicle/charging-sessions/[id]/samples` feed used by `ChargingSessionScreen`).
+2. Render it in `VehicleLiveView` below the Hero when `isCharging` && active session exists.
+3. `vehicle-hub.tsx`: `visibleTabs` → `["live","service"]`; drop charge tab; redirect any
+   `?tab=charge` → live (keep deep-link safety).
+4. Keep `/charging/[id]` (deep links from charge-complete push) and `/history` intact.
+
+**Guardrail:** exactly one `useChargingSessionLiveSync` instance may run while charging.
+Live's inline block owns it; `/charging/[id]` owns its own when visited directly (separate
+routes, never mounted together). Must not double-mount → double-write.
+
+**Open:** the Math-Range fix (uncommitted) and the inline-charging params can share the same
+active-session lookup in `VehicleLiveView`.
+
+**→ Build this (params + graph inline, remove Charge tab)?**
+
+---
+
 ### 🟢 Charge-session finish detection — overshoot/stuck fixes (BUILT 2026-06-30)
 
 **Status:** **BUILT** (server-side + live sync, EvAcChargeTimer). Tests green

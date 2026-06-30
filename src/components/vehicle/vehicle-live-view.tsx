@@ -354,10 +354,14 @@ function VehicleLiveContent({
     error: tripsError,
   } = useBydmateTripsQuery(selectedDate, snapshot.vehicle_id, !fixturePoints && !isCharging && !isStale);
   const { data: sessions = [] } = useSessionsQuery();
+  // Not gated by isCharging: Math Range (kmPerPercentSoc × SOC) needs the last drive's
+  // efficiency, which the live snapshot can't supply while charging (the daemon doesn't
+  // send current-trip consumption). Without these trips Math Range falls back to live
+  // consumption — null during charge — and shows "—".
   const { data: recentTrips = [] } = useLatestBydmateTripsQuery(
     snapshot.vehicle_id,
     50,
-    !fixturePoints && !isCharging && Boolean(snapshot.vehicle_id),
+    !fixturePoints && Boolean(snapshot.vehicle_id),
     true,
   );
   const trips = fixtureTrips ?? apiTrips;
