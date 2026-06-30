@@ -92,7 +92,11 @@ import type {
   BydmateTelemetryPointRow,
   BydmateTripRow,
   BydmateTripTrackPointRow,
+  ChargingSessionRow,
 } from "@/types/database";
+import { ChargingDeltaCard } from "@/components/charging/charging-delta-card";
+import { chargingParamsFromSession } from "@/lib/charging-session-sync";
+import { deriveSessionProgressFromSoc, secondsUntilTargetSoc } from "@/lib/charging-math";
 
 function fmt(value: number | null | undefined, digits = 0) {
   return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
@@ -376,6 +380,15 @@ function VehicleLiveContent({
       }),
     [sessions, matchedCar?.id, fixtureTrips, recentTrips, snapshot, batteryCapacityKwh],
   );
+  // Active charging session for this car. The ~1 Hz persist/auto-complete is owned globally
+  // by ChargingSessionBackgroundSync (MobileShell), so here we only read it for display.
+  const activeChargingSession = useMemo<ChargingSessionRow | null>(
+    () =>
+      sessions.find(
+        (s) => s.status === "charging" && (!matchedCar || s.car_id === matchedCar.id),
+      ) ?? null,
+    [sessions, matchedCar],
+  );
   const rangeEstimate = useVehicleRangeEstimate({
     baseSnapshot: rangeBaseSnapshot,
     scopedVehicleId,
@@ -416,7 +429,14 @@ function VehicleLiveContent({
         hasMounted={hasMounted}
         distanceSinceChargeKm={heroDriveMetrics.distanceSinceChargeKm}
         kmPerPercentSoc={heroDriveMetrics.kmPerPercentSoc}
+        activeChargingSession={activeChargingSession}
       />
+      {isCharging && activeChargingSession ? (
+        <ChargingDeltaCard
+          session={activeChargingSession}
+          vehicleId={scopedVehicleId ?? snapshot.vehicle_id}
+        />
+      ) : null}
       {!fixturePoints && isAdmin ? (
         <VehicleControlPanel
           vehicleId={scopedVehicleId ?? snapshot.vehicle_id}
@@ -510,6 +530,7 @@ function Hero({
   hasMounted,
   distanceSinceChargeKm,
   kmPerPercentSoc,
+  activeChargingSession,
 }: {
   snapshot: BydmateLiveSnapshotRow;
   nowMs: number;
@@ -522,11 +543,30 @@ function Hero({
   hasMounted: boolean;
   distanceSinceChargeKm: number | null;
   kmPerPercentSoc: number | null;
+  activeChargingSession: ChargingSessionRow | null;
 }) {
   const { locale, t: translate } = useTranslation();
   const t = translate as Translator;
+  const currency = useAppPreferences((s) => s.currency) as Currency;
   const telemetry = snapshot.telemetry;
   const coreMetrics = heroCoreMetrics(snapshot, t, locale);
+  // Charging projection from the active session + live SOC. Persist is global
+  // (ChargingSessionBackgroundSync) — these are display-only. Time-left uses the local
+  // formatDuration(ms); cost is the projected total at 100% in the user's currency.
+  const chargeSummary = useMemo(() => {
+    const liveSoc = telemetry.soc;
+    if (!activeChargingSession || typeof liveSoc !== "number") return null;
+    const params = chargingParamsFromSession(activeChargingSession);
+    const clampedSoc = Math.min(liveSoc, params.targetPercent);
+    const deliveredKwh = deriveSessionProgressFromSoc(params, clampedSoc).chargedEnergyKwh;
+    const fullCost = deriveSessionProgressFromSoc(params, params.targetPercent).estimatedCost;
+    const secsLeft = secondsUntilTargetSoc(params, clampedSoc);
+    return {
+      timeLeftLabel: secsLeft != null && secsLeft > 0 ? formatDuration(secsLeft * 1000) : null,
+      deliveredLabel: `${deliveredKwh.toFixed(2)} kWh`,
+      fullCostLabel: formatCurrencyAmount(currency, fullCost, locale),
+    };
+  }, [activeChargingSession, telemetry.soc, currency, locale]);
   const primaryMetrics = [
     {
       key: "aiRange",
@@ -615,6 +655,24 @@ function Hero({
               icon: Zap,
               label: t("vehicle.telemetry.chargePower"),
               value: `${fmt(telemetry.charge_power_kw, 1)} kW`,
+            },
+            {
+              key: "chargeTimeLeft",
+              icon: Clock3,
+              label: t("charging.remaining"),
+              value: chargeSummary?.timeLeftLabel ?? "—",
+            },
+            {
+              key: "chargeDelivered",
+              icon: BatteryCharging,
+              label: t("charging.energyDelivered"),
+              value: chargeSummary?.deliveredLabel ?? "—",
+            },
+            {
+              key: "chargeFullCost",
+              icon: Activity,
+              label: t("charging.fullCost"),
+              value: chargeSummary?.fullCostLabel ?? "—",
             },
           );
         } else {

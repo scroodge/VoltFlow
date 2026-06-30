@@ -10,11 +10,26 @@
 
 ## Pending plan
 
-### 🟡 Inline charging on /vehicle Live + remove Charge tab (PLANNED 2026-06-30)
+### 🟢 Inline charging on /vehicle Live + remove Charge tab (BUILT 2026-06-30)
 
-**Goal:** when `state = charging`, show the charging params + SOC graph inline on the Live
-`/vehicle` view (below the charging section), and remove the Charge tab. Scope chosen by
-user: **params + graph only** (no stop/tariff controls inline — those stay on `/charging/[id]`).
+**Status:** **BUILT.** tsc clean, 69/69 tests green. Lint: only the 3 pre-existing
+`panRef.current = pan` errors (map component, untouched). Uncommitted.
+
+**Built:**
+- `vehicle-live-view.tsx`: `activeChargingSession` lookup in the body (display-only —
+  persist is global via `ChargingSessionBackgroundSync`); `Hero` gets it as a prop and
+  computes 3 tiles when charging — time-left (`secondsUntilTargetSoc`→local
+  `formatDuration(ms)`), delivered (`deriveSessionProgressFromSoc(soc).chargedEnergyKwh`),
+  cost-at-100% (`deriveSessionProgressFromSoc(target).estimatedCost` →
+  `formatCurrencyAmount(currency,…)`, currency from prefs = BYN). Tiles use existing
+  `charging.remaining/energyDelivered/fullCost` keys (all 3 locales). Vehicle-page tile
+  design (HeroMetric), not the charge-screen layout. `<ChargingDeltaCard>` (the SOC graph)
+  rendered below the Hero when charging.
+- `vehicle-hub.tsx`: Charge tab removed (`VehicleTab` = live|service); legacy `?tab=charge`
+  → Live. `/charging/[id]` (deep links) + `/history` untouched.
+
+**Scope chosen by user:** **params + graph only** (no stop/tariff controls inline — those
+stay on `/charging/[id]`).
 
 **Why:** today the Charge tab isn't an inline view — when charging it *redirects* to a
 separate full page `/charging/[id]`; when idle it lists sessions (redundant with `/history`).
