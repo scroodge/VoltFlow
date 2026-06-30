@@ -57,7 +57,7 @@ import {
   deriveChargingSessionLiveBundle,
   staticDerivedFromSession,
 } from "@/lib/charging-session-sync";
-import { deriveLiveChargingState, findFreshChargingSnapshot } from "@/lib/charging-live";
+import { deriveLiveChargingState, findFreshChargingSnapshot, snapshotChargePowerKw } from "@/lib/charging-live";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import { useAppPath } from "@/lib/dev/dev-path";
 import { useChargingUi } from "@/stores/use-charging-ui";
@@ -222,6 +222,12 @@ export function ChargingSessionScreen({
     );
   }, [session, effectiveBydmateLive, nowMs]);
 
+  const liveChargePowerKw = useMemo(
+    () => snapshotChargePowerKw(findFreshChargingSnapshot(effectiveBydmateLive, nowMs)),
+    [effectiveBydmateLive, nowMs],
+  );
+  const displayAcPowerKw = liveChargePowerKw ?? session?.charger_power_kw ?? 0;
+
   const pctForBar =
     session && derived ? derived.currentPercent : session?.current_percent ?? 0;
   const remainingToTargetPercent =
@@ -318,7 +324,7 @@ export function ChargingSessionScreen({
     () => resolveTariffLocationMatch(autoTariffGps.activeLocation, tariffLocations),
     [autoTariffGps.activeLocation, tariffLocations],
   );
-  const powerTariffFallback = resolveTariffTypeByPower(session?.charger_power_kw ?? 0);
+  const powerTariffFallback = resolveTariffTypeByPower(displayAcPowerKw);
 
   if (isLoading) {
     return (
@@ -430,7 +436,7 @@ export function ChargingSessionScreen({
     },
     {
       label: t("charging.acPower") as string,
-      value: `${session.charger_power_kw.toFixed(1)} kW`,
+      value: `${displayAcPowerKw.toFixed(1)} kW`,
       accent: "blue",
     },
     {
@@ -558,7 +564,7 @@ export function ChargingSessionScreen({
           <p className="text-xs text-muted-foreground">
             {t("charging.tariff.noMatchInRadius", {
               tariffType: t(tariffTypeKey(powerTariffFallback)) as string,
-              power: session.charger_power_kw.toFixed(1),
+              power: displayAcPowerKw.toFixed(1),
             })}
           </p>
         ) : null}
