@@ -180,6 +180,9 @@ function fmtOdometerKm(km: number | null | undefined, locale: Locale) {
 
 function telemetryGridClass(count: number) {
   if (count % 3 === 0) return "grid grid-cols-3 gap-2";
+  // 4 items read cleaner as a balanced 2×2 than as 3 + a lonely tile on the second row
+  // (also gives wider tiles so longer labels like "Cost at 100%" don't wrap).
+  if (count === 4) return "grid grid-cols-2 gap-2";
   return "grid grid-cols-2 gap-2 min-[380px]:grid-cols-3";
 }
 
