@@ -166,11 +166,11 @@ async function fallbackLocation(
 async function loadTelegramProfile(supabase: SupabaseClient, userId: string) {
   const { data, error } = await supabase
     .from("profiles")
-    .select("telegram_id, notify_channel")
+    .select("telegram_id, notify_channel, timezone")
     .eq("id", userId)
     .maybeSingle();
 
-  if (error || !data) return { telegramId: null as number | string | null, channel: "web_push" as const };
+  if (error || !data) return { telegramId: null as number | string | null, channel: "web_push" as const, timezone: "Europe/Minsk" };
 
   const row = data as Record<string, unknown>;
   const telegramId = row.telegram_id != null ? (row.telegram_id as number | string) : null;
@@ -181,6 +181,7 @@ async function loadTelegramProfile(supabase: SupabaseClient, userId: string) {
     channel: notifyChannel === "telegram" || notifyChannel === "both"
       ? notifyChannel
       : "web_push" as const,
+    timezone: (row.timezone as string) || "Europe/Minsk",
   };
 }
 
@@ -196,6 +197,7 @@ function notificationText(
   cost?: number | null,
   currency?: string,
   chargePowerKw?: number | null,
+  timezone?: string,
 ): string {
   const namePart = carName || "Автомобиль";
   let prefix: string;
@@ -217,9 +219,9 @@ function notificationText(
   if (deviceTime) {
     const d = new Date(deviceTime);
     if (!Number.isNaN(d.getTime())) {
-      const hh = String(d.getUTCHours()).padStart(2, "0");
-      const mm = String(d.getUTCMinutes()).padStart(2, "0");
-      statusParts.push(`Время ${hh}:${mm}`);
+      const tz = timezone || "Europe/Minsk";
+      const timeStr = d.toLocaleTimeString("ru-RU", { timeZone: tz, hour: "2-digit", minute: "2-digit" });
+      statusParts.push(`Время ${timeStr}`);
     }
   }
   const line2 = statusParts.join(". ");
@@ -414,6 +416,7 @@ export async function processBydmateVehicleStateNotifications({
             chargeCost,
             currency,
             chargePowerKw,
+            profile.timezone,
           );
           await sendTelegramMessage(profile.telegramId, discText, { disableWebPagePreview: false });
           disconnected++;
@@ -422,14 +425,14 @@ export async function processBydmateVehicleStateNotifications({
 
       if (gapMs > CONNECTED_GAP_MS) {
         if (shouldSendTelegram && profile.telegramId != null) {
-          const connText = notificationText(carName, "connected", odometer, soc, lastSample.device_time, lat, lon, timeToFull, chargeCost, currency, chargePowerKw);
+          const connText = notificationText(carName, "connected", odometer, soc, lastSample.device_time, lat, lon, timeToFull, chargeCost, currency, chargePowerKw, profile.timezone);
           await sendTelegramMessage(profile.telegramId, connText, { disableWebPagePreview: false });
           connected++;
         }
       }
     } else if (!prevState) {
       if (shouldSendTelegram && profile.telegramId != null) {
-        const connText = notificationText(carName, "connected", odometer, soc, lastSample.device_time, lat, lon, timeToFull, chargeCost, currency, chargePowerKw);
+        const connText = notificationText(carName, "connected", odometer, soc, lastSample.device_time, lat, lon, timeToFull, chargeCost, currency, chargePowerKw, profile.timezone);
         await sendTelegramMessage(profile.telegramId, connText, { disableWebPagePreview: false });
         connected++;
       }
@@ -440,7 +443,7 @@ export async function processBydmateVehicleStateNotifications({
         || now - new Date(prevState.last_park_notified_at).getTime() > PARK_NOTIFICATION_COOLDOWN_MS;
 
       if (parkCooldownOk && shouldSendTelegram && profile.telegramId != null) {
-        const parkText = notificationText(carName, "parked", odometer, soc, lastSample.device_time, lat, lon, timeToFull, chargeCost, currency, chargePowerKw);
+        const parkText = notificationText(carName, "parked", odometer, soc, lastSample.device_time, lat, lon, timeToFull, chargeCost, currency, chargePowerKw, profile.timezone);
         await sendTelegramMessage(profile.telegramId, parkText, { disableWebPagePreview: false });
         parked++;
       }
