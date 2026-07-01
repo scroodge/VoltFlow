@@ -186,6 +186,30 @@ export const dictionaries = {
       linkTitle: "Link your account",
       generateCode: "Generate linking code",
       adbGuide: "Full ADB guide",
+      adbOptional:
+        "ADB is optional — VoltFlow Mate still works without it, just in a reduced mode.",
+      adbWorksTitle: "Works without ADB (basic mode)",
+      adbWorks: [
+        "Live cockpit — battery %, charging status and power",
+        "Speed, gear, odometer and range estimate",
+        "Climate, temperatures and cell voltages",
+        "Trip journal and manual charging sessions (with cost)",
+      ],
+      adbUnlocksTitle: "Unlocks with ADB",
+      adbUnlocks: [
+        "Battery health (SoH) — accurate value from the BMS",
+        "Auto charging journal — sessions logged automatically (otherwise added by hand)",
+      ],
+      adbAllow:
+        "These features enable automatically — no separate toggle needed. On first launch, BYDMate shows an “Allow ADB debugging” dialog once. Tap Allow and check “Always allow from this computer” so it doesn’t ask again.",
+      dilinkTitle: "DiLink 5.0",
+      dilinkBody:
+        "ADB debugging is blocked and can only be unlocked remotely from China. Options:",
+      dilinkTaobao:
+        "Taobao sellers (search “DiLink 5.0”, ~40 ¥ inside China / ~80 ¥ abroad, AliPay). Seller remotely opens engineering menu via QR code.",
+      dilinkTelegram: "Telegram helper",
+      dilinkTelegramLink: "in this chat",
+      dilinkTelegramPrice: "(~30–40 ¥)",
       waitingTitle: "Waiting for your car…",
       waitingBody:
         "Keep VoltFlow Mate running on the car tablet with sync enabled. This screen updates by itself the moment data arrives.",
@@ -1336,6 +1360,30 @@ export const dictionaries = {
       linkTitle: "Прывяжыце акаўнт",
       generateCode: "Стварыць код прывязкі",
       adbGuide: "Поўны гайд па ADB",
+      adbOptional:
+        "ADB неабавязковы — VoltFlow Mate працуе і без яго, проста ў абмежаваным рэжыме.",
+      adbWorksTitle: "Працуе без ADB (базавы рэжым)",
+      adbWorks: [
+        "Жывая кабіна — зарад %, статус зарадкі і магутнасць",
+        "Хуткасць, перадача, прабег і ацэнка запасу ходу",
+        "Клімат, тэмпературы і напружанні ячэек",
+        "Часопіс паездак і ручныя сесіі зарадкі (з коштам)",
+      ],
+      adbUnlocksTitle: "Адкрывае з ADB",
+      adbUnlocks: [
+        "Стан батарэі (SoH) — дакладнае значэнне з BMS",
+        "Аўтаматычны часопіс зарадкі — сесіі запісваюцца аўтаматычна (інакш дадаюцца ўручную)",
+      ],
+      adbAllow:
+        "Гэтыя функцыі ўключаюцца аўтаматычна — асобны перамыкач не патрэбны. Пры першым запуску BYDMate адзін раз пакажа дыялог «Дазволіць адладку ADB». Націсніце «Дазволіць» і адзначце «Заўсёды дазваляць з гэтага камп’ютара», каб больш не пыталася.",
+      dilinkTitle: "DiLink 5.0",
+      dilinkBody:
+        "Адладка ADB заблакаваная і можа быць разблакаваная толькі выдалена з Кітая. Варыянты:",
+      dilinkTaobao:
+        "Прадаўцы на Taobao (пошук «DiLink 5.0», ~40 ¥ у Кітаі / ~80 ¥ за мяжой, AliPay). Прадавец выдалена адкрывае інжынернае меню праз QR-код.",
+      dilinkTelegram: "Памочнік у Telegram",
+      dilinkTelegramLink: "у гэтым чаце",
+      dilinkTelegramPrice: "(~30–40 ¥)",
       waitingTitle: "Чакаем ваша аўто…",
       waitingBody:
         "Пакіньце VoltFlow Mate запушчаным на планшэце аўто з уключанай сінхранізацыяй. Экран абновіцца сам, як толькі прыйдуць дадзеныя.",
@@ -2488,6 +2536,30 @@ export const dictionaries = {
       linkTitle: "Привяжите аккаунт",
       generateCode: "Создать код привязки",
       adbGuide: "Полный гайд по ADB",
+      adbOptional:
+        "ADB необязателен — VoltFlow Mate работает и без него, просто в ограниченном режиме.",
+      adbWorksTitle: "Работает без ADB (базовый режим)",
+      adbWorks: [
+        "Живой кокпит — заряд %, статус зарядки и мощность",
+        "Скорость, передача, пробег и оценка запаса хода",
+        "Климат, температуры и напряжения ячеек",
+        "Журнал поездок и ручные сессии зарядки (со стоимостью)",
+      ],
+      adbUnlocksTitle: "Открывает с ADB",
+      adbUnlocks: [
+        "Состояние батареи (SoH) — точное значение из BMS",
+        "Автоматический журнал зарядки — сессии записываются автоматически (иначе добавляются вручную)",
+      ],
+      adbAllow:
+        "Эти функции включаются автоматически — отдельный переключатель не нужен. При первом запуске BYDMate один раз покажет диалог «Разрешить отладку ADB». Нажмите «Разрешить» и отметьте «Всегда разрешать с этого компьютера», чтобы больше не спрашивал.",
+      dilinkTitle: "DiLink 5.0",
+      dilinkBody:
+        "Отладка ADB заблокирована и может быть разблокирована только удалённо из Китая. Варианты:",
+      dilinkTaobao:
+        "Продавцы на Taobao (поиск «DiLink 5.0», ~40 ¥ в Китае / ~80 ¥ за рубежом, AliPay). Продавец удалённо открывает инженерное меню через QR-код.",
+      dilinkTelegram: "Помощник в Telegram",
+      dilinkTelegramLink: "в этом чате",
+      dilinkTelegramPrice: "(~30–40 ¥)",
       waitingTitle: "Ждём ваш автомобиль…",
       waitingBody:
         "Оставьте VoltFlow Mate запущенным на планшете авто с включённой синхронизацией. Экран обновится сам, как только придут данные.",

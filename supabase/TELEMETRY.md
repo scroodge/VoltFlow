@@ -5,6 +5,31 @@ APK ingest contract: see `supabase/BYDMATE_APK_API.md`.
 This document describes the current VoltFlow Mate telemetry storage model and the Di+
 fields that the Android app may send.
 
+## Data availability: ADB vs basic mode
+
+Most live telemetry flows through the **Di+ (D+) local HTTP API** on the DiLink head
+unit, which the APK reads **without ADB**. ADB debugging only gates two things.
+
+**Works without ADB (basic mode):**
+
+- Live cockpit — `soc`, charging status (`is_charging` / charge-gun state), `power_kw` / `charge_power_kw`
+- `speed_kmh`, gear, `odometer_km`, range estimate
+- Climate / temperatures, and cell voltages (`diplus_min/max/cell_delta_v`)
+- GPS `location` → trip journal (auto-tracked)
+- Manual charging sessions + cost math (`SOC_delta% × capacity`, no ADB needed)
+
+**Requires ADB:**
+
+- **Battery health / SoH** — accurate `soh_percent` read from the BMS. Without ADB it is
+  absent, so range estimate falls back to nominal capacity (no degradation factor) — see
+  `src/lib/bydmate/range-estimate.ts`.
+- **Auto charging journal** — automatic start/stop detection of charging sessions. Without
+  ADB, charging sessions must be added manually.
+
+On DiLink 5.0 (all BYD Yuan UP), ADB is locked and can only be unlocked remotely (Taobao /
+Telegram helper). The onboarding "Full ADB guide" (`src/app/onboarding/page.tsx`) is the
+user-facing version of this table.
+
 ## Cloud ingest contract
 
 Endpoint:

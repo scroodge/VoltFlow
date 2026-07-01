@@ -207,71 +207,46 @@ export default function OnboardingPage() {
                                   {t("onboarding.adbGuide") ?? "Full ADB guide"}
                                 </summary>
                                 <div className="space-y-3 border-t border-border px-3 py-3 text-xs leading-relaxed text-muted-foreground">
-                                  <p>
-                                    ADB is optional — VoltFlow Mate still works without
-                                    it, just in a reduced mode.
-                                  </p>
+                                  <p>{t("onboarding.adbOptional")}</p>
                                   <p className="font-semibold text-foreground">
-                                    Works without ADB (basic mode)
+                                    {t("onboarding.adbWorksTitle")}
                                   </p>
                                   <ul className="list-disc space-y-1 pl-4">
-                                    <li>
-                                      Live cockpit — battery %, charging status and power
-                                    </li>
-                                    <li>Speed, gear, odometer and range estimate</li>
-                                    <li>Climate, temperatures and cell voltages</li>
-                                    <li>
-                                      Trip journal and manual charging sessions (with cost)
-                                    </li>
+                                    {(t("onboarding.adbWorks") as readonly string[]).map(
+                                      (item) => (
+                                        <li key={item}>{item}</li>
+                                      ),
+                                    )}
                                   </ul>
                                   <p className="font-semibold text-foreground">
-                                    Unlocks with ADB
+                                    {t("onboarding.adbUnlocksTitle")}
                                   </p>
                                   <ul className="list-disc space-y-1 pl-4">
-                                    <li>
-                                      Battery health (SoH) — accurate value from the BMS
-                                    </li>
-                                    <li>
-                                      Auto charging journal — sessions logged
-                                      automatically (otherwise added by hand)
-                                    </li>
+                                    {(t("onboarding.adbUnlocks") as readonly string[]).map(
+                                      (item) => (
+                                        <li key={item}>{item}</li>
+                                      ),
+                                    )}
                                   </ul>
-                                  <p>
-                                    These features enable automatically — no separate
-                                    toggle needed. On first launch, BYDMate will show an{" "}
-                                    <strong>Allow ADB debugging</strong> dialog once. Tap{" "}
-                                    <strong>Allow</strong> and check{" "}
-                                    <strong>
-                                      Always allow from this computer
-                                    </strong>{" "}
-                                    so it doesn&apos;t ask again.
-                                  </p>
+                                  <p>{t("onboarding.adbAllow")}</p>
                                   <div>
                                     <p className="mb-1 font-semibold text-foreground">
-                                      DiLink 5.0
+                                      {t("onboarding.dilinkTitle")}
                                     </p>
-                                    <p>
-                                      ADB debugging is blocked and can only be unlocked
-                                      remotely from China. Options:
-                                    </p>
+                                    <p>{t("onboarding.dilinkBody")}</p>
                                     <ul className="list-disc space-y-1 pl-4">
+                                      <li>{t("onboarding.dilinkTaobao")}</li>
                                       <li>
-                                        Taobao sellers (search &ldquo;DiLink 5.0&rdquo;,
-                                        ~40&nbsp;¥ inside China / ~80&nbsp;¥ abroad,
-                                        AliPay). Seller remotely opens engineering menu via
-                                        QR code.
-                                      </li>
-                                      <li>
-                                        Telegram helper{" "}
+                                        {t("onboarding.dilinkTelegram")}{" "}
                                         <a
                                           href="https://t.me/bydyuanupbuybelarus/183/45949"
                                           target="_blank"
                                           rel="noreferrer"
                                           className="underline underline-offset-2 hover:text-[var(--voltflow-cyan)]"
                                         >
-                                          in this chat
+                                          {t("onboarding.dilinkTelegramLink")}
                                         </a>{" "}
-                                        (~30–40&nbsp;¥)
+                                        {t("onboarding.dilinkTelegramPrice")}
                                       </li>
                                     </ul>
                                   </div>
