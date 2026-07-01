@@ -91,7 +91,6 @@ export default function OnboardingPage() {
   const installSteps = t("settings.cloud.installSteps") as readonly string[];
   const installStepsGen1 = t("settings.cloud.installStepsGen1") as readonly string[];
   const generationSteps = carGeneration === "gen1_2024" ? installStepsGen1 : installSteps;
-  const isGen1 = carGeneration === "gen1_2024";
 
   return (
     <main className="relative isolate min-h-dvh overflow-x-clip bg-background text-foreground">
@@ -196,7 +195,6 @@ export default function OnboardingPage() {
                   <ol className="space-y-3">
                     {generationSteps.map((stepText, index) => {
                       if (index === 0) {
-                        const isDlink5 = !isGen1;
                         return (
                           <li key={index} className="flex gap-3 text-sm leading-6">
                             <span className="grid size-6 shrink-0 place-items-center rounded-full border border-border text-xs font-bold text-[var(--voltflow-cyan)]">
@@ -210,16 +208,32 @@ export default function OnboardingPage() {
                                 </summary>
                                 <div className="space-y-3 border-t border-border px-3 py-3 text-xs leading-relaxed text-muted-foreground">
                                   <p>
-                                    Without ADB, VoltFlow Mate works in basic mode. ADB
-                                    debugging unlocks:
+                                    ADB is optional — VoltFlow Mate still works without
+                                    it, just in a reduced mode.
+                                  </p>
+                                  <p className="font-semibold text-foreground">
+                                    Works without ADB (basic mode)
                                   </p>
                                   <ul className="list-disc space-y-1 pl-4">
                                     <li>
-                                      Battery health (SoH) — accurate value from BMS
+                                      Live cockpit — battery %, charging status and power
+                                    </li>
+                                    <li>Speed, gear, odometer and range estimate</li>
+                                    <li>Climate, temperatures and cell voltages</li>
+                                    <li>
+                                      Trip journal and manual charging sessions (with cost)
+                                    </li>
+                                  </ul>
+                                  <p className="font-semibold text-foreground">
+                                    Unlocks with ADB
+                                  </p>
+                                  <ul className="list-disc space-y-1 pl-4">
+                                    <li>
+                                      Battery health (SoH) — accurate value from the BMS
                                     </li>
                                     <li>
-                                      Auto charging journal — without ADB, charging
-                                      sessions can only be added manually
+                                      Auto charging journal — sessions logged
+                                      automatically (otherwise added by hand)
                                     </li>
                                   </ul>
                                   <p>
@@ -230,57 +244,37 @@ export default function OnboardingPage() {
                                     <strong>
                                       Always allow from this computer
                                     </strong>{" "}
-                                    so it doesn't ask again.
+                                    so it doesn&apos;t ask again.
                                   </p>
-                                  {isDlink5 ? (
-                                    <div>
-                                      <p className="mb-1 font-semibold text-foreground">
-                                        DiLink 5.0
-                                      </p>
-                                      <p>
-                                        ADB debugging is blocked and can only be unlocked
-                                        remotely from China. Options:
-                                      </p>
-                                      <ul className="list-disc space-y-1 pl-4">
-                                        <li>
-                                          Taobao sellers (search &ldquo;DiLink
-                                          5.0&rdquo;, ~40&nbsp;¥ inside China /
-                                          ~80&nbsp;¥ abroad, AliPay). Seller remotely opens
-                                          engineering menu via QR code.
-                                        </li>
-                                        <li>
-                                          Telegram helper{" "}
-                                          <a
-                                            href="https://t.me/bydyuanupbuybelarus/183/45949"
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="underline underline-offset-2 hover:text-[var(--voltflow-cyan)]"
-                                          >
-                                            in this chat
-                                          </a>{" "}
-                                          (~30–40&nbsp;¥)
-                                        </li>
-                                      </ul>
-                                    </div>
-                                  ) : (
-                                    <div>
-                                      <p className="mb-1 font-semibold text-foreground">
-                                        DiLink 3 / 4
-                                      </p>
-                                      <p>
-                                        Install BydDevelopmentTools, go to Settings →
-                                        Version Management, tap{" "}
-                                        <strong>Reset to factory default</strong> 10 times,
-                                        then enable{" "}
-                                        <strong>
-                                          Debug Mode when USB is Connected
-                                        </strong>{" "}
-                                        and <strong>Wireless adb debug switch</strong>. On
-                                        updated DiLink 3/4 firmware, ADB may be locked like
-                                        DiLink 5 — use the method below.
-                                      </p>
-                                    </div>
-                                  )}
+                                  <div>
+                                    <p className="mb-1 font-semibold text-foreground">
+                                      DiLink 5.0
+                                    </p>
+                                    <p>
+                                      ADB debugging is blocked and can only be unlocked
+                                      remotely from China. Options:
+                                    </p>
+                                    <ul className="list-disc space-y-1 pl-4">
+                                      <li>
+                                        Taobao sellers (search &ldquo;DiLink 5.0&rdquo;,
+                                        ~40&nbsp;¥ inside China / ~80&nbsp;¥ abroad,
+                                        AliPay). Seller remotely opens engineering menu via
+                                        QR code.
+                                      </li>
+                                      <li>
+                                        Telegram helper{" "}
+                                        <a
+                                          href="https://t.me/bydyuanupbuybelarus/183/45949"
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="underline underline-offset-2 hover:text-[var(--voltflow-cyan)]"
+                                        >
+                                          in this chat
+                                        </a>{" "}
+                                        (~30–40&nbsp;¥)
+                                      </li>
+                                    </ul>
+                                  </div>
                                 </div>
                               </details>
                             </div>
