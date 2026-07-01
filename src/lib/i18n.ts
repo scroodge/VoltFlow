@@ -497,7 +497,9 @@ export const dictionaries = {
       wallbox: "Wallbox kW",
       wallboxHelp: "Matches your AC pedestal limit.",
       efficiency: "AC efficiency",
-      efficiencyHelp: "Grid-to-pack factor for tariff math.",
+      efficiencyHelp:
+        "Grid-to-battery loss factor for cost math. Leave at the default unless you've measured your own.",
+      advanced: "Advanced",
       save: "Save vehicle",
       update: "Save changes",
       saved: "Vehicle saved",
@@ -508,6 +510,10 @@ export const dictionaries = {
       homeLat: "Home latitude",
       homeLon: "Home longitude",
       homeRadius: "Radius (m)",
+      newEyebrow: "Fleet",
+      newHeading: "Add an EV blueprint",
+      newIntro:
+        "Capacities and AC limits seed the charging model — tweak later anytime from settings.",
     },
     vehicle: {
       badge: "BYDMate live",
@@ -1577,7 +1583,9 @@ export const dictionaries = {
       wallbox: "Wallbox кВт",
       wallboxHelp: "Адпавядае ліміту вашай AC-стойкі.",
       efficiency: "AC-эфектыўнасць",
-      efficiencyHelp: "Каэфіцыент сетка-батарэя для тарыфнага разліку.",
+      efficiencyHelp:
+        "Каэфіцыент страт сетка-батарэя для разліку кошту. Пакіньце па змаўчанні, калі не вымяралі свой.",
+      advanced: "Дадаткова",
       save: "Захаваць аўто",
       update: "Захаваць змены",
       saved: "Аўто захавана",
@@ -1588,6 +1596,10 @@ export const dictionaries = {
       homeLat: "Шырата дома",
       homeLon: "Даўгата дома",
       homeRadius: "Радыус (м)",
+      newEyebrow: "Гараж",
+      newIntro:
+        "Ёмістасць і ліміты AC задаюць мадэль зарадкі — потым можна змяніць у наладах у любы час.",
+      newHeading: "Дадаць профіль электрамабіля",
     },
     vehicle: {
       badge: "BYDMate live",
@@ -2657,7 +2669,9 @@ export const dictionaries = {
       wallbox: "Зарядная станция в  кВт",
       wallboxHelp: "Соответствует лимиту вашей AC-стойки.",
       efficiency: "AC-эффективность",
-      efficiencyHelp: "Коэффициент сеть-батарея для тарифного расчета.",
+      efficiencyHelp:
+        "Коэффициент потерь сеть-батарея для расчёта стоимости. Оставьте по умолчанию, если не измеряли свой.",
+      advanced: "Дополнительно",
       save: "Сохранить авто",
       update: "Сохранить изменения",
       saved: "Авто сохранено",
@@ -2668,6 +2682,10 @@ export const dictionaries = {
       homeLat: "Широта дома",
       homeLon: "Долгота дома",
       homeRadius: "Радиус (м)",
+      newEyebrow: "Гараж",
+      newHeading: "Добавить профиль электромобиля",
+      newIntro:
+        "Ёмкость и лимиты AC задают модель зарядки — потом можно изменить в настройках в любое время.",
     },
     vehicle: {
       badge: "BYDMate live",

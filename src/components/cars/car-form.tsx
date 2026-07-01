@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown } from "lucide-react";
 import Link from "next/link";
 import type { FormEvent } from "react";
 import { useState } from "react";
@@ -148,40 +149,22 @@ export function CarForm({
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="default_charger_power_kw">{t("cars.wallbox")}</Label>
-              <Input
-                id="default_charger_power_kw"
-                name="default_charger_power_kw"
-                type="text"
-                inputMode="decimal"
-                pattern="[0-9]*[,.]?[0-9]*"
-                step="0.1"
-                min={1}
-                max={300}
-                value={chargerPower}
-                onChange={(event) => setChargerPower(event.target.value)}
-                className="min-h-[52px] rounded-2xl text-lg"
-              />
-              <p className="text-muted-foreground text-xs">{t("cars.wallboxHelp")}</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="default_efficiency_percent">{t("cars.efficiency")}</Label>
-              <Input
-                id="default_efficiency_percent"
-                name="default_efficiency_percent"
-                type="number"
-                inputMode="numeric"
-                min={70}
-                max={100}
-                step="1"
-                value={efficiency}
-                onChange={(event) => setEfficiency(event.target.value)}
-                className="min-h-[52px] rounded-2xl text-lg"
-              />
-              <p className="text-muted-foreground text-xs">{t("cars.efficiencyHelp")}</p>
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="default_charger_power_kw">{t("cars.wallbox")}</Label>
+            <Input
+              id="default_charger_power_kw"
+              name="default_charger_power_kw"
+              type="text"
+              inputMode="decimal"
+              pattern="[0-9]*[,.]?[0-9]*"
+              step="0.1"
+              min={1}
+              max={300}
+              value={chargerPower}
+              onChange={(event) => setChargerPower(event.target.value)}
+              className="min-h-[52px] rounded-2xl text-lg"
+            />
+            <p className="text-muted-foreground text-xs">{t("cars.wallboxHelp")}</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
@@ -227,6 +210,29 @@ export function CarForm({
               />
             </div>
           </div>
+
+          <details className="group rounded-2xl border border-white/[0.08] bg-white/[0.02]">
+            <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium">
+              <span>{t("cars.advanced")}</span>
+              <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden />
+            </summary>
+            <div className="space-y-2 px-4 pb-4">
+              <Label htmlFor="default_efficiency_percent">{t("cars.efficiency")}</Label>
+              <Input
+                id="default_efficiency_percent"
+                name="default_efficiency_percent"
+                type="number"
+                inputMode="numeric"
+                min={70}
+                max={100}
+                step="1"
+                value={efficiency}
+                onChange={(event) => setEfficiency(event.target.value)}
+                className="min-h-[52px] rounded-2xl text-lg"
+              />
+              <p className="text-muted-foreground text-xs">{t("cars.efficiencyHelp")}</p>
+            </div>
+          </details>
         </CardContent>
 
         <CardFooter className="flex flex-col gap-3 pt-8 sm:flex-row">
