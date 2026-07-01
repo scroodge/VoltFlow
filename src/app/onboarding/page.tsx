@@ -170,14 +170,41 @@ export default function OnboardingPage() {
               {step === "install" ? (
                 <div className="mt-6 voltflow-card p-5">
                   <ol className="space-y-3">
-                    {installSteps.map((stepText, index) => (
-                      <li key={index} className="flex gap-3 text-sm leading-6">
-                        <span className="grid size-6 shrink-0 place-items-center rounded-full border border-border text-xs font-bold text-[var(--voltflow-cyan)]">
-                          {index + 1}
-                        </span>
-                        <span>{stepText}</span>
-                      </li>
-                    ))}
+                    {installSteps.map((stepText, index) =>
+                      index === 0 ? (
+                        <li key={index} className="flex gap-3 text-sm leading-6">
+                          <span className="grid size-6 shrink-0 place-items-center rounded-full border border-border text-xs font-bold text-[var(--voltflow-cyan)]">
+                            {index + 1}
+                          </span>
+                          <span>
+                            {(() => {
+                              const parts = stepText.split("BYDMATE");
+                              return (
+                                <>
+                                  {parts[0]}
+                                  <a
+                                    href={MATE_GITHUB_RELEASES_LATEST_URL}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="underline underline-offset-2 hover:text-[var(--voltflow-cyan)]"
+                                  >
+                                    BYDMATE
+                                  </a>
+                                  {parts[1]}
+                                </>
+                              );
+                            })()}
+                          </span>
+                        </li>
+                      ) : (
+                        <li key={index} className="flex gap-3 text-sm leading-6">
+                          <span className="grid size-6 shrink-0 place-items-center rounded-full border border-border text-xs font-bold text-[var(--voltflow-cyan)]">
+                            {index + 1}
+                          </span>
+                          <span>{stepText}</span>
+                        </li>
+                      ),
+                    )}
                   </ol>
                   <Button
                     variant="outline"
