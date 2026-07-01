@@ -674,7 +674,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
 
   const handleGenerateBydmateKey = () => {
     if (!profileUserId) {
-      toast.error("Sign in before generating a BYDMate key");
+      toast.error("Sign in before generating a VoltFlow Mate key");
       return;
     }
 
@@ -692,7 +692,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
           return;
         }
         setBydmateCloudApiKey(key);
-        toast.success("BYDMate API key generated");
+        toast.success("VoltFlow Mate API key generated");
       });
   };
 
@@ -700,7 +700,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
     if (!bydmateCloudApiKey) return;
     void navigator.clipboard
       .writeText(bydmateCloudApiKey)
-      .then(() => toast.success("BYDMate API key copied"))
+      .then(() => toast.success("VoltFlow Mate API key copied"))
       .catch(() => toast.error("Could not copy API key"));
   };
 
@@ -722,7 +722,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
 
   const handleCreateBydmateLinkCode = () => {
     if (!profileUserId && !isDevAppRoute()) {
-      toast.error("Sign in before linking BYDMate");
+      toast.error("Sign in before linking VoltFlow Mate");
       return;
     }
 

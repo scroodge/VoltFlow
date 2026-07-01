@@ -153,7 +153,7 @@ export function VehicleControlDevClient({
         <h1 className="font-heading text-2xl font-bold">Remote commands (way)</h1>
         <p className="text-sm text-muted-foreground">
           Queue commands without login. Use agent simulator to test poll/ack without the APK or
-          car. Real D+ execution still requires BYDMate on the head unit or{" "}
+          car. Real D+ execution still requires VoltFlow Mate on the head unit or{" "}
           <code className="text-xs">agent_dev.py</code>.
         </p>
       </header>
@@ -164,14 +164,14 @@ export function VehicleControlDevClient({
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Agent simulator</CardTitle>
           <CardDescription>
-            Calls the same endpoints as BYDMate: <code className="text-xs">{commandsPollUrl}</code>
+            Calls the same endpoints as VoltFlow Mate: <code className="text-xs">{commandsPollUrl}</code>
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {!apiKey ? (
             <p className="text-sm text-amber-600">
               Profile has no <code>bydmate_cloud_api_key</code> — generate one in Settings or link
-              BYDMate first.
+              VoltFlow Mate first.
             </p>
           ) : null}
           <div className="flex flex-wrap gap-2">

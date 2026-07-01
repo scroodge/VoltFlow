@@ -1,14 +1,7 @@
 "use client";
 
-import {
-  ArrowLeft,
-  ArrowRight,
-  Car,
-  Check,
-  Download,
-  Loader2,
-  RefreshCw,
-} from "lucide-react";
+import { toast } from "sonner";
+import { ArrowLeft, ArrowRight, Car, Check, Download, Loader2, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
@@ -65,7 +58,10 @@ export default function OnboardingPage() {
       }
       setLinkCode(payload.code);
       setLinkExpiresAt(new Date(payload.expires_at).getTime());
-    } catch {
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to generate code";
+      toast.error(message);
       setLinkCode(null);
       setLinkExpiresAt(null);
     } finally {
@@ -178,7 +174,7 @@ export default function OnboardingPage() {
                           </span>
                           <span>
                             {(() => {
-                              const parts = stepText.split("BYDMATE");
+                              const parts = stepText.split("VoltFlow Mate");
                               return (
                                 <>
                                   {parts[0]}
@@ -188,7 +184,7 @@ export default function OnboardingPage() {
                                     rel="noreferrer"
                                     className="underline underline-offset-2 hover:text-[var(--voltflow-cyan)]"
                                   >
-                                    BYDMATE
+                                    VoltFlow Mate
                                   </a>
                                   {parts[1]}
                                 </>

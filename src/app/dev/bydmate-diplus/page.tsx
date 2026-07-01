@@ -176,7 +176,7 @@ export default async function BydmateDiplusDebugPage({
     <main className="safe-bottom mx-auto flex max-w-7xl flex-col gap-5 px-4 pb-8 pt-5">
       <header className="flex flex-col gap-2">
         <p className="text-muted-foreground text-xs uppercase tracking-[0.22em]">
-          Dev / BYDMate Di+
+          Dev / VoltFlow Mate Di+
         </p>
         <h1 className="font-heading text-3xl font-bold tracking-normal">
           Di+ payload debug

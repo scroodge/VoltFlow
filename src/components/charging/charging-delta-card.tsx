@@ -128,7 +128,7 @@ export function ChargingDeltaCard({
           </span>
         </div>
         <div className="mt-5 rounded-2xl border border-border bg-background/30 p-4 text-sm leading-6 text-muted-foreground">
-          Нет реальных BYDMate точек для этой сессии. Если во время зарядки приходят данные, график появится здесь.
+          Нет реальных VoltFlow Mate точек для этой сессии. Если во время зарядки приходят данные, график появится здесь.
         </div>
       </article>
     );

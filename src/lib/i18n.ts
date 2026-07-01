@@ -516,7 +516,7 @@ export const dictionaries = {
         "Capacities and AC limits seed the charging model — tweak later anytime from settings.",
     },
     vehicle: {
-      badge: "BYDMate live",
+      badge: "VoltFlow Mate live",
       tab: {
         live: "Live",
         charge: "Charge",
@@ -673,7 +673,7 @@ export const dictionaries = {
         lastKnown: "Last known position",
         mapAria: "Map showing the last known vehicle position",
         empty:
-          "No GPS in the latest payload. BYDMate sends location only when Android location permission is granted.",
+          "No GPS in the latest payload. VoltFlow Mate sends location only when Android location permission is granted.",
         deviceTime: "Device time",
         received: "Received",
         lastTrip: "last trip",
@@ -683,12 +683,12 @@ export const dictionaries = {
       empty: {
         title: "No car data yet",
         beforeEndpoint:
-          "Generate a BYDMate key in Settings, paste it into the Android app, and set the endpoint to",
+          "Generate a VoltFlow Mate key in Settings, paste it into the Android app, and set the endpoint to",
         afterEndpoint: "The first accepted payload will appear here.",
         refresh: "The page refreshes every 5 seconds while open.",
       },
       errors: {
-        live: "Could not load BYDMate telemetry.",
+        live: "Could not load VoltFlow Mate telemetry.",
         trips: "Could not load trip history.",
         history: "Could not load telemetry history.",
       },
@@ -1030,13 +1030,13 @@ export const dictionaries = {
           "Gateway app on the BYD head unit — sends live car data to VoltFlow. Install on DiLink first, then link your account.",
         installTitle: "Install on the car tablet",
         installSteps: [
-          "Install BYDMATE on the DiLink head unit and finish its setup (VoltFlow Mate reads live data from it).",
+          "Install VoltFlow Mate on the DiLink head unit and finish its setup (it reads live data from your car).",
           "Download the latest VoltFlow-Mate APK from GitHub Releases and install it on the same tablet (allow unknown sources if asked).",
           "Open VoltFlow Mate, grant location and storage permissions, and in DiLink turn off background restriction: Settings → General → Disable background Apps → VoltFlow Mate = OFF.",
-          "Tap Link BYDMate below, enter the 6-digit code in the app under VoltFlow sync → Connect, then match vehicle name, Send test, Save, and enable sync.",
+          "Tap Link VoltFlow Mate below, enter the 6-digit code in the app under VoltFlow sync → Connect, then match vehicle name, Send test, Save, and enable sync.",
         ],
         downloadApk: "Download APK (GitHub)",
-        linkBydmate: "Link BYDMate",
+        linkBydmate: "Link VoltFlow Mate",
         linkCodeHint: "Enter this 6-digit code in VoltFlow Mate → VoltFlow sync, then tap Connect.",
         linkCodeExpires: "Code expires in {time}",
         linkCodeExpired: "Code expired — generate a new one.",
@@ -1046,7 +1046,7 @@ export const dictionaries = {
         apiKey: "API Key",
         generateKey: "Generate key",
         copyKey: "Copy key",
-        endpointURL: "BYDMate endpoint URL",
+        endpointURL: "VoltFlow Mate endpoint URL",
         versionTitle: "VoltFlow Mate version",
         versionInstalled: "Installed on car",
         versionLatest: "Latest available",
@@ -1649,7 +1649,7 @@ export const dictionaries = {
       newHeading: "Дадаць профіль электрамабіля",
     },
     vehicle: {
-      badge: "BYDMate live",
+      badge: "VoltFlow Mate live",
       tab: {
         live: "Live",
         charge: "Зарад",
@@ -1806,7 +1806,7 @@ export const dictionaries = {
         lastKnown: "Апошняя вядомая пазіцыя",
         mapAria: "Карта з апошняй вядомай пазіцыяй аўта",
         empty:
-          "У апошнім payload няма GPS. BYDMate дасылае лакацыю толькі калі Android мае дазвол на геалакацыю.",
+          "У апошнім payload няма GPS. VoltFlow Mate дасылае лакацыю толькі калі Android мае дазвол на геалакацыю.",
         deviceTime: "Час прылады",
         received: "Атрымана",
         lastTrip: "апошняя паездка",
@@ -1816,12 +1816,12 @@ export const dictionaries = {
       empty: {
         title: "Даных аўто пакуль няма",
         beforeEndpoint:
-          "Стварыце BYDMate-ключ у наладах, устаўце яго ў Android-дадатак і задайце endpoint",
+          "Стварыце VoltFlow Mate-ключ у наладах, устаўце яго ў Android-дадатак і задайце endpoint",
         afterEndpoint: "Першы прыняты payload з'явіцца тут.",
         refresh: "Старонка абнаўляецца кожныя 5 секунд, пакуль адкрытая.",
       },
       errors: {
-        live: "Не ўдалося загрузіць тэлеметрыю BYDMate.",
+        live: "Не ўдалося загрузіць тэлеметрыю VoltFlow Mate.",
         trips: "Не ўдалося загрузіць гісторыю паездак.",
         history: "Не ўдалося загрузіць гісторыю тэлеметрыі.",
       },
@@ -2163,13 +2163,13 @@ export const dictionaries = {
           "Шлюз для галоўнага экрана BYD — перадае даныя аўто ў VoltFlow у рэальным часе. Спачатку ўсталюйце на DiLink, затым злучыце акаўнт.",
         installTitle: "Усталёўка на планшэце аўто",
         installSteps: [
-          "Спачатку ўсталюйце BYDMATE на планшэце DiLink і завершыце наладу — VoltFlow Mate бярэ з яго даныя аўта.",
+          "Спачатку ўсталюйце VoltFlow Mate на планшэце DiLink і завершыце наладу — ён бярэ з яго даныя аўта.",
           "Спампуйце апошні VoltFlow-Mate APK з рэлізаў GitHub і ўсталюйце на тым жа планшэце (дазвольце ўстаноўку з невядомых крыніц, калі сістэма запытае).",
           "Запусціце VoltFlow Mate і дайце дазволы на геалакацыю і сховішча. У меню DiLink адключіце фонавую працу: Settings → General → Disable background Apps → VoltFlow Mate = OFF.",
-          "Націсніце «Злучыць BYDMate» ніжэй, увядзіце 6-значны код у VoltFlow Mate (сінхранізацыя VoltFlow → Злучыць), падайце імя аўто як у VoltFlow, зрабіце тэставую адправку, захавайце налады і ўключыце сінхранізацыю.",
+          "Націсніце «Злучыць VoltFlow Mate» ніжэй, увядзіце 6-значны код у VoltFlow Mate (сінхранізацыя VoltFlow → Злучыць), падайце імя аўто як у VoltFlow, зрабіце тэставую адправку, захавайце налады і ўключыце сінхранізацыю.",
         ],
         downloadApk: "Спампаваць APK (GitHub)",
-        linkBydmate: "Злучыць BYDMate",
+        linkBydmate: "Злучыць VoltFlow Mate",
         linkCodeHint:
           "Увядзіце гэты 6-значны код у VoltFlow Mate → сінхранізацыя VoltFlow і націсніце «Злучыць».",
         linkCodeExpires: "Код састанецца праз {time}",
@@ -2180,7 +2180,7 @@ export const dictionaries = {
         apiKey: "API-ключ",
         generateKey: "Згенераваць ключ",
         copyKey: "Капіяваць ключ",
-        endpointURL: "URL-адрас канчатковай кропкі BYDMate",
+        endpointURL: "URL-адрас канчатковай кропкі VoltFlow Mate",
         versionTitle: "Версія VoltFlow Mate",
         versionInstalled: "Усталявана на аўто",
         versionLatest: "Апошняя даступная",
@@ -2782,7 +2782,7 @@ export const dictionaries = {
         "Ёмкость и лимиты AC задают модель зарядки — потом можно изменить в настройках в любое время.",
     },
     vehicle: {
-      badge: "BYDMate live",
+      badge: "VoltFlow Mate live",
       tab: {
         live: "Live",
         charge: "Зарядка",
@@ -2939,7 +2939,7 @@ export const dictionaries = {
         lastKnown: "Последняя известная позиция",
         mapAria: "Карта с последней известной позицией автомобиля",
         empty:
-          "В последнем payload нет GPS. BYDMate отправляет геопозицию только когда Android выдал разрешение на геолокацию.",
+          "В последнем payload нет GPS. VoltFlow Mate отправляет геопозицию только когда Android выдал разрешение на геолокацию.",
         deviceTime: "Время устройства",
         received: "Получено",
         lastTrip: "последняя поездка",
@@ -2949,12 +2949,12 @@ export const dictionaries = {
       empty: {
         title: "Данных авто пока нет",
         beforeEndpoint:
-          "Создайте BYDMate-ключ в настройках, вставьте его в Android-приложение и задайте endpoint",
+          "Создайте VoltFlow Mate-ключ в настройках, вставьте его в Android-приложение и задайте endpoint",
         afterEndpoint: "Первый принятый payload появится здесь.",
         refresh: "Страница обновляется каждые 5 секунд, пока открыта.",
       },
       errors: {
-        live: "Не удалось загрузить телеметрию BYDMate.",
+        live: "Не удалось загрузить телеметрию VoltFlow Mate.",
         trips: "Не удалось загрузить историю поездок.",
         history: "Не удалось загрузить историю телеметрии.",
       },
@@ -3296,13 +3296,13 @@ export const dictionaries = {
           "Шлюз для головного устройства BYD — передаёт данные авто в VoltFlow в реальном времени. Сначала установите на DiLink, затем подключите аккаунт.",
         installTitle: "Установка на планшете авто",
         installSteps: [
-          "Сначала установите BYDMATE на планшете DiLink и завершите настройку — VoltFlow Mate берёт из него данные авто.",
+          "Сначала установите VoltFlow Mate на планшете DiLink и завершите настройку — он берёт из него данные авто.",
           "Скачайте последний VoltFlow-Mate APK из релизов GitHub и установите на том же планшете (разрешите установку из неизвестных источников, если система спросит).",
           "Запустите VoltFlow Mate и выдайте разрешения на геолокацию и хранилище. В меню DiLink отключите фоновую работу: Settings → General → Disable background Apps → VoltFlow Mate = OFF.",
-          "Нажмите «Подключить BYDMate» ниже, введите 6-значный код в VoltFlow Mate (синхронизация VoltFlow → Подключить), укажите имя авто как в VoltFlow, отправьте тест, сохраните настройки и включите синхронизацию.",
+          "Нажмите «Подключить VoltFlow Mate» ниже, введите 6-значный код в VoltFlow Mate (синхронизация VoltFlow → Подключить), укажите имя авто как в VoltFlow, отправьте тест, сохраните настройки и включите синхронизацию.",
         ],
         downloadApk: "Скачать APK (GitHub)",
-        linkBydmate: "Подключить BYDMate",
+        linkBydmate: "Подключить VoltFlow Mate",
         linkCodeHint:
           "Введите этот 6-значный код в VoltFlow Mate → синхронизация VoltFlow и нажмите «Подключить».",
         linkCodeExpires: "Код истекает через {time}",
@@ -3313,7 +3313,7 @@ export const dictionaries = {
         apiKey: "API-ключ",
         generateKey: "Сгенерировать ключ",
         copyKey: "Копировать ключ",
-        endpointURL: "URL-адрес конечной точки BYDMate",
+        endpointURL: "URL-адрес конечной точки VoltFlow Mate",
         versionTitle: "Версия VoltFlow Mate",
         versionInstalled: "Установлена на авто",
         versionLatest: "Последняя доступная",
