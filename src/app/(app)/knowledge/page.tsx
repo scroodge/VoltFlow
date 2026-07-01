@@ -6,7 +6,7 @@ import { getTelegramKnowledgeDataWithFallback } from "@/lib/supabase/knowledge";
 import { staticTelegramKnowledgeData } from "@/lib/telegram/knowledge";
 
 export const metadata: Metadata = {
-  title: "Knowledge",
+  title: "База знаний",
 };
 
 export default async function KnowledgePage() {

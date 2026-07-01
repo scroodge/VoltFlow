@@ -256,24 +256,28 @@ Keep hot-path indexes small:
 Avoid per-field indexes for every Di+ column unless a production query actually
 filters or sorts by that field.
 
-## Retention (90-day raw, 3-year hourly)
+## Retention (tiered by premium)
 
-Migration `20260530120000` adds `public.purge_old_bydmate_telemetry()`:
+The original global 90-day/3-year purge (`20260530120000`,
+`purge_old_bydmate_telemetry()`) was **superseded** by a premium-tiered purge. The
+current authoritative function is `public.purge_old_bydmate_telemetry_by_tier()`
+(tiers set across `20260617133000` → `20260617135500` → `20260626130000`):
 
-| Data | TTL |
-| --- | --- |
-| `bydmate_telemetry_samples` | 90 days (`device_time`) |
-| `bydmate_trip_track_points` | 90 days (`device_time`) |
-| `bydmate_telemetry_hourly` | 3 years (`hour_start`) |
+| Data | Free | Premium + Admin |
+| --- | --- | --- |
+| `bydmate_telemetry_samples` (`device_time`) | 30 days | **Unlimited** (kept forever) |
+| `bydmate_trip_track_points` (`device_time`) | 30 days | **Unlimited** |
+| `bydmate_telemetry_hourly` (`hour_start`) | 3 years | 3 years |
 
-Trips, live snapshots, and trip-level energy columns are **not** purged by this
-job — regen/traction on `bydmate_trips` survives after raw samples expire.
+`is_user_premium()` returns true for admins too, so premium + admin rows are fully
+exempt. Trips, live snapshots, and trip-level energy columns are **not** purged — so
+regen/traction on `bydmate_trips` survives after raw samples expire.
 
-On Supabase Pro, pg_cron schedules a daily run at 03:00 UTC when the extension
-is available. Manual run (service role):
+A pg_cron job `purge-bydmate-telemetry` runs the tiered purge daily (registered in
+`20260624130000`). Manual run (service role):
 
 ```sql
-select public.purge_old_bydmate_telemetry();
+select public.purge_old_bydmate_telemetry_by_tier();
 ```
 
 ## Home charger geofence (`cars`)

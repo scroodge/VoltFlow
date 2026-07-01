@@ -315,6 +315,8 @@ Do not accidentally regress:
 
 When the project changes, update the relevant document:
 
+- `docs/ARCHITECTURE.md` for the system overview, data flow, invariants, and the doc map (the onboarding entry point — keep its map current when docs are added/moved).
+- `CHANGELOG.md` when a plan ships; `BACKLOG.md` for new proposed-but-unbuilt plans.
 - `README.md` for product surface, setup, scripts, project structure, and current progress.
 - `AGENTS.md` for hard agent rules and project invariants.
 - `SKILLS.md` for safe workflow, ownership map, and project-specific development skills.

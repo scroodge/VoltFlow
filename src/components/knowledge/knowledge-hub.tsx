@@ -10,11 +10,11 @@ import type { TelegramKnowledgeData } from "@/types/knowledge";
 import { cn } from "@/lib/utils";
 
 const tabs = [
-  { id: "home" as TelegramTab, label: "Home", icon: Home },
-  { id: "guides" as TelegramTab, label: "Guides", icon: BookOpen },
-  { id: "faq" as TelegramTab, label: "FAQ", icon: HelpCircle },
-  { id: "buy" as TelegramTab, label: "Buy", icon: ShoppingBag },
-  { id: "more" as TelegramTab, label: "More", icon: Menu },
+  { id: "home" as TelegramTab, label: "Главная", icon: Home },
+  { id: "guides" as TelegramTab, label: "Гайды", icon: BookOpen },
+  { id: "faq" as TelegramTab, label: "Вопросы", icon: HelpCircle },
+  { id: "buy" as TelegramTab, label: "Купить", icon: ShoppingBag },
+  { id: "more" as TelegramTab, label: "Еще", icon: Menu },
 ];
 
 export function KnowledgeHub({ data }: { data?: TelegramKnowledgeData }) {
@@ -25,8 +25,8 @@ export function KnowledgeHub({ data }: { data?: TelegramKnowledgeData }) {
     <div className="px-3 py-4">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <h1 className="font-heading text-xl font-bold">Knowledge</h1>
-          <p className="text-sm text-muted-foreground">BYD YUAN UP knowledge base</p>
+          <h1 className="font-heading text-xl font-bold">База знаний</h1>
+          <p className="text-sm text-muted-foreground">База знаний BYD YUAN UP</p>
         </div>
         <Search className="size-5 text-muted-foreground" aria-hidden />
       </div>

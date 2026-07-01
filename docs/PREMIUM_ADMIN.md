@@ -50,8 +50,11 @@
 
 ## Retention policy
 
-- Scheduled purge runs daily and applies tiered raw telemetry retention:
-  - premium users: 365 days (`bydmate_telemetry_samples`, `bydmate_trip_track_points`),
-  - non-premium users: 30 days for the same raw tables.
-- Hourly rollups (`bydmate_telemetry_hourly`) keep the previous global policy (3 years).
+- Scheduled purge runs daily (`purge_old_bydmate_telemetry_by_tier()`, pg_cron job
+  `purge-bydmate-telemetry`) and applies tiered raw telemetry retention:
+  - **non-premium users: 30 days** raw (`bydmate_telemetry_samples`, `bydmate_trip_track_points`),
+  - **premium users + admins:** retained per the current purge tier (see
+    `purge_old_bydmate_telemetry_by_tier()` — verify against the in-app privacy text
+    before quoting a specific window to users).
+- Hourly rollups (`bydmate_telemetry_hourly`) keep the global policy (3 years).
 

@@ -74,6 +74,8 @@ import {
   canStartChargingSession,
   dashboardVehicleStatusLabelKey,
   deriveDashboardVehicleMode,
+  isChargingTelemetry,
+  isFreshLiveSnapshot,
   resolveLiveSnapshotForVehicle,
   type DashboardVehicleMode,
 } from "@/lib/vehicle-live-mode";
@@ -714,6 +716,10 @@ export function DashboardView() {
 
   const statusLabel = String(t(dashboardVehicleStatusLabelKey(vehicleMode)));
 
+  const hasLiveChargingData =
+    isChargingTelemetry(latestBydmateSnapshot) &&
+    isFreshLiveSnapshot(latestBydmateSnapshot, nowMs);
+
   const actionButtonStatus =
     vehicleMode === "app_charging"
       ? "charging"
@@ -1179,7 +1185,7 @@ export function DashboardView() {
             <div className="mt-4 grid gap-2">
               <ChargingActionButton
                 status={actionButtonStatus}
-                disabled={!selectedCar || stopping}
+                disabled={!selectedCar || stopping || hasLiveChargingData}
                 loading={stopping}
                 labels={{
                   start: mainButtonLabel ?? (t("dashboard.startCharging") as string),

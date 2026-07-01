@@ -49,6 +49,8 @@ package-lock.json
 opencode.json
 
 /docs
+/docs/archive
+
 .claude/
 .codegraph/
 .cursor/

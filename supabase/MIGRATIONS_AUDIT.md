@@ -30,7 +30,8 @@ npm run db:migrations:plan -- --db-url-from-pooler --password-env=SUPABASE_POSTG
 
 ## Applied 2026-05-30 (database architecture review)
 
-These migrations are applied to the linked production project (`fgazcjtxbkiuimdoyelh`):
+These migrations are applied to the linked production project (ref kept in the
+local-only `docs/OPS_LOCAL.md`, not this public repo):
 
 | Migration | Purpose |
 | --- | --- |

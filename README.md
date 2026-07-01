@@ -15,13 +15,20 @@ License
 
 ## Project docs / Документация проекта
 
+**Start here:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system overview, end-to-end data flow, source-of-truth invariants, and the full documentation map.
+
 - [AGENTS.md](AGENTS.md) — required instructions for AI/coding agents, especially Next.js 16 and VoltFlow Mate charging-history rules.
-- [docs/CHARGING_SESSIONS.md](docs/CHARGING_SESSIONS.md) — charging session sync, Mate auto start/stop, reconcile, 2026-06 fixes, cleanup script / зарядные сессии, ingest, reconcile.
+- [CHANGELOG.md](CHANGELOG.md) — shipped initiatives & notable fixes. / [BACKLOG.md](BACKLOG.md) — proposed-but-unbuilt plans.
+- [docs/CHARGING_SESSIONS.md](docs/CHARGING_SESSIONS.md) — charging session sync, Mate auto start/stop, reconcile, energy/cost formula, 2026-06 fixes.
+- [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) — full schema, RLS, RPCs, enums, storage buckets.
+- [docs/TRIPS.md](docs/TRIPS.md) — trip lifecycle and junk filtering. / [docs/CHART_OPTIMIZATION_SPEC.md](docs/CHART_OPTIMIZATION_SPEC.md) — analytics/trip chart spec.
+- [docs/VEHICLE_STATE_NOTIFICATIONS.md](docs/VEHICLE_STATE_NOTIFICATIONS.md) — Telegram connect/park/disconnect. / [docs/PREMIUM_ADMIN.md](docs/PREMIUM_ADMIN.md) — entitlements & retention tiers.
 - [SKILLS.md](SKILLS.md) — current project skills, safe-change workflow, git branches for new features / навыки и ветки для новых фич.
 - [INSTALL.md](INSTALL.md) — user-facing PWA install guide for iPhone, iPad, and Android.
 - [supabase/TELEMETRY.md](supabase/TELEMETRY.md) — VoltFlow Mate telemetry storage model, retention, analytics APIs, and ingest compatibility notes.
-- [supabase/BYDMATE_APK_API.md](supabase/BYDMATE_APK_API.md) — Android APK cloud ingest contract.
+- [supabase/BYDMATE_APK_API.md](supabase/BYDMATE_APK_API.md) — Android APK cloud ingest + command contract.
 - [supabase/MIGRATIONS_AUDIT.md](supabase/MIGRATIONS_AUDIT.md) — migration-chain audit and one-at-a-time migration workflow.
+- `docs/archive/` — finished/superseded initiative plans (egress, hosting, phase-0, telegram mini app). Kept **local only** (contains infra details), not in the public repo.
 
 ## Language / Язык
 
@@ -112,7 +119,7 @@ This repository already contains the main production surface of VoltFlow. Future
 - **Auto charging sessions:** after ingest, server may start/stop `charging_sessions` for alias-matched cars; state in `bydmate_auto_charging_session_state`; response field `auto_charging_sessions` (see `supabase/TELEMETRY.md`).
 - GPS sanity filtering and suspicious point dropping before track persistence.
 - Di+ raw payload storage plus materialized columns for SOC, speed, power, cell voltages, temperatures, doors, windows, tires, lights, HVAC, drive state, and diagnostics.
-- **90-day raw retention** and **3-year hourly retention** via `purge_old_bydmate_telemetry()` (pg_cron on Pro).
+- **Tiered raw retention** (free 30 days, premium + admin unlimited) and **3-year hourly retention** via `purge_old_bydmate_telemetry_by_tier()` (daily pg_cron).
 - **Trip regen/traction persist** on `bydmate_trips` at trip close; hourly `regen_kwh_sum` / `traction_kwh_sum` rollups.
 - **Realtime live vehicle** via Supabase Realtime on `bydmate_live_snapshots` (replaces 5 s polling).
 - **Analytics APIs:** `GET /api/vehicle/telemetry`, `/api/vehicle/analytics` (`monthly`, `phantom`, `cost-per-km`, `period-trips`, `route-insights`), `/api/vehicle/lifetime-map`, `/api/vehicle/export`; `PUT /api/vehicle/route-labels` for route names and park flags.
@@ -473,7 +480,7 @@ VoltFlow помогает владельцам электромобилей мо
 - **Авто-сессии зарядки:** после ingest сервер может стартовать/останавливать `charging_sessions` для машин с alias; состояние в `bydmate_auto_charging_session_state`; в ответе ingest — `auto_charging_sessions` (см. `supabase/TELEMETRY.md`).
 - До сохранения треков применяется фильтрация подозрительных GPS-точек.
 - Di+ сохраняется raw JSON и частично материализуется в колонки для SOC, speed, power, cell voltages, temperatures, doors, windows, tires, lights, HVAC и diagnostics.
-- **Retention 90 дней raw / 3 года hourly** через `purge_old_bydmate_telemetry()` (pg_cron на Pro).
+- **Тарифицируемый retention** (free 30 дней, premium + admin без ограничений) и **3 года hourly** через `purge_old_bydmate_telemetry_by_tier()` (ежедневный pg_cron).
 - **Regen/traction на поездке** сохраняются в `bydmate_trips` при закрытии; hourly `regen_kwh_sum` / `traction_kwh_sum`.
 - **Realtime live vehicle** через Supabase Realtime на `bydmate_live_snapshots` (вместо polling каждые 5 с).
 - **Analytics API:** `GET /api/vehicle/telemetry`, `/api/vehicle/analytics` (`monthly`, `phantom`, `cost-per-km`, `period-trips`, `route-insights`), `/api/vehicle/lifetime-map`, `/api/vehicle/export`; `PUT /api/vehicle/route-labels`.

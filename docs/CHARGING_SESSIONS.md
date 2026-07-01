@@ -82,7 +82,7 @@ Session card **«Старт → Итог»** shows `start_percent → current_pe
 
 - Session pricing now stores both:
   - `tariff_type` (`home | commercial_ac | fast_dc`)
-  - `provider_type` (`home | malanka | evika | forevo | zaryadka | custom`)
+  - `provider_type` (`home | malanka | evika | forevo | zaryadka | batterfly | custom`)
 - Start priority:
   1. manual session override (tariff/price/provider),
   2. matched GPS location preset (`charging_tariff_locations`),
@@ -92,7 +92,42 @@ Session card **«Старт → Итог»** shows `start_percent → current_pe
   - Evika!: AC `0.54`, DC `0.72`
   - forEVo: AC `0.46`, DC `0.61`
   - Zaryadka: AC `0.48`, DC `0.61`
+  - BatteryFly: provider preset added `20260630110000`.
   - Home: `0.15-0.54` (time-of-use); app stores your configured home/default values.
+
+## Charging energy & cost (the authoritative formula)
+
+**Energy and cost are derived from SOC, not from the BMS energy counter.**
+
+```
+charged_energy_kwh = (current_percent − start_percent) / 100 × battery_capacity_kwh
+estimated_cost     = charged_energy_kwh × price_per_kwh
+```
+
+with **efficiency ≈ 100 %**. `battery_capacity_kwh` is snapshotted per session from the
+car (per-user, hand-entered) — **never hardcode** it.
+
+Why ~100 % and not the configured efficiency: BYD calibrates the SOC display against the
+**charger input** (grid-side), so the user's configured pack capacity already implies
+grid-side accounting. Validated on car `way` (45.1 kWh, AC 4.6 kW):
+
+| Source | kWh / 36 min | vs grid truth |
+| --- | --- | --- |
+| Car display (4.6 kW × 36 min) | 2.760 | truth |
+| **SOC × capacity** | **2.706** | **−2 % ✅** |
+| di+ integral (`charge_power_kw × Δt`) | 2.400 | −13 % |
+| BMS `kwh_charged` delta | 1.451 | **−47 % ❌** |
+
+### Do NOT use the BMS counter for cost
+
+`telemetry.kwh_charged` (`FID_CHARGING_CAPACITY`) measures **battery-cell energy only**.
+~1.7 kW of active battery thermal management draws from the OBC output *before* the cells,
+so the counter reads ~47 % low vs the grid — and `÷ efficiency` makes it worse. Keep
+`kwh_charged` for diagnostics (thermal load, cell-vs-grid energy, degradation research)
+and live display, but it must never drive `estimated_cost` or the power display.
+
+> Status: some code paths still wire the BMS counter into cost/power and need reverting —
+> see [../BACKLOG.md](../BACKLOG.md) (top item).
 
 ## Migrations (applied 2026-06-02)
 
