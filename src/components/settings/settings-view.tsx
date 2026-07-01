@@ -481,7 +481,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       .single()
       .then(({ data, error }) => {
         if (error || !data) {
-          toast.error(error?.message ?? "Could not save location tariff");
+          toast.error(error?.message ?? (t("settings.toasts.saveLocationError") as string));
           return;
         }
         const mapped = mapChargingTariffLocation(data as Record<string, unknown>);
@@ -508,7 +508,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
           toast.error(error.message);
           return;
         }
-        toast.success("Location tariff removed");
+        toast.success(t("settings.toasts.locationRemoved") as string);
       });
   };
 
@@ -571,7 +571,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
 
   const handleSignOut = async () => {
     if (isDevAppRoute()) {
-      toast.message("Dev preview — sign out disabled");
+      toast.message(t("settings.toasts.devSignOutDisabled") as string);
       return;
     }
     const returnPath = isTelegramWebView() ? "/telegram" : "/login";
@@ -674,7 +674,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
 
   const handleGenerateBydmateKey = () => {
     if (!profileUserId) {
-      toast.error("Sign in before generating a VoltFlow Mate key");
+      toast.error(t("settings.toasts.signInForKey") as string);
       return;
     }
 
@@ -692,7 +692,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
           return;
         }
         setBydmateCloudApiKey(key);
-        toast.success("VoltFlow Mate API key generated");
+        toast.success(t("settings.toasts.keyGenerated") as string);
       });
   };
 
@@ -700,8 +700,8 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
     if (!bydmateCloudApiKey) return;
     void navigator.clipboard
       .writeText(bydmateCloudApiKey)
-      .then(() => toast.success("VoltFlow Mate API key copied"))
-      .catch(() => toast.error("Could not copy API key"));
+      .then(() => toast.success(t("settings.toasts.keyCopied") as string))
+      .catch(() => toast.error(t("settings.toasts.copyKeyError") as string));
   };
 
   useEffect(() => {
@@ -722,7 +722,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
 
   const handleCreateBydmateLinkCode = () => {
     if (!profileUserId && !isDevAppRoute()) {
-      toast.error("Sign in before linking VoltFlow Mate");
+      toast.error(t("settings.toasts.signInForLink") as string);
       return;
     }
 
@@ -970,7 +970,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
               <Link href="/admin/users">
                 <span className="inline-flex items-center gap-3">
                   <ShieldCheck className="size-5" aria-hidden />
-                  Открыть Premium Admin
+                  {t("settings.adminPremium.open")}
                 </span>
                 <ExternalLink className="size-4" aria-hidden />
               </Link>
@@ -1093,7 +1093,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                 <Label htmlFor="bydmate-api-key">{t("settings.cloud.apiKey")}</Label>
                 <Input
                   id="bydmate-api-key"
-                  value={bydmateCloudApiKey || "No key generated yet"}
+                  value={bydmateCloudApiKey || (t("settings.noKeyYet") as string)}
                   readOnly
                   className="h-11 rounded-2xl font-mono text-sm"
                 />

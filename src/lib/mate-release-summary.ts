@@ -41,3 +41,6 @@ export function summarizeReleaseNotes(
 
 export const MATE_GITHUB_RELEASES_LATEST_URL =
   "https://github.com/scroodge/BYDMate-own/releases/latest";
+
+export const DIPLUS_APK_URL =
+  "https://github.com/scroodge/VoltFlow/blob/main/install/Di%2B_1.3.6_26.01.2025.apk";

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useTranslation } from "@/hooks/use-translation";
 
 type BackgroundRow = {
   id: string;
@@ -13,6 +14,7 @@ type BackgroundRow = {
 };
 
 export function ClusterBackgroundsSettings() {
+  const { t } = useTranslation();
   const [rows, setRows] = useState<BackgroundRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -26,12 +28,12 @@ export function ClusterBackgroundsSettings() {
       error?: string;
     };
     if (!response.ok || !payload.ok) {
-      setError(payload.error ?? "Failed to load backgrounds");
+      setError(payload.error ?? (t("settings.clusterBg.loadError") as string));
       setRows([]);
       return;
     }
     setRows(payload.backgrounds ?? []);
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -51,7 +53,7 @@ export function ClusterBackgroundsSettings() {
       });
       const payload = (await response.json()) as { ok?: boolean; error?: string };
       if (!response.ok || !payload.ok) {
-        setError(payload.error ?? "Upload failed");
+        setError(payload.error ?? (t("settings.clusterBg.uploadError") as string));
         return;
       }
       await load();
@@ -63,13 +65,13 @@ export function ClusterBackgroundsSettings() {
   return (
     <div className="space-y-3 rounded-lg border border-border p-4">
       <div>
-        <h3 className="text-sm font-medium">Cluster backgrounds</h3>
+        <h3 className="text-sm font-medium">{t("settings.clusterBg.title")}</h3>
         <p className="text-muted-foreground text-xs">
-          Upload 1280×480-friendly images for VoltFlow Dashboard on your BYD cluster.
+          {t("settings.clusterBg.help")}
         </p>
       </div>
       <div className="space-y-2">
-        <Label htmlFor="cluster-bg-upload">Upload PNG or JPG (max 5 MB)</Label>
+        <Label htmlFor="cluster-bg-upload">{t("settings.clusterBg.uploadLabel")}</Label>
         <Input
           id="cluster-bg-upload"
           type="file"
@@ -87,7 +89,7 @@ export function ClusterBackgroundsSettings() {
         ))}
       </ul>
       <Button type="button" variant="outline" size="sm" onClick={() => void load()}>
-        Refresh
+        {t("settings.clusterBg.refresh")}
       </Button>
     </div>
   );

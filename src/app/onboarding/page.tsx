@@ -10,8 +10,9 @@ import { LocaleSwitcher } from "@/components/locale-switcher";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
 import { useVehicleConnection } from "@/hooks/use-vehicle-connection";
-import { MATE_GITHUB_RELEASES_LATEST_URL } from "@/lib/mate-release-summary";
+import { MATE_GITHUB_RELEASES_LATEST_URL, DIPLUS_APK_URL } from "@/lib/mate-release-summary";
 import { useAppPreferences } from "@/stores/use-app-preferences";
+import type { CarGeneration } from "@/lib/car-generations";
 
 type Step = "install" | "link";
 
@@ -30,6 +31,7 @@ export default function OnboardingPage() {
   const connected = connection?.connected ?? false;
 
   const [step, setStep] = useState<Step>("install");
+  const [carGeneration, setCarGeneration] = useState<CarGeneration>("gen2_2025");
   const [linkCode, setLinkCode] = useState<string | null>(null);
   const [linkExpiresAt, setLinkExpiresAt] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
@@ -87,6 +89,9 @@ export default function OnboardingPage() {
   const remaining = linkExpiresAt ? linkExpiresAt - now : 0;
   const codeExpired = linkExpiresAt != null && remaining <= 0;
   const installSteps = t("settings.cloud.installSteps") as readonly string[];
+  const installStepsGen1 = t("settings.cloud.installStepsGen1") as readonly string[];
+  const generationSteps = carGeneration === "gen1_2024" ? installStepsGen1 : installSteps;
+  const isGen1 = carGeneration === "gen1_2024";
 
   return (
     <main className="relative isolate min-h-dvh overflow-x-clip bg-background text-foreground">
@@ -165,57 +170,176 @@ export default function OnboardingPage() {
 
               {step === "install" ? (
                 <div className="mt-6 voltflow-card p-5">
+                  {/* Generation picker */}
+                  <div className="mb-5 flex items-center gap-3 rounded-2xl border border-border bg-white/[0.03] p-3">
+                    <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                      Car:
+                    </span>
+                    <div className="flex gap-1 rounded-lg border border-border bg-background p-0.5">
+                      {(["gen2_2025", "gen1_2024"] as const).map((gen) => (
+                        <button
+                          key={gen}
+                          type="button"
+                          onClick={() => setCarGeneration(gen)}
+                          className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                            carGeneration === gen
+                              ? "bg-[var(--voltflow-cyan)]/10 text-[var(--voltflow-cyan)]"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {gen === "gen2_2025" ? "2025+" : "2024"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <ol className="space-y-3">
-                    {installSteps.map((stepText, index) =>
-                      index === 0 ? (
-                        <li key={index} className="flex gap-3 text-sm leading-6">
-                          <span className="grid size-6 shrink-0 place-items-center rounded-full border border-border text-xs font-bold text-[var(--voltflow-cyan)]">
-                            {index + 1}
-                          </span>
-                          <span>
-                            {(() => {
-                              const parts = stepText.split("VoltFlow Mate");
-                              return (
-                                <>
-                                  {parts[0]}
-                                  <a
-                                    href={MATE_GITHUB_RELEASES_LATEST_URL}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="underline underline-offset-2 hover:text-[var(--voltflow-cyan)]"
-                                  >
-                                    VoltFlow Mate
-                                  </a>
-                                  {parts[1]}
-                                </>
-                              );
-                            })()}
-                          </span>
-                        </li>
-                      ) : (
+                    {generationSteps.map((stepText, index) => {
+                      if (index === 0) {
+                        const isDlink5 = !isGen1;
+                        return (
+                          <li key={index} className="flex gap-3 text-sm leading-6">
+                            <span className="grid size-6 shrink-0 place-items-center rounded-full border border-border text-xs font-bold text-[var(--voltflow-cyan)]">
+                              {index + 1}
+                            </span>
+                            <div className="space-y-2">
+                              <span>{stepText}</span>
+                              <details className="rounded-xl border border-border bg-white/[0.02]">
+                                <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground">
+                                  {t("onboarding.adbGuide") ?? "Full ADB guide"}
+                                </summary>
+                                <div className="space-y-3 border-t border-border px-3 py-3 text-xs leading-relaxed text-muted-foreground">
+                                  <p>
+                                    Without ADB, VoltFlow Mate works in basic mode. ADB
+                                    debugging unlocks:
+                                  </p>
+                                  <ul className="list-disc space-y-1 pl-4">
+                                    <li>
+                                      Battery health (SoH) — accurate value from BMS
+                                    </li>
+                                    <li>
+                                      Auto charging journal — without ADB, charging
+                                      sessions can only be added manually
+                                    </li>
+                                  </ul>
+                                  <p>
+                                    These features enable automatically — no separate
+                                    toggle needed. On first launch, BYDMate will show an{" "}
+                                    <strong>Allow ADB debugging</strong> dialog once. Tap{" "}
+                                    <strong>Allow</strong> and check{" "}
+                                    <strong>
+                                      Always allow from this computer
+                                    </strong>{" "}
+                                    so it doesn't ask again.
+                                  </p>
+                                  {isDlink5 ? (
+                                    <div>
+                                      <p className="mb-1 font-semibold text-foreground">
+                                        DiLink 5.0
+                                      </p>
+                                      <p>
+                                        ADB debugging is blocked and can only be unlocked
+                                        remotely from China. Options:
+                                      </p>
+                                      <ul className="list-disc space-y-1 pl-4">
+                                        <li>
+                                          Taobao sellers (search &ldquo;DiLink
+                                          5.0&rdquo;, ~40&nbsp;¥ inside China /
+                                          ~80&nbsp;¥ abroad, AliPay). Seller remotely opens
+                                          engineering menu via QR code.
+                                        </li>
+                                        <li>
+                                          Telegram helper{" "}
+                                          <a
+                                            href="https://t.me/bydyuanupbuybelarus/183/45949"
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="underline underline-offset-2 hover:text-[var(--voltflow-cyan)]"
+                                          >
+                                            in this chat
+                                          </a>{" "}
+                                          (~30–40&nbsp;¥)
+                                        </li>
+                                      </ul>
+                                    </div>
+                                  ) : (
+                                    <div>
+                                      <p className="mb-1 font-semibold text-foreground">
+                                        DiLink 3 / 4
+                                      </p>
+                                      <p>
+                                        Install BydDevelopmentTools, go to Settings →
+                                        Version Management, tap{" "}
+                                        <strong>Reset to factory default</strong> 10 times,
+                                        then enable{" "}
+                                        <strong>
+                                          Debug Mode when USB is Connected
+                                        </strong>{" "}
+                                        and <strong>Wireless adb debug switch</strong>. On
+                                        updated DiLink 3/4 firmware, ADB may be locked like
+                                        DiLink 5 — use the method below.
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              </details>
+                            </div>
+                          </li>
+                        );
+                      }
+                      if (index === 1) {
+                        return (
+                          <li key={index} className="flex gap-3 text-sm leading-6">
+                            <span className="grid size-6 shrink-0 place-items-center rounded-full border border-border text-xs font-bold text-[var(--voltflow-cyan)]">
+                              {index + 1}
+                            </span>
+                            <div className="space-y-2">
+                              <span>{stepText}</span>
+                              <a
+                                href={DIPLUS_APK_URL}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--voltflow-cyan)] underline underline-offset-2"
+                              >
+                                <Download className="size-3.5" aria-hidden />
+                                Download Di+ APK
+                              </a>
+                            </div>
+                          </li>
+                        );
+                      }
+                      if (index === 2) {
+                        const apkParts = stepText.split("VoltFlow-Mate APK");
+                        return (
+                          <li key={index} className="flex gap-3 text-sm leading-6">
+                            <span className="grid size-6 shrink-0 place-items-center rounded-full border border-border text-xs font-bold text-[var(--voltflow-cyan)]">
+                              {index + 1}
+                            </span>
+                            <span>
+                              {apkParts[0]}
+                              <a
+                                href={MATE_GITHUB_RELEASES_LATEST_URL}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="underline underline-offset-2 hover:text-[var(--voltflow-cyan)]"
+                              >
+                                VoltFlow-Mate APK
+                              </a>
+                              {apkParts[1]}
+                            </span>
+                          </li>
+                        );
+                      }
+                      return (
                         <li key={index} className="flex gap-3 text-sm leading-6">
                           <span className="grid size-6 shrink-0 place-items-center rounded-full border border-border text-xs font-bold text-[var(--voltflow-cyan)]">
                             {index + 1}
                           </span>
                           <span>{stepText}</span>
                         </li>
-                      ),
-                    )}
+                      );
+                    })}
                   </ol>
-                  <Button
-                    variant="outline"
-                    className="mt-5 h-12 w-full rounded-full border-border bg-white/[0.03] font-heading text-sm font-bold"
-                    asChild
-                  >
-                    <a
-                      href={MATE_GITHUB_RELEASES_LATEST_URL}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <Download className="size-4" aria-hidden />
-                      {t("settings.cloud.downloadApk")}
-                    </a>
-                  </Button>
                 </div>
               ) : (
                 <div className="mt-6 voltflow-card p-5">
