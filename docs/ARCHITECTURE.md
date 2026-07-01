@@ -161,6 +161,7 @@ restores. Breaking one of them causes the classic bugs (frozen percent, false
 
 | Doc | Scope |
 | --- | --- |
+| [PRODUCT_STATUS.md](PRODUCT_STATUS.md) | Plain-language capabilities + improvement roadmap |
 | [../CHANGELOG.md](../CHANGELOG.md) | Shipped initiatives & notable fixes (built work log) |
 | [../BACKLOG.md](../BACKLOG.md) | Proposed-but-unbuilt plans awaiting go-ahead |
 | `docs/PLAN_A_PARTITION_DRAFT.sql` | Annotated draft for the (unbuilt) partitioning plan — **local only** |
