@@ -125,8 +125,12 @@ export const dictionaries = {
       brandDescription:
         "Real-time EV charging tracker and calculator for confident starts, clean stops, live kWh and cost control.",
       dashboardAria: "Open dashboard",
+      telegramTitle: "Prefer Telegram?",
+      telegramBody:
+        "Open VoltFlow right inside Telegram — no install needed. Track charging and browse the BYD knowledge base from the Mini App.",
+      telegramAction: "Open in Telegram",
       liveCockpit: "Live cockpit",
-      demoCar: "Model Y",
+      demoCar: "BYD Yuan UP",
       statusCharging: "Charging",
       statKwh: "Charged kWh",
       statRemaining: "Remaining",
@@ -148,9 +152,6 @@ export const dictionaries = {
       highlightMobileTitle: "Mobile-first PWA",
       highlightMobileBody:
         "Large controls, safe-area navigation and a centered 430px app frame on desktop.",
-      highlightControlTitle: "Full control",
-      highlightControlBody:
-        "Supabase authentication keeps charging sessions scoped to your account while the cockpit stays quick.",
       copyright: "© {year} VoltFlow. All rights reserved.",
       rights:
         "Third-party packages, maps and services remain under their own licenses.",
@@ -221,7 +222,7 @@ export const dictionaries = {
     },
     auth: {
       title: "VoltFlow identity",
-      description: "Minimal auth · Supabase session cookies + row-level guards.",
+      description: "Sign in to track your EV's charging, trips and battery health.",
       login: "Login",
       register: "Register",
       continue: "Continue",
@@ -231,8 +232,6 @@ export const dictionaries = {
       installHint: "Offline install hint: Safari share sheet →",
       addToHome: "Add to Home Screen",
       back: "Back to splash",
-      hosted:
-        "Hosted on Vercel · deterministic charging math survives refresh via timestamps.",
       email: "Email",
       password: "Password",
       weakPassword: "Use a password with at least 8 characters.",
@@ -1190,8 +1189,12 @@ export const dictionaries = {
       brandDescription:
         "Трэкер і калькулятар EV-зарадкі ў рэальным часе для ўпэўненага старту, чыстага стопу, жывых кВт·г і кантролю кошту.",
       dashboardAria: "Адкрыць панэль",
+      telegramTitle: "Больш зручна ў Telegram?",
+      telegramBody:
+        "Адкрыйце VoltFlow прама ў Telegram — без усталёўкі. Сачыце за зарадкай і глядзіце базу ведаў BYD у Mini App.",
+      telegramAction: "Адкрыць у Telegram",
       liveCockpit: "Жывая кабіна",
-      demoCar: "Model Y",
+      demoCar: "BYD Yuan UP",
       statusCharging: "Зарадка",
       statKwh: "Зараджана кВт·г",
       statRemaining: "Засталося",
@@ -1213,9 +1216,6 @@ export const dictionaries = {
       highlightMobileTitle: "PWA спачатку для тэлефона",
       highlightMobileBody:
         "Вялікія элементы кіравання, safe-area навігацыя і цэнтраваны app-frame 430px на desktop.",
-      highlightControlTitle: "Поўны кантроль",
-      highlightControlBody:
-        "Аўтарызацыя Supabase трымае зарадныя сесіі ў межах вашага акаўнта, а кабіна застаецца хуткай.",
       copyright: "© {year} VoltFlow. Усе правы абаронены.",
       rights:
         "Пакеты, карты і сэрвісы трэціх бакоў застаюцца пад сваімі ліцэнзіямі.",
@@ -1286,7 +1286,7 @@ export const dictionaries = {
     },
     auth: {
       title: "Ідэнтыфікацыя Charge VoltFlow",
-      description: "Мінімальная аўтарызацыя · cookies Supabase + RLS-абарона.",
+      description: "Увайдзіце, каб сачыць за зарадкай, паездкамі і станам батарэі вашага электрамабіля.",
       login: "Увайсці",
       register: "Рэгістрацыя",
       continue: "Працягнуць",
@@ -1296,8 +1296,6 @@ export const dictionaries = {
       installHint: "Падказка для offline: меню Safari →",
       addToHome: "Дадаць на галоўны экран",
       back: "Назад да старту",
-      hosted:
-        "Размешчана на Vercel · матэматыка зарадкі перажывае абнаўленне праз часавыя меткі.",
       email: "Email",
       password: "Пароль",
       weakPassword: "Выкарыстайце пароль мінімум з 8 сімвалаў.",
@@ -2257,8 +2255,12 @@ export const dictionaries = {
       brandDescription:
         "Трекер и калькулятор EV-зарядки в реальном времени для уверенного старта, чистой остановки, живых кВт·ч и контроля стоимости.",
       dashboardAria: "Открыть панель",
+      telegramTitle: "Удобнее в Telegram?",
+      telegramBody:
+        "Откройте VoltFlow прямо в Telegram — без установки. Следите за зарядкой и смотрите базу знаний BYD в Mini App.",
+      telegramAction: "Открыть в Telegram",
       liveCockpit: "Живой кокпит",
-      demoCar: "Model Y",
+      demoCar: "BYD Yuan UP",
       statusCharging: "Зарядка",
       statKwh: "Заряжено кВт·ч",
       statRemaining: "Осталось",
@@ -2280,9 +2282,6 @@ export const dictionaries = {
       highlightMobileTitle: "PWA сначала для телефона",
       highlightMobileBody:
         "Крупные элементы управления, safe-area навигация и центрированный app-frame 430px на desktop.",
-      highlightControlTitle: "Полный контроль",
-      highlightControlBody:
-        "Авторизация Supabase держит зарядные сессии в рамках вашего аккаунта, а кокпит остается быстрым.",
       copyright: "© {year} VoltFlow. Все права защищены.",
       rights:
         "Пакеты, карты и сервисы третьих сторон остаются под собственными лицензиями.",
@@ -2353,7 +2352,7 @@ export const dictionaries = {
     },
     auth: {
       title: "Идентификация VoltFlow",
-      description: "Минимальная авторизация · cookies Supabase + RLS-защита.",
+      description: "Войдите, чтобы следить за зарядкой, поездками и состоянием батареи вашего электромобиля.",
       login: "Войти",
       register: "Регистрация",
       continue: "Продолжить",
@@ -2363,8 +2362,6 @@ export const dictionaries = {
       installHint: "Подсказка для offline: меню Safari →",
       addToHome: "Добавить на экран «Домой»",
       back: "Назад к старту",
-      hosted:
-        "Размещено на Vercel · расчеты зарядки переживают обновление через временные метки.",
       email: "Email",
       password: "Пароль",
       weakPassword: "Используйте пароль минимум из 8 символов.",

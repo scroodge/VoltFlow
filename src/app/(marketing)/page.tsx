@@ -1,6 +1,6 @@
 "use client";
 
-import { Gauge, LocateFixed, ShieldCheck, Smartphone, Zap } from "lucide-react";
+import { Gauge, LocateFixed, Send, Smartphone, Zap } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -17,6 +17,7 @@ import { StartTrackingButton } from "@/components/pwa/start-tracking-button";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
 import { createClient } from "@/lib/supabase/client";
+import { TELEGRAM_MINIAPP_URL } from "@/lib/support";
 
 type IpLocation = {
   city?: string;
@@ -90,11 +91,6 @@ export default function LandingPage() {
       icon: Smartphone,
       title: t("landing.highlightMobileTitle") as string,
       body: t("landing.highlightMobileBody") as string,
-    },
-    {
-      icon: ShieldCheck,
-      title: t("landing.highlightControlTitle") as string,
-      body: t("landing.highlightControlBody") as string,
     },
   ];
 
@@ -180,6 +176,37 @@ export default function LandingPage() {
             </div>
           </div>
 
+          <div className="mt-4 voltflow-card p-4">
+            <div className="flex gap-3">
+              <div className="grid size-10 shrink-0 place-items-center rounded-2xl border border-border bg-white/[0.04] text-[var(--voltflow-cyan)]">
+                <Send className="size-5" aria-hidden />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-heading text-base font-bold">
+                  {t("landing.telegramTitle")}
+                </p>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  {t("landing.telegramBody")}
+                </p>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="mt-3 h-11 w-full rounded-full border-border bg-white/[0.03] font-heading text-sm font-bold"
+                  asChild
+                >
+                  <a
+                    href={TELEGRAM_MINIAPP_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Send className="size-4" aria-hidden />
+                    {t("landing.telegramAction")}
+                  </a>
+                </Button>
+              </div>
+            </div>
+          </div>
+
           <div className="mt-8 voltflow-card overflow-hidden p-5">
             <div className="flex items-center justify-between">
               <div>
@@ -253,6 +280,36 @@ export default function LandingPage() {
               </div>
             </article>
           ))}
+          <article className="voltflow-card p-4">
+            <div className="flex gap-3">
+              <div className="grid size-10 shrink-0 place-items-center rounded-2xl border border-border bg-white/[0.04] text-[var(--voltflow-cyan)]">
+                <Send className="size-5" aria-hidden />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="font-heading text-base font-bold">
+                  {t("landing.telegramTitle")}
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  {t("landing.telegramBody")}
+                </p>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="mt-3 h-11 w-full rounded-full border-border bg-white/[0.03] font-heading text-sm font-bold"
+                  asChild
+                >
+                  <a
+                    href={TELEGRAM_MINIAPP_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Send className="size-4" aria-hidden />
+                    {t("landing.telegramAction")}
+                  </a>
+                </Button>
+              </div>
+            </div>
+          </article>
           <footer className="pt-5 text-center text-xs leading-6 text-muted-foreground">
             <LegalFooterLinks className="mb-3" />
             <p>{t("landing.copyright", { year })}</p>

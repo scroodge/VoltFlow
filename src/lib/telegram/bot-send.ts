@@ -1,5 +1,3 @@
-import "server-only";
-
 /**
  * Send a message to a Telegram user via the Bot API.
  *
@@ -14,7 +12,7 @@ import "server-only";
  */
 
 export type TelegramSendResult =
-  | { ok: true }
+  | { ok: true; messageId?: number }
   | { ok: false; error: string; blocked?: boolean };
 
 type SendOptions = {
@@ -58,6 +56,44 @@ export async function sendTelegramLocation(
   }
 }
 
+export async function editTelegramMessageText(
+  chatId: number | string,
+  messageId: number,
+  text: string,
+  options: SendOptions = {},
+): Promise<TelegramSendResult> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return { ok: false, error: "missing_bot_token" };
+
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageId,
+        text,
+        parse_mode: options.parseMode,
+        reply_markup: options.replyMarkup,
+        disable_web_page_preview: options.disableWebPagePreview ?? true,
+      }),
+    });
+
+    const payload = (await response.json().catch(() => null)) as
+      | { ok?: boolean; description?: string; error_code?: number }
+      | null;
+
+    // editMessageText returns true on success, or false if content unchanged
+    if (response.ok && payload?.ok) return { ok: true };
+
+    const description = payload?.description ?? `http_${response.status}`;
+    const blocked = response.status === 403 || /blocked|chat not found/i.test(description);
+    return { ok: false, error: description, blocked };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "fetch_failed" };
+  }
+}
+
 export async function sendTelegramMessage(
   chatId: number | string,
   text: string,
@@ -81,10 +117,10 @@ export async function sendTelegramMessage(
     });
 
     const payload = (await response.json().catch(() => null)) as
-      | { ok?: boolean; description?: string; error_code?: number }
+      | { ok?: boolean; result?: { message_id?: number }; description?: string; error_code?: number }
       | null;
 
-    if (response.ok && payload?.ok) return { ok: true };
+    if (response.ok && payload?.ok) return { ok: true, messageId: payload.result?.message_id };
 
     const description = payload?.description ?? `http_${response.status}`;
     const blocked = response.status === 403 || /blocked|chat not found/i.test(description);

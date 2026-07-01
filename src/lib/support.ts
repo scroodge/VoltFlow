@@ -21,8 +21,11 @@ export const SUPPORT_CARDS: readonly SupportCard[] = [
 /** International tip jar. */
 export const SUPPORT_BUYMEACOFFEE_URL = "https://buymeacoffee.com/scroodge";
 
-/** VoltFlow Telegram bot chat where users send receipts. TODO: real @username. */
-export const SUPPORT_TELEGRAM_BOT_URL = "https://t.me/VoltFlowBot";
+/** VoltFlow Telegram bot chat where users send receipts. */
+export const SUPPORT_TELEGRAM_BOT_URL = "https://t.me/Voltflowscr_bot";
+
+/** Direct deep link to the VoltFlow Telegram Mini App (onboarding entry). */
+export const TELEGRAM_MINIAPP_URL = "https://t.me/Voltflowscr_bot/voltflow";
 
 /** Receipts can also go here by email; same inbox as premium upgrade requests. */
 export const SUPPORT_EMAIL = "washjurine@gmail.com";

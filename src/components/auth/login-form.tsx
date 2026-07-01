@@ -246,8 +246,7 @@ export function LoginForm() {
       </CardFooter>
 
       <CardContent className="pb-10 text-muted-foreground text-center text-[11px] tracking-wide">
-        <LegalFooterLinks className="mb-3" />
-        {t("auth.hosted")}
+        <LegalFooterLinks />
       </CardContent>
     </Card>
   );
