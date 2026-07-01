@@ -14,10 +14,10 @@ async function main() {
   const now = new Date().toISOString();
 
   const samples = [{
-    schema_version: 1,
+    schema_version: 1 as const,
     vehicle_id: "way",
     device_time: now,
-    source: "BYDMate",
+    source: "BYDMate" as const,
     telemetry: (() => {
       switch (phase) {
         case "driving":

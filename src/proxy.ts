@@ -8,6 +8,7 @@ const PUBLIC_PATHS = new Set([
   "/reset-password",
   "/auth/callback",
   "/auth/callback/recovery",
+  "/auth/confirm",
   "/telegram",
   "/knowledge/search",
 ]);

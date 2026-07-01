@@ -6,6 +6,65 @@ go-ahead.** These are researched but **not built**. Shipped work lives in
 
 ---
 
+## 🟢 Email verification for signup (onboarding) — DECIDED, awaiting build go-ahead
+
+**Decision (2026-07-01):** free-user signup should **require email verification**
+(chosen over the current instant-access / autoconfirm behavior).
+
+**Current state (root cause of "no signup email"):** GoTrue runs with
+`ENABLE_EMAIL_AUTOCONFIRM=true` → `GOTRUE_MAILER_AUTOCONFIRM: true`. Signups are
+auto-confirmed and instantly logged in server-side; **no confirmation email is ever
+generated** (verified in `docker logs supabase-auth`: `user_signedup` +
+`immediate_login_after_signup:true`, zero mailer sends; Resend also shows nothing).
+The Resend pipeline itself is healthy (it sends the recovery emails).
+
+**Known landmine:** the default confirm link (`{{ .ConfirmationURL }}` → auto-verifying
+`/auth/v1/verify` GET) gets **consumed by email-link prefetchers** (Apple Mail Privacy
+Protection, Telegram preview bot) before the user clicks → `otp_expired`. Already solved
+for password reset via a **token_hash link verified only on click** — reuse that exact
+pattern here. See [[gotrue-smtp-resend]].
+
+### Work items
+
+**1. Server (contabo `/opt/supabase`)**
+- `.env`: `ENABLE_EMAIL_AUTOCONFIRM=false`.
+- Add confirmation subject + template env to the `auth` service in `docker-compose.yml`:
+  `GOTRUE_MAILER_SUBJECTS_CONFIRMATION`, `GOTRUE_MAILER_TEMPLATES_CONFIRMATION` →
+  `https://supabase.mykid.life/auth-templates/confirmation.html`.
+- Host `confirmation.html` at `/opt/supabase/volumes/auth-templates/` (served by the
+  existing nginx `location /auth-templates/` block). Link →
+  `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup` (**token_hash, no
+  auto-verify**).
+- (Optional, while in the file) add `supabase.mykid.life` to
+  `GOTRUE_MAILER_EXTERNAL_HOSTS` to stop the log flood.
+- Apply: `cd /opt/supabase && docker compose up -d auth`. Back up `.env` +
+  `docker-compose.yml` first.
+- **Existing 28 users unaffected** (already confirmed); Google OAuth unaffected.
+
+**2. Client (Next.js)**
+- New public page `src/app/auth/confirm/page.tsx`: reads `token_hash`+`type`, calls
+  `supabase.auth.verifyOtp({ type: 'signup', token_hash })` on mount (bots doing a plain
+  GET don't run the JS, so the token survives), then routes into `/onboarding`. Error
+  state offers a **resend**.
+- Add `/auth/confirm` to `PUBLIC_PATHS` in `src/proxy.ts`.
+- `login-form.tsx` `handleSignUp`: with autoconfirm off, `data.session` is null →
+  show a clear **"check your inbox"** state (not the misleading current toast), with a
+  **Resend** action (`supabase.auth.resend({ type: 'signup', email })`).
+- Handle `email_not_confirmed` on the **sign-in** path (user tries to log in before
+  confirming) → friendly message + resend.
+
+**3. i18n** — new keys for confirm page, resend, and the not-confirmed error, in en/be/ru
+(ru is `defaultLocale`, so keys must exist there or `tsc` breaks).
+
+**4. Verify** — `tsc` + `eslint` + `npm run build`; then a real end-to-end test:
+signup → Resend shows the mail → click link → verify → land in onboarding; confirm a
+prefetch (plain GET) does **not** burn the token.
+
+**Trade-off:** more friction + more moving parts vs. instant access, but gives real email
+ownership. The whole flow hinges on the token_hash pattern to survive prefetchers.
+
+---
+
 ## 🔴 Revert BMS-for-cost code paths (correctness)
 
 The BMS counter `kwh_charged` is battery-**cell** energy only (~47 % low vs grid) and

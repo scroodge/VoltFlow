@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, MessageCircle } from "lucide-react";
+import { ExternalLink, MailCheck, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import Script from "next/script";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -24,7 +24,8 @@ export function LoginForm() {
   const next = searchParams.get("next") ?? "/dashboard";
   const [loading, setLoading] = useState(false);
   const [telegramLogin, setTelegramLogin] = useState(false);
-  const { t } = useTranslation();
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const { t, locale } = useTranslation();
   const wantsTelegramReturn = next === "/telegram";
 
   const detectTelegramLogin = () => {
@@ -85,13 +86,41 @@ export function LoginForm() {
     }
     const supabase = createClient();
     setLoading(true);
-    const { error } = await supabase.auth.signUp({ email, password });
+    // Persist the interface locale as user metadata so GoTrue renders the
+    // confirmation email (and any later auth emails) in the same language.
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { locale } },
+    });
     setLoading(false);
     if (error) {
       toast.error(error.message);
       return;
     }
-    toast.success(t("auth.confirmEmail") as string);
+    // Email confirmation is required (GoTrue AUTOCONFIRM off): signUp returns no
+    // session. Show the "check your inbox" panel with a resend affordance.
+    if (data.session) {
+      toast.success(t("auth.welcome") as string);
+      router.replace(next);
+      router.refresh();
+      return;
+    }
+    setPendingEmail(email);
+    toast.success(t("auth.confirmSent", { email }) as string);
+  };
+
+  const handleResend = async () => {
+    if (!pendingEmail) return;
+    const supabase = createClient();
+    setLoading(true);
+    const { error } = await supabase.auth.resend({ type: "signup", email: pendingEmail });
+    setLoading(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(t("auth.resent") as string);
   };
 
   const handleSignIn = async (event: FormEvent<HTMLFormElement>) => {
@@ -106,6 +135,12 @@ export function LoginForm() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
+      // User signed up but never clicked the confirmation link.
+      if (error.code === "email_not_confirmed") {
+        setPendingEmail(email);
+        toast.error(t("auth.emailNotConfirmed") as string);
+        return;
+      }
       toast.error(error.message);
       return;
     }
@@ -135,6 +170,44 @@ export function LoginForm() {
           {t("auth.description")}
         </CardDescription>
       </CardHeader>
+      {pendingEmail ? (
+        <CardContent className="pb-6">
+          <div className="space-y-4 rounded-2xl border border-[var(--voltflow-cyan)]/30 bg-[var(--voltflow-cyan)]/10 p-4 text-sm">
+            <div className="flex items-start gap-3">
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[var(--voltflow-cyan)]/15 text-[var(--voltflow-cyan)]">
+                <MailCheck className="size-5" aria-hidden />
+              </span>
+              <div className="space-y-1">
+                <p className="font-semibold tracking-tight">
+                  {t("auth.confirmSentTitle")}
+                </p>
+                <p className="text-muted-foreground leading-relaxed">
+                  {t("auth.confirmSentBody", { email: pendingEmail })}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-11 w-full rounded-full text-sm font-semibold"
+                disabled={loading}
+                onClick={() => void handleResend()}
+              >
+                {t("auth.resend")}
+              </Button>
+              <button
+                type="button"
+                className="text-muted-foreground text-xs underline underline-offset-4 hover:text-primary"
+                onClick={() => setPendingEmail(null)}
+              >
+                {t("auth.useDifferentEmail")}
+              </button>
+            </div>
+          </div>
+        </CardContent>
+      ) : null}
+
       <Tabs defaultValue="signin" className="w-full px-6">
         <TabsList className="mx-auto mb-10 flex w-full rounded-full border border-white/[0.1] bg-white/[0.03] p-1 group-data-horizontal/tabs:h-auto">
           <TabsTrigger className="h-11 rounded-full text-base" value="signin">
