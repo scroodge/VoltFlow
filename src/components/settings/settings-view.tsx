@@ -95,6 +95,7 @@ function isNotifyChannel(value: unknown): value is NotifyChannel {
 }
 
 function TariffLocationMapPreview({ lat, lng }: { lat: number; lng: number }) {
+  const { t } = useTranslation();
   const latDelta = 0.006;
   const lngDelta = 0.012;
   const params = new URLSearchParams({
@@ -113,7 +114,7 @@ function TariffLocationMapPreview({ lat, lng }: { lat: number; lng: number }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02]">
       <iframe
-        title="Tariff location map"
+        title={t("settings.tariffMapTitle") as string}
         src={osmUrl}
         className="h-64 w-full border-0"
         loading="lazy"
@@ -126,7 +127,7 @@ function TariffLocationMapPreview({ lat, lng }: { lat: number; lng: number }) {
           rel="noreferrer"
           className="text-muted-foreground transition hover:text-foreground"
         >
-          Open in OpenStreetMap
+          {t("settings.openInOsm")}
         </a>
       </div>
     </div>
@@ -923,13 +924,12 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ShieldCheck className="size-5 text-[var(--voltflow-green)]" aria-hidden />
-              CMS базы знаний
+              {t("settings.adminCms.title")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-muted-foreground text-sm leading-relaxed">
-              Управление статьями, вопросами, аксессуарами, запчастями и разделами
-              для Telegram-базы знаний VoltFlow.
+              {t("settings.adminCms.description")}
             </p>
             <Button
               asChild
@@ -940,7 +940,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
               <Link href="/admin/knowledge">
                 <span className="inline-flex items-center gap-3">
                   <ShieldCheck className="size-5" aria-hidden />
-                  Открыть CMS
+                  {t("settings.adminCms.open")}
                 </span>
                 <ExternalLink className="size-4" aria-hidden />
               </Link>
@@ -954,13 +954,12 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ShieldCheck className="size-5 text-[var(--voltflow-cyan)]" aria-hidden />
-              Premium пользователи
+              {t("settings.adminPremium.title")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-muted-foreground text-sm leading-relaxed">
-              Ручное управление premium-статусом, сроком действия, активностью пользователя и
-              версиями VoltFlow Mate.
+              {t("settings.adminPremium.description")}
             </p>
             <Button
               asChild
@@ -1585,6 +1584,7 @@ function MateVersionPanel() {
 type PushStatus = Awaited<ReturnType<typeof getPushClientStatus>>;
 
 function PushDiagnostics() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<PushStatus | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -1604,9 +1604,9 @@ function PushDiagnostics() {
       await ensureNotificationsPermission();
       await ensurePushSubscription();
       refresh();
-      toast.success("Push status refreshed");
+      toast.success(t("settings.push.refreshed") as string);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not sync push");
+      toast.error(err instanceof Error ? err.message : (t("settings.push.syncError") as string));
     } finally {
       setBusy(null);
     }
@@ -1617,9 +1617,11 @@ function PushDiagnostics() {
     try {
       const result = await showLocalTestNotification();
       if (!result.ok) throw new Error(result.error);
-      toast.success("Local notification requested");
+      toast.success(t("settings.push.localRequested") as string);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not show local notification");
+      toast.error(
+        err instanceof Error ? err.message : (t("settings.push.localError") as string),
+      );
     } finally {
       setBusy(null);
     }
@@ -1631,10 +1633,12 @@ function PushDiagnostics() {
       await ensurePushSubscription();
       const result = await sendTestPush();
       if (!result.ok) throw new Error(result.error);
-      toast.success(`Server push sent to ${result.sent ?? 0} device(s)`);
+      toast.success(t("settings.push.serverSent", { count: result.sent ?? 0 }) as string);
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not send server push");
+      toast.error(
+        err instanceof Error ? err.message : (t("settings.push.serverError") as string),
+      );
     } finally {
       setBusy(null);
     }
@@ -1645,16 +1649,35 @@ function PushDiagnostics() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Bell className="size-5" aria-hidden />
-          Push diagnostics
+          {t("settings.push.title")}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-3 text-sm sm:grid-cols-2">
-          <PushStatusRow label="Supported" value={status?.supported ? "yes" : "no"} />
-          <PushStatusRow label="Permission" value={status?.permission ?? "checking"} />
-          <PushStatusRow label="Service worker" value={status?.serviceWorker ?? "checking"} />
-          <PushStatusRow label="Subscription" value={status?.hasSubscription ? "saved on device" : "missing"} />
-          <PushStatusRow label="Endpoint" value={status?.endpointHost ?? "none"} />
+          <PushStatusRow
+            label={t("settings.push.supported") as string}
+            value={(status?.supported ? t("settings.push.yes") : t("settings.push.no")) as string}
+          />
+          <PushStatusRow
+            label={t("settings.push.permission") as string}
+            value={status?.permission ?? (t("settings.push.checking") as string)}
+          />
+          <PushStatusRow
+            label={t("settings.push.serviceWorker") as string}
+            value={status?.serviceWorker ?? (t("settings.push.checking") as string)}
+          />
+          <PushStatusRow
+            label={t("settings.push.subscription") as string}
+            value={
+              (status?.hasSubscription
+                ? t("settings.push.savedOnDevice")
+                : t("settings.push.missing")) as string
+            }
+          />
+          <PushStatusRow
+            label={t("settings.push.endpoint") as string}
+            value={status?.endpointHost ?? (t("settings.push.none") as string)}
+          />
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <Button
@@ -1665,7 +1688,7 @@ function PushDiagnostics() {
             disabled={busy !== null}
             onClick={handleSync}
           >
-            {busy === "sync" ? "Checking..." : "Check push"}
+            {busy === "sync" ? t("settings.push.checkingBtn") : t("settings.push.checkBtn")}
           </Button>
           <Button
             type="button"
@@ -1675,7 +1698,7 @@ function PushDiagnostics() {
             disabled={busy !== null}
             onClick={handleLocalTest}
           >
-            {busy === "local" ? "Sending..." : "Local test"}
+            {busy === "local" ? t("settings.push.sendingBtn") : t("settings.push.localBtn")}
           </Button>
           <Button
             type="button"
@@ -1685,7 +1708,7 @@ function PushDiagnostics() {
             disabled={busy !== null}
             onClick={handleServerTest}
           >
-            {busy === "server" ? "Sending..." : "Server test"}
+            {busy === "server" ? t("settings.push.sendingBtn") : t("settings.push.serverBtn")}
           </Button>
         </div>
       </CardContent>
