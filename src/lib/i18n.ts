@@ -187,13 +187,13 @@ export const dictionaries = {
       generateCode: "Generate linking code",
       adbGuide: "Full ADB guide",
       adbOptional:
-        "ADB is optional — VoltFlow Mate still works without it, just in a reduced mode.",
-      adbWorksTitle: "Works without ADB (basic mode)",
+        "ADB unlocks the most accurate data. A no-ADB basic mode (below) is rolling out in an upcoming VoltFlow Mate update — on DiLink 5, ADB is currently needed for live data.",
+      adbWorksTitle: "Basic mode without ADB (coming soon)",
       adbWorks: [
-        "Live cockpit — battery %, charging status and power",
-        "Speed, gear, odometer and range estimate",
-        "Climate, temperatures and cell voltages",
-        "Trip journal and manual charging sessions (with cost)",
+        "Trip tracking and mileage",
+        "Energy consumption (real values from the BMS)",
+        "AI insights",
+        "Home-screen widget",
       ],
       adbUnlocksTitle: "Unlocks with ADB",
       adbUnlocks: [
@@ -1361,13 +1361,13 @@ export const dictionaries = {
       generateCode: "Стварыць код прывязкі",
       adbGuide: "Поўны гайд па ADB",
       adbOptional:
-        "ADB неабавязковы — VoltFlow Mate працуе і без яго, проста ў абмежаваным рэжыме.",
-      adbWorksTitle: "Працуе без ADB (базавы рэжым)",
+        "ADB адкрывае найбольш дакладныя даныя. Базавы рэжым без ADB (ніжэй) з’явіцца ў наступным абнаўленні VoltFlow Mate — на DiLink 5 зараз патрэбны ADB для жывых даных.",
+      adbWorksTitle: "Базавы рэжым без ADB (хутка)",
       adbWorks: [
-        "Жывая кабіна — зарад %, статус зарадкі і магутнасць",
-        "Хуткасць, перадача, прабег і ацэнка запасу ходу",
-        "Клімат, тэмпературы і напружанні ячэек",
-        "Часопіс паездак і ручныя сесіі зарадкі (з коштам)",
+        "Адсочванне паездак і прабег",
+        "Расход энергіі (рэальныя значэнні з BMS)",
+        "AI-інсайты",
+        "Віджэт на галоўным экране",
       ],
       adbUnlocksTitle: "Адкрывае з ADB",
       adbUnlocks: [
@@ -2537,13 +2537,13 @@ export const dictionaries = {
       generateCode: "Создать код привязки",
       adbGuide: "Полный гайд по ADB",
       adbOptional:
-        "ADB необязателен — VoltFlow Mate работает и без него, просто в ограниченном режиме.",
-      adbWorksTitle: "Работает без ADB (базовый режим)",
+        "ADB открывает самые точные данные. Базовый режим без ADB (ниже) появится в ближайшем обновлении VoltFlow Mate — на DiLink 5 сейчас нужен ADB для живых данных.",
+      adbWorksTitle: "Базовый режим без ADB (скоро)",
       adbWorks: [
-        "Живой кокпит — заряд %, статус зарядки и мощность",
-        "Скорость, передача, пробег и оценка запаса хода",
-        "Климат, температуры и напряжения ячеек",
-        "Журнал поездок и ручные сессии зарядки (со стоимостью)",
+        "Отслеживание поездок и пробег",
+        "Расход энергии (реальные значения из BMS)",
+        "AI-инсайты",
+        "Виджет на главном экране",
       ],
       adbUnlocksTitle: "Открывает с ADB",
       adbUnlocks: [

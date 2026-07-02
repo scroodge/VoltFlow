@@ -7,28 +7,39 @@ fields that the Android app may send.
 
 ## Data availability: ADB vs basic mode
 
-Most live telemetry flows through the **Di+ (D+) local HTTP API** on the DiLink head
-unit, which the APK reads **without ADB**. ADB debugging only gates two things.
+⚠️ **Two data sources, easy to conflate:**
 
-**Works without ADB (basic mode):**
+1. **Di+ (D+) local API** — what the current VoltFlow Mate APK (`scroodge/BYDMate-own`
+   v0.4.x) reads from. **On DiLink 5, Di+ is fully locked without ADB** — the Di+ "Data"
+   screen shows all fields blank (`-`). So today, on DiLink 5, **no ADB = no data at all**
+   for our fork.
+2. **BMS `energydata` SQLite** — what upstream **BYDMate (AndyShaman)** reads *directly*,
+   with no ADB and no D+ app (upstream v3.0.0+ dropped D+). This is the real "basic mode"
+   source.
 
-- Live cockpit — `soc`, charging status (`is_charging` / charge-gun state), `power_kw` / `charge_power_kw`
-- `speed_kmh`, gear, `odometer_km`, range estimate
-- Climate / temperatures, and cell voltages (`diplus_min/max/cell_delta_v`)
-- GPS `location` → trip journal (auto-tracked)
-- Manual charging sessions + cost math (`SOC_delta% × capacity`, no ADB needed)
+**Planned direction:** port the direct BMS `energydata` SQLite read into our APK so basic
+mode works on DiLink 5 without ADB. **Until that ships, DiLink 5 requires ADB for any
+live data.**
 
-**Requires ADB:**
+**Basic mode without ADB (planned, via BMS `energydata` SQLite):**
 
-- **Battery health / SoH** — accurate `soh_percent` read from the BMS. Without ADB it is
-  absent, so range estimate falls back to nominal capacity (no degradation factor) — see
-  `src/lib/bydmate/range-estimate.ts`.
-- **Auto charging journal** — automatic start/stop detection of charging sessions. Without
-  ADB, charging sessions must be added manually.
+- Trip tracking + mileage
+- Energy consumption (real BMS consumption, better than the car computer)
+- AI insights
+- Home-screen widget
+- GPS route via Android LocationManager
+
+**Requires ADB (both today and after the BMS-read port):**
+
+- **Battery health / SoH** — accurate `soh_percent` from the vehicle system. Without it,
+  range estimate falls back to nominal capacity — see `src/lib/bydmate/range-estimate.ts`.
+- **Auto charging journal** — automatic charge session start/stop detection.
+- **Remote commands / operation with the car off** — shell-level access (not user-facing
+  yet).
 
 On DiLink 5.0 (all BYD Yuan UP), ADB is locked and can only be unlocked remotely (Taobao /
 Telegram helper). The onboarding "Full ADB guide" (`src/app/onboarding/page.tsx`) is the
-user-facing version of this table.
+user-facing version of this table. Refs: upstream https://github.com/AndyShaman/BYDMate.
 
 ## Cloud ingest contract
 

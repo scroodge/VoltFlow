@@ -117,6 +117,27 @@ priority than partitioning; build only if explicitly prioritized.
 
 ---
 
+## 🟣 APK: adopt direct BMS `energydata` SQLite read (no-ADB basic mode)
+
+**Android/APK work — outside this web repo, tracked here for visibility.**
+
+Confirmed 2026-07-01: on **DiLink 5** (all Yuan UP), the **Di+ (D+) local API is fully
+locked without ADB** — the Di+ "Data" screen is blank (`-`), so our current VoltFlow Mate
+(`scroodge/BYDMate-own` v0.4.x, Di+-based) gets **no data at all without ADB**.
+
+Upstream **BYDMate (AndyShaman)** solved this by reading the **BMS `energydata` SQLite
+directly** — no ADB, no D+ app (upstream v3.0.0+ dropped D+). That yields real "basic
+mode": trip tracking + mileage, energy consumption (better than the car computer), AI
+insights, widget, GPS route.
+
+**Task:** port the direct `energydata` SQLite read into our APK so basic mode works on
+DiLink 5 without ADB. Until it ships, DiLink 5 requires ADB for any live data (onboarding +
+`supabase/TELEMETRY.md` now say "basic mode without ADB (coming soon)"). ADB still gates
+SoH, auto charging journal, and remote commands regardless. Ref:
+https://github.com/AndyShaman/BYDMate. See [[adb-data-source-reality]].
+
+---
+
 ## Notes / smaller debt
 
 - **Overlapping tariff columns on `profiles`:** legacy `default_price_per_kwh` coexists
