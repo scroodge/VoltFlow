@@ -5,41 +5,35 @@ APK ingest contract: see `supabase/BYDMATE_APK_API.md`.
 This document describes the current VoltFlow Mate telemetry storage model and the Di+
 fields that the Android app may send.
 
-## Data availability: ADB vs basic mode
+## Data availability: ADB is required on DiLink 5
 
-⚠️ **Two data sources, easy to conflate:**
+**On DiLink 5 (all BYD Yuan UP), ADB is required for _any_ vehicle data.** Investigated
+and confirmed 2026-07-02 on car `way` via ADB — there is **no viable no-ADB data source**
+on the Yuan UP:
 
-1. **Di+ (D+) local API** — what the current VoltFlow Mate APK (`scroodge/BYDMate-own`
-   v0.4.x) reads from. **On DiLink 5, Di+ is fully locked without ADB** — the Di+ "Data"
-   screen shows all fields blank (`-`). So today, on DiLink 5, **no ADB = no data at all**
-   for our fork.
-2. **BMS `energydata` SQLite** — what upstream **BYDMate (AndyShaman)** reads *directly*,
-   with no ADB and no D+ app (upstream v3.0.0+ dropped D+). This is the real "basic mode"
-   source.
+- **Di+ (D+) local API** — what our APK (`scroodge/BYDMate-own`) reads. On DiLink 5 the
+  Di+ live "Data" screen is entirely blank (`-`) without ADB.
+- **BMS `energydata` SQLite** (`/storage/emulated/0/energydata/EC_database.db`) — the
+  upstream AndyShaman "basic mode" source. **This directory does not exist on the Yuan
+  UP** (it is Leopard-3-only). `EnergyDataReader.kt` in the APK already reads it, but there
+  is nothing to read on this model.
+- **di+ `van_bm_db`** (`/storage/emulated/0/vandiplus/db/van_bm_db`, table `TripInfo` /
+  `ChargingLog`) — rich trip+charging history readable from shared storage, but di+ only
+  **populates** it when di+ itself is working, which needs ADB. No ADB → empty.
 
-**Planned direction:** port the direct BMS `energydata` SQLite read into our APK so basic
-mode works on DiLink 5 without ADB. **Until that ships, DiLink 5 requires ADB for any
-live data.**
+So all three paths require ADB on the Yuan UP. There is no "basic mode" on this model.
+Upstream's no-ADB basic mode is real but rests entirely on the `energydata` file, which
+only some models write (Leopard 3 yes, Yuan UP no) — and even upstream, live
+SOC/temps/SoH come from the autoservice Binder **under ADB**; basic mode is
+trips/consumption only. For cars that do have the file, a cloud-sync plan exists — see
+BACKLOG "energydata trip-summary cloud sync".
 
-**Basic mode without ADB (planned, via BMS `energydata` SQLite):**
+**With ADB you get:** live cockpit (`soc`, charging, power), trips + mileage + energy,
+battery health (`soh_percent` from BMS), and the auto charging journal.
 
-- Trip tracking + mileage
-- Energy consumption (real BMS consumption, better than the car computer)
-- AI insights
-- Home-screen widget
-- GPS route via Android LocationManager
-
-**Requires ADB (both today and after the BMS-read port):**
-
-- **Battery health / SoH** — accurate `soh_percent` from the vehicle system. Without it,
-  range estimate falls back to nominal capacity — see `src/lib/bydmate/range-estimate.ts`.
-- **Auto charging journal** — automatic charge session start/stop detection.
-- **Remote commands / operation with the car off** — shell-level access (not user-facing
-  yet).
-
-On DiLink 5.0 (all BYD Yuan UP), ADB is locked and can only be unlocked remotely (Taobao /
-Telegram helper). The onboarding "Full ADB guide" (`src/app/onboarding/page.tsx`) is the
-user-facing version of this table. Refs: upstream https://github.com/AndyShaman/BYDMate.
+ADB on DiLink 5 is locked and can only be unlocked remotely (Taobao / Telegram helper).
+The onboarding "Full ADB guide" (`src/app/onboarding/page.tsx`) is the user-facing version.
+Refs: upstream https://github.com/AndyShaman/BYDMate.
 
 ## Cloud ingest contract
 

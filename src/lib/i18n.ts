@@ -187,18 +187,13 @@ export const dictionaries = {
       generateCode: "Generate linking code",
       adbGuide: "Full ADB guide",
       adbOptional:
-        "ADB unlocks the most accurate data. A no-ADB basic mode (below) is rolling out in an upcoming VoltFlow Mate update — on DiLink 5, ADB is currently needed for live data.",
-      adbWorksTitle: "Basic mode without ADB (coming soon)",
-      adbWorks: [
-        "Trip tracking and mileage",
-        "Energy consumption (real values from the BMS)",
-        "AI insights",
-        "Home-screen widget",
-      ],
-      adbUnlocksTitle: "Unlocks with ADB",
+        "On DiLink 5, ADB is required. Without it di+ stays blank, so VoltFlow Mate gets no data at all — no live cockpit, trips, energy or battery health. Unlock ADB below.",
+      adbUnlocksTitle: "With ADB you get",
       adbUnlocks: [
-        "Battery health (SoH) — accurate value from the BMS",
-        "Auto charging journal — sessions logged automatically (otherwise added by hand)",
+        "Live cockpit — battery %, charging status and power",
+        "Trips, mileage and energy consumption",
+        "Battery health (SoH) from the BMS",
+        "Auto charging journal — sessions logged automatically",
       ],
       adbAllow:
         "These features enable automatically — no separate toggle needed. On first launch, BYDMate shows an “Allow ADB debugging” dialog once. Tap Allow and check “Always allow from this computer” so it doesn’t ask again.",
@@ -1361,18 +1356,13 @@ export const dictionaries = {
       generateCode: "Стварыць код прывязкі",
       adbGuide: "Поўны гайд па ADB",
       adbOptional:
-        "ADB адкрывае найбольш дакладныя даныя. Базавы рэжым без ADB (ніжэй) з’явіцца ў наступным абнаўленні VoltFlow Mate — на DiLink 5 зараз патрэбны ADB для жывых даных.",
-      adbWorksTitle: "Базавы рэжым без ADB (хутка)",
-      adbWorks: [
-        "Адсочванне паездак і прабег",
-        "Расход энергіі (рэальныя значэнні з BMS)",
-        "AI-інсайты",
-        "Віджэт на галоўным экране",
-      ],
-      adbUnlocksTitle: "Адкрывае з ADB",
+        "На DiLink 5 ADB абавязковы. Без яго di+ застаецца пустым, таму VoltFlow Mate не атрымлівае ніякіх даных — ні жывой кабіны, ні паездак, ні энергіі, ні стану батарэі. Разблакіруйце ADB ніжэй.",
+      adbUnlocksTitle: "З ADB вы атрымліваеце",
       adbUnlocks: [
-        "Стан батарэі (SoH) — дакладнае значэнне з BMS",
-        "Аўтаматычны часопіс зарадкі — сесіі запісваюцца аўтаматычна (інакш дадаюцца ўручную)",
+        "Жывую кабіну — зарад %, статус зарадкі і магутнасць",
+        "Паездкі, прабег і расход энергіі",
+        "Стан батарэі (SoH) з BMS",
+        "Аўтаматычны часопіс зарадкі — сесіі запісваюцца аўтаматычна",
       ],
       adbAllow:
         "Гэтыя функцыі ўключаюцца аўтаматычна — асобны перамыкач не патрэбны. Пры першым запуску BYDMate адзін раз пакажа дыялог «Дазволіць адладку ADB». Націсніце «Дазволіць» і адзначце «Заўсёды дазваляць з гэтага камп’ютара», каб больш не пыталася.",
@@ -2537,18 +2527,13 @@ export const dictionaries = {
       generateCode: "Создать код привязки",
       adbGuide: "Полный гайд по ADB",
       adbOptional:
-        "ADB открывает самые точные данные. Базовый режим без ADB (ниже) появится в ближайшем обновлении VoltFlow Mate — на DiLink 5 сейчас нужен ADB для живых данных.",
-      adbWorksTitle: "Базовый режим без ADB (скоро)",
-      adbWorks: [
-        "Отслеживание поездок и пробег",
-        "Расход энергии (реальные значения из BMS)",
-        "AI-инсайты",
-        "Виджет на главном экране",
-      ],
-      adbUnlocksTitle: "Открывает с ADB",
+        "На DiLink 5 ADB обязателен. Без него di+ остаётся пустым, поэтому VoltFlow Mate не получает никаких данных — ни живого кокпита, ни поездок, ни энергии, ни состояния батареи. Разблокируйте ADB ниже.",
+      adbUnlocksTitle: "С ADB вы получаете",
       adbUnlocks: [
-        "Состояние батареи (SoH) — точное значение из BMS",
-        "Автоматический журнал зарядки — сессии записываются автоматически (иначе добавляются вручную)",
+        "Живой кокпит — заряд %, статус зарядки и мощность",
+        "Поездки, пробег и расход энергии",
+        "Состояние батареи (SoH) из BMS",
+        "Автоматический журнал зарядки — сессии записываются автоматически",
       ],
       adbAllow:
         "Эти функции включаются автоматически — отдельный переключатель не нужен. При первом запуске BYDMate один раз покажет диалог «Разрешить отладку ADB». Нажмите «Разрешить» и отметьте «Всегда разрешать с этого компьютера», чтобы больше не спрашивал.",

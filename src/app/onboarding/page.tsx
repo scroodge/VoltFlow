@@ -209,16 +209,6 @@ export default function OnboardingPage() {
                                 <div className="space-y-3 border-t border-border px-3 py-3 text-xs leading-relaxed text-muted-foreground">
                                   <p>{t("onboarding.adbOptional")}</p>
                                   <p className="font-semibold text-foreground">
-                                    {t("onboarding.adbWorksTitle")}
-                                  </p>
-                                  <ul className="list-disc space-y-1 pl-4">
-                                    {(t("onboarding.adbWorks") as readonly string[]).map(
-                                      (item) => (
-                                        <li key={item}>{item}</li>
-                                      ),
-                                    )}
-                                  </ul>
-                                  <p className="font-semibold text-foreground">
                                     {t("onboarding.adbUnlocksTitle")}
                                   </p>
                                   <ul className="list-disc space-y-1 pl-4">

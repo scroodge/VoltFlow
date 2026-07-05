@@ -117,24 +117,59 @@ priority than partitioning; build only if explicitly prioritized.
 
 ---
 
-## 🟣 APK: adopt direct BMS `energydata` SQLite read (no-ADB basic mode)
+## ⛔ APK: no-ADB basic mode — INVESTIGATED, NOT VIABLE on Yuan UP (2026-07-02)
 
-**Android/APK work — outside this web repo, tracked here for visibility.**
+Investigated adopting AndyShaman's no-ADB `energydata` read. **Dead end on the Yuan UP** —
+verified on car `way` via ADB:
 
-Confirmed 2026-07-01: on **DiLink 5** (all Yuan UP), the **Di+ (D+) local API is fully
-locked without ADB** — the Di+ "Data" screen is blank (`-`), so our current VoltFlow Mate
-(`scroodge/BYDMate-own` v0.4.x, Di+-based) gets **no data at all without ADB**.
+- `/storage/emulated/0/energydata/EC_database.db` (AndyShaman's source) **does not exist**
+  on the Yuan UP — it's Leopard-3-only. `EnergyDataReader.kt` already reads it; nothing to
+  read on this model.
+- di+ `van_bm_db` (`/storage/emulated/0/vandiplus/db/van_bm_db`) has rich trip+charging
+  history and a reader (`DiPlusDbReader`), but di+ only **writes** it when di+ works —
+  which needs ADB. No ADB → empty.
 
-Upstream **BYDMate (AndyShaman)** solved this by reading the **BMS `energydata` SQLite
-directly** — no ADB, no D+ app (upstream v3.0.0+ dropped D+). That yields real "basic
-mode": trip tracking + mileage, energy consumption (better than the car computer), AI
-insights, widget, GPS route.
+**Conclusion:** on DiLink 5 there is no no-ADB source; ADB is required for any data. Docs +
+onboarding reverted from "basic mode coming soon" to "ADB required." No APK work to do
+unless a future model ships the `energydata` DB. See [[adb-data-source-reality]].
 
-**Task:** port the direct `energydata` SQLite read into our APK so basic mode works on
-DiLink 5 without ADB. Until it ships, DiLink 5 requires ADB for any live data (onboarding +
-`supabase/TELEMETRY.md` now say "basic mode without ADB (coming soon)"). ADB still gates
-SoH, auto charging journal, and remote commands regardless. Ref:
-https://github.com/AndyShaman/BYDMate. See [[adb-data-source-reality]].
+**Clarification vs upstream README (2026-07-05):** AndyShaman's no-ADB basic mode is real
+but rests entirely on the `energydata` file — and per his own architecture table, live
+SOC/temps/SoH/cells come from the **autoservice Binder under shell (ADB)** even upstream.
+Basic mode ≠ live cockpit anywhere; it's trips/consumption + GPS only. His car (Leopard 3)
+writes `energydata`; the Yuan UP doesn't.
+
+---
+
+## 🟡 energydata trip-summary cloud sync (for models that HAVE the file)
+
+**Proposed, not built.** For cars that do write `/storage/emulated/0/energydata`
+(Leopard 3 and similar — NOT Yuan UP), make no-ADB basic mode work **end-to-end into
+VoltFlow**, not just locally in the Mate app.
+
+**Already in the fork (inherited upstream, works today, no ADB):**
+`EnergyDataReader.kt` (reads `EnergyConsumption`: start/end ts, duration, km, kWh) →
+`HistoryImporter.syncFromEnergyData()` → local Room DB + Compose UI; `ENERGYDATA|DIPLUS`
+source switch in Welcome/Settings.
+
+**Missing — the cloud half (both repos):**
+1. **APK:** after `syncFromEnergyData()`, POST new records to VoltFlow (same API-key auth
+   as telemetry; watermark = max `start_timestamp` synced; retry queue). Only when data
+   source = ENERGYDATA, to avoid double-trips on ADB cars.
+2. **Web:** new `POST /api/bydmate/trip-summaries` → upsert trips with a
+   `source='byd_energydata'` marker + unique `(user_id, vehicle_id, started_at)` dedupe.
+   These are **per-trip aggregates** (no samples, no GPS route) — bypass
+   `bydmate_ingest_telemetry` and its junk rules; `distance_km` is already per-trip. Needs
+   a small migration (source column or separate import table merged in UI).
+3. **Web UI:** trips list badge ("BYD log"), no-route/no-chart empty states.
+4. **Docs/onboarding:** "If your BYD writes energydata (Leopard 3…), basic mode works
+   without ADB; Yuan UP requires ADB."
+
+**Limits:** no live snapshots → live cockpit stays empty; charging stays manual. Trips +
+consumption history only.
+
+**Recommendation:** defer until at least one real user has such a car — zero benefit to
+the current Yuan UP user base. Build on explicit go-ahead.
 
 ---
 
