@@ -3,7 +3,6 @@ import { reconcileChargingSessionsForUser } from "@/lib/charging-session-reconci
 import { normalizePayloads } from "@/lib/bydmate/ingest-payload";
 import { parseIngestStats } from "@/lib/bydmate/ingest-stats";
 import { processBydmateChargeNotifications } from "@/lib/push/charge-notifications";
-import { processBydmateVehicleStateNotifications } from "@/lib/push/vehicle-state-notifications";
 import { updateTelegramLiveWidgets } from "@/lib/telegram/live-widget";
 import {
   acceptedLocationFromSnapshot,
@@ -296,18 +295,6 @@ export async function POST(request: Request) {
       chargeNotifications = { sent: 0, thresholds: [] };
     }
 
-    let vehicleStateNotifications = { connected: 0, parked: 0, disconnected: 0 };
-    try {
-      vehicleStateNotifications = await processBydmateVehicleStateNotifications({
-        supabase,
-        userId: profile.id,
-        samples,
-        receivedAt,
-      });
-    } catch {
-      vehicleStateNotifications = { connected: 0, parked: 0, disconnected: 0 };
-    }
-
     let telegramWidgets = { updated: 0 };
     try {
       telegramWidgets = await updateTelegramLiveWidgets({
@@ -368,7 +355,6 @@ export async function POST(request: Request) {
       dropped_location_count: droppedLocations,
       dropped_telemetry_field_count: droppedTelemetryFields,
       charge_notifications: chargeNotifications,
-      vehicle_state_notifications: vehicleStateNotifications,
       telegram_live_widgets: telegramWidgets,
       auto_charging_sessions: autoChargingSessions,
       charging_session_reconcile: chargingSessionReconcile,

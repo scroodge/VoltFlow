@@ -432,24 +432,36 @@ function VehicleLiveContent({
         hasMounted={hasMounted}
         distanceSinceChargeKm={heroDriveMetrics.distanceSinceChargeKm}
         kmPerPercentSoc={heroDriveMetrics.kmPerPercentSoc}
-        activeChargingSession={activeChargingSession}
       />
-      {isCharging && activeChargingSession ? (
-        <ChargingDeltaCard
-          session={activeChargingSession}
-          vehicleId={scopedVehicleId ?? snapshot.vehicle_id}
-        />
-      ) : null}
-      {!fixturePoints && isAdmin ? (
-        <VehicleControlPanel
-          vehicleId={scopedVehicleId ?? snapshot.vehicle_id}
-          collapsible
-        />
-      ) : null}
       {isCharging ? (
-        <ChargingModeCard snapshot={snapshot} />
+        <>
+          <ChargingModeCard snapshot={snapshot} session={activeChargingSession} />
+          <RestMetricsCard
+            snapshot={snapshot}
+            rangeLabel={rangeLabel}
+            mathRangeLabel={mathRangeLabel}
+          />
+          {activeChargingSession ? (
+            <ChargingDeltaCard
+              session={activeChargingSession}
+              vehicleId={scopedVehicleId ?? snapshot.vehicle_id}
+            />
+          ) : null}
+          {!fixturePoints && isAdmin ? (
+            <VehicleControlPanel
+              vehicleId={scopedVehicleId ?? snapshot.vehicle_id}
+              collapsible
+            />
+          ) : null}
+        </>
       ) : (
         <>
+          {!fixturePoints && isAdmin ? (
+            <VehicleControlPanel
+              vehicleId={scopedVehicleId ?? snapshot.vehicle_id}
+              collapsible
+            />
+          ) : null}
           <CellHealthCard snapshot={snapshot} />
           {isStale ? (
             <>
@@ -533,7 +545,6 @@ function Hero({
   hasMounted,
   distanceSinceChargeKm,
   kmPerPercentSoc,
-  activeChargingSession,
 }: {
   snapshot: BydmateLiveSnapshotRow;
   nowMs: number;
@@ -546,30 +557,11 @@ function Hero({
   hasMounted: boolean;
   distanceSinceChargeKm: number | null;
   kmPerPercentSoc: number | null;
-  activeChargingSession: ChargingSessionRow | null;
 }) {
   const { locale, t: translate } = useTranslation();
   const t = translate as Translator;
-  const currency = useAppPreferences((s) => s.currency) as Currency;
   const telemetry = snapshot.telemetry;
   const coreMetrics = heroCoreMetrics(snapshot, t, locale);
-  // Charging projection from the active session + live SOC. Persist is global
-  // (ChargingSessionBackgroundSync) — these are display-only. Time-left uses the local
-  // formatDuration(ms); cost is the projected total at 100% in the user's currency.
-  const chargeSummary = useMemo(() => {
-    const liveSoc = telemetry.soc;
-    if (!activeChargingSession || typeof liveSoc !== "number") return null;
-    const params = chargingParamsFromSession(activeChargingSession);
-    const clampedSoc = Math.min(liveSoc, params.targetPercent);
-    const deliveredKwh = deriveSessionProgressFromSoc(params, clampedSoc).chargedEnergyKwh;
-    const fullCost = deriveSessionProgressFromSoc(params, params.targetPercent).estimatedCost;
-    const secsLeft = secondsUntilTargetSoc(params, clampedSoc);
-    return {
-      timeLeftLabel: secsLeft != null && secsLeft > 0 ? formatDuration(secsLeft * 1000) : null,
-      deliveredLabel: `${deliveredKwh.toFixed(2)} kWh`,
-      fullCostLabel: formatCurrencyAmount(currency, fullCost, locale),
-    };
-  }, [activeChargingSession, telemetry.soc, currency, locale]);
   const primaryMetrics = [
     {
       key: "aiRange",
@@ -630,72 +622,12 @@ function Hero({
         </span>
       </div>
 
-      <div className={`mt-4 ${telemetryGridClass(primaryMetrics.length)}`}>
-        {primaryMetrics.map((metric) => (
-          <HeroMetric
-            key={metric.key}
-            icon={metric.icon}
-            label={metric.label}
-            value={metric.value}
-          />
-        ))}
-      </div>
-
-      {(() => {
-        const modeMetrics: {
-          key: string;
-          icon: typeof Gauge;
-          label: string;
-          value: string;
-        }[] = [];
-
-        if (isStale) {
-          modeMetrics.push(...driveMetrics);
-        } else if (isCharging) {
-          modeMetrics.push(
-            {
-              key: "chargePower",
-              icon: Zap,
-              label: t("vehicle.telemetry.chargePower"),
-              value: `${fmt(telemetry.charge_power_kw, 1)} kW`,
-            },
-            {
-              key: "chargeTimeLeft",
-              icon: Clock3,
-              label: t("charging.remaining"),
-              value: chargeSummary?.timeLeftLabel ?? "—",
-            },
-            {
-              key: "chargeDelivered",
-              icon: BatteryCharging,
-              label: t("charging.energyDelivered"),
-              value: chargeSummary?.deliveredLabel ?? "—",
-            },
-            {
-              key: "chargeFullCost",
-              icon: Activity,
-              label: t("charging.fullCost"),
-              value: chargeSummary?.fullCostLabel ?? "—",
-            },
-          );
-        } else {
-          modeMetrics.push(
-            ...driveMetrics,
-            {
-              key: "speed",
-              icon: Gauge,
-              label: t("vehicle.metrics.speed"),
-              value: `${fmt(telemetry.speed_kmh, 0)} km/h`,
-            },
-          );
-        }
-
-        const visibleModeMetrics = modeMetrics.filter((metric) => !isMissingMetricValue(metric.value));
-        if (visibleModeMetrics.length === 0) return null;
-
-        return (
-          <div className={`mt-2 ${telemetryGridClass(visibleModeMetrics.length)}`}>
-            {visibleModeMetrics.map((metric) => (
+      {/* While charging, all metrics move to the highlighted charging card + rest card
+          below — the hero keeps only SOC / status / last update. */}
+      {!isCharging ? (
+        <>
+          <div className={`mt-4 ${telemetryGridClass(primaryMetrics.length)}`}>
+            {primaryMetrics.map((metric) => (
               <HeroMetric
                 key={metric.key}
                 icon={metric.icon}
@@ -704,8 +636,47 @@ function Hero({
               />
             ))}
           </div>
-        );
-      })()}
+
+          {(() => {
+            const modeMetrics: {
+              key: string;
+              icon: typeof Gauge;
+              label: string;
+              value: string;
+            }[] = [];
+
+            if (isStale) {
+              modeMetrics.push(...driveMetrics);
+            } else {
+              modeMetrics.push(
+                ...driveMetrics,
+                {
+                  key: "speed",
+                  icon: Gauge,
+                  label: t("vehicle.metrics.speed"),
+                  value: `${fmt(telemetry.speed_kmh, 0)} km/h`,
+                },
+              );
+            }
+
+            const visibleModeMetrics = modeMetrics.filter((metric) => !isMissingMetricValue(metric.value));
+            if (visibleModeMetrics.length === 0) return null;
+
+            return (
+              <div className={`mt-2 ${telemetryGridClass(visibleModeMetrics.length)}`}>
+                {visibleModeMetrics.map((metric) => (
+                  <HeroMetric
+                    key={metric.key}
+                    icon={metric.icon}
+                    label={metric.label}
+                    value={metric.value}
+                  />
+                ))}
+              </div>
+            );
+          })()}
+        </>
+      ) : null}
     </section>
   );
 }
@@ -728,16 +699,44 @@ function HeroMetric({
   );
 }
 
-function ChargingModeCard({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
-  const { t } = useTranslation();
+function ChargingModeCard({
+  snapshot,
+  session,
+}: {
+  snapshot: BydmateLiveSnapshotRow;
+  session: ChargingSessionRow | null;
+}) {
+  const { locale, t } = useTranslation();
   const tx = t as Translator;
+  const currency = useAppPreferences((s) => s.currency) as Currency;
   const telemetry = snapshot.telemetry;
+  // Charging projection from the active session + live SOC. Persist is global
+  // (ChargingSessionBackgroundSync) — these are display-only. Time-left uses the local
+  // formatDuration(ms); cost is the projected total at 100% in the user's currency.
+  const chargeSummary = useMemo(() => {
+    const liveSoc = telemetry.soc;
+    if (!session || typeof liveSoc !== "number") return null;
+    const params = chargingParamsFromSession(session);
+    const clampedSoc = Math.min(liveSoc, params.targetPercent);
+    const deliveredKwh = deriveSessionProgressFromSoc(params, clampedSoc).chargedEnergyKwh;
+    const fullCost = deriveSessionProgressFromSoc(params, params.targetPercent).estimatedCost;
+    const secsLeft = secondsUntilTargetSoc(params, clampedSoc);
+    return {
+      timeLeftLabel: secsLeft != null && secsLeft > 0 ? formatDuration(secsLeft * 1000) : null,
+      deliveredLabel: `${deliveredKwh.toFixed(2)} kWh`,
+      fullCostLabel: formatCurrencyAmount(currency, fullCost, locale),
+    };
+  }, [session, telemetry.soc, currency, locale]);
   const items = [
-    { icon: Zap, label: tx("vehicle.telemetry.chargePower"), value: `${fmt(telemetry.charge_power_kw, 1)} kW` },
-    { icon: Activity, label: tx("vehicle.telemetry.chargeType"), value: telemetry.charge_type ?? "—" },
-    { icon: Thermometer, label: tx("vehicle.telemetry.batteryTemp"), value: fmtTemp(telemetry.battery_temp_c) },
-    { icon: Thermometer, label: tx("vehicle.telemetry.outsideTemp"), value: fmtTemp(telemetry.outside_temp_c) },
+    { key: "chargePower", icon: Zap, label: tx("vehicle.telemetry.chargePower"), value: `${fmt(telemetry.charge_power_kw, 1)} kW` },
+    { key: "chargeType", icon: Activity, label: tx("vehicle.telemetry.chargeType"), value: telemetry.charge_type ?? "—" },
+    { key: "batteryTemp", icon: Thermometer, label: tx("vehicle.telemetry.batteryTemp"), value: fmtTemp(telemetry.battery_temp_c) },
+    { key: "outsideTemp", icon: Thermometer, label: tx("vehicle.telemetry.outsideTemp"), value: fmtTemp(telemetry.outside_temp_c) },
+    { key: "chargeTimeLeft", icon: Clock3, label: tx("charging.remaining"), value: chargeSummary?.timeLeftLabel ?? "—" },
+    { key: "chargeDelivered", icon: BatteryCharging, label: tx("charging.energyDelivered"), value: chargeSummary?.deliveredLabel ?? "—" },
+    { key: "chargeFullCost", icon: Activity, label: tx("charging.fullCost"), value: chargeSummary?.fullCostLabel ?? "—" },
   ];
+  const visibleItems = items.filter((item) => !isMissingMetricValue(item.value));
 
   return (
     <Card className="border-cyan-300/20 bg-cyan-300/[0.06]">
@@ -750,12 +749,44 @@ function ChargingModeCard({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
           {tx("vehicle.chargingMode.body")}
         </p>
       </CardHeader>
-      <CardContent className="grid grid-cols-2 gap-2 p-4 pt-0 min-[380px]:grid-cols-4">
-        {items.map((item) => (
-          <HeroMetric key={item.label} icon={item.icon} label={item.label} value={item.value} />
+      <CardContent className={`p-4 pt-0 ${telemetryGridClass(Math.max(visibleItems.length, 1))}`}>
+        {visibleItems.map((item) => (
+          <HeroMetric key={item.key} icon={item.icon} label={item.label} value={item.value} />
         ))}
       </CardContent>
     </Card>
+  );
+}
+
+// Non-charging hero metrics (ranges, 12V, odometer), regrouped into their own card
+// while a charge is active so the charging card can lead.
+function RestMetricsCard({
+  snapshot,
+  rangeLabel,
+  mathRangeLabel,
+}: {
+  snapshot: BydmateLiveSnapshotRow;
+  rangeLabel: string;
+  mathRangeLabel: string;
+}) {
+  const { locale, t: translate } = useTranslation();
+  const t = translate as Translator;
+  const items = [
+    { key: "aiRange", icon: Route, label: t("vehicle.metrics.aiRange"), value: rangeLabel },
+    { key: "mathRange", icon: Activity, label: t("vehicle.metrics.mathRange"), value: mathRangeLabel },
+    ...heroCoreMetrics(snapshot, t, locale),
+  ];
+  const visibleItems = items.filter((item) => !isMissingMetricValue(item.value));
+  if (visibleItems.length === 0) return null;
+
+  return (
+    <section className="voltflow-card p-4">
+      <div className={telemetryGridClass(visibleItems.length)}>
+        {visibleItems.map((item) => (
+          <HeroMetric key={item.key} icon={item.icon} label={item.label} value={item.value} />
+        ))}
+      </div>
+    </section>
   );
 }
 

@@ -11,6 +11,7 @@ import {
   Copy,
   ExternalLink,
   KeyRound,
+  Loader2,
   MessageCircle,
   RefreshCw,
   Scale,
@@ -174,7 +175,15 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   const [newLocationProviderType, setNewLocationProviderType] =
     useState<ChargingProviderType>("custom");
   const [newLocationOverridePrice, setNewLocationOverridePrice] = useState("");
+  const [tariffSaveState, setTariffSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const tariffSavedResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { t } = useTranslation();
+
+  useEffect(() => {
+    return () => {
+      if (tariffSavedResetRef.current) clearTimeout(tariffSavedResetRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -350,8 +359,15 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
     };
   }, [setCurrency, setDefaultPrice, setTariffPrices]);
 
+  const markTariffSaved = () => {
+    setTariffSaveState("saved");
+    if (tariffSavedResetRef.current) clearTimeout(tariffSavedResetRef.current);
+    tariffSavedResetRef.current = setTimeout(() => setTariffSaveState("idle"), 2_000);
+  };
+
   const handlePriceSave = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (tariffSaveState === "saving") return;
     const form = new FormData(event.currentTarget);
     const homeNumeric = parseDecimalInput(String(form.get("pref-price-home") ?? ""));
     const acNumeric = parseDecimalInput(String(form.get("pref-price-ac") ?? ""));
@@ -382,30 +398,42 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
 
     if (!profileUserId) {
       toast.success(t("settings.tariffSaved") as string);
+      markTariffSaved();
       return;
     }
 
-    void createClient()
-      .from("profiles")
-      .update({
-        default_price_per_kwh: homeNumeric,
-        home_price_per_kwh: homeNumeric,
-        commercial_ac_price_per_kwh: acNumeric,
-        fast_dc_price_per_kwh: dcNumeric,
+    setTariffSaveState("saving");
+    const save = (async () => {
+      const { error } = await createClient()
+        .from("profiles")
+        .update({
+          default_price_per_kwh: homeNumeric,
+          home_price_per_kwh: homeNumeric,
+          commercial_ac_price_per_kwh: acNumeric,
+          fast_dc_price_per_kwh: dcNumeric,
+        })
+        .eq("id", profileUserId);
+      if (error) throw new Error(error.message);
+    })();
+
+    toast.promise(save, {
+      loading: t("settings.tariffSaving") as string,
+      success: t("settings.tariffSaved") as string,
+      error: (err: unknown) => (err instanceof Error ? err.message : String(err)),
+    });
+
+    void save
+      .then(() => {
+        markTariffSaved();
       })
-      .eq("id", profileUserId)
-      .then(({ error }) => {
-        if (error) {
-          setTariffPrices({
-            homePricePerKwh: previous.home,
-            commercialAcPricePerKwh: previous.ac,
-            fastDcPricePerKwh: previous.dc,
-          });
-          setDefaultPrice(previous.home);
-          toast.error(error.message);
-          return;
-        }
-        toast.success(t("settings.tariffSaved") as string);
+      .catch(() => {
+        setTariffPrices({
+          homePricePerKwh: previous.home,
+          commercialAcPricePerKwh: previous.ac,
+          fastDcPricePerKwh: previous.dc,
+        });
+        setDefaultPrice(previous.home);
+        setTariffSaveState("idle");
       });
   };
 
@@ -419,6 +447,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       fastDcPricePerKwh: preset.fast_dc,
     });
     setDefaultPrice(preset.home);
+    toast.info(t("settings.locationTariffs.presetAppliedHint") as string);
   };
 
   const handleUseCurrentGps = () => {
@@ -1253,8 +1282,24 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             <p className="text-muted-foreground text-sm">
               {t("settings.locationTariffs.autoTierHint") as string}
             </p>
-            <Button className="h-11 w-full rounded-full text-sm font-semibold" type="submit">
-              {t("settings.storeDefault")}
+            <Button
+              className="h-11 w-full rounded-full text-sm font-semibold"
+              type="submit"
+              disabled={tariffSaveState === "saving"}
+            >
+              {tariffSaveState === "saving" ? (
+                <>
+                  <Loader2 className="animate-spin" />
+                  {t("settings.tariffSaving")}
+                </>
+              ) : tariffSaveState === "saved" ? (
+                <>
+                  <CheckCircle2 />
+                  {t("settings.tariffSavedShort")}
+                </>
+              ) : (
+                t("settings.storeDefault")
+              )}
             </Button>
           </form>
           <div className="space-y-4 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4">

@@ -9,6 +9,42 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-07-06
+
+### Telegram: only the live widget remains — verbose state messages removed
+The "ℹ️ Ваш автомобиль … подключился к сети / в режиме стоянки / отключен от сети"
+messages (Пробег/🔋/Время + maps link) duplicated the editable live widget and
+spammed the chat on every connect/park/reconnect. Built backlog Option A:
+- Deleted `src/lib/push/vehicle-state-notifications.ts` and its call + import +
+  `vehicle_state_notifications` response field in
+  `src/app/api/bydmate/telemetry/route.ts` (its only call site).
+- Migration `20260706000000_drop_bydmate_vehicle_state_notifications.sql` drops the
+  module's state table (`drop table if exists`, idempotent). ⚠️ **Deploy order
+  matters:** with the table gone but the *old* code still deployed, every ingest
+  batch sees "no previous state" and fires a connected message — so the table was
+  re-created on prod as a shim. **Run the drop migration via the pooler psql recipe
+  AFTER the new code is live on Vercel.**
+- Side benefit: ~4 fewer DB queries per ingest batch (egress/CPU initiative).
+- Kept: the live widget (`updateTelegramLiveWidgets`) and the separate
+  `Charging: 80/95/100%` threshold notifications (user chose to keep them).
+- Accepted trade-offs: no Telegram ping on connect (widget edits are silent), no 💰
+  cost estimate line, no explicit "disconnected" message (widget shows 💤 Офлайн).
+
+### Settings → tariff save: visible progress + confirmation (UX)
+Pressing **Save** under Settings → Economics gave no feedback until the Supabase
+round-trip finished (fire-and-forget update, no pending state on the button).
+Built Option A from the backlog plan, in `settings-view.tsx` + `i18n.ts` only:
+- Save button now has a `saving` state (disabled + spinner + "Saving…") and a ~2 s
+  "Saved ✓" confirmation state where the user is looking; double-submit guarded.
+- `toast.promise` shows an instant "Saving…" toast that resolves to success/error;
+  on error the previous prices are rolled back (as before).
+- Applying a **provider preset** now shows an info toast reminding that the values
+  still need to be saved (they only fill the form).
+- New i18n keys `settings.tariffSaving`, `settings.tariffSavedShort`,
+  `settings.locationTariffs.presetAppliedHint` in en/be/ru.
+
+---
+
 ## 2026-06-30
 
 ### Inline charging on `/vehicle` Live + Charge tab removed
