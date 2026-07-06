@@ -1,7 +1,6 @@
 "use client";
 
-import { type ReactNode } from "react";
-import { useMemo } from "react";
+import { type ReactNode, useEffect, useMemo } from "react";
 
 import { MateUpdateBanner } from "@/components/dashboard/mate-update-banner";
 import { ChargingSessionBackgroundSync } from "@/components/charging/charging-session-background-sync";
@@ -13,6 +12,7 @@ import {
   ConnectCarBanner,
   OnboardingGate,
 } from "@/components/onboarding/onboarding-gate";
+import { touchUserActivity } from "@/actions/activity";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { getTelegramThemeStyle } from "@/lib/telegram/theme";
 import { useTelegramWebApp } from "@/lib/telegram/useTelegramWebApp";
@@ -32,6 +32,16 @@ function MateUpdateBannerHost() {
 
 export function MobileShell({ children }: { children: ReactNode }) {
   const telegram = useTelegramWebApp();
+
+  useEffect(() => {
+    try {
+      const lastTouch = localStorage.getItem("voltflow:last_active_touch");
+      const hourAgo = Date.now() - 3600_000;
+      if (lastTouch && Number(lastTouch) > hourAgo) return;
+      localStorage.setItem("voltflow:last_active_touch", String(Date.now()));
+      void touchUserActivity();
+    } catch {}
+  }, []);
   const telegramThemeStyle = useMemo(
     () => (telegram.isTelegram ? getTelegramThemeStyle(telegram.themeParams) : undefined),
     [telegram.isTelegram, telegram.themeParams],
