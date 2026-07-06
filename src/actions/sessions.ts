@@ -5,14 +5,23 @@ import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
 import { costFromGridEnergy, deriveChargingState } from "@/lib/charging-math";
-import { mapChargingTariffLocation } from "@/lib/db-map";
+import { mapChargingTariffLocation, mapProviderTariff } from "@/lib/db-map";
 import { resolveStopProgressForSession } from "@/lib/charging-session-finalize";
 import {
   sessionTariffMatches,
   shouldAutoApplyTariffResolution,
 } from "@/lib/charging-session-tariff-sync";
-import { resolveSessionTariff } from "@/lib/charging-tariffs";
-import type { ChargingTariffType, SessionStatus } from "@/types/database";
+import {
+  matchNearestTariffLocation,
+  PROVIDER_LABELS,
+  providerTariffsFromRows,
+  resolveSessionTariff,
+} from "@/lib/charging-tariffs";
+import {
+  decideTariffLocationAutosave,
+  uniqueTariffLocationName,
+} from "@/lib/charging-tariff-location-autosave";
+import type { ChargingProviderType, ChargingTariffType, SessionStatus } from "@/types/database";
 
 const startSchema = z.object({
   carId: z.string().uuid(),
@@ -65,7 +74,7 @@ export async function startChargingSession(input: z.infer<typeof startSchema>) {
     .eq("user_id", user.id)
     .eq("status", "charging");
 
-  const [{ data: liveRows }, { data: profile }, { data: rawPresets }] =
+  const [{ data: liveRows }, { data: profile }, { data: rawPresets }, { data: rawProviderTariffs }] =
     await Promise.all([
       supabase
         .from("bydmate_live_snapshots")
@@ -84,11 +93,18 @@ export async function startChargingSession(input: z.infer<typeof startSchema>) {
         .from("charging_tariff_locations")
         .select("*")
         .eq("user_id", user.id),
+      supabase
+        .from("provider_tariffs")
+        .select("*")
+        .eq("user_id", user.id),
     ]);
 
   const liveLocation = liveRows?.[0]?.location as { lat?: number; lon?: number } | null | undefined;
   const locationPresets = (rawPresets ?? []).map((row) =>
     mapChargingTariffLocation(row as Record<string, unknown>),
+  );
+  const providerTariffs = providerTariffsFromRows(
+    (rawProviderTariffs ?? []).map((row) => mapProviderTariff(row as Record<string, unknown>)),
   );
   const manualTariffType = (parsed.data.tariffType ?? null) as ChargingTariffType | null;
   const tariff = resolveSessionTariff({
@@ -99,6 +115,7 @@ export async function startChargingSession(input: z.infer<typeof startSchema>) {
     location: liveLocation,
     locationPresets,
     profile,
+    providerTariffs,
   });
 
   const { data: session, error: insertError } = await supabase
@@ -115,6 +132,10 @@ export async function startChargingSession(input: z.infer<typeof startSchema>) {
       tariff_type: tariff.tariffType,
       provider_type: tariff.providerType,
       tariff_manual: tariff.source === "manual",
+      tariff_selected_at:
+        tariff.source === "manual" && tariff.providerType !== "custom"
+          ? new Date().toISOString()
+          : null,
       price_per_kwh: tariff.pricePerKwh,
       charged_energy_kwh: 0,
       estimated_cost: 0,
@@ -246,6 +267,10 @@ export async function updateChargingSessionTariff(
       tariff_type: parsed.data.tariffType,
       provider_type: parsed.data.providerType,
       tariff_manual: true,
+      // Re-picking a provider resets the delay clock for the background
+      // GPS-location auto-save; picking "custom" cancels it.
+      tariff_selected_at:
+        parsed.data.providerType !== "custom" ? new Date().toISOString() : null,
       price_per_kwh: pricePerKwh,
       estimated_cost: estimatedCost,
       charged_energy_kwh: chargedEnergyKwh,
@@ -294,7 +319,7 @@ export async function syncChargingSessionTariffFromGps(
     return { ok: true as const, applied: false as const };
   }
 
-  const [{ data: profile }, { data: rawPresets }] = await Promise.all([
+  const [{ data: profile }, { data: rawPresets }, { data: rawProviderTariffs }] = await Promise.all([
     supabase
       .from("profiles")
       .select(
@@ -303,16 +328,21 @@ export async function syncChargingSessionTariffFromGps(
       .eq("id", user.id)
       .maybeSingle(),
     supabase.from("charging_tariff_locations").select("*").eq("user_id", user.id),
+    supabase.from("provider_tariffs").select("*").eq("user_id", user.id),
   ]);
 
   const locationPresets = (rawPresets ?? []).map((row) =>
     mapChargingTariffLocation(row as Record<string, unknown>),
+  );
+  const providerTariffs = providerTariffsFromRows(
+    (rawProviderTariffs ?? []).map((row) => mapProviderTariff(row as Record<string, unknown>)),
   );
   const tariff = resolveSessionTariff({
     chargerPowerKw: Number(session.charger_power_kw),
     location: { lat: parsed.data.lat, lon: parsed.data.lon },
     locationPresets,
     profile,
+    providerTariffs,
   });
 
   if (!shouldAutoApplyTariffResolution(tariff)) {
@@ -373,4 +403,132 @@ export async function syncChargingSessionTariffFromGps(
     locationPresets.find((preset) => preset.id === tariff.locationPresetId)?.name ?? null;
 
   return { ok: true as const, applied: true as const, locationName };
+}
+
+const persistTariffLocationSchema = z.object({
+  sessionId: z.string().uuid(),
+  browserLat: z.coerce.number().min(-90).max(90).optional(),
+  browserLon: z.coerce.number().min(-180).max(180).optional(),
+});
+
+/**
+ * Called by ChargingSessionBackgroundSync a few minutes after the user manually picks
+ * a provider on the active charge screen. Saves the car's current GPS spot as a
+ * `charging_tariff_locations` row (or corrects an existing one) so future charges at
+ * the same spot auto-apply the provider — see [[docs/CHARGING_SESSIONS.md]] and
+ * BACKLOG.md "Editable provider tariffs + auto-save GPS point after manual provider pick".
+ */
+export async function persistManualTariffLocationFromSession(
+  input: z.infer<typeof persistTariffLocationSchema>,
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Unauthorized" };
+
+  const parsed = persistTariffLocationSchema.safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: "Invalid input" };
+
+  const { data: session, error } = await supabase
+    .from("charging_sessions")
+    .select("*")
+    .eq("id", parsed.data.sessionId)
+    .eq("user_id", user.id)
+    .single();
+  if (error || !session) {
+    return { ok: false as const, error: "Charging session not found" };
+  }
+
+  const [{ data: liveRows }, { data: rawPresets }] = await Promise.all([
+    supabase
+      .from("bydmate_live_snapshots")
+      .select("location")
+      .eq("user_id", user.id)
+      .order("received_at", { ascending: false })
+      .limit(1),
+    supabase.from("charging_tariff_locations").select("*").eq("user_id", user.id),
+  ]);
+
+  const liveLocation = liveRows?.[0]?.location as
+    | { lat?: number; lon?: number }
+    | null
+    | undefined;
+  const location =
+    typeof liveLocation?.lat === "number" && typeof liveLocation?.lon === "number"
+      ? { lat: liveLocation.lat, lon: liveLocation.lon }
+      : parsed.data.browserLat != null && parsed.data.browserLon != null
+        ? { lat: parsed.data.browserLat, lon: parsed.data.browserLon }
+        : null;
+
+  const locationPresets = (rawPresets ?? []).map((row) =>
+    mapChargingTariffLocation(row as Record<string, unknown>),
+  );
+  const matched = location ? matchNearestTariffLocation(location, locationPresets) : null;
+
+  const decision = decideTariffLocationAutosave({
+    sessionStatus: session.status,
+    tariffManual: session.tariff_manual === true,
+    providerType: session.provider_type,
+    tariffSelectedAt: session.tariff_selected_at,
+    nowMs: Date.now(),
+    location,
+    matched,
+  });
+
+  if (decision.action === "skip") {
+    return { ok: true as const, applied: false as const, reason: decision.reason };
+  }
+
+  if (decision.action === "update") {
+    const { error: updateError } = await supabase
+      .from("charging_tariff_locations")
+      .update({
+        provider_type: session.provider_type,
+        tariff_type: session.tariff_type,
+      })
+      .eq("id", decision.matchedLocationId)
+      .eq("user_id", user.id);
+    if (updateError) return { ok: false as const, error: updateError.message };
+    return {
+      ok: true as const,
+      applied: true as const,
+      action: "update" as const,
+      locationId: decision.matchedLocationId,
+    };
+  }
+
+  if (!location) return { ok: false as const, error: "Missing location" };
+
+  const providerType = session.provider_type as Exclude<ChargingProviderType, "custom">;
+  const name = uniqueTariffLocationName(
+    PROVIDER_LABELS[providerType],
+    locationPresets.map((preset) => preset.name),
+  );
+
+  const { data: inserted, error: insertError } = await supabase
+    .from("charging_tariff_locations")
+    .insert({
+      user_id: user.id,
+      name,
+      lat: location.lat,
+      lng: location.lon,
+      radius_m: 150,
+      tariff_type: session.tariff_type,
+      provider_type: session.provider_type,
+      price_per_kwh_override: null,
+    })
+    .select("id")
+    .single();
+  if (insertError || !inserted) {
+    return { ok: false as const, error: insertError?.message ?? "Insert failed" };
+  }
+
+  return {
+    ok: true as const,
+    applied: true as const,
+    action: "insert" as const,
+    locationId: inserted.id as string,
+    name,
+  };
 }

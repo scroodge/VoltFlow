@@ -38,7 +38,7 @@ import {
   type DerivedChargingState,
 } from "@/lib/charging-math";
 import { formatCurrencyAmount, type TranslationKey } from "@/lib/i18n";
-import { PROVIDER_TARIFF_PRESETS, resolveTariffTypeByPower } from "@/lib/charging-tariffs";
+import { resolveProviderTariff, resolveTariffTypeByPower } from "@/lib/charging-tariffs";
 import { resolveTariffLocationMatch } from "@/lib/charging-gps-location";
 import { isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { isDevMockChargingSessionId } from "@/lib/dev/build-mock-charging-session";
@@ -47,6 +47,7 @@ import { mapChargingSession, mapChargingTariffLocation } from "@/lib/db-map";
 import { queryKeys } from "@/lib/query-keys";
 import { useChargingSessionLiveSync } from "@/hooks/use-charging-session-live-sync";
 import { useChargingSessionAutoTariff } from "@/hooks/use-charging-session-auto-tariff";
+import { useProviderTariffOverrides } from "@/hooks/use-provider-tariffs-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useSessionQuery } from "@/hooks/use-session-query";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
@@ -99,6 +100,7 @@ export function ChargingSessionScreen({
 
   const { data: session, error, isLoading } = useSessionQuery(sessionId);
   const { data: carsResult } = useCarsQuery();
+  const providerTariffOverrides = useProviderTariffOverrides();
   const { data: bydmateLive = [] } = useBydmateLiveQuery();
   const devSource = useChargingDevSource();
   const devOverrideActive = devSource?.isOverrideActive ?? false;
@@ -325,10 +327,10 @@ export function ChargingSessionScreen({
   const applyProviderPresetPrice = useCallback(
     (provider: ChargingProviderType, tariffType: ChargingTariffType) => {
       if (provider === "custom") return;
-      const preset = PROVIDER_TARIFF_PRESETS[provider];
+      const preset = resolveProviderTariff(provider, providerTariffOverrides);
       setPriceDraft(String(preset[tariffType]));
     },
-    [],
+    [providerTariffOverrides],
   );
 
   const tariffLocationMatch = useMemo(

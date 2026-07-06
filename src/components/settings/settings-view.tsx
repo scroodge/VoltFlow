@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import type { FormEvent } from "react";
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { deleteCar } from "@/actions/cars";
@@ -45,6 +46,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useMateReleaseQuery } from "@/hooks/use-mate-release-query";
+import { useProviderTariffsQuery } from "@/hooks/use-provider-tariffs-query";
 import { useTranslation } from "@/hooks/use-translation";
 import { compareMateVersions, isMateUpdateAvailable } from "@/lib/mate-version";
 import { sendPasswordResetEmail } from "@/lib/auth/password-reset";
@@ -73,6 +75,7 @@ import {
   PROVIDER_LABELS,
   PROVIDER_TARIFF_PRESETS,
 } from "@/lib/charging-tariffs";
+import { queryKeys } from "@/lib/query-keys";
 import {
   ensureNotificationsPermission,
   ensurePushSubscription,
@@ -86,6 +89,14 @@ import type {
   ChargingTariffLocationRow,
   ChargingTariffType,
 } from "@/types/database";
+
+const EDITABLE_PROVIDERS = [
+  "malanka",
+  "evika",
+  "forevo",
+  "zaryadka",
+  "batterfly",
+] as const satisfies readonly Exclude<ChargingProviderType, "home" | "custom">[];
 
 type NotifyChannel = "web_push" | "telegram" | "both";
 
@@ -178,6 +189,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   const [tariffSaveState, setTariffSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const tariffSavedResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { t } = useTranslation();
+  const qc = useQueryClient();
+  const { data: providerTariffRows = [] } = useProviderTariffsQuery();
+  const [providerTariffsSaving, setProviderTariffsSaving] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -437,17 +451,79 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       });
   };
 
-  const applyProviderPreset = (provider: ChargingProviderType) => {
-    if (provider === "custom") return;
-    const preset = PROVIDER_TARIFF_PRESETS[provider];
-    if (!preset) return;
-    setTariffPrices({
-      homePricePerKwh: preset.home,
-      commercialAcPricePerKwh: preset.commercial_ac,
-      fastDcPricePerKwh: preset.fast_dc,
-    });
-    setDefaultPrice(preset.home);
-    toast.info(t("settings.locationTariffs.presetAppliedHint") as string);
+  const providerTariffDefaults = (provider: (typeof EDITABLE_PROVIDERS)[number]) => {
+    const override = providerTariffRows.find((row) => row.provider_type === provider);
+    return {
+      commercialAc: override?.commercial_ac_price_per_kwh ?? PROVIDER_TARIFF_PRESETS[provider].commercial_ac,
+      fastDc: override?.fast_dc_price_per_kwh ?? PROVIDER_TARIFF_PRESETS[provider].fast_dc,
+    };
+  };
+
+  const handleProviderTariffsSave = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!profileUserId || providerTariffsSaving) return;
+    const form = new FormData(event.currentTarget);
+    const rowsToUpsert: {
+      user_id: string;
+      provider_type: (typeof EDITABLE_PROVIDERS)[number];
+      home_price_per_kwh: number;
+      commercial_ac_price_per_kwh: number;
+      fast_dc_price_per_kwh: number;
+    }[] = [];
+
+    for (const provider of EDITABLE_PROVIDERS) {
+      const acInput = parseDecimalInput(String(form.get(`provider-${provider}-ac`) ?? ""));
+      const dcInput = parseDecimalInput(String(form.get(`provider-${provider}-dc`) ?? ""));
+      if (!Number.isFinite(acInput) || !Number.isFinite(dcInput) || acInput < 0 || dcInput < 0) {
+        toast.error(t("settings.providerTariffs.invalidPrice") as string);
+        return;
+      }
+      const current = providerTariffDefaults(provider);
+      if (acInput === current.commercialAc && dcInput === current.fastDc) continue;
+      rowsToUpsert.push({
+        user_id: profileUserId,
+        provider_type: provider,
+        home_price_per_kwh: acInput,
+        commercial_ac_price_per_kwh: acInput,
+        fast_dc_price_per_kwh: dcInput,
+      });
+    }
+
+    if (rowsToUpsert.length === 0) {
+      toast.success(t("settings.providerTariffs.saved") as string);
+      return;
+    }
+
+    setProviderTariffsSaving(true);
+    void createClient()
+      .from("provider_tariffs")
+      .upsert(rowsToUpsert, { onConflict: "user_id,provider_type" })
+      .then(({ error }) => {
+        setProviderTariffsSaving(false);
+        if (error) {
+          toast.error(error.message);
+          return;
+        }
+        void qc.invalidateQueries({ queryKey: queryKeys.providerTariffs });
+        toast.success(t("settings.providerTariffs.saved") as string);
+      });
+  };
+
+  const handleResetProviderTariff = (provider: (typeof EDITABLE_PROVIDERS)[number]) => {
+    if (!profileUserId) return;
+    void createClient()
+      .from("provider_tariffs")
+      .delete()
+      .eq("user_id", profileUserId)
+      .eq("provider_type", provider)
+      .then(({ error }) => {
+        if (error) {
+          toast.error(error.message);
+          return;
+        }
+        void qc.invalidateQueries({ queryKey: queryKeys.providerTariffs });
+        toast.success(t("settings.providerTariffs.resetDone") as string);
+      });
   };
 
   const handleUseCurrentGps = () => {
@@ -1197,35 +1273,6 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="provider-preset">{t("settings.locationTariffs.providerPreset") as string}</Label>
-              <Select
-                value="custom"
-                onValueChange={(value) => applyProviderPreset(value as ChargingProviderType)}
-                items={[
-                  { value: "custom", label: t("settings.locationTariffs.manualValues") as string },
-                  { value: "home", label: PROVIDER_LABELS.home },
-                  { value: "malanka", label: PROVIDER_LABELS.malanka },
-                  { value: "evika", label: PROVIDER_LABELS.evika },
-                  { value: "forevo", label: PROVIDER_LABELS.forevo },
-                  { value: "zaryadka", label: PROVIDER_LABELS.zaryadka },
-                  { value: "batterfly", label: PROVIDER_LABELS.batterfly },
-                ]}
-              >
-                <SelectTrigger id="provider-preset" className="h-11 w-full rounded-2xl text-sm">
-                  <SelectValue placeholder={t("settings.locationTariffs.applyProviderPreset") as string} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="custom">{t("settings.locationTariffs.manualValues") as string}</SelectItem>
-                  <SelectItem value="home">{PROVIDER_LABELS.home}</SelectItem>
-                  <SelectItem value="malanka">{PROVIDER_LABELS.malanka}</SelectItem>
-                  <SelectItem value="evika">{PROVIDER_LABELS.evika}</SelectItem>
-                  <SelectItem value="forevo">{PROVIDER_LABELS.forevo}</SelectItem>
-                  <SelectItem value="zaryadka">{PROVIDER_LABELS.zaryadka}</SelectItem>
-                  <SelectItem value="batterfly">{PROVIDER_LABELS.batterfly}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
               <Label htmlFor="pref-price-home">
                 {t("settings.locationTariffs.homeTariff", { currency: currencySymbols[currency] })}
               </Label>
@@ -1302,6 +1349,73 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
               )}
             </Button>
           </form>
+
+          <form
+            onSubmit={handleProviderTariffsSave}
+            className="space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4"
+          >
+            <div>
+              <p className="text-sm font-semibold tracking-tight">
+                {t("settings.providerTariffs.title") as string}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t("settings.providerTariffs.body") as string}
+              </p>
+            </div>
+            {EDITABLE_PROVIDERS.map((provider) => {
+              const defaults = providerTariffDefaults(provider);
+              const isOverridden = providerTariffRows.some(
+                (row) => row.provider_type === provider,
+              );
+              return (
+                <div key={provider} className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">{PROVIDER_LABELS[provider]}</Label>
+                    {isOverridden ? (
+                      <button
+                        type="button"
+                        onClick={() => handleResetProviderTariff(provider)}
+                        className="text-xs text-muted-foreground underline underline-offset-2"
+                      >
+                        {t("settings.providerTariffs.resetToDefault") as string}
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      key={`${provider}-ac-${defaults.commercialAc}`}
+                      name={`provider-${provider}-ac`}
+                      aria-label={`${PROVIDER_LABELS[provider]} ${t("settings.providerTariffs.acLabel") as string}`}
+                      type="text"
+                      inputMode="decimal"
+                      pattern="[0-9]*[,.]?[0-9]*"
+                      defaultValue={String(defaults.commercialAc)}
+                      className="h-11 rounded-2xl text-sm"
+                    />
+                    <Input
+                      key={`${provider}-dc-${defaults.fastDc}`}
+                      name={`provider-${provider}-dc`}
+                      aria-label={`${PROVIDER_LABELS[provider]} ${t("settings.providerTariffs.dcLabel") as string}`}
+                      type="text"
+                      inputMode="decimal"
+                      pattern="[0-9]*[,.]?[0-9]*"
+                      defaultValue={String(defaults.fastDc)}
+                      className="h-11 rounded-2xl text-sm"
+                    />
+                  </div>
+                </div>
+              );
+            })}
+            <Button
+              className="h-11 w-full rounded-full text-sm font-semibold"
+              type="submit"
+              disabled={providerTariffsSaving}
+            >
+              {providerTariffsSaving ? <Loader2 className="animate-spin" /> : null}
+              {t("settings.providerTariffs.save") as string}
+            </Button>
+          </form>
+
           <div className="space-y-4 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4">
             <p className="text-sm font-semibold tracking-tight">
               {t("settings.locationTariffs.title") as string}

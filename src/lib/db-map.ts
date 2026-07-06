@@ -6,6 +6,7 @@ import type {
   ChargingTariffType,
   ChargingTariffLocationRow,
   Profile,
+  ProviderTariffRow,
 } from "@/types/database";
 
 function num(v: unknown, fallback = 0): number {
@@ -86,6 +87,7 @@ export function mapChargingSession(
       "custom",
     ) as ChargingProviderType,
     tariff_manual: raw.tariff_manual === true,
+    tariff_selected_at: raw.tariff_selected_at ? String(raw.tariff_selected_at) : null,
     price_per_kwh: num(raw.price_per_kwh),
     energy_overridden: raw.energy_overridden === true,
     charged_energy_kwh: num(raw.charged_energy_kwh),
@@ -120,6 +122,22 @@ export function mapChargingTariffLocation(
     ) as ChargingProviderType,
     price_per_kwh_override:
       raw.price_per_kwh_override != null ? num(raw.price_per_kwh_override) : null,
+    created_at: String(raw.created_at ?? ""),
+    updated_at: String(raw.updated_at ?? ""),
+  };
+}
+
+export function mapProviderTariff(raw: Record<string, unknown>): ProviderTariffRow {
+  return {
+    user_id: String(raw.user_id),
+    provider_type: enumValue(
+      raw.provider_type,
+      ["home", "malanka", "evika", "forevo", "zaryadka", "batterfly"] as const,
+      "malanka",
+    ) as ProviderTariffRow["provider_type"],
+    home_price_per_kwh: num(raw.home_price_per_kwh),
+    commercial_ac_price_per_kwh: num(raw.commercial_ac_price_per_kwh),
+    fast_dc_price_per_kwh: num(raw.fast_dc_price_per_kwh),
     created_at: String(raw.created_at ?? ""),
     updated_at: String(raw.updated_at ?? ""),
   };

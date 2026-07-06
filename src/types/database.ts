@@ -57,6 +57,7 @@ export type ChargingSessionRow = {
   tariff_type: ChargingTariffType;
   provider_type: ChargingProviderType;
   tariff_manual: boolean;
+  tariff_selected_at: string | null;
   price_per_kwh: number;
   energy_overridden: boolean;
   charged_energy_kwh: number;
@@ -78,6 +79,16 @@ export type ChargingTariffLocationRow = {
   tariff_type: ChargingTariffType;
   provider_type: ChargingProviderType;
   price_per_kwh_override: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProviderTariffRow = {
+  user_id: string;
+  provider_type: Exclude<ChargingProviderType, "custom">;
+  home_price_per_kwh: number;
+  commercial_ac_price_per_kwh: number;
+  fast_dc_price_per_kwh: number;
   created_at: string;
   updated_at: string;
 };

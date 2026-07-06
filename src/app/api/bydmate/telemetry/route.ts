@@ -254,6 +254,12 @@ export async function POST(request: Request) {
         .is("vehicle_connected_at", null);
     }
 
+    // Every telemetry sample resets the inactivity timer.
+    await supabase
+      .from("profiles")
+      .update({ last_active_at: new Date().toISOString() })
+      .eq("id", profile.id);
+
     const lastSample = samples.at(-1);
     const { data: persistedRow, error: persistedError } = lastSample
       ? await supabase

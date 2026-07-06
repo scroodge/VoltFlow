@@ -173,7 +173,106 @@ the current Yuan UP user base. Build on explicit go-ahead.
 
 ---
 
-## 🟢 Settings → Provider preset select always shows "Manual values"
+## 🟢 Editable provider tariffs + auto-save GPS point after manual provider pick — BUILT, see CHANGELOG
+
+**Requested 2026-07-06** (chosen over just fixing the settings preset select). Two parts:
+
+**(1) Provider tariffs become user-editable.** Today they're hardcoded in
+`PROVIDER_TARIFF_PRESETS` (`src/lib/charging-tariffs.ts`, Belarus 2026 baseline);
+if Malanka changes prices the user can't do anything. Per-user overrides, hardcoded
+values remain the default.
+
+**(2) Auto-save a GPS tariff point after a manual provider pick during a charge.**
+When the user selects a provider on the active charge screen, remember the spot in
+`charging_tariff_locations` **in the background, ~5 min later** (not instantly — the
+user may still be flipping through providers, and a mis-tap shouldn't pollute saved
+locations). Next charge at that spot then auto-applies the provider with no manual
+step.
+
+### Part 1 — editable provider tariffs
+
+**Schema (new migration, idempotent):** table `public.provider_tariffs`
+- `user_id uuid` FK → auth.users cascade, `provider_type public.charging_provider_type`,
+  PK `(user_id, provider_type)`
+- `commercial_ac_price_per_kwh numeric ≥0`, `fast_dc_price_per_kwh numeric ≥0`,
+  `home_price_per_kwh numeric ≥0` (kept for shape; presets today all have home = AC
+  for commercial providers), `created_at/updated_at` + `set_updated_at` trigger, RLS
+  select/insert/update/delete own. **No seed rows** — absence = code preset.
+
+**Lib:** `resolveTariffPrice(tariffType, profile, providerType, overrides?)` and
+`resolveSessionTariff({ …, providerTariffs? })` take an optional
+`Partial<Record<provider, {home, commercial_ac, fast_dc}>>`; lookup order:
+user override → hardcoded preset. Location `price_per_kwh_override` still wins
+over everything (unchanged).
+
+**Server call sites (each already batch-queries profile + locations — add one query):**
+- `src/actions/sessions.ts`: `startChargingSession` (~68), `syncChargingSessionTariffFromGps` (~297)
+- `src/lib/bydmate/charging-auto-session.ts`: `resolveTariffForTelemetry` (~72)
+
+**Client call sites (new `useProviderTariffsQuery` hook + query key):**
+- charge screen `applyProviderPresetPrice` (`charging-session-screen.tsx:325`)
+- dashboard park estimate (`dashboard-view.tsx:856`)
+- settings `applyProviderPreset` (`settings-view.tsx:440`)
+
+**Settings UI:** replace the confusing **"Provider preset" dropdown** in Economics
+defaults with a **"Provider tariffs" editor**: one row per provider (malanka, evika,
+forevo, zaryadka, batterfly — custom excluded, home lives in Economics defaults):
+AC + DC price fields (home column saved = AC, matching today's preset shape),
+per-row save + "reset to default" (deletes the row). New i18n keys in **ru
+(defaultLocale!), en, be**.
+
+### Part 2 — delayed GPS point save
+
+**Schema (same or second migration):** `charging_sessions.tariff_selected_at
+timestamptz` — set by `updateChargingSessionTariff` whenever the user manually
+saves a tariff. Re-selection resets the 5-min clock. No "saved" flag needed —
+dedupe below makes the save idempotent.
+
+**New server action `persistManualTariffLocationFromSession(sessionId)`:**
+1. Session must be **still `charging`**, `tariff_manual = true`, `provider_type ≠
+   'custom'`, `tariff_selected_at ≥ 5 min ago` (server re-validates; constant
+   `TARIFF_LOCATION_AUTOSAVE_DELAY_MS`). If the user unplugs before 5 min → nothing
+   saved (deliberate: too short to be worth memorizing, and the car may move).
+2. GPS: latest Mate live-snapshot location for the session's user/vehicle (car is
+   stationary while charging); fallback to client-passed browser coords.
+3. Dedupe via `matchNearestTariffLocation`: existing point covering the coords with
+   the **same provider → skip**; **different provider → update** that point's
+   `provider_type`/`tariff_type` (user corrected the spot). Otherwise **insert**:
+   name `PROVIDER_LABELS[provider]` (+ " 2", " 3"… on name collision), session's
+   `tariff_type`, default radius 150 m, **no price override** (provider price
+   comes from Part 1, so a later tariff edit propagates).
+4. Returns what happened so the client can toast ("Point saved — Malanka will
+   apply here automatically").
+
+**Trigger:** `ChargingSessionBackgroundSync` (global in `MobileShell`, already owns
+the ~1 Hz session loop) checks every ~30 s: active session with `tariff_manual`,
+`provider ≠ custom`, `tariff_selected_at` past the delay → fire the action once per
+selection (in-memory guard per `sessionId+tariff_selected_at`; server dedupe makes
+retries harmless). Survives navigation away from the charge screen; PWA closed the
+whole 5 min → skipped (acceptable; next manual pick at the same spot retries).
+
+**Interaction with auto-tariff GPS sync:** unchanged — `syncChargingSessionTariffFromGps`
+skips `tariff_manual` sessions, so the new point takes effect from the *next*
+session onward.
+
+**Tests:** pure-logic `.test.mjs` for the override lookup (`resolveTariffPrice` /
+`resolveSessionTariff` with `providerTariffs`) and for the persist decision
+(too-early / unplugged / dedupe-same / dedupe-different / insert).
+
+**Migrations note:** self-hosted prod → apply via pooler psql (no CLI), keep
+`IF NOT EXISTS`-idempotent.
+
+**Verify:** `npm run lint`, `npm run build`, `npm run test`; manual: pick Malanka
+during a charge → after ~5 min a "Malanka" location appears in Settings → edit
+Malanka AC price → next session at that spot uses the edited price.
+
+---
+
+## ⛔ Settings → Provider preset select always shows "Manual values" — SUPERSEDED
+
+**Superseded by the plan above (2026-07-06):** the confusing dropdown gets replaced
+by the editable provider-tariffs card, so this fix won't be built separately.
+Kept for the root-cause record.
 
 **Requested 2026-07-06.** Choosing **Malanka** in Settings → Economics → Provider
 preset fills the price fields correctly (0.55 / 0.55 / 0.73 — the Malanka preset
@@ -214,6 +313,33 @@ no schema, no i18n keys.
 **Verify:** `npm run lint`, `npm run build`; manual: pick Malanka → select shows
 Malanka + fields fill → Store default → reload → select still shows Malanka; edit a
 price → save → select shows Manual values.
+
+---
+
+---
+
+## 🟢 Inactive account auto-cleanup — DECIDED, building
+
+**Decision (2026-07-06):** 30-day inactivity → Resend warning email → 60-day auto-deletion.
+Premium users exempt. See full plan in [dev session](#).
+
+### Work items
+
+**1. Migration** `20260706120000_profiles_inactivity_cleanup.sql`:
+`last_active_at timestamptz`, `inactivity_warning_sent_at timestamptz` on `profiles`.
+
+**2. Track activity** — telemetry route (`route.ts:250`) + login server action (`src/actions/activity.ts`).
+
+**3. Email infra** — `npm install resend`, `src/lib/email/inactivity-warning.ts`.
+
+**4. Cron route** — `POST /api/cron/inactivity-check` (CRON_SECRET gated), sends
+warning emails + deletes accounts via `supabaseAdmin.auth.admin.deleteUser()`.
+
+**5. Policy updates** — privacy + terms (world + belarus) × 3 locales.
+
+**6. Self-service deletion** — settings "Delete account" card + server action.
+
+**7. Contabo crontab** — daily `curl` to the cron route.
 
 ---
 

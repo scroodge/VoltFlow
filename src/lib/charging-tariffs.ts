@@ -4,6 +4,7 @@ import type {
   ChargingTariffLocationRow,
   ChargingTariffType,
   Profile,
+  ProviderTariffRow,
 } from "../types/database.ts";
 
 export const COMMERCIAL_AC_MIN_KW = 4;
@@ -47,6 +48,34 @@ export const PROVIDER_TARIFF_PRESETS: Record<
   batterfly: { home: 0.50, commercial_ac: 0.50, fast_dc: 0.45 },
 };
 
+/** User-editable overrides of PROVIDER_TARIFF_PRESETS, keyed by provider. A missing
+ * entry (or a missing provider key) falls back to the hardcoded preset. */
+export type ProviderTariffOverrides = Partial<
+  Record<
+    Exclude<ChargingProviderType, "custom">,
+    { home: number; commercial_ac: number; fast_dc: number }
+  >
+>;
+
+export function providerTariffsFromRows(rows: ProviderTariffRow[]): ProviderTariffOverrides {
+  const overrides: ProviderTariffOverrides = {};
+  for (const row of rows) {
+    overrides[row.provider_type] = {
+      home: row.home_price_per_kwh,
+      commercial_ac: row.commercial_ac_price_per_kwh,
+      fast_dc: row.fast_dc_price_per_kwh,
+    };
+  }
+  return overrides;
+}
+
+export function resolveProviderTariff(
+  providerType: Exclude<ChargingProviderType, "custom">,
+  overrides?: ProviderTariffOverrides,
+) {
+  return overrides?.[providerType] ?? PROVIDER_TARIFF_PRESETS[providerType];
+}
+
 export function normalizeTariffType(value: unknown): ChargingTariffType {
   return value === "commercial_ac" || value === "fast_dc" || value === "home"
     ? value
@@ -76,9 +105,10 @@ export function resolveTariffPrice(
   tariffType: ChargingTariffType,
   profile: TariffPriceProfile | null | undefined,
   providerType: ChargingProviderType = "custom",
+  providerTariffs?: ProviderTariffOverrides,
 ): number {
   if (providerType !== "custom") {
-    const preset = PROVIDER_TARIFF_PRESETS[providerType];
+    const preset = resolveProviderTariff(providerType, providerTariffs);
     return preset[tariffType];
   }
   const fallback = Number(profile?.default_price_per_kwh ?? 0);
@@ -117,6 +147,7 @@ export function resolveSessionTariff(params: {
   location: { lat?: number | null; lon?: number | null } | null | undefined;
   locationPresets: ChargingTariffLocationRow[];
   profile: TariffPriceProfile | null | undefined;
+  providerTariffs?: ProviderTariffOverrides;
 }): TariffResolution {
   const manualPrice = Number(params.manualPricePerKwh ?? 0);
   const providerType = normalizeProviderType(params.manualProviderType ?? "custom");
@@ -142,7 +173,9 @@ export function resolveSessionTariff(params: {
       tariffType: type,
       providerType: matchedProvider,
       pricePerKwh:
-        override > 0 ? override : resolveTariffPrice(type, params.profile, matchedProvider),
+        override > 0
+          ? override
+          : resolveTariffPrice(type, params.profile, matchedProvider, params.providerTariffs),
       source: "location",
       locationPresetId: matched.id,
     };
@@ -153,7 +186,7 @@ export function resolveSessionTariff(params: {
   return {
     tariffType,
     providerType: autoProvider,
-    pricePerKwh: resolveTariffPrice(tariffType, params.profile, autoProvider),
+    pricePerKwh: resolveTariffPrice(tariffType, params.profile, autoProvider, params.providerTariffs),
     source: "power",
     locationPresetId: null,
   };

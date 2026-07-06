@@ -40,6 +40,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useLatestBydmateTripsQuery } from "@/hooks/use-bydmate-trips-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
+import { useProviderTariffOverrides } from "@/hooks/use-provider-tariffs-query";
 import { usePageVisible } from "@/hooks/use-page-visible";
 import { chargingSessionsRefetchInterval, fetchSessions } from "@/hooks/use-sessions-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
@@ -561,6 +562,7 @@ export function DashboardView() {
   } = useCarsQuery();
   const cars = carsResult?.cars;
   const preferredCarId = carsResult?.preferredCarId ?? null;
+  const providerTariffOverrides = useProviderTariffOverrides();
   const { data: bydmateLive = [], isLoading: loadingLive } = useBydmateLiveQuery();
   const selectedCarId = useAppPreferences((s) => s.selectedCarId);
   const setSelectedCarId = useAppPreferences((s) => s.setSelectedCarId);
@@ -862,6 +864,7 @@ export function DashboardView() {
         fast_dc_price_per_kwh: fastDcPricePerKwh,
       },
       estimateProviderType,
+      providerTariffOverrides,
     );
     const packEnergyKwh = energyNeededKwh(capacityKwh, soc, 100);
     const gridEnergyKwh = energyFromGridKwh(
@@ -893,6 +896,7 @@ export function DashboardView() {
     fastDcPricePerKwh,
     homePricePerKwh,
     packCapacityKwh,
+    providerTariffOverrides,
     selectedCar?.default_efficiency_percent,
   ]);
 

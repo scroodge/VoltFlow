@@ -7,6 +7,7 @@ import { isDevAppRoute } from "@/lib/dev/dev-fetch";
 
 import { useChargingSessionLiveSync } from "@/hooks/use-charging-session-live-sync";
 import { useChargingSessionAutoTariff } from "@/hooks/use-charging-session-auto-tariff";
+import { useChargingTariffLocationAutosave } from "@/hooks/use-charging-tariff-location-autosave";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { chargingSessionsRefetchInterval, fetchSessions } from "@/hooks/use-sessions-query";
@@ -64,6 +65,11 @@ export function ChargingSessionBackgroundSync() {
     sessionId: activeSession?.id ?? null,
     liveSnapshots: bydmateLive,
     vehicleId: scopedVehicleId,
+    enabled: Boolean(activeSession) && !devRoute,
+  });
+
+  useChargingTariffLocationAutosave({
+    session: activeSession,
     enabled: Boolean(activeSession) && !devRoute,
   });
 

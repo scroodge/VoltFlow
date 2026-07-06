@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { deriveSessionProgressFromSoc } from "@/lib/charging-math";
-import { mapChargingTariffLocation } from "@/lib/db-map";
-import { resolveSessionTariff } from "@/lib/charging-tariffs";
+import { mapChargingTariffLocation, mapProviderTariff } from "@/lib/db-map";
+import { providerTariffsFromRows, resolveSessionTariff } from "@/lib/charging-tariffs";
 import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
 import {
   nextAutoChargingSessionStep,
@@ -69,7 +69,7 @@ async function resolveTariffForTelemetry(
   chargerPowerKw: number,
   location: { lat?: number | null; lon?: number | null } | null | undefined,
 ) {
-  const [{ data: profile }, { data: rawPresets }] = await Promise.all([
+  const [{ data: profile }, { data: rawPresets }, { data: rawProviderTariffs }] = await Promise.all([
     supabase
       .from("profiles")
       .select(
@@ -78,6 +78,7 @@ async function resolveTariffForTelemetry(
       .eq("id", userId)
       .maybeSingle(),
     supabase.from("charging_tariff_locations").select("*").eq("user_id", userId),
+    supabase.from("provider_tariffs").select("*").eq("user_id", userId),
   ]);
   return resolveSessionTariff({
     chargerPowerKw,
@@ -85,6 +86,9 @@ async function resolveTariffForTelemetry(
     profile,
     locationPresets: (rawPresets ?? []).map((row) =>
       mapChargingTariffLocation(row as Record<string, unknown>),
+    ),
+    providerTariffs: providerTariffsFromRows(
+      (rawProviderTariffs ?? []).map((row) => mapProviderTariff(row as Record<string, unknown>)),
     ),
   });
 }
