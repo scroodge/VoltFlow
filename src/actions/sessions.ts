@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
 import { costFromGridEnergy, deriveChargingState } from "@/lib/charging-math";
-import { mapChargingTariffLocation, mapProviderTariff } from "@/lib/db-map";
+import { mapChargingTariffLocation, mapProviderTariff, mapUserProvider } from "@/lib/db-map";
 import { resolveStopProgressForSession } from "@/lib/charging-session-finalize";
 import {
   sessionTariffMatches,
@@ -16,6 +16,7 @@ import {
   PROVIDER_LABELS,
   providerTariffsFromRows,
   resolveSessionTariff,
+  userProvidersFromRows,
 } from "@/lib/charging-tariffs";
 import {
   decideTariffLocationAutosave,
@@ -30,8 +31,9 @@ const startSchema = z.object({
   pricePerKwh: z.coerce.number().min(0).max(999).optional(),
   tariffType: z.enum(["home", "commercial_ac", "fast_dc"]).optional(),
   providerType: z
-    .enum(["home", "malanka", "evika", "forevo", "zaryadka", "batterfly", "custom"])
+    .enum(["home", "malanka", "evika", "forevo", "zaryadka", "batterfly", "user_provider", "custom"])
     .optional(),
+  userProviderId: z.string().uuid().optional(),
   chargerPowerKw: z.coerce.number().positive().max(350).optional(),
 });
 
@@ -74,7 +76,7 @@ export async function startChargingSession(input: z.infer<typeof startSchema>) {
     .eq("user_id", user.id)
     .eq("status", "charging");
 
-  const [{ data: liveRows }, { data: profile }, { data: rawPresets }, { data: rawProviderTariffs }] =
+  const [{ data: liveRows }, { data: profile }, { data: rawPresets }, { data: rawProviderTariffs }, { data: rawUserProviders }] =
     await Promise.all([
       supabase
         .from("bydmate_live_snapshots")
@@ -97,6 +99,10 @@ export async function startChargingSession(input: z.infer<typeof startSchema>) {
         .from("provider_tariffs")
         .select("*")
         .eq("user_id", user.id),
+      supabase
+        .from("user_providers")
+        .select("*")
+        .eq("user_id", user.id),
     ]);
 
   const liveLocation = liveRows?.[0]?.location as { lat?: number; lon?: number } | null | undefined;
@@ -106,16 +112,21 @@ export async function startChargingSession(input: z.infer<typeof startSchema>) {
   const providerTariffs = providerTariffsFromRows(
     (rawProviderTariffs ?? []).map((row) => mapProviderTariff(row as Record<string, unknown>)),
   );
+  const userProviderMap = userProvidersFromRows(
+    (rawUserProviders ?? []).map((row) => mapUserProvider(row as Record<string, unknown>)),
+  );
   const manualTariffType = (parsed.data.tariffType ?? null) as ChargingTariffType | null;
   const tariff = resolveSessionTariff({
     manualPricePerKwh: parsed.data.pricePerKwh,
     manualTariffType,
     manualProviderType: parsed.data.providerType ?? null,
+    userProviderId: parsed.data.userProviderId ?? null,
     chargerPowerKw,
     location: liveLocation,
     locationPresets,
     profile,
     providerTariffs,
+    userProviderMap,
   });
 
   const { data: session, error: insertError } = await supabase
@@ -131,6 +142,7 @@ export async function startChargingSession(input: z.infer<typeof startSchema>) {
       efficiency_percent: car.default_efficiency_percent,
       tariff_type: tariff.tariffType,
       provider_type: tariff.providerType,
+      user_provider_id: tariff.userProviderId,
       tariff_manual: tariff.source === "manual",
       tariff_selected_at:
         tariff.source === "manual" && tariff.providerType !== "custom"
@@ -210,7 +222,8 @@ export async function stopChargingSession(sessionId: string) {
 const updateTariffSchema = z.object({
   sessionId: z.string().uuid(),
   tariffType: z.enum(["home", "commercial_ac", "fast_dc"]),
-  providerType: z.enum(["home", "malanka", "evika", "forevo", "zaryadka", "batterfly", "custom"]),
+  providerType: z.enum(["home", "malanka", "evika", "forevo", "zaryadka", "batterfly", "user_provider", "custom"]),
+  userProviderId: z.string().uuid().optional(),
   pricePerKwh: z.coerce.number().min(0).max(999),
 });
 
@@ -266,11 +279,13 @@ export async function updateChargingSessionTariff(
     .update({
       tariff_type: parsed.data.tariffType,
       provider_type: parsed.data.providerType,
+      user_provider_id: parsed.data.providerType === "user_provider" ? (parsed.data.userProviderId ?? null) : null,
       tariff_manual: true,
       // Re-picking a provider resets the delay clock for the background
-      // GPS-location auto-save; picking "custom" cancels it.
+      // GPS-location auto-save; picking "custom" or "user_provider" cancels it.
       tariff_selected_at:
-        parsed.data.providerType !== "custom" ? new Date().toISOString() : null,
+        parsed.data.providerType !== "custom" && parsed.data.providerType !== "user_provider"
+          ? new Date().toISOString() : null,
       price_per_kwh: pricePerKwh,
       estimated_cost: estimatedCost,
       charged_energy_kwh: chargedEnergyKwh,
@@ -319,7 +334,7 @@ export async function syncChargingSessionTariffFromGps(
     return { ok: true as const, applied: false as const };
   }
 
-  const [{ data: profile }, { data: rawPresets }, { data: rawProviderTariffs }] = await Promise.all([
+  const [{ data: profile }, { data: rawPresets }, { data: rawProviderTariffs }, { data: rawUserProviders }] = await Promise.all([
     supabase
       .from("profiles")
       .select(
@@ -329,6 +344,7 @@ export async function syncChargingSessionTariffFromGps(
       .maybeSingle(),
     supabase.from("charging_tariff_locations").select("*").eq("user_id", user.id),
     supabase.from("provider_tariffs").select("*").eq("user_id", user.id),
+    supabase.from("user_providers").select("*").eq("user_id", user.id),
   ]);
 
   const locationPresets = (rawPresets ?? []).map((row) =>
@@ -337,12 +353,16 @@ export async function syncChargingSessionTariffFromGps(
   const providerTariffs = providerTariffsFromRows(
     (rawProviderTariffs ?? []).map((row) => mapProviderTariff(row as Record<string, unknown>)),
   );
+  const userProviderMap = userProvidersFromRows(
+    (rawUserProviders ?? []).map((row) => mapUserProvider(row as Record<string, unknown>)),
+  );
   const tariff = resolveSessionTariff({
     chargerPowerKw: Number(session.charger_power_kw),
     location: { lat: parsed.data.lat, lon: parsed.data.lon },
     locationPresets,
     profile,
     providerTariffs,
+    userProviderMap,
   });
 
   if (!shouldAutoApplyTariffResolution(tariff)) {
@@ -385,6 +405,7 @@ export async function syncChargingSessionTariffFromGps(
     .update({
       tariff_type: tariff.tariffType,
       provider_type: tariff.providerType,
+      user_provider_id: tariff.userProviderId,
       tariff_manual: false,
       price_per_kwh: pricePerKwh,
       estimated_cost: estimatedCost,

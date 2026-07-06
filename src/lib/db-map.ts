@@ -7,6 +7,7 @@ import type {
   ChargingTariffLocationRow,
   Profile,
   ProviderTariffRow,
+  UserProviderRow,
 } from "@/types/database";
 
 function num(v: unknown, fallback = 0): number {
@@ -83,9 +84,10 @@ export function mapChargingSession(
     ) as ChargingTariffType,
     provider_type: enumValue(
       raw.provider_type,
-      ["home", "malanka", "evika", "forevo", "zaryadka", "batterfly", "custom"] as const,
+      ["home", "malanka", "evika", "forevo", "zaryadka", "batterfly", "user_provider", "custom"] as const,
       "custom",
     ) as ChargingProviderType,
+    user_provider_id: raw.user_provider_id ? String(raw.user_provider_id) : null,
     tariff_manual: raw.tariff_manual === true,
     tariff_selected_at: raw.tariff_selected_at ? String(raw.tariff_selected_at) : null,
     price_per_kwh: num(raw.price_per_kwh),
@@ -117,11 +119,25 @@ export function mapChargingTariffLocation(
     ) as ChargingTariffType,
     provider_type: enumValue(
       raw.provider_type,
-      ["home", "malanka", "evika", "forevo", "zaryadka", "batterfly", "custom"] as const,
+      ["home", "malanka", "evika", "forevo", "zaryadka", "batterfly", "user_provider", "custom"] as const,
       "custom",
     ) as ChargingProviderType,
+    user_provider_id: raw.user_provider_id ? String(raw.user_provider_id) : null,
     price_per_kwh_override:
       raw.price_per_kwh_override != null ? num(raw.price_per_kwh_override) : null,
+    created_at: String(raw.created_at ?? ""),
+    updated_at: String(raw.updated_at ?? ""),
+  };
+}
+
+export function mapUserProvider(raw: Record<string, unknown>): UserProviderRow {
+  return {
+    id: String(raw.id),
+    user_id: String(raw.user_id),
+    label: String(raw.label ?? ""),
+    home_price_per_kwh: num(raw.home_price_per_kwh),
+    commercial_ac_price_per_kwh: num(raw.commercial_ac_price_per_kwh),
+    fast_dc_price_per_kwh: num(raw.fast_dc_price_per_kwh),
     created_at: String(raw.created_at ?? ""),
     updated_at: String(raw.updated_at ?? ""),
   };

@@ -1,7 +1,7 @@
 import type { Locale } from "@/lib/i18n";
 import type { LegalDocument, LegalOperatorDetails } from "@/content/legal/types";
 
-const UPDATED = "2026-06-16";
+const UPDATED = "2026-07-06";
 
 const en = (op: LegalOperatorDetails): LegalDocument => ({
   title: "Privacy Policy (Belarus)",
@@ -51,7 +51,9 @@ const en = (op: LegalOperatorDetails): LegalDocument => ({
       title: "Retention",
       paragraphs: [
         "Data is retained for the life of your account and as needed for history, analytics, and legal compliance. Raw telemetry retention policy is tiered: Free plan keeps 30 days of raw telemetry/tracks, Premium keeps 365 days.",
-        "After retention expires, raw records are deleted during scheduled cleanup and cannot be restored. You may request erasure subject to limits of applicable law and technical feasibility.",
+        "After retention expires, raw records are deleted during scheduled cleanup and cannot be restored.",
+        "Inactive accounts: if you do not log in or send telemetry for 30 days, we will send a warning email. If no activity occurs within 60 days, your account and all associated data will be permanently deleted. Premium users are exempt while their Premium status is active.",
+        "You may request erasure subject to limits of applicable law and technical feasibility.",
       ],
     },
     {
@@ -133,7 +135,9 @@ const be = (op: LegalOperatorDetails): LegalDocument => ({
       title: "Тэрміны захоўвання",
       paragraphs: [
         "Даныя захоўваюцца на працягу існавання акаўнта і столькі, колькі патрэбна для гісторыі, аналітыкі і выканання закона. Палітыка сырых даных ступенчатая: free-план — 30 дзён сырай тэлеметрыі/трэкаў, Premium — 365 дзён.",
-        "Пасля заканчэння тэрміну захоўвання сырыя запісы выдаляюцца падчас планавых ачыстак і не могуць быць адноўлены. Вы можаце запытаць выдаленне ў межах закону і тэхнічных магчымасцей.",
+        "Пасля заканчэння тэрміну захоўвання сырыя запісы выдаляюцца падчас планавых ачыстак і не могуць быць адноўлены.",
+        "Неактыўныя акаўнты: калі вы не ўваходзіце ў сістэму або не дасылаеце тэлеметрыю на працягу 30 дзён, мы дашлем папярэджанне на email. Калі актыўнасць не аднавіцца на працягу 60 дзён, ваш акаўнт і ўсе звязаныя даныя будуць выдалены назаўжды. Прэміум-карыстальнікі вызваляюцца, пакуль іх прэміум-статус актыўны.",
+        "Вы можаце запытаць выдаленне ў межах закону і тэхнічных магчымасцей.",
       ],
     },
     {
@@ -213,7 +217,9 @@ const ru = (op: LegalOperatorDetails): LegalDocument => ({
       title: "Сроки хранения",
       paragraphs: [
         "Данные хранятся в течение существования аккаунта и столько, сколько нужно для истории, аналитики и исполнения закона. Политика по сырым данным ступенчатая: free-план — 30 дней сырой телеметрии/треков, Premium — 365 дней.",
-        "После истечения срока хранения сырые записи удаляются в плановых очистках и восстановлению не подлежат. Вы можете запросить удаление в пределах закона и технических возможностей.",
+        "После истечения срока хранения сырые записи удаляются в плановых очистках и восстановлению не подлежат.",
+        "Неактивные аккаунты: если вы не входите в систему или не отправляете телеметрию в течение 30 дней, мы отправим предупреждение по email. Если активность не возобновится в течение 60 дней, ваш аккаунт и все связанные данные будут безвозвратно удалены. Премиум-пользователи освобождаются, пока их премиум-статус активен.",
+        "Вы можете запросить удаление в пределах закона и технических возможностей.",
       ],
     },
     {

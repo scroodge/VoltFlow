@@ -316,30 +316,10 @@ price → save → select shows Manual values.
 
 ---
 
----
+## 🟢 User-connected providers — add/remove custom providers per-user — BUILT, see CHANGELOG
 
-## 🟢 Inactive account auto-cleanup — DECIDED, building
-
-**Decision (2026-07-06):** 30-day inactivity → Resend warning email → 60-day auto-deletion.
-Premium users exempt. See full plan in [dev session](#).
-
-### Work items
-
-**1. Migration** `20260706120000_profiles_inactivity_cleanup.sql`:
-`last_active_at timestamptz`, `inactivity_warning_sent_at timestamptz` on `profiles`.
-
-**2. Track activity** — telemetry route (`route.ts:250`) + login server action (`src/actions/activity.ts`).
-
-**3. Email infra** — `npm install resend`, `src/lib/email/inactivity-warning.ts`.
-
-**4. Cron route** — `POST /api/cron/inactivity-check` (CRON_SECRET gated), sends
-warning emails + deletes accounts via `supabaseAdmin.auth.admin.deleteUser()`.
-
-**5. Policy updates** — privacy + terms (world + belarus) × 3 locales.
-
-**6. Self-service deletion** — settings "Delete account" card + server action.
-
-**7. Contabo crontab** — daily `curl` to the cron route.
+**Built 2026-07-06.** Option A: `user_providers` table + `'user_provider'` enum marker.
+Users can add/remove their own providers with custom labels and prices. See CHANGELOG.
 
 ---
 

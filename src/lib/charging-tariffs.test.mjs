@@ -7,6 +7,8 @@ import {
   resolveSessionTariff,
   resolveTariffPrice,
   resolveTariffTypeByPower,
+  userProvidersFromRows,
+  resolveUserProviderPrices,
   PROVIDER_TARIFF_PRESETS,
 } from "./charging-tariffs.ts";
 
@@ -38,6 +40,7 @@ test("location preset wins over power resolver", () => {
         radius_m: 150,
         tariff_type: "commercial_ac",
         provider_type: "malanka",
+        user_provider_id: null,
         price_per_kwh_override: null,
         created_at: "",
         updated_at: "",
@@ -49,6 +52,64 @@ test("location preset wins over power resolver", () => {
   assert.equal(result.providerType, "malanka");
   assert.equal(result.tariffType, "commercial_ac");
   assert.equal(result.pricePerKwh, PROVIDER_TARIFF_PRESETS.malanka.commercial_ac);
+});
+
+test("user provider tariff resolution", () => {
+  const userMap = userProvidersFromRows([
+    { id: "up-1", user_id: "u1", label: "My Garage", home_price_per_kwh: 0.3, commercial_ac_price_per_kwh: 0.3, fast_dc_price_per_kwh: 0.5, created_at: "", updated_at: "" },
+  ]);
+  assert.deepEqual(resolveUserProviderPrices("up-1", userMap), { home: 0.3, commercial_ac: 0.3, fast_dc: 0.5 });
+  assert.equal(resolveUserProviderPrices("nonexistent", userMap), null);
+
+  const result = resolveSessionTariff({
+    manualPricePerKwh: 0.66,
+    manualTariffType: "fast_dc",
+    manualProviderType: "user_provider",
+    userProviderId: "up-1",
+    chargerPowerKw: 4.4,
+    location: { lat: 53.9, lon: 27.56 },
+    locationPresets: [],
+    profile,
+    userProviderMap: userMap,
+  });
+  assert.equal(result.source, "manual");
+  assert.equal(result.providerType, "user_provider");
+  assert.equal(result.userProviderId, "up-1");
+  assert.equal(result.tariffType, "fast_dc");
+  assert.equal(result.pricePerKwh, 0.66);
+});
+
+test("user provider tariff resolution with location match", () => {
+  const userMap = userProvidersFromRows([
+    { id: "up-2", user_id: "u1", label: "Office", home_price_per_kwh: 0.4, commercial_ac_price_per_kwh: 0.4, fast_dc_price_per_kwh: 0.6, created_at: "", updated_at: "" },
+  ]);
+  const result = resolveSessionTariff({
+    chargerPowerKw: 15,
+    location: { lat: 53.9, lon: 27.56 },
+    locationPresets: [
+      {
+        id: "loc-up",
+        user_id: "u1",
+        name: "Office spot",
+        lat: 53.9,
+        lng: 27.56,
+        radius_m: 150,
+        tariff_type: "commercial_ac",
+        provider_type: "user_provider",
+        user_provider_id: "up-2",
+        price_per_kwh_override: null,
+        created_at: "",
+        updated_at: "",
+      },
+    ],
+    profile,
+    userProviderMap: userMap,
+  });
+  assert.equal(result.source, "location");
+  assert.equal(result.providerType, "user_provider");
+  assert.equal(result.userProviderId, "up-2");
+  assert.equal(result.tariffType, "commercial_ac");
+  assert.equal(result.pricePerKwh, 0.4);
 });
 
 test("manual override wins over location and power", () => {
@@ -121,6 +182,7 @@ test("resolveSessionTariff applies provider overrides for a matched location", (
         radius_m: 150,
         tariff_type: "commercial_ac",
         provider_type: "malanka",
+        user_provider_id: null,
         price_per_kwh_override: null,
         created_at: "",
         updated_at: "",

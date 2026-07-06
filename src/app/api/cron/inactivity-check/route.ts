@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     .lt("last_active_at", thirtyDaysAgo)
     .is("inactivity_warning_sent_at", null)
     .or("is_premium.is.null,is_premium.eq.false")
-    .or("premium_until.is.null,premium_until.lt", thirtyDaysAgo);
+    .or(`premium_until.is.null,premium_until.lt.${thirtyDaysAgo}`);
 
   if (warnCandidates) {
     for (const profile of warnCandidates) {
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     .lt("last_active_at", sixtyDaysAgo)
     .not("inactivity_warning_sent_at", "is", null)
     .or("is_premium.is.null,is_premium.eq.false")
-    .or("premium_until.is.null,premium_until.lt", sixtyDaysAgo);
+    .or(`premium_until.is.null,premium_until.lt.${sixtyDaysAgo}`);
 
   if (deleteCandidates) {
     for (const profile of deleteCandidates) {

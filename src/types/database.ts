@@ -7,6 +7,7 @@ export type ChargingProviderType =
   | "forevo"
   | "zaryadka"
   | "batterfly"
+  | "user_provider"
   | "custom";
 
 export type Profile = {
@@ -56,6 +57,7 @@ export type ChargingSessionRow = {
   efficiency_percent: number;
   tariff_type: ChargingTariffType;
   provider_type: ChargingProviderType;
+  user_provider_id: string | null;
   tariff_manual: boolean;
   tariff_selected_at: string | null;
   price_per_kwh: number;
@@ -78,6 +80,7 @@ export type ChargingTariffLocationRow = {
   radius_m: number;
   tariff_type: ChargingTariffType;
   provider_type: ChargingProviderType;
+  user_provider_id: string | null;
   price_per_kwh_override: number | null;
   created_at: string;
   updated_at: string;
@@ -85,7 +88,18 @@ export type ChargingTariffLocationRow = {
 
 export type ProviderTariffRow = {
   user_id: string;
-  provider_type: Exclude<ChargingProviderType, "custom">;
+  provider_type: Exclude<ChargingProviderType, "custom" | "user_provider">;
+  home_price_per_kwh: number;
+  commercial_ac_price_per_kwh: number;
+  fast_dc_price_per_kwh: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type UserProviderRow = {
+  id: string;
+  user_id: string;
+  label: string;
   home_price_per_kwh: number;
   commercial_ac_price_per_kwh: number;
   fast_dc_price_per_kwh: number;

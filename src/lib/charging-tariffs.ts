@@ -5,6 +5,7 @@ import type {
   ChargingTariffType,
   Profile,
   ProviderTariffRow,
+  UserProviderRow,
 } from "../types/database.ts";
 
 export const COMMERCIAL_AC_MIN_KW = 4;
@@ -21,6 +22,7 @@ export type TariffPriceProfile = Pick<
 export type TariffResolution = {
   tariffType: ChargingTariffType;
   providerType: ChargingProviderType;
+  userProviderId: string | null;
   pricePerKwh: number;
   source: "manual" | "location" | "power";
   locationPresetId: string | null;
@@ -33,11 +35,12 @@ export const PROVIDER_LABELS: Record<ChargingProviderType, string> = {
   forevo: "forEVo",
   zaryadka: "Zaryadka",
   batterfly: "BatteryFly",
+  user_provider: "Custom",
   custom: "Custom",
 };
 
 export const PROVIDER_TARIFF_PRESETS: Record<
-  Exclude<ChargingProviderType, "custom">,
+  Exclude<ChargingProviderType, "custom" | "user_provider">,
   { home: number; commercial_ac: number; fast_dc: number }
 > = {
   home: { home: 0.15, commercial_ac: 0.54, fast_dc: 0.54 },
@@ -49,13 +52,16 @@ export const PROVIDER_TARIFF_PRESETS: Record<
 };
 
 /** User-editable overrides of PROVIDER_TARIFF_PRESETS, keyed by provider. A missing
- * entry (or a missing provider key) falls back to the hardcoded preset. */
+ * entry (or a missing provider key) falls back to the hardcoded preset.
+ * Only applies to built-in providers — user-created providers have prices in UserProviderRow. */
 export type ProviderTariffOverrides = Partial<
   Record<
-    Exclude<ChargingProviderType, "custom">,
+    Exclude<ChargingProviderType, "custom" | "user_provider">,
     { home: number; commercial_ac: number; fast_dc: number }
   >
 >;
+
+export type UserProviderMap = Record<string, UserProviderRow>;
 
 export function providerTariffsFromRows(rows: ProviderTariffRow[]): ProviderTariffOverrides {
   const overrides: ProviderTariffOverrides = {};
@@ -69,10 +75,39 @@ export function providerTariffsFromRows(rows: ProviderTariffRow[]): ProviderTari
   return overrides;
 }
 
+export function userProvidersFromRows(rows: UserProviderRow[]): UserProviderMap {
+  const map: UserProviderMap = {};
+  for (const row of rows) {
+    map[row.id] = row;
+  }
+  return map;
+}
+
+export function resolveUserProviderPrices(
+  userProviderId: string | null | undefined,
+  userProviderMap: UserProviderMap | undefined,
+): { home: number; commercial_ac: number; fast_dc: number } | null {
+  if (!userProviderId || !userProviderMap) return null;
+  const row = userProviderMap[userProviderId];
+  if (!row) return null;
+  return {
+    home: row.home_price_per_kwh,
+    commercial_ac: row.commercial_ac_price_per_kwh,
+    fast_dc: row.fast_dc_price_per_kwh,
+  };
+}
+
 export function resolveProviderTariff(
   providerType: Exclude<ChargingProviderType, "custom">,
   overrides?: ProviderTariffOverrides,
-) {
+  userProviderId?: string | null,
+  userProviderMap?: UserProviderMap,
+): { home: number; commercial_ac: number; fast_dc: number } {
+  if (providerType === "user_provider") {
+    const userPrices = resolveUserProviderPrices(userProviderId, userProviderMap);
+    if (userPrices) return userPrices;
+    return { home: 0, commercial_ac: 0, fast_dc: 0 };
+  }
   return overrides?.[providerType] ?? PROVIDER_TARIFF_PRESETS[providerType];
 }
 
@@ -89,8 +124,9 @@ export function normalizeProviderType(value: unknown): ChargingProviderType {
     value === "forevo" ||
     value === "zaryadka" ||
     value === "batterfly" ||
+    value === "user_provider" ||
     value === "custom"
-    ? value
+    ? (value as ChargingProviderType)
     : "custom";
 }
 
@@ -106,9 +142,11 @@ export function resolveTariffPrice(
   profile: TariffPriceProfile | null | undefined,
   providerType: ChargingProviderType = "custom",
   providerTariffs?: ProviderTariffOverrides,
+  userProviderId?: string | null,
+  userProviderMap?: UserProviderMap,
 ): number {
   if (providerType !== "custom") {
-    const preset = resolveProviderTariff(providerType, providerTariffs);
+    const preset = resolveProviderTariff(providerType, providerTariffs, userProviderId, userProviderMap);
     return preset[tariffType];
   }
   const fallback = Number(profile?.default_price_per_kwh ?? 0);
@@ -143,14 +181,18 @@ export function resolveSessionTariff(params: {
   manualPricePerKwh?: number;
   manualTariffType?: ChargingTariffType | null;
   manualProviderType?: ChargingProviderType | null;
+  userProviderId?: string | null;
   chargerPowerKw: number;
   location: { lat?: number | null; lon?: number | null } | null | undefined;
   locationPresets: ChargingTariffLocationRow[];
   profile: TariffPriceProfile | null | undefined;
   providerTariffs?: ProviderTariffOverrides;
+  userProviderMap?: UserProviderMap;
 }): TariffResolution {
   const manualPrice = Number(params.manualPricePerKwh ?? 0);
   const providerType = normalizeProviderType(params.manualProviderType ?? "custom");
+  const userProviderId =
+    providerType === "user_provider" ? (params.userProviderId ?? null) : null;
   if (manualPrice > 0) {
     const tariffType = normalizeTariffType(
       params.manualTariffType ?? resolveTariffTypeByPower(params.chargerPowerKw),
@@ -158,6 +200,7 @@ export function resolveSessionTariff(params: {
     return {
       tariffType,
       providerType,
+      userProviderId,
       pricePerKwh: manualPrice,
       source: "manual",
       locationPresetId: null,
@@ -168,14 +211,24 @@ export function resolveSessionTariff(params: {
   if (matched) {
     const type = normalizeTariffType(matched.tariff_type);
     const matchedProvider = normalizeProviderType(matched.provider_type);
+    const matchedUserProviderId =
+      matchedProvider === "user_provider" ? (matched.user_provider_id ?? null) : null;
     const override = Number(matched.price_per_kwh_override ?? 0);
     return {
       tariffType: type,
       providerType: matchedProvider,
+      userProviderId: matchedUserProviderId,
       pricePerKwh:
         override > 0
           ? override
-          : resolveTariffPrice(type, params.profile, matchedProvider, params.providerTariffs),
+          : resolveTariffPrice(
+              type,
+              params.profile,
+              matchedProvider,
+              params.providerTariffs,
+              matchedUserProviderId,
+              params.userProviderMap,
+            ),
       source: "location",
       locationPresetId: matched.id,
     };
@@ -186,6 +239,7 @@ export function resolveSessionTariff(params: {
   return {
     tariffType,
     providerType: autoProvider,
+    userProviderId: null,
     pricePerKwh: resolveTariffPrice(tariffType, params.profile, autoProvider, params.providerTariffs),
     source: "power",
     locationPresetId: null,

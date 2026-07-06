@@ -41,6 +41,7 @@ import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useLatestBydmateTripsQuery } from "@/hooks/use-bydmate-trips-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useProviderTariffOverrides } from "@/hooks/use-provider-tariffs-query";
+import { useUserProvidersQuery } from "@/hooks/use-user-providers-query";
 import { usePageVisible } from "@/hooks/use-page-visible";
 import { chargingSessionsRefetchInterval, fetchSessions } from "@/hooks/use-sessions-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
@@ -95,7 +96,7 @@ const CHARGE_TYPE_OPTIONS: { value: ChargingTariffType; labelKey: TranslationKey
   { value: "fast_dc", labelKey: "dashboard.estimateTypeDc" },
 ];
 
-const PROVIDER_OPTIONS: { value: ChargingProviderType; label: string }[] = [
+const BUILT_IN_PROVIDER_OPTIONS: { value: ChargingProviderType; label: string }[] = [
   { value: "custom", label: PROVIDER_LABELS.custom },
   { value: "home", label: PROVIDER_LABELS.home },
   { value: "malanka", label: PROVIDER_LABELS.malanka },
@@ -373,18 +374,23 @@ function ParkChargeEstimatePanel({
   currency,
   estimatePowerKw,
   estimateProviderType,
+  estimateUserProviderId,
   estimateTariffType,
   homeChargerPowerKw,
   locale,
   parkEstimate,
   setEstimatePowerKw,
   setEstimateProviderType,
+  setEstimateUserProviderId,
   setEstimateTariffType,
   t,
+  allProviderOptions,
+  parseProviderSelectValue,
 }: {
   currency: Currency;
   estimatePowerKw: string;
   estimateProviderType: ChargingProviderType;
+  estimateUserProviderId: string | null;
   estimateTariffType: ChargingTariffType;
   homeChargerPowerKw?: number | null;
   locale: Locale;
@@ -396,8 +402,11 @@ function ParkChargeEstimatePanel({
   } | null;
   setEstimatePowerKw: (value: string) => void;
   setEstimateProviderType: (value: ChargingProviderType) => void;
+  setEstimateUserProviderId: (value: string | null) => void;
   setEstimateTariffType: (value: ChargingTariffType) => void;
   t: (key: TranslationKey, values?: Record<string, string | number>) => string;
+  allProviderOptions: { value: string; label: string }[];
+  parseProviderSelectValue: (value: string | null | undefined) => { providerType: ChargingProviderType; userProviderId: string | null };
 }) {
   const durationText = parkEstimate
     ? formatDuration(Math.round(parkEstimate.durationSeconds))
@@ -463,9 +472,13 @@ function ParkChargeEstimatePanel({
             {t("dashboard.estimateProvider")}
           </Label>
           <Select
-            value={estimateProviderType}
-            onValueChange={(value) => setEstimateProviderType(value as ChargingProviderType)}
-            items={PROVIDER_OPTIONS.map((item) => ({
+            value={estimateUserProviderId ? `up_${estimateUserProviderId}` : estimateProviderType}
+            onValueChange={(value) => {
+              const parsed = parseProviderSelectValue(value);
+              setEstimateProviderType(parsed.providerType);
+              setEstimateUserProviderId(parsed.userProviderId);
+            }}
+            items={allProviderOptions.map((item) => ({
               value: item.value,
               label: item.label,
             }))}
@@ -474,7 +487,7 @@ function ParkChargeEstimatePanel({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {PROVIDER_OPTIONS.map((item) => (
+              {allProviderOptions.map((item) => (
                 <SelectItem key={item.value} value={item.value}>
                   {item.label}
                 </SelectItem>
@@ -563,6 +576,25 @@ export function DashboardView() {
   const cars = carsResult?.cars;
   const preferredCarId = carsResult?.preferredCarId ?? null;
   const providerTariffOverrides = useProviderTariffOverrides();
+  const { data: userProviderRows = [] } = useUserProvidersQuery();
+  const allProviderOptions = useMemo(() => {
+    const userOpts = userProviderRows.map((p) => ({
+      value: `up_${p.id}` as const,
+      label: p.label,
+      userProviderId: p.id,
+    }));
+    return [...BUILT_IN_PROVIDER_OPTIONS, ...userOpts];
+  }, [userProviderRows]);
+
+  /** Convert a select value to (providerType, userProviderId) pair. */
+  function parseProviderSelectValue(
+    value: string | null | undefined,
+  ): { providerType: ChargingProviderType; userProviderId: string | null } {
+    if (typeof value === "string" && value.startsWith("up_")) {
+      return { providerType: "user_provider", userProviderId: value.slice(3) };
+    }
+    return { providerType: (value as ChargingProviderType) ?? "custom", userProviderId: null };
+  }
   const { data: bydmateLive = [], isLoading: loadingLive } = useBydmateLiveQuery();
   const selectedCarId = useAppPreferences((s) => s.selectedCarId);
   const setSelectedCarId = useAppPreferences((s) => s.setSelectedCarId);
@@ -690,15 +722,15 @@ export function DashboardView() {
   const [targetPct, setTargetPct] = useState("100");
   const [chargerKw, setChargerKw] = useState("");
   const [price, setPrice] = useState(String(defaultPrice));
-  const [manualProviderType, setManualProviderType] = useState<
-    "custom" | "home" | "malanka" | "evika" | "forevo" | "zaryadka" | "batterfly"
-  >("custom");
+  const [manualProviderType, setManualProviderType] = useState<ChargingProviderType>("custom");
+  const [manualUserProviderId, setManualUserProviderId] = useState<string | null>(null);
   const [manualTariffType, setManualTariffType] = useState<"auto" | ChargingTariffType>(
     "auto",
   );
   const [estimateTariffType, setEstimateTariffType] = useState<ChargingTariffType>("home");
   const [estimateProviderType, setEstimateProviderType] =
     useState<ChargingProviderType>("home");
+  const [estimateUserProviderId, setEstimateUserProviderId] = useState<string | null>(null);
   const [estimatePowerKw, setEstimatePowerKw] = useState(
     String(defaultEstimatePowerKw("home", selectedCar?.default_charger_power_kw)),
   );
@@ -938,6 +970,7 @@ export function DashboardView() {
             ? undefined
             : (manualTariffType as ChargingTariffType),
         providerType: manualProviderType,
+        userProviderId: manualUserProviderId ?? undefined,
         ...overrides,
       });
       if (!res.ok) throw new Error(res.error);
@@ -1139,6 +1172,7 @@ export function DashboardView() {
                       currency={currency}
                       estimatePowerKw={estimatePowerKw}
                       estimateProviderType={estimateProviderType}
+                      estimateUserProviderId={estimateUserProviderId}
                       estimateTariffType={estimateTariffType}
                       homeChargerPowerKw={selectedCar?.default_charger_power_kw}
                       locale={locale}
@@ -1151,11 +1185,16 @@ export function DashboardView() {
                         setEstimateProviderTouched(true);
                         setEstimateProviderType(value);
                       }}
+                      setEstimateUserProviderId={(value) => {
+                        setEstimateUserProviderId(value);
+                      }}
                       setEstimateTariffType={(value) => {
                         setEstimateTariffTouched(true);
                         setEstimateTariffType(value);
                       }}
                       t={(key, values) => String(t(key, values))}
+                      allProviderOptions={allProviderOptions}
+                      parseProviderSelectValue={parseProviderSelectValue}
                     />
                   ) : (
                     <div
@@ -1347,40 +1386,26 @@ export function DashboardView() {
             <div className="space-y-2">
               <Label htmlFor="session-provider-type">Provider</Label>
               <Select
-                value={manualProviderType}
-                onValueChange={(value) =>
-                  setManualProviderType(
-                    value as
-                      | "custom"
-                      | "home"
-                      | "malanka"
-                      | "evika"
-                      | "forevo"
-                      | "zaryadka"
-                      | "batterfly",
-                  )
-                }
-                items={[
-                  { value: "custom", label: PROVIDER_LABELS.custom },
-                  { value: "home", label: PROVIDER_LABELS.home },
-                  { value: "malanka", label: PROVIDER_LABELS.malanka },
-                  { value: "evika", label: PROVIDER_LABELS.evika },
-                  { value: "forevo", label: PROVIDER_LABELS.forevo },
-                  { value: "zaryadka", label: PROVIDER_LABELS.zaryadka },
-                  { value: "batterfly", label: PROVIDER_LABELS.batterfly },
-                ]}
+                value={manualUserProviderId ? `up_${manualUserProviderId}` : manualProviderType}
+                onValueChange={(value) => {
+                  const parsed = parseProviderSelectValue(value);
+                  setManualProviderType(parsed.providerType);
+                  setManualUserProviderId(parsed.userProviderId);
+                }}
+                items={allProviderOptions.map((item) => ({
+                  value: item.value,
+                  label: item.label,
+                }))}
               >
                 <SelectTrigger id="session-provider-type" className="h-[52px] rounded-xl text-lg">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="custom">{PROVIDER_LABELS.custom}</SelectItem>
-                  <SelectItem value="home">{PROVIDER_LABELS.home}</SelectItem>
-                  <SelectItem value="malanka">{PROVIDER_LABELS.malanka}</SelectItem>
-                  <SelectItem value="evika">{PROVIDER_LABELS.evika}</SelectItem>
-                  <SelectItem value="forevo">{PROVIDER_LABELS.forevo}</SelectItem>
-                  <SelectItem value="zaryadka">{PROVIDER_LABELS.zaryadka}</SelectItem>
-                  <SelectItem value="batterfly">{PROVIDER_LABELS.batterfly}</SelectItem>
+                  {allProviderOptions.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

@@ -22,6 +22,7 @@ export const queryKeys = {
   mateLatestRelease: ["mate-latest-release"] as const,
   tariffLocations: ["tariff-locations"] as const,
   providerTariffs: ["provider-tariffs"] as const,
+  userProviders: ["user-providers"] as const,
   serviceRecords: (carId: string) => ["service-records", carId] as const,
   serviceRecord: (id: string) => ["service-record", id] as const,
   serviceReminders: (carId: string) => ["service-reminders", carId] as const,

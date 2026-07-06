@@ -1,6 +1,81 @@
 # Changelog — shipped initiatives & notable fixes
 
 A running log of completed work that was previously tracked as "plans". Newest first.
+
+---
+
+## 2026-07-06
+
+### User-connected providers — add/remove custom providers per-user
+
+Users can now create their own charging providers with custom names and prices, and
+remove them. These appear alongside built-in providers (Malanka, Evika, etc.) in all
+selectors. Built-in providers remain unchanged.
+
+**Migration** `20260706180000_user_providers.sql`:
+- Added `'user_provider'` to `charging_provider_type` enum (marker value)
+- New `user_providers` table (per-user label + 3 prices, RLS, unique per label)
+- Nullable `user_provider_id` FK on `charging_sessions` and `charging_tariff_locations`
+
+**Lib** (`src/lib/charging-tariffs.ts`):
+- `resolveProviderTariff()` now handles `'user_provider'` — looks up prices from
+  `user_provider` rows
+- New `userProvidersFromRows()`, `resolveUserProviderPrices()`, `UserProviderMap` type
+- `TariffResolution` includes `userProviderId`
+- `ProviderTariffOverrides` excludes `user_provider` (prices live in user_providers)
+
+**Types** (`src/types/database.ts`): `ChargingProviderType` union includes `'user_provider'`,
+new `UserProviderRow` type, `user_provider_id` on `ChargingSessionRow` and
+`ChargingTariffLocationRow`.
+
+**Hook** (`src/hooks/use-user-providers-query.ts`): fetches user's `user_providers` rows;
+`useUserProviderMap()` returns the id→row map for resolution.
+
+**Server actions** (`src/actions/sessions.ts`, `src/lib/bydmate/charging-auto-session.ts`):
+all tariff resolution call sites also fetch `user_providers` rows and pass
+`userProviderMap` into `resolveSessionTariff`. Created sessions save `user_provider_id`.
+
+**Settings UI** (`src/components/settings/settings-view.tsx`): new "Your providers" card
+with:
+- List of existing user providers (label, AC/DC prices, Delete button)
+- Add provider form (label, AC price, DC price, Save button)
+- Duplicate label detection and validation
+
+**Provider selectors** (4 components):
+- Dashboard park estimate (`dashboard-view.tsx:ParkChargeEstimatePanel`)
+- Dashboard manual session dialog (`dashboard-view.tsx`)
+- Charging session screen (`charging-session-screen.tsx`)
+- Settings tariff location form (`settings-view.tsx`)
+All use `up_<uuid>` namespace convention for user-provider values and merge built-in +
+user providers in a single dropdown.
+
+**i18n**: new keys in en/be/ru for add/delete provider flows.
+
+**Tests**: `charging-tariffs.test.mjs` – user provider tariff resolution, user provider
+with location match.
+
+### Inactive account auto-cleanup
+
+30-day inactivity → Resend warning email → 60-day auto-deletion. Premium users exempt.
+
+- **Migration** `20260706120000_profiles_inactivity_cleanup.sql`: added
+  `last_active_at` + `inactivity_warning_sent_at` to `profiles`.
+- **Activity tracking**: `last_active_at` updated on every telemetry ingest
+  (`route.ts`) and on web login via `touchUserActivity()` server action
+  (throttled to 1/hour, called from `MobileShell` on mount).
+- **Email infra**: `resend` npm package installed; `sendInactivityWarning()` in
+  `src/lib/email/inactivity-warning.ts`.
+- **Cron route**: `POST /api/cron/inactivity-check` (CRON_SECRET gated) sends
+  warnings at 30d and deletes accounts at 60d via
+  `supabaseAdmin.auth.admin.deleteUser()`.
+- **Self-service deletion**: "Delete account" card in settings with type-to-confirm
+  (`Trash2`, DELETE text), calls `src/actions/account.ts`.
+- **Policy updates**: privacy + terms (world + belarus) × 3 locales — added
+  inactivity paragraph in Retention / Termination sections. Date bumped to
+  2026-07-06.
+- **Remaining**: add daily crontab entry on Contabo to curl the cron route.
+
+---
 For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 [docs/](docs/ARCHITECTURE.md) reference set.
 

@@ -16,13 +16,15 @@ import {
   RefreshCw,
   Scale,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 import type { FormEvent } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { deleteCar } from "@/actions/cars";
+import { deleteAccount } from "@/actions/account";
 import { sendTestPush } from "@/actions/push";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { LegalSettingsRow } from "@/components/legal/legal-document-view";
@@ -47,6 +49,7 @@ import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useMateReleaseQuery } from "@/hooks/use-mate-release-query";
 import { useProviderTariffsQuery } from "@/hooks/use-provider-tariffs-query";
+import { useUserProvidersQuery } from "@/hooks/use-user-providers-query";
 import { useTranslation } from "@/hooks/use-translation";
 import { compareMateVersions, isMateUpdateAvailable } from "@/lib/mate-version";
 import { sendPasswordResetEmail } from "@/lib/auth/password-reset";
@@ -70,7 +73,7 @@ import { legalDocumentPath } from "@/lib/legal-region";
 import { parseDecimalInput } from "@/lib/number-input";
 import { devFetch, isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { useAppPath } from "@/lib/dev/dev-path";
-import { mapChargingTariffLocation } from "@/lib/db-map";
+import { mapChargingTariffLocation, mapUserProvider } from "@/lib/db-map";
 import {
   PROVIDER_LABELS,
   PROVIDER_TARIFF_PRESETS,
@@ -158,6 +161,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   const [notifyChannel, setNotifyChannel] = useState<NotifyChannel>("web_push");
   const [telegramInstructionsOpen, setTelegramInstructionsOpen] = useState(false);
   const [securityBusy, setSecurityBusy] = useState(false);
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [deleteAccountText, setDeleteAccountText] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [telegramBusy, setTelegramBusy] = useState(false);
   const [bydmateCloudApiKey, setBydmateCloudApiKey] = useState("");
   const [linkCode, setLinkCode] = useState<string | null>(null);
@@ -185,13 +191,44 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
     useState<ChargingTariffType>("home");
   const [newLocationProviderType, setNewLocationProviderType] =
     useState<ChargingProviderType>("custom");
+  const [newLocationUserProviderId, setNewLocationUserProviderId] = useState<string | null>(null);
   const [newLocationOverridePrice, setNewLocationOverridePrice] = useState("");
   const [tariffSaveState, setTariffSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const tariffSavedResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { t } = useTranslation();
   const qc = useQueryClient();
   const { data: providerTariffRows = [] } = useProviderTariffsQuery();
+  const { data: userProviderRows = [] } = useUserProvidersQuery();
+
+  const locationProviderOptions = useMemo(() => {
+    const builtIn = (["custom", "home", "malanka", "evika", "forevo", "zaryadka", "batterfly"] as const).map(
+      (value) => ({
+        value,
+        label: t(`charging.tariff.providers.${value}` as TranslationKey),
+      }),
+    );
+    const userOpts = userProviderRows.map((p) => ({
+      value: `up_${p.id}` as const,
+      label: p.label,
+    }));
+    return [...builtIn, ...userOpts];
+  }, [userProviderRows, t]);
+
+  function parseLocationProviderValue(value: string | null | undefined): {
+    providerType: ChargingProviderType;
+    userProviderId: string | null;
+  } {
+    if (typeof value === "string" && value.startsWith("up_")) {
+      return { providerType: "user_provider", userProviderId: value.slice(3) };
+    }
+    return { providerType: (value as ChargingProviderType) ?? "custom", userProviderId: null };
+  }
   const [providerTariffsSaving, setProviderTariffsSaving] = useState(false);
+  const [newProviderLabel, setNewProviderLabel] = useState("");
+  const [newProviderAc, setNewProviderAc] = useState("");
+  const [newProviderDc, setNewProviderDc] = useState("");
+  const [deletingProviderId, setDeletingProviderId] = useState<string | null>(null);
+  const [newProviderSaving, setNewProviderSaving] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -526,6 +563,66 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       });
   };
 
+  const handleAddUserProvider = () => {
+    if (!profileUserId || newProviderSaving) return;
+    const label = newProviderLabel.trim();
+    if (!label) {
+      toast.error(t("settings.providerTariffs.providerNameRequired") as string);
+      return;
+    }
+    const acInput = parseDecimalInput(newProviderAc);
+    const dcInput = parseDecimalInput(newProviderDc);
+    if (!Number.isFinite(acInput) || !Number.isFinite(dcInput) || acInput < 0 || dcInput < 0) {
+      toast.error(t("settings.providerTariffs.invalidPrice") as string);
+      return;
+    }
+    if (userProviderRows.some((p) => p.label.toLowerCase() === label.toLowerCase())) {
+      toast.error(t("settings.providerTariffs.providerNameExists") as string);
+      return;
+    }
+    setNewProviderSaving(true);
+    void createClient()
+      .from("user_providers")
+      .insert({
+        user_id: profileUserId,
+        label,
+        home_price_per_kwh: acInput,
+        commercial_ac_price_per_kwh: acInput,
+        fast_dc_price_per_kwh: dcInput,
+      })
+      .then(({ error }) => {
+        setNewProviderSaving(false);
+        if (error) {
+          toast.error(error.message);
+          return;
+        }
+        setNewProviderLabel("");
+        setNewProviderAc("");
+        setNewProviderDc("");
+        void qc.invalidateQueries({ queryKey: queryKeys.userProviders });
+        toast.success(t("settings.providerTariffs.added") as string);
+      });
+  };
+
+  const handleDeleteUserProvider = (providerId: string) => {
+    if (!profileUserId) return;
+    setDeletingProviderId(providerId);
+    void createClient()
+      .from("user_providers")
+      .delete()
+      .eq("id", providerId)
+      .eq("user_id", profileUserId)
+      .then(({ error }) => {
+        setDeletingProviderId(null);
+        if (error) {
+          toast.error(error.message);
+          return;
+        }
+        void qc.invalidateQueries({ queryKey: queryKeys.userProviders });
+        toast.success(t("settings.providerTariffs.deleted") as string);
+      });
+  };
+
   const handleUseCurrentGps = () => {
     if (!navigator.geolocation) {
       toast.error(t("settings.locationTariffs.geolocationUnavailable") as string);
@@ -579,6 +676,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         radius_m: radiusM,
         tariff_type: newLocationTariffType,
         provider_type: newLocationProviderType,
+        user_provider_id: newLocationUserProviderId,
         price_per_kwh_override:
           Number.isFinite(override) && override > 0 ? override : null,
       })
@@ -903,6 +1001,70 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
           >
             {t("settings.signOut")}
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card size="sm" className="border-white/[0.08]">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Trash2 className="size-5 text-destructive" aria-hidden />
+            {t("settings.deleteAccount")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm leading-relaxed">
+          <p className="text-muted-foreground">
+            {t("settings.deleteAccountBody")}
+          </p>
+          {deleteAccountOpen ? (
+            <div className="space-y-3">
+              <Input
+                placeholder={t("settings.deleteAccountConfirm") as string}
+                value={deleteAccountText}
+                onChange={(e) => setDeleteAccountText(e.target.value)}
+                className="h-11 rounded-2xl text-sm"
+              />
+              <Button
+                className="h-11 w-full rounded-full text-sm font-semibold"
+                variant="destructive"
+                disabled={deleteAccountText !== "DELETE" || deletingAccount}
+                onClick={async () => {
+                  setDeletingAccount(true);
+                  const result = await deleteAccount();
+                  setDeletingAccount(false);
+                  if (result.ok) {
+                    toast.success(t("settings.deleteAccountDone") as string);
+                    router.replace("/login");
+                    router.refresh();
+                  } else {
+                    toast.error(result.error);
+                  }
+                }}
+              >
+                {deletingAccount
+                  ? t("settings.deleteAccountConfirming")
+                  : t("settings.deleteAccount")}
+              </Button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteAccountOpen(false);
+                  setDeleteAccountText("");
+                }}
+                className="w-full py-1 text-center text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+              >
+                {t("common.cancel") as string}
+              </button>
+            </div>
+          ) : (
+            <Button
+              className="h-11 w-full rounded-full text-sm font-semibold"
+              variant="outline"
+              type="button"
+              onClick={() => setDeleteAccountOpen(true)}
+            >
+              {t("settings.deleteAccount")}
+            </Button>
+          )}
         </CardContent>
       </Card>
 
@@ -1416,6 +1578,98 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             </Button>
           </form>
 
+          <div className="space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4">
+            <div>
+              <p className="text-sm font-semibold tracking-tight">
+                {t("settings.providerTariffs.userProvidersTitle") as string}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t("settings.providerTariffs.userProvidersBody") as string}
+              </p>
+            </div>
+
+            {userProviderRows.length > 0 ? (
+              <div className="space-y-2">
+                {userProviderRows.map((provider) => (
+                  <div key={provider.id} className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{provider.label}</p>
+                      <p className="text-xs text-muted-foreground">
+                        AC {provider.commercial_ac_price_per_kwh} · DC {provider.fast_dc_price_per_kwh}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteUserProvider(provider.id)}
+                      disabled={deletingProviderId === provider.id}
+                      className="shrink-0 text-xs text-destructive underline underline-offset-2 disabled:opacity-50"
+                    >
+                      {deletingProviderId === provider.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        t("settings.providerTariffs.deleteProvider") as string
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">
+                  {t("settings.providerTariffs.addProviderLabel") as string}
+                </Label>
+                <Input
+                  value={newProviderLabel}
+                  onChange={(e) => setNewProviderLabel(e.target.value)}
+                  placeholder={t("settings.providerTariffs.addProviderLabel") as string}
+                  className="h-10 rounded-xl text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">
+                  {t("settings.providerTariffs.addProviderAc") as string}
+                </Label>
+                <Input
+                  value={newProviderAc}
+                  onChange={(e) => setNewProviderAc(e.target.value)}
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9]*[,.]?[0-9]*"
+                  placeholder="0.00"
+                  className="h-10 rounded-xl text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">
+                  {t("settings.providerTariffs.addProviderDc") as string}
+                </Label>
+                <Input
+                  value={newProviderDc}
+                  onChange={(e) => setNewProviderDc(e.target.value)}
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9]*[,.]?[0-9]*"
+                  placeholder="0.00"
+                  className="h-10 rounded-xl text-sm"
+                />
+              </div>
+              <Button
+                type="button"
+                onClick={handleAddUserProvider}
+                disabled={newProviderSaving}
+                className="h-10 rounded-xl text-sm"
+              >
+                {newProviderSaving ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  t("settings.providerTariffs.addProviderSave") as string
+                )}
+              </Button>
+            </div>
+          </div>
+
           <div className="space-y-4 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4">
             <p className="text-sm font-semibold tracking-tight">
               {t("settings.locationTariffs.title") as string}
@@ -1509,28 +1763,26 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                 </SelectContent>
               </Select>
               <Select
-                value={newLocationProviderType}
-                onValueChange={(value) =>
-                  setNewLocationProviderType(value as ChargingProviderType)
-                }
-                items={(
-                  ["custom", "home", "malanka", "evika", "forevo", "zaryadka", "batterfly"] as const
-                ).map((value) => ({
-                  value,
-                  label: t(`charging.tariff.providers.${value}` as TranslationKey),
+                value={newLocationUserProviderId ? `up_${newLocationUserProviderId}` : newLocationProviderType}
+                onValueChange={(value) => {
+                  const parsed = parseLocationProviderValue(value);
+                  setNewLocationProviderType(parsed.providerType);
+                  setNewLocationUserProviderId(parsed.userProviderId);
+                }}
+                items={locationProviderOptions.map((item) => ({
+                  value: item.value,
+                  label: item.label,
                 }))}
               >
                 <SelectTrigger className="h-11 rounded-2xl text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {(["custom", "home", "malanka", "evika", "forevo", "zaryadka", "batterfly"] as const).map(
-                    (value) => (
-                      <SelectItem key={value} value={value}>
-                        {t(`charging.tariff.providers.${value}` as TranslationKey)}
-                      </SelectItem>
-                    ),
-                  )}
+                  {locationProviderOptions.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

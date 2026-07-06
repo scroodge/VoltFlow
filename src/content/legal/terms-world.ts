@@ -1,7 +1,7 @@
 import type { Locale } from "@/lib/i18n";
 import type { LegalDocument, LegalOperatorDetails } from "@/content/legal/types";
 
-const UPDATED = "2026-06-16";
+const UPDATED = "2026-07-06";
 
 const en = (op: LegalOperatorDetails): LegalDocument => ({
   title: "Terms of Service (International)",
@@ -58,6 +58,7 @@ const en = (op: LegalOperatorDetails): LegalDocument => ({
       title: "Termination",
       paragraphs: [
         "You may stop using the Service and request account deletion. We may suspend access for breach of these Terms or to protect the Service.",
+        "Accounts inactive for 60 days may be terminated after a 30-day warning notice. Premium users are exempt while their Premium status is active.",
       ],
     },
     {
@@ -128,6 +129,7 @@ const be = (op: LegalOperatorDetails): LegalDocument => ({
       title: "Спыненне",
       paragraphs: [
         "Вы можаце спыніць выкарыстанне і запытаць выдаленне акаўнта. Мы можам прыпыніць доступ пры парушэнні Умоў.",
+        "Акаўнты, неактыўныя на працягу 60 дзён, могуць быць спынены пасля 30-дзённага папярэджання. Прэміум-карыстальнікі вызваляюцца, пакуль іх прэміум-статус актыўны.",
       ],
     },
     {
@@ -196,6 +198,7 @@ const ru = (op: LegalOperatorDetails): LegalDocument => ({
       title: "Прекращение",
       paragraphs: [
         "Вы можете прекратить использование и запросить удаление аккаунта. Мы можем приостановить доступ при нарушении Условий.",
+        "Аккаунты, неактивные в течение 60 дней, могут быть прекращены после 30-дневного предупреждения. Премиум-пользователи освобождаются, пока их премиум-статус активен.",
       ],
     },
     {

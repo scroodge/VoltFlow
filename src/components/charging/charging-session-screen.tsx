@@ -48,6 +48,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { useChargingSessionLiveSync } from "@/hooks/use-charging-session-live-sync";
 import { useChargingSessionAutoTariff } from "@/hooks/use-charging-session-auto-tariff";
 import { useProviderTariffOverrides } from "@/hooks/use-provider-tariffs-query";
+import { useUserProvidersQuery } from "@/hooks/use-user-providers-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useSessionQuery } from "@/hooks/use-session-query";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
@@ -96,11 +97,13 @@ export function ChargingSessionScreen({
   const [tariffTypeDraft, setTariffTypeDraft] = useState<ChargingTariffType | null>(null);
   const [priceDraft, setPriceDraft] = useState("");
   const [providerTypeDraft, setProviderTypeDraft] = useState<ChargingProviderType | null>(null);
+  const [userProviderIdDraft, setUserProviderIdDraft] = useState<string | null>(null);
   const [savingTariff, setSavingTariff] = useState(false);
 
   const { data: session, error, isLoading } = useSessionQuery(sessionId);
   const { data: carsResult } = useCarsQuery();
   const providerTariffOverrides = useProviderTariffOverrides();
+  const { data: userProviderRows = [] } = useUserProvidersQuery();
   const { data: bydmateLive = [] } = useBydmateLiveQuery();
   const devSource = useChargingDevSource();
   const devOverrideActive = devSource?.isOverrideActive ?? false;
@@ -111,6 +114,27 @@ export function ChargingSessionScreen({
         : null,
     [carsResult?.cars, session],
   );
+
+  const allProviderOptions = useMemo(() => {
+    const userOpts = userProviderRows.map((p) => ({
+      value: `up_${p.id}` as const,
+      label: p.label,
+    }));
+    const builtIn = (["home", "malanka", "evika", "forevo", "zaryadka", "batterfly", "custom"] as const).map(
+      (value) => ({ value, label: t(tariffProviderKey(value)) }),
+    );
+    return [...builtIn, ...userOpts];
+  }, [userProviderRows, t]);
+
+  function parseProviderSelectValue(value: string | null | undefined): {
+    providerType: ChargingProviderType;
+    userProviderId: string | null;
+  } {
+    if (typeof value === "string" && value.startsWith("up_")) {
+      return { providerType: "user_provider", userProviderId: value.slice(3) };
+    }
+    return { providerType: (value as ChargingProviderType) ?? "custom", userProviderId: null };
+  }
 
   const clockActive = session?.status === "charging";
   const nowMs = useTickingClock(clockActive);
@@ -308,10 +332,13 @@ export function ChargingSessionScreen({
       return;
     }
     setSavingTariff(true);
+    const effectiveProvider = providerTypeDraft ?? session.provider_type;
+    const effectiveUserProviderId = userProviderIdDraft ?? session.user_provider_id;
     const res = await updateChargingSessionTariff({
       sessionId,
       tariffType: tariffTypeDraft ?? session.tariff_type,
-      providerType: providerTypeDraft ?? session.provider_type,
+      providerType: effectiveProvider,
+      userProviderId: effectiveUserProviderId ?? undefined,
       pricePerKwh,
     });
     setSavingTariff(false);
@@ -327,10 +354,14 @@ export function ChargingSessionScreen({
   const applyProviderPresetPrice = useCallback(
     (provider: ChargingProviderType, tariffType: ChargingTariffType) => {
       if (provider === "custom") return;
-      const preset = resolveProviderTariff(provider, providerTariffOverrides);
+      const userProviderId = provider === "user_provider" ? userProviderIdDraft : undefined;
+      const userMap = userProviderRows.length > 0
+        ? Object.fromEntries(userProviderRows.map((r) => [r.id, r]))
+        : undefined;
+      const preset = resolveProviderTariff(provider, providerTariffOverrides, userProviderId, userMap);
       setPriceDraft(String(preset[tariffType]));
     },
-    [providerTariffOverrides],
+    [providerTariffOverrides, userProviderIdDraft, userProviderRows],
   );
 
   const tariffLocationMatch = useMemo(
@@ -375,6 +406,7 @@ export function ChargingSessionScreen({
     session.price_per_kwh > 0 ? session.price_per_kwh : defaultPricePerKwh;
   const effectiveTariffTypeDraft = tariffTypeDraft ?? session.tariff_type;
   const effectiveProviderTypeDraft = providerTypeDraft ?? session.provider_type;
+  const effectiveUserProviderIdDraft = userProviderIdDraft ?? session.user_provider_id;
   const effectivePriceDraft =
     priceDraft.trim() === ""
       ? String(session.price_per_kwh > 0 ? session.price_per_kwh : defaultPricePerKwh)
@@ -608,39 +640,28 @@ export function ChargingSessionScreen({
           <div className="space-y-2">
             <Label htmlFor="session-provider-type">{t("charging.tariff.provider") as string}</Label>
             <Select
-              value={effectiveProviderTypeDraft}
+              value={effectiveUserProviderIdDraft ? `up_${effectiveUserProviderIdDraft}` : effectiveProviderTypeDraft}
               onValueChange={(value) => {
-                const provider = value as ChargingProviderType;
-                setProviderTypeDraft(provider);
-                applyProviderPresetPrice(provider, effectiveTariffTypeDraft);
+                const parsed = parseProviderSelectValue(value);
+                setProviderTypeDraft(parsed.providerType);
+                setUserProviderIdDraft(parsed.userProviderId);
+                applyProviderPresetPrice(parsed.providerType, effectiveTariffTypeDraft);
               }}
               modal={false}
-              items={(
-                [
-                  "home",
-                  "malanka",
-                  "evika",
-                  "forevo",
-                  "zaryadka",
-                  "batterfly",
-                  "custom",
-                ] as const
-              ).map((value) => ({
-                value,
-                label: t(tariffProviderKey(value)),
+              items={allProviderOptions.map((item) => ({
+                value: item.value,
+                label: item.label,
               }))}
             >
               <SelectTrigger id="session-provider-type" className="h-11 w-full rounded-2xl text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="z-[200]">
-                {(["home", "malanka", "evika", "forevo", "zaryadka", "batterfly", "custom"] as const).map(
-                  (value) => (
-                    <SelectItem key={value} value={value}>
-                      {t(tariffProviderKey(value))}
-                    </SelectItem>
-                  ),
-                )}
+                {allProviderOptions.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
