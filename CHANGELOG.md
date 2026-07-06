@@ -11,6 +11,25 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-07-06
 
+### Auto page while charging: charge params lead, then rest, Delta, Remote
+During an active charge the Авто page used to mix charge metrics into the hero grid
+and duplicate power/type/temps in a "Идет зарядка" card at the very bottom. Rebuilt
+the charging layout in `src/components/vehicle/vehicle-live-view.tsx` (single file,
+no schema/i18n changes):
+- **Hero** is slimmed while charging: SOC + status badge + last update only.
+- **`ChargingModeCard`** (cyan, "Идет зарядка") moved to directly under the hero and
+  extended from 4 to 7 tiles: charge power, charge type, battery temp, outside temp,
+  remaining, energy delivered, cost at 100%. The `chargeSummary` projection memo
+  moved out of `Hero` into this card (takes `session` prop); `—`-valued tiles are
+  hidden via `isMissingMetricValue`.
+- New **`RestMetricsCard`** below it with the displaced hero metrics: AI range,
+  math range, 12V battery, odometer.
+- Then **`ChargingDeltaCard`** (Delta by SOC) and **`VehicleControlPanel`**
+  (Remote commands, admin) in that order.
+- Non-charging and stale layouts unchanged; `is_charging` without an open
+  auto-session still renders power/type/temps from telemetry (summary tiles hidden).
+- Verified: `npm run build` clean; lint shows no new issues in the file.
+
 ### Telegram: only the live widget remains — verbose state messages removed
 The "ℹ️ Ваш автомобиль … подключился к сети / в режиме стоянки / отключен от сети"
 messages (Пробег/🔋/Время + maps link) duplicated the editable live widget and

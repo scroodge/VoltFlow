@@ -173,6 +173,50 @@ the current Yuan UP user base. Build on explicit go-ahead.
 
 ---
 
+## 🟢 Settings → Provider preset select always shows "Manual values"
+
+**Requested 2026-07-06.** Choosing **Malanka** in Settings → Economics → Provider
+preset fills the price fields correctly (0.55 / 0.55 / 0.73 — the Malanka preset
+applied fine) but the select immediately shows **"Manual values"** again, so it
+looks like the choice failed.
+
+**Root cause (verified in `src/components/settings/settings-view.tsx:1202`):** the
+`Select` is hardcoded to `value="custom"`. It's a controlled component pinned to
+"Manual values" — `onValueChange` fires `applyProviderPreset` (prices + hint toast)
+and the select snaps straight back. The preset choice is never stored anywhere;
+only the three prices are.
+
+### Options
+
+- **A — derive the select value from the prices (recommended, no migration).**
+  Replace the hardcoded `value="custom"` with a `useMemo` that reverse-matches the
+  current tariff state (`homePricePerKwh`, `commercialAcPricePerKwh`,
+  `fastDcPricePerKwh`) against `PROVIDER_TARIFF_PRESETS` (epsilon compare, first
+  match, else `"custom"`). All preset triples are distinct today.
+  - Pick Malanka → `applyProviderPreset` sets the state → select shows **Malanka**
+    immediately.
+  - Reload → the profile-load effect fills the same state → still matches → still
+    shows Malanka. Persistence for free, since `handlePriceSave` writes the same
+    three columns.
+  - Save manual non-preset values → state updated on save → back to "Manual values".
+  - Caveat: manually retyping the exact preset numbers also shows the provider name
+    (harmless — identical prices), and editing a field *without saving* doesn't flip
+    the select back until save (inputs are uncontrolled `defaultValue`).
+- **B — persist a real `profiles.default_provider_type` column.** New migration,
+  save/load wiring, and `resolveSessionTariff` could then label sessions with the
+  provider. More truthful model, but nothing downstream needs it today — cost math
+  runs off the three prices. Overkill for this complaint; revisit if per-provider
+  session labeling is ever wanted.
+
+**Recommendation: A.** One `useMemo` + one prop change in `settings-view.tsx`;
+no schema, no i18n keys.
+
+**Verify:** `npm run lint`, `npm run build`; manual: pick Malanka → select shows
+Malanka + fields fill → Store default → reload → select still shows Malanka; edit a
+price → save → select shows Manual values.
+
+---
+
 ## Notes / smaller debt
 
 - **Overlapping tariff columns on `profiles`:** legacy `default_price_per_kwh` coexists
