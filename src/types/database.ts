@@ -294,6 +294,7 @@ export type BydmateTripRow = {
   regen_energy_kwh?: number | null;
   traction_energy_kwh?: number | null;
   power_sample_count?: number;
+  source?: "telemetry" | "byd_energydata";
 };
 
 export type BydmateTripTrackPointRow = {

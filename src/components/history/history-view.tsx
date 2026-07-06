@@ -699,8 +699,13 @@ function TripCardHeader({
       ) : null}
       <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
       <div className="min-w-0">
-        <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+        <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
           {label}
+          {trip.source === "byd_energydata" ? (
+            <span className="rounded-full border border-border px-1.5 py-0.5 text-[9px] font-semibold normal-case tracking-normal text-muted-foreground">
+              {tx("history.trips.bydLogBadge")}
+            </span>
+          ) : null}
         </p>
         <p className="mt-0.5 font-heading text-lg font-bold leading-tight">
           {formatClock(trip.started_at)}

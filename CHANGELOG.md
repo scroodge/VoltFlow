@@ -1,10 +1,93 @@
 # Changelog — shipped initiatives & notable fixes
 
 A running log of completed work that was previously tracked as "plans". Newest first.
+For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
+[docs/](docs/ARCHITECTURE.md) reference set.
+
+> Dates are when the work landed in the working tree. "Built" here means code +
+> tests + (where applicable) migrations applied to prod, as recorded at the time.
 
 ---
 
 ## 2026-07-06
+
+### energydata trip-summary cloud sync — web half
+
+Web side of letting no-ADB BYD trip logs reach VoltFlow (APK side still pending —
+see BACKLOG). Triggered by a real user's Yuan UP 2025 / DiLink 5 confirming (via the
+VoltFlow Mate v0.4.6 «Диагностика BYD» button) that their firmware writes
+`/storage/emulated/0/energydata/EC_database.db` — 876 trips, readable with no ADB.
+
+- **Migration** `20260706190000_bydmate_trip_summary_source.sql`: `bydmate_trips.source`
+  (`telemetry` default / `byd_energydata`), a partial unique index on
+  `(user_id, vehicle_id, started_at) where source='byd_energydata'` for idempotent
+  re-import, and `bydmate_ingest_trip_summaries(user_id, vehicle_id, trips jsonb)` RPC
+  (security definer, service_role only) that upserts per-trip aggregates and derives
+  `avg_speed_kmh` / `avg_consumption_kwh_100km` server-side so the existing history UI
+  needs no new fields. Verified in a rolled-back transaction: insert, then re-ingest with
+  the same `started_at` updates in place (no duplicate row); math matches the real
+  report's trip (46.85 km/h, 20.0 kWh/100km for 6.0 km / 461 s / 1.20 kWh).
+- **API** `POST /api/bydmate/trip-summaries` (`src/app/api/bydmate/trip-summaries/route.ts`):
+  same `X-Api-Key` → `profiles.bydmate_cloud_api_key` auth as `/api/bydmate/telemetry`;
+  Zod-validated batch (`src/lib/bydmate/trip-summary-payload.ts`, max 300, epoch-second
+  timestamps matching `EnergyConsumption.start_timestamp`).
+- **UI**: small "BYD log" badge on trip cards where `source === 'byd_energydata'`
+  (`history-view.tsx`); no other changes needed — charts/route panels already have
+  empty states for trips with no telemetry samples or GPS track, and `fmt()` already
+  renders missing SOC as `—`.
+- These are per-trip **aggregates only** (no samples, no track, no SOC) — bypass
+  `bydmate_ingest_telemetry` and its junk-trip rules entirely.
+
+### Editable provider tariffs + auto-save GPS point after manual provider pick
+
+Two-part feature so per-provider prices (Malanka, Evika, etc.) are no longer
+hardcoded, and a manual provider pick during a charge quietly turns into a saved
+GPS location for next time.
+
+**Part 1 — editable provider tariffs:**
+- **Migration** `20260706010000_provider_tariffs.sql`: new `provider_tariffs` table
+  (PK `user_id, provider_type`, AC/DC/home prices, RLS own). No seed rows — a
+  missing row means "use the hardcoded `PROVIDER_TARIFF_PRESETS` default".
+- **Lib** (`src/lib/charging-tariffs.ts`): `resolveProviderTariff()`,
+  `providerTariffsFromRows()`; `resolveTariffPrice()` / `resolveSessionTariff()`
+  take an optional `providerTariffs` overrides map — user override wins over the
+  hardcoded preset, a location's `price_per_kwh_override` still wins over both.
+- Wired into all three tariff-resolution call sites (`startChargingSession`,
+  `syncChargingSessionTariffFromGps` in `src/actions/sessions.ts`, and
+  `resolveTariffForTelemetry` in `src/lib/bydmate/charging-auto-session.ts`) and
+  three client spots (charge-screen provider pick, dashboard park estimate,
+  settings) via a new `useProviderTariffsQuery` / `useProviderTariffOverrides`
+  hook (`src/hooks/use-provider-tariffs-query.ts`).
+- **Settings UI**: the old "Provider preset" dropdown (which silently reset to
+  "Manual values" and never actually persisted a chosen provider — see the
+  superseded BACKLOG item) is replaced by a "Provider tariffs" editor: one row per
+  built-in provider with AC/DC price fields and a single save button. Rows with a
+  saved override show a checkbox — checking one or more swaps "Save provider
+  tariffs" for a "Cancel" / "Delete selected (N)" row, which deletes those
+  override rows from `provider_tariffs` (the provider itself reverts to its
+  hardcoded default price, same bulk-select pattern as custom providers below it).
+
+**Part 2 — delayed GPS point save:**
+- **Migration** `20260706020000_charging_sessions_tariff_selected_at.sql`: new
+  `charging_sessions.tariff_selected_at`, set whenever the user manually saves a
+  tariff on the active charge screen; re-picking resets the clock.
+- New pure decision module `src/lib/charging-tariff-location-autosave.ts`
+  (`decideTariffLocationAutosave`, `TARIFF_LOCATION_AUTOSAVE_DELAY_MS = 5 min`,
+  `uniqueTariffLocationName`) plus server action
+  `persistManualTariffLocationFromSession` (`src/actions/sessions.ts`): once a
+  manual, non-custom provider pick has stuck for 5 minutes on a still-charging
+  session, it takes the car's GPS from the live snapshot (browser GPS fallback),
+  dedupes against existing saved locations (same provider → skip, different
+  provider → correct that point), and otherwise inserts a new point named after
+  the provider (150 m radius, no price override, so later tariff edits propagate).
+  Unplugging before 5 minutes saves nothing (filters out mis-taps).
+- **Trigger**: new hook `useChargingTariffLocationAutosave`, polled every 30 s from
+  the global `ChargingSessionBackgroundSync` — survives navigating away from the
+  charge screen.
+- Tests: `src/lib/charging-tariffs.test.mjs` (override lookup) and
+  `src/lib/charging-tariff-location-autosave.test.mjs` (persist decision:
+  too-early / not-manual / custom-provider / dedupe-same / dedupe-different /
+  insert).
 
 ### User-connected providers — add/remove custom providers per-user
 
@@ -37,8 +120,12 @@ all tariff resolution call sites also fetch `user_providers` rows and pass
 
 **Settings UI** (`src/components/settings/settings-view.tsx`): new "Your providers" card
 with:
-- List of existing user providers (label, AC/DC prices, Delete button)
-- Add provider form (label, AC price, DC price, Save button)
+- List of existing user providers (label, AC/DC prices), each row a checkbox rather
+  than a per-row Delete button — selecting one or more swaps the add-provider form
+  for a "Cancel" / "Delete (N)" action row, so removing several providers doesn't
+  need N separate confirmations.
+- Add provider form (label, AC price, DC price, Save button) — hidden while a
+  selection is active.
 - Duplicate label detection and validation
 
 **Provider selectors** (4 components):
@@ -74,17 +161,6 @@ with location match.
   inactivity paragraph in Retention / Termination sections. Date bumped to
   2026-07-06.
 - **Remaining**: add daily crontab entry on Contabo to curl the cron route.
-
----
-For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
-[docs/](docs/ARCHITECTURE.md) reference set.
-
-> Dates are when the work landed in the working tree. "Built" here means code +
-> tests + (where applicable) migrations applied to prod, as recorded at the time.
-
----
-
-## 2026-07-06
 
 ### Auto page while charging: charge params lead, then rest, Delta, Remote
 During an active charge the Авто page used to mix charge metrics into the hero grid

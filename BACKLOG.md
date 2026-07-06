@@ -6,6 +6,84 @@ go-ahead.** These are researched but **not built**. Shipped work lives in
 
 ---
 
+## 🟢 Providers should be user-owned data, not app-wide hardcoded + a hide-list
+
+**Requested 2026-07-06.** Rejected the first draft of this plan (a `hidden_providers`
+exception table layered on top of the hardcoded `PROVIDER_TARIFF_PRESETS` list) —
+user's correction: **"providers is user dependent, not app dependent."** The
+architecture should reflect that from the start, not bolt a hide-list onto a
+global constant. Since `user_providers` (custom providers) already has full,
+working CRUD — add, edit-by-replace, and the checkbox → "Delete selected (N)"
+flow — the fix is to make **that** table the single source of truth for every
+provider, built-in ones included.
+
+**Current split (the thing being unified):**
+- `PROVIDER_TARIFF_PRESETS` (`src/lib/charging-tariffs.ts`) — hardcoded, global,
+  same for every user.
+- `provider_tariffs` — per-user *price override* on top of a hardcoded provider.
+- `user_providers` — per-user, fully owned, add/delete already works.
+- 4 separate hardcoded built-in lists enumerate providers for selectors:
+  `settings-view.tsx:96` (`EDITABLE_PROVIDERS`), `settings-view.tsx:204`
+  (`locationProviderOptions`), `dashboard-view.tsx:99`
+  (`BUILT_IN_PROVIDER_OPTIONS`), `charging-session-screen.tsx:123` (inline).
+
+### Design — fold built-ins into `user_providers`
+
+**Seed, don't hardcode.** Every user's `user_providers` table gets pre-populated
+with the current Belarus baseline (Home, Malanka, Evika!, forEVo, Zaryadka,
+BatteryFly) as ordinary rows they can rename, reprice, or (except Home) delete —
+exactly like a provider they typed in themselves. Deleting one is the existing
+"Delete selected" flow; there is no separate "built-in" concept left to
+special-case.
+
+- **Home is permanent — decided 2026-07-06.** New `is_default boolean not null
+  default false` column on `user_providers`, `true` only for the seeded Home row.
+  Settings UI hides the selection checkbox for `is_default` rows (nothing to
+  delete), so it never appears in a "Delete selected" batch. Price stays fully
+  editable like any other row. This also removes the "what if Home gets deleted"
+  fallback question entirely — it can't happen.
+- **Existing users (migration, one-time, idempotent):** for each `profiles.id`,
+  insert the 6 seed rows into `user_providers` (`ON CONFLICT (user_id, label) DO
+  NOTHING`, so reruns are safe) — price = the user's existing `provider_tariffs`
+  override if one exists, else `PROVIDER_TARIFF_PRESETS` default; Home row gets
+  `is_default = true`. Existing `charging_sessions`/`charging_tariff_locations`
+  rows keep their historical `provider_type` enum value (`'malanka'` etc.) and
+  display exactly as before — no retroactive rewrite, this is additive only.
+- **New users:** the DB trigger route is a known landmine here — GoTrue upgrades
+  have silently dropped `on_auth_user_created` before (see
+  [[handle-new-user-trigger-dropped]]), which is exactly the kind of place a
+  seed-on-signup step would go quietly missing. Instead, **lazy-seed on first
+  Settings load**: if `useUserProvidersQuery()` returns zero rows for a user,
+  insert the 6 defaults client-side once (Home flagged `is_default`).
+  Self-healing if it's ever missed.
+- **Selectors:** all 4 places drop their hardcoded built-in arrays and enumerate
+  `user_providers` rows only (already the `up_<uuid>` merge convention — this
+  removes the "other half" of the merge, it doesn't add a new one). `custom`
+  stays as the always-available manual-price fallback (not a stored provider).
+- **`provider_tariffs` table:** becomes dead after the seed migration folds its
+  data into `user_providers`. Drop it in the same migration once the backfill
+  read is done (no lingering unused table/columns).
+- **Tariff resolution** (`resolveSessionTariff` / `resolveTariffPrice`): the
+  hardcoded-preset branch stays *only* for reading old sessions/locations still
+  tagged with a bare enum value (`'malanka'`, not `'user_provider'`) — dead for
+  all new picks, which now always resolve through `resolveUserProviderPrices`.
+  The power-based auto-tier fallback (no manual pick, no GPS match, low charger
+  power ⇒ home tariff) now always resolves through the user's `is_default` Home
+  row, which is guaranteed to exist.
+
+**Tests:** the seed-migration backfill logic (idempotent re-run, override price
+carried over, Home always `is_default`) and that the Home row is excluded from
+delete-selection, alongside the existing `charging-tariffs.test.mjs` coverage.
+
+**Verify:** `npm run lint`, `npm run build`, `npm run test`; manual: fresh user
+lands in Settings → sees the 6 seeded providers pre-filled, editable, all
+deletable down to just Home (no checkbox on the Home row, can't be selected for
+delete); existing user's prior `provider_tariffs` override price shows up
+correctly on the seeded row after migration; old charging history still displays
+correctly.
+
+---
+
 ## 🟢 Email verification for signup (onboarding) — DECIDED, awaiting build go-ahead
 
 **Decision (2026-07-01):** free-user signup should **require email verification**
@@ -117,7 +195,17 @@ priority than partitioning; build only if explicitly prioritized.
 
 ---
 
-## ⛔ APK: no-ADB basic mode — INVESTIGATED, NOT VIABLE on Yuan UP (2026-07-02)
+## ⚠️ APK: no-ADB basic mode — verdict REVISED 2026-07-06 (varies by firmware)
+
+> **2026-07-06 correction:** a real user's **Yuan UP 2025 / DiLink 5** ran the v0.4.6
+> «Диагностика BYD» button: `/storage/emulated/0/energydata/EC_database.db` **EXISTS**
+> (876 rows, `canRead=true`, DiPlus not running, no ADB), and the APK's existing importer
+> had already pulled **873 trips into its local DB**. So `energydata` presence **varies by
+> firmware/model-year within Yuan UP** — the owner's car lacks it, the 2025 car has it.
+> Basic mode is viable on such cars; the ⛔ below stands only for cars without the file.
+> → The trip-summary cloud sync plan below is now **justified by a real user**.
+
+### Original investigation (2026-07-02, owner's car)
 
 Investigated adopting AndyShaman's no-ADB `energydata` read. **Dead end on the Yuan UP** —
 verified on car `way` via ADB:
@@ -141,185 +229,31 @@ writes `energydata`; the Yuan UP doesn't.
 
 ---
 
-## 🟡 energydata trip-summary cloud sync (for models that HAVE the file)
+## 🟡 energydata trip-summary cloud sync — web half DONE, APK half pending
 
-**Proposed, not built.** For cars that do write `/storage/emulated/0/energydata`
-(Leopard 3 and similar — NOT Yuan UP), make no-ADB basic mode work **end-to-end into
-VoltFlow**, not just locally in the Mate app.
+**Web half shipped 2026-07-06** — see [CHANGELOG](CHANGELOG.md). Migration
+`20260706190000_bydmate_trip_summary_source.sql` (`bydmate_trips.source` +
+`bydmate_ingest_trip_summaries` RPC, applied to prod) + `POST /api/bydmate/trip-summaries`
++ "BYD log" trip badge. Confirmed real schema from a Yuan UP 2025 / DiLink 5 user's
+Диагностика BYD report: `EnergyConsumption(_id, month, date, start_timestamp[sec],
+end_timestamp, is_deleted, duration, trip[km], electricity[kWh], fuel)` — no SOC columns.
 
-**Already in the fork (inherited upstream, works today, no ADB):**
-`EnergyDataReader.kt` (reads `EnergyConsumption`: start/end ts, duration, km, kWh) →
-`HistoryImporter.syncFromEnergyData()` → local Room DB + Compose UI; `ENERGYDATA|DIPLUS`
-source switch in Welcome/Settings.
+**Still missing — the APK sender (`BYDMate-own`):** after `HistoryImporter.syncFromEnergyData()`
+imports locally, POST new records to `/api/bydmate/trip-summaries` (same
+`X-Api-Key`/`X-Vehicle-Id` headers as telemetry; body = array of
+`{ start_timestamp, end_timestamp, distance_km, energy_kwh, duration_seconds }`, epoch
+seconds; watermark on max `start_timestamp` already synced; only when data source =
+ENERGYDATA, to avoid double-trips on ADB cars that also run telemetry). Ship as the next
+VoltFlow Mate release.
 
-**Missing — the cloud half (both repos):**
-1. **APK:** after `syncFromEnergyData()`, POST new records to VoltFlow (same API-key auth
-   as telemetry; watermark = max `start_timestamp` synced; retry queue). Only when data
-   source = ENERGYDATA, to avoid double-trips on ADB cars.
-2. **Web:** new `POST /api/bydmate/trip-summaries` → upsert trips with a
-   `source='byd_energydata'` marker + unique `(user_id, vehicle_id, started_at)` dedupe.
-   These are **per-trip aggregates** (no samples, no GPS route) — bypass
-   `bydmate_ingest_telemetry` and its junk rules; `distance_km` is already per-trip. Needs
-   a small migration (source column or separate import table merged in UI).
-3. **Web UI:** trips list badge ("BYD log"), no-route/no-chart empty states.
-4. **Docs/onboarding:** "If your BYD writes energydata (Leopard 3…), basic mode works
-   without ADB; Yuan UP requires ADB."
+**Docs/onboarding follow-up (web, not yet done):** replace the flat "ADB required on
+DiLink 5" with: "check whether your car writes energydata via the «Диагностика BYD»
+button (VoltFlow Mate v0.4.6+) — if yes, trips/consumption sync without ADB; live data
+still needs ADB."
 
-**Limits:** no live snapshots → live cockpit stays empty; charging stays manual. Trips +
-consumption history only.
-
-**Recommendation:** defer until at least one real user has such a car — zero benefit to
-the current Yuan UP user base. Build on explicit go-ahead.
-
----
-
-## 🟢 Editable provider tariffs + auto-save GPS point after manual provider pick — BUILT, see CHANGELOG
-
-**Requested 2026-07-06** (chosen over just fixing the settings preset select). Two parts:
-
-**(1) Provider tariffs become user-editable.** Today they're hardcoded in
-`PROVIDER_TARIFF_PRESETS` (`src/lib/charging-tariffs.ts`, Belarus 2026 baseline);
-if Malanka changes prices the user can't do anything. Per-user overrides, hardcoded
-values remain the default.
-
-**(2) Auto-save a GPS tariff point after a manual provider pick during a charge.**
-When the user selects a provider on the active charge screen, remember the spot in
-`charging_tariff_locations` **in the background, ~5 min later** (not instantly — the
-user may still be flipping through providers, and a mis-tap shouldn't pollute saved
-locations). Next charge at that spot then auto-applies the provider with no manual
-step.
-
-### Part 1 — editable provider tariffs
-
-**Schema (new migration, idempotent):** table `public.provider_tariffs`
-- `user_id uuid` FK → auth.users cascade, `provider_type public.charging_provider_type`,
-  PK `(user_id, provider_type)`
-- `commercial_ac_price_per_kwh numeric ≥0`, `fast_dc_price_per_kwh numeric ≥0`,
-  `home_price_per_kwh numeric ≥0` (kept for shape; presets today all have home = AC
-  for commercial providers), `created_at/updated_at` + `set_updated_at` trigger, RLS
-  select/insert/update/delete own. **No seed rows** — absence = code preset.
-
-**Lib:** `resolveTariffPrice(tariffType, profile, providerType, overrides?)` and
-`resolveSessionTariff({ …, providerTariffs? })` take an optional
-`Partial<Record<provider, {home, commercial_ac, fast_dc}>>`; lookup order:
-user override → hardcoded preset. Location `price_per_kwh_override` still wins
-over everything (unchanged).
-
-**Server call sites (each already batch-queries profile + locations — add one query):**
-- `src/actions/sessions.ts`: `startChargingSession` (~68), `syncChargingSessionTariffFromGps` (~297)
-- `src/lib/bydmate/charging-auto-session.ts`: `resolveTariffForTelemetry` (~72)
-
-**Client call sites (new `useProviderTariffsQuery` hook + query key):**
-- charge screen `applyProviderPresetPrice` (`charging-session-screen.tsx:325`)
-- dashboard park estimate (`dashboard-view.tsx:856`)
-- settings `applyProviderPreset` (`settings-view.tsx:440`)
-
-**Settings UI:** replace the confusing **"Provider preset" dropdown** in Economics
-defaults with a **"Provider tariffs" editor**: one row per provider (malanka, evika,
-forevo, zaryadka, batterfly — custom excluded, home lives in Economics defaults):
-AC + DC price fields (home column saved = AC, matching today's preset shape),
-per-row save + "reset to default" (deletes the row). New i18n keys in **ru
-(defaultLocale!), en, be**.
-
-### Part 2 — delayed GPS point save
-
-**Schema (same or second migration):** `charging_sessions.tariff_selected_at
-timestamptz` — set by `updateChargingSessionTariff` whenever the user manually
-saves a tariff. Re-selection resets the 5-min clock. No "saved" flag needed —
-dedupe below makes the save idempotent.
-
-**New server action `persistManualTariffLocationFromSession(sessionId)`:**
-1. Session must be **still `charging`**, `tariff_manual = true`, `provider_type ≠
-   'custom'`, `tariff_selected_at ≥ 5 min ago` (server re-validates; constant
-   `TARIFF_LOCATION_AUTOSAVE_DELAY_MS`). If the user unplugs before 5 min → nothing
-   saved (deliberate: too short to be worth memorizing, and the car may move).
-2. GPS: latest Mate live-snapshot location for the session's user/vehicle (car is
-   stationary while charging); fallback to client-passed browser coords.
-3. Dedupe via `matchNearestTariffLocation`: existing point covering the coords with
-   the **same provider → skip**; **different provider → update** that point's
-   `provider_type`/`tariff_type` (user corrected the spot). Otherwise **insert**:
-   name `PROVIDER_LABELS[provider]` (+ " 2", " 3"… on name collision), session's
-   `tariff_type`, default radius 150 m, **no price override** (provider price
-   comes from Part 1, so a later tariff edit propagates).
-4. Returns what happened so the client can toast ("Point saved — Malanka will
-   apply here automatically").
-
-**Trigger:** `ChargingSessionBackgroundSync` (global in `MobileShell`, already owns
-the ~1 Hz session loop) checks every ~30 s: active session with `tariff_manual`,
-`provider ≠ custom`, `tariff_selected_at` past the delay → fire the action once per
-selection (in-memory guard per `sessionId+tariff_selected_at`; server dedupe makes
-retries harmless). Survives navigation away from the charge screen; PWA closed the
-whole 5 min → skipped (acceptable; next manual pick at the same spot retries).
-
-**Interaction with auto-tariff GPS sync:** unchanged — `syncChargingSessionTariffFromGps`
-skips `tariff_manual` sessions, so the new point takes effect from the *next*
-session onward.
-
-**Tests:** pure-logic `.test.mjs` for the override lookup (`resolveTariffPrice` /
-`resolveSessionTariff` with `providerTariffs`) and for the persist decision
-(too-early / unplugged / dedupe-same / dedupe-different / insert).
-
-**Migrations note:** self-hosted prod → apply via pooler psql (no CLI), keep
-`IF NOT EXISTS`-idempotent.
-
-**Verify:** `npm run lint`, `npm run build`, `npm run test`; manual: pick Malanka
-during a charge → after ~5 min a "Malanka" location appears in Settings → edit
-Malanka AC price → next session at that spot uses the edited price.
-
----
-
-## ⛔ Settings → Provider preset select always shows "Manual values" — SUPERSEDED
-
-**Superseded by the plan above (2026-07-06):** the confusing dropdown gets replaced
-by the editable provider-tariffs card, so this fix won't be built separately.
-Kept for the root-cause record.
-
-**Requested 2026-07-06.** Choosing **Malanka** in Settings → Economics → Provider
-preset fills the price fields correctly (0.55 / 0.55 / 0.73 — the Malanka preset
-applied fine) but the select immediately shows **"Manual values"** again, so it
-looks like the choice failed.
-
-**Root cause (verified in `src/components/settings/settings-view.tsx:1202`):** the
-`Select` is hardcoded to `value="custom"`. It's a controlled component pinned to
-"Manual values" — `onValueChange` fires `applyProviderPreset` (prices + hint toast)
-and the select snaps straight back. The preset choice is never stored anywhere;
-only the three prices are.
-
-### Options
-
-- **A — derive the select value from the prices (recommended, no migration).**
-  Replace the hardcoded `value="custom"` with a `useMemo` that reverse-matches the
-  current tariff state (`homePricePerKwh`, `commercialAcPricePerKwh`,
-  `fastDcPricePerKwh`) against `PROVIDER_TARIFF_PRESETS` (epsilon compare, first
-  match, else `"custom"`). All preset triples are distinct today.
-  - Pick Malanka → `applyProviderPreset` sets the state → select shows **Malanka**
-    immediately.
-  - Reload → the profile-load effect fills the same state → still matches → still
-    shows Malanka. Persistence for free, since `handlePriceSave` writes the same
-    three columns.
-  - Save manual non-preset values → state updated on save → back to "Manual values".
-  - Caveat: manually retyping the exact preset numbers also shows the provider name
-    (harmless — identical prices), and editing a field *without saving* doesn't flip
-    the select back until save (inputs are uncontrolled `defaultValue`).
-- **B — persist a real `profiles.default_provider_type` column.** New migration,
-  save/load wiring, and `resolveSessionTariff` could then label sessions with the
-  provider. More truthful model, but nothing downstream needs it today — cost math
-  runs off the three prices. Overkill for this complaint; revisit if per-provider
-  session labeling is ever wanted.
-
-**Recommendation: A.** One `useMemo` + one prop change in `settings-view.tsx`;
-no schema, no i18n keys.
-
-**Verify:** `npm run lint`, `npm run build`; manual: pick Malanka → select shows
-Malanka + fields fill → Store default → reload → select still shows Malanka; edit a
-price → save → select shows Manual values.
-
----
-
-## 🟢 User-connected providers — add/remove custom providers per-user — BUILT, see CHANGELOG
-
-**Built 2026-07-06.** Option A: `user_providers` table + `'user_provider'` enum marker.
-Users can add/remove their own providers with custom labels and prices. See CHANGELOG.
+**Limits (both today and after the APK sender ships):** no live snapshots → live cockpit
+stays empty; charging stays manual; no SOC per trip (`soc=-→-`). Trips + consumption
+history only.
 
 ---
 
