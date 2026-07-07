@@ -6,7 +6,6 @@ import type {
   ChargingTariffType,
   ChargingTariffLocationRow,
   Profile,
-  ProviderTariffRow,
   UserProviderRow,
 } from "@/types/database";
 
@@ -138,22 +137,7 @@ export function mapUserProvider(raw: Record<string, unknown>): UserProviderRow {
     home_price_per_kwh: num(raw.home_price_per_kwh),
     commercial_ac_price_per_kwh: num(raw.commercial_ac_price_per_kwh),
     fast_dc_price_per_kwh: num(raw.fast_dc_price_per_kwh),
-    created_at: String(raw.created_at ?? ""),
-    updated_at: String(raw.updated_at ?? ""),
-  };
-}
-
-export function mapProviderTariff(raw: Record<string, unknown>): ProviderTariffRow {
-  return {
-    user_id: String(raw.user_id),
-    provider_type: enumValue(
-      raw.provider_type,
-      ["home", "malanka", "evika", "forevo", "zaryadka", "batterfly"] as const,
-      "malanka",
-    ) as ProviderTariffRow["provider_type"],
-    home_price_per_kwh: num(raw.home_price_per_kwh),
-    commercial_ac_price_per_kwh: num(raw.commercial_ac_price_per_kwh),
-    fast_dc_price_per_kwh: num(raw.fast_dc_price_per_kwh),
+    is_default: raw.is_default === true,
     created_at: String(raw.created_at ?? ""),
     updated_at: String(raw.updated_at ?? ""),
   };

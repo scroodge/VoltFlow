@@ -48,7 +48,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useMateReleaseQuery } from "@/hooks/use-mate-release-query";
-import { useProviderTariffsQuery } from "@/hooks/use-provider-tariffs-query";
 import { useUserProvidersQuery } from "@/hooks/use-user-providers-query";
 import { useTranslation } from "@/hooks/use-translation";
 import { compareMateVersions, isMateUpdateAvailable } from "@/lib/mate-version";
@@ -74,10 +73,6 @@ import { parseDecimalInput } from "@/lib/number-input";
 import { devFetch, isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { useAppPath } from "@/lib/dev/dev-path";
 import { mapChargingTariffLocation, mapUserProvider } from "@/lib/db-map";
-import {
-  PROVIDER_LABELS,
-  PROVIDER_TARIFF_PRESETS,
-} from "@/lib/charging-tariffs";
 import { queryKeys } from "@/lib/query-keys";
 import {
   ensureNotificationsPermission,
@@ -92,14 +87,6 @@ import type {
   ChargingTariffLocationRow,
   ChargingTariffType,
 } from "@/types/database";
-
-const EDITABLE_PROVIDERS = [
-  "malanka",
-  "evika",
-  "forevo",
-  "zaryadka",
-  "batterfly",
-] as const satisfies readonly Exclude<ChargingProviderType, "home" | "custom">[];
 
 type NotifyChannel = "web_push" | "telegram" | "both";
 
@@ -197,21 +184,20 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   const tariffSavedResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const { data: providerTariffRows = [] } = useProviderTariffsQuery();
   const { data: userProviderRows = [] } = useUserProvidersQuery();
 
+  // "custom" (manual price, no picked provider) is the only non-stored option —
+  // every named provider (including Home) is a `user_providers` row, seeded on
+  // signup so it's always at least present as Home.
   const locationProviderOptions = useMemo(() => {
-    const builtIn = (["custom", "home", "malanka", "evika", "forevo", "zaryadka", "batterfly"] as const).map(
-      (value) => ({
-        value,
-        label: t(`charging.tariff.providers.${value}` as TranslationKey),
-      }),
-    );
     const userOpts = userProviderRows.map((p) => ({
       value: `up_${p.id}` as const,
       label: p.label,
     }));
-    return [...builtIn, ...userOpts];
+    return [
+      { value: "custom" as const, label: t(`charging.tariff.providers.custom` as TranslationKey) },
+      ...userOpts,
+    ];
   }, [userProviderRows, t]);
 
   function parseLocationProviderValue(value: string | null | undefined): {
@@ -223,11 +209,11 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
     }
     return { providerType: (value as ChargingProviderType) ?? "custom", userProviderId: null };
   }
-  const [providerTariffsSaving, setProviderTariffsSaving] = useState(false);
+  const [providerPricesSaving, setProviderPricesSaving] = useState(false);
   const [newProviderLabel, setNewProviderLabel] = useState("");
   const [newProviderAc, setNewProviderAc] = useState("");
   const [newProviderDc, setNewProviderDc] = useState("");
-  const [deletingProviderId, setDeletingProviderId] = useState<string | null>(null);
+  const [selectedProviderIds, setSelectedProviderIds] = useState<string[]>([]);
   const [newProviderSaving, setNewProviderSaving] = useState(false);
 
   useEffect(() => {
@@ -488,79 +474,67 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       });
   };
 
-  const providerTariffDefaults = (provider: (typeof EDITABLE_PROVIDERS)[number]) => {
-    const override = providerTariffRows.find((row) => row.provider_type === provider);
-    return {
-      commercialAc: override?.commercial_ac_price_per_kwh ?? PROVIDER_TARIFF_PRESETS[provider].commercial_ac,
-      fastDc: override?.fast_dc_price_per_kwh ?? PROVIDER_TARIFF_PRESETS[provider].fast_dc,
-    };
-  };
-
-  const handleProviderTariffsSave = (event: FormEvent<HTMLFormElement>) => {
+  const handleSaveProviderPrices = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!profileUserId || providerTariffsSaving) return;
+    if (!profileUserId || providerPricesSaving) return;
     const form = new FormData(event.currentTarget);
-    const rowsToUpsert: {
-      user_id: string;
-      provider_type: (typeof EDITABLE_PROVIDERS)[number];
+    const updates: {
+      id: string;
       home_price_per_kwh: number;
       commercial_ac_price_per_kwh: number;
       fast_dc_price_per_kwh: number;
     }[] = [];
 
-    for (const provider of EDITABLE_PROVIDERS) {
-      const acInput = parseDecimalInput(String(form.get(`provider-${provider}-ac`) ?? ""));
-      const dcInput = parseDecimalInput(String(form.get(`provider-${provider}-dc`) ?? ""));
+    for (const provider of userProviderRows) {
+      const acInput = parseDecimalInput(String(form.get(`provider-${provider.id}-ac`) ?? ""));
+      const dcInput = parseDecimalInput(String(form.get(`provider-${provider.id}-dc`) ?? ""));
       if (!Number.isFinite(acInput) || !Number.isFinite(dcInput) || acInput < 0 || dcInput < 0) {
         toast.error(t("settings.providerTariffs.invalidPrice") as string);
         return;
       }
-      const current = providerTariffDefaults(provider);
-      if (acInput === current.commercialAc && dcInput === current.fastDc) continue;
-      rowsToUpsert.push({
-        user_id: profileUserId,
-        provider_type: provider,
+      if (
+        acInput === provider.commercial_ac_price_per_kwh &&
+        dcInput === provider.fast_dc_price_per_kwh
+      ) {
+        continue;
+      }
+      updates.push({
+        id: provider.id,
         home_price_per_kwh: acInput,
         commercial_ac_price_per_kwh: acInput,
         fast_dc_price_per_kwh: dcInput,
       });
     }
 
-    if (rowsToUpsert.length === 0) {
+    if (updates.length === 0) {
       toast.success(t("settings.providerTariffs.saved") as string);
       return;
     }
 
-    setProviderTariffsSaving(true);
-    void createClient()
-      .from("provider_tariffs")
-      .upsert(rowsToUpsert, { onConflict: "user_id,provider_type" })
-      .then(({ error }) => {
-        setProviderTariffsSaving(false);
-        if (error) {
-          toast.error(error.message);
-          return;
-        }
-        void qc.invalidateQueries({ queryKey: queryKeys.providerTariffs });
-        toast.success(t("settings.providerTariffs.saved") as string);
-      });
-  };
-
-  const handleResetProviderTariff = (provider: (typeof EDITABLE_PROVIDERS)[number]) => {
-    if (!profileUserId) return;
-    void createClient()
-      .from("provider_tariffs")
-      .delete()
-      .eq("user_id", profileUserId)
-      .eq("provider_type", provider)
-      .then(({ error }) => {
-        if (error) {
-          toast.error(error.message);
-          return;
-        }
-        void qc.invalidateQueries({ queryKey: queryKeys.providerTariffs });
-        toast.success(t("settings.providerTariffs.resetDone") as string);
-      });
+    setProviderPricesSaving(true);
+    const supabase = createClient();
+    void Promise.all(
+      updates.map((update) =>
+        supabase
+          .from("user_providers")
+          .update({
+            home_price_per_kwh: update.home_price_per_kwh,
+            commercial_ac_price_per_kwh: update.commercial_ac_price_per_kwh,
+            fast_dc_price_per_kwh: update.fast_dc_price_per_kwh,
+          })
+          .eq("id", update.id)
+          .eq("user_id", profileUserId),
+      ),
+    ).then((results) => {
+      setProviderPricesSaving(false);
+      const error = results.find((r) => r.error)?.error;
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      void qc.invalidateQueries({ queryKey: queryKeys.userProviders });
+      toast.success(t("settings.providerTariffs.saved") as string);
+    });
   };
 
   const handleAddUserProvider = () => {
@@ -604,16 +578,30 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       });
   };
 
-  const handleDeleteUserProvider = (providerId: string) => {
-    if (!profileUserId) return;
-    setDeletingProviderId(providerId);
+  const handleToggleProvider = (providerId: string) => {
+    setSelectedProviderIds((prev) =>
+      prev.includes(providerId) ? prev.filter((id) => id !== providerId) : [...prev, providerId],
+    );
+  };
+
+  const handleDeleteSelectedProviders = () => {
+    if (!profileUserId || selectedProviderIds.length === 0) return;
+    // Defensive: Home (is_default) never renders a checkbox, but guard anyway
+    // in case selection state is ever stale.
+    const deletableIds = selectedProviderIds.filter(
+      (id) => !userProviderRows.find((p) => p.id === id)?.is_default,
+    );
+    if (deletableIds.length === 0) {
+      setSelectedProviderIds([]);
+      return;
+    }
     void createClient()
       .from("user_providers")
       .delete()
-      .eq("id", providerId)
+      .in("id", deletableIds)
       .eq("user_id", profileUserId)
       .then(({ error }) => {
-        setDeletingProviderId(null);
+        setSelectedProviderIds([]);
         if (error) {
           toast.error(error.message);
           return;
@@ -1512,72 +1500,6 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             </Button>
           </form>
 
-          <form
-            onSubmit={handleProviderTariffsSave}
-            className="space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4"
-          >
-            <div>
-              <p className="text-sm font-semibold tracking-tight">
-                {t("settings.providerTariffs.title") as string}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t("settings.providerTariffs.body") as string}
-              </p>
-            </div>
-            {EDITABLE_PROVIDERS.map((provider) => {
-              const defaults = providerTariffDefaults(provider);
-              const isOverridden = providerTariffRows.some(
-                (row) => row.provider_type === provider,
-              );
-              return (
-                <div key={provider} className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm">{PROVIDER_LABELS[provider]}</Label>
-                    {isOverridden ? (
-                      <button
-                        type="button"
-                        onClick={() => handleResetProviderTariff(provider)}
-                        className="text-xs text-muted-foreground underline underline-offset-2"
-                      >
-                        {t("settings.providerTariffs.resetToDefault") as string}
-                      </button>
-                    ) : null}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      key={`${provider}-ac-${defaults.commercialAc}`}
-                      name={`provider-${provider}-ac`}
-                      aria-label={`${PROVIDER_LABELS[provider]} ${t("settings.providerTariffs.acLabel") as string}`}
-                      type="text"
-                      inputMode="decimal"
-                      pattern="[0-9]*[,.]?[0-9]*"
-                      defaultValue={String(defaults.commercialAc)}
-                      className="h-11 rounded-2xl text-sm"
-                    />
-                    <Input
-                      key={`${provider}-dc-${defaults.fastDc}`}
-                      name={`provider-${provider}-dc`}
-                      aria-label={`${PROVIDER_LABELS[provider]} ${t("settings.providerTariffs.dcLabel") as string}`}
-                      type="text"
-                      inputMode="decimal"
-                      pattern="[0-9]*[,.]?[0-9]*"
-                      defaultValue={String(defaults.fastDc)}
-                      className="h-11 rounded-2xl text-sm"
-                    />
-                  </div>
-                </div>
-              );
-            })}
-            <Button
-              className="h-11 w-full rounded-full text-sm font-semibold"
-              type="submit"
-              disabled={providerTariffsSaving}
-            >
-              {providerTariffsSaving ? <Loader2 className="animate-spin" /> : null}
-              {t("settings.providerTariffs.save") as string}
-            </Button>
-          </form>
-
           <div className="space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4">
             <div>
               <p className="text-sm font-semibold tracking-tight">
@@ -1588,86 +1510,132 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
               </p>
             </div>
 
-            {userProviderRows.length > 0 ? (
-              <div className="space-y-2">
-                {userProviderRows.map((provider) => (
-                  <div key={provider.id} className="flex items-center gap-2">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{provider.label}</p>
-                      <p className="text-xs text-muted-foreground">
-                        AC {provider.commercial_ac_price_per_kwh} · DC {provider.fast_dc_price_per_kwh}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteUserProvider(provider.id)}
-                      disabled={deletingProviderId === provider.id}
-                      className="shrink-0 text-xs text-destructive underline underline-offset-2 disabled:opacity-50"
-                    >
-                      {deletingProviderId === provider.id ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        t("settings.providerTariffs.deleteProvider") as string
-                      )}
-                    </button>
+            <form onSubmit={handleSaveProviderPrices} className="space-y-3">
+              {userProviderRows.map((provider) => (
+                <div key={provider.id} className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    {!provider.is_default ? (
+                      <input
+                        type="checkbox"
+                        checked={selectedProviderIds.includes(provider.id)}
+                        onChange={() => handleToggleProvider(provider.id)}
+                        aria-label={`${provider.label} ${t("settings.providerTariffs.deleteSelected") as string}`}
+                        className="size-4 accent-destructive"
+                      />
+                    ) : null}
+                    <Label className="text-sm">{provider.label}</Label>
                   </div>
-                ))}
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      key={`${provider.id}-ac-${provider.commercial_ac_price_per_kwh}`}
+                      name={`provider-${provider.id}-ac`}
+                      aria-label={`${provider.label} ${t("settings.providerTariffs.acLabel") as string}`}
+                      type="text"
+                      inputMode="decimal"
+                      pattern="[0-9]*[,.]?[0-9]*"
+                      defaultValue={String(provider.commercial_ac_price_per_kwh)}
+                      className="h-11 rounded-2xl text-sm"
+                    />
+                    <Input
+                      key={`${provider.id}-dc-${provider.fast_dc_price_per_kwh}`}
+                      name={`provider-${provider.id}-dc`}
+                      aria-label={`${provider.label} ${t("settings.providerTariffs.dcLabel") as string}`}
+                      type="text"
+                      inputMode="decimal"
+                      pattern="[0-9]*[,.]?[0-9]*"
+                      defaultValue={String(provider.fast_dc_price_per_kwh)}
+                      className="h-11 rounded-2xl text-sm"
+                    />
+                  </div>
+                </div>
+              ))}
+              {selectedProviderIds.length > 0 ? (
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedProviderIds([])}
+                    className="text-xs text-muted-foreground underline underline-offset-2"
+                  >
+                    {t("settings.providerTariffs.cancelSelection") as string}
+                  </button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    className="h-9 rounded-full text-xs"
+                    onClick={handleDeleteSelectedProviders}
+                  >
+                    <Trash2 className="mr-1 size-3.5" />
+                    {t("settings.providerTariffs.deleteSelected") as string} ({selectedProviderIds.length})
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  className="h-11 w-full rounded-full text-sm font-semibold"
+                  type="submit"
+                  disabled={providerPricesSaving}
+                >
+                  {providerPricesSaving ? <Loader2 className="animate-spin" /> : null}
+                  {t("settings.providerTariffs.save") as string}
+                </Button>
+              )}
+            </form>
+
+            {selectedProviderIds.length === 0 ? (
+              <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">
+                    {t("settings.providerTariffs.addProviderLabel") as string}
+                  </Label>
+                  <Input
+                    value={newProviderLabel}
+                    onChange={(e) => setNewProviderLabel(e.target.value)}
+                    placeholder={t("settings.providerTariffs.addProviderLabel") as string}
+                    className="h-10 rounded-xl text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">
+                    {t("settings.providerTariffs.addProviderAc") as string}
+                  </Label>
+                  <Input
+                    value={newProviderAc}
+                    onChange={(e) => setNewProviderAc(e.target.value)}
+                    type="text"
+                    inputMode="decimal"
+                    pattern="[0-9]*[,.]?[0-9]*"
+                    placeholder="0.00"
+                    className="h-10 rounded-xl text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">
+                    {t("settings.providerTariffs.addProviderDc") as string}
+                  </Label>
+                  <Input
+                    value={newProviderDc}
+                    onChange={(e) => setNewProviderDc(e.target.value)}
+                    type="text"
+                    inputMode="decimal"
+                    pattern="[0-9]*[,.]?[0-9]*"
+                    placeholder="0.00"
+                    className="h-10 rounded-xl text-sm"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  onClick={handleAddUserProvider}
+                  disabled={newProviderSaving}
+                  className="h-10 rounded-xl text-sm"
+                >
+                  {newProviderSaving ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    t("settings.providerTariffs.addProviderSave") as string
+                  )}
+                </Button>
               </div>
             ) : null}
-
-            <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">
-                  {t("settings.providerTariffs.addProviderLabel") as string}
-                </Label>
-                <Input
-                  value={newProviderLabel}
-                  onChange={(e) => setNewProviderLabel(e.target.value)}
-                  placeholder={t("settings.providerTariffs.addProviderLabel") as string}
-                  className="h-10 rounded-xl text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">
-                  {t("settings.providerTariffs.addProviderAc") as string}
-                </Label>
-                <Input
-                  value={newProviderAc}
-                  onChange={(e) => setNewProviderAc(e.target.value)}
-                  type="text"
-                  inputMode="decimal"
-                  pattern="[0-9]*[,.]?[0-9]*"
-                  placeholder="0.00"
-                  className="h-10 rounded-xl text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">
-                  {t("settings.providerTariffs.addProviderDc") as string}
-                </Label>
-                <Input
-                  value={newProviderDc}
-                  onChange={(e) => setNewProviderDc(e.target.value)}
-                  type="text"
-                  inputMode="decimal"
-                  pattern="[0-9]*[,.]?[0-9]*"
-                  placeholder="0.00"
-                  className="h-10 rounded-xl text-sm"
-                />
-              </div>
-              <Button
-                type="button"
-                onClick={handleAddUserProvider}
-                disabled={newProviderSaving}
-                className="h-10 rounded-xl text-sm"
-              >
-                {newProviderSaving ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  t("settings.providerTariffs.addProviderSave") as string
-                )}
-              </Button>
-            </div>
           </div>
 
           <div className="space-y-4 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4">

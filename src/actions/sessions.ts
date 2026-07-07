@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
 import { costFromGridEnergy, deriveChargingState } from "@/lib/charging-math";
-import { mapChargingTariffLocation, mapProviderTariff, mapUserProvider } from "@/lib/db-map";
+import { mapChargingTariffLocation, mapUserProvider } from "@/lib/db-map";
 import { resolveStopProgressForSession } from "@/lib/charging-session-finalize";
 import {
   sessionTariffMatches,
@@ -14,7 +14,6 @@ import {
 import {
   matchNearestTariffLocation,
   PROVIDER_LABELS,
-  providerTariffsFromRows,
   resolveSessionTariff,
   userProvidersFromRows,
 } from "@/lib/charging-tariffs";
@@ -76,7 +75,7 @@ export async function startChargingSession(input: z.infer<typeof startSchema>) {
     .eq("user_id", user.id)
     .eq("status", "charging");
 
-  const [{ data: liveRows }, { data: profile }, { data: rawPresets }, { data: rawProviderTariffs }, { data: rawUserProviders }] =
+  const [{ data: liveRows }, { data: profile }, { data: rawPresets }, { data: rawUserProviders }] =
     await Promise.all([
       supabase
         .from("bydmate_live_snapshots")
@@ -96,10 +95,6 @@ export async function startChargingSession(input: z.infer<typeof startSchema>) {
         .select("*")
         .eq("user_id", user.id),
       supabase
-        .from("provider_tariffs")
-        .select("*")
-        .eq("user_id", user.id),
-      supabase
         .from("user_providers")
         .select("*")
         .eq("user_id", user.id),
@@ -108,9 +103,6 @@ export async function startChargingSession(input: z.infer<typeof startSchema>) {
   const liveLocation = liveRows?.[0]?.location as { lat?: number; lon?: number } | null | undefined;
   const locationPresets = (rawPresets ?? []).map((row) =>
     mapChargingTariffLocation(row as Record<string, unknown>),
-  );
-  const providerTariffs = providerTariffsFromRows(
-    (rawProviderTariffs ?? []).map((row) => mapProviderTariff(row as Record<string, unknown>)),
   );
   const userProviderMap = userProvidersFromRows(
     (rawUserProviders ?? []).map((row) => mapUserProvider(row as Record<string, unknown>)),
@@ -125,7 +117,6 @@ export async function startChargingSession(input: z.infer<typeof startSchema>) {
     location: liveLocation,
     locationPresets,
     profile,
-    providerTariffs,
     userProviderMap,
   });
 
@@ -334,7 +325,7 @@ export async function syncChargingSessionTariffFromGps(
     return { ok: true as const, applied: false as const };
   }
 
-  const [{ data: profile }, { data: rawPresets }, { data: rawProviderTariffs }, { data: rawUserProviders }] = await Promise.all([
+  const [{ data: profile }, { data: rawPresets }, { data: rawUserProviders }] = await Promise.all([
     supabase
       .from("profiles")
       .select(
@@ -343,15 +334,11 @@ export async function syncChargingSessionTariffFromGps(
       .eq("id", user.id)
       .maybeSingle(),
     supabase.from("charging_tariff_locations").select("*").eq("user_id", user.id),
-    supabase.from("provider_tariffs").select("*").eq("user_id", user.id),
     supabase.from("user_providers").select("*").eq("user_id", user.id),
   ]);
 
   const locationPresets = (rawPresets ?? []).map((row) =>
     mapChargingTariffLocation(row as Record<string, unknown>),
-  );
-  const providerTariffs = providerTariffsFromRows(
-    (rawProviderTariffs ?? []).map((row) => mapProviderTariff(row as Record<string, unknown>)),
   );
   const userProviderMap = userProvidersFromRows(
     (rawUserProviders ?? []).map((row) => mapUserProvider(row as Record<string, unknown>)),
@@ -361,7 +348,6 @@ export async function syncChargingSessionTariffFromGps(
     location: { lat: parsed.data.lat, lon: parsed.data.lon },
     locationPresets,
     profile,
-    providerTariffs,
     userProviderMap,
   });
 

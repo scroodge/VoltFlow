@@ -11,6 +11,47 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-07-06
 
+### Providers unified into user-owned data (Home permanent, rest fully deletable)
+
+Replaced the hardcoded `PROVIDER_TARIFF_PRESETS` + per-user `provider_tariffs`
+override table with a single model: every provider (Home, Malanka, Evika!,
+forEVo, Zaryadka, BatteryFly, plus any custom ones) is now a `user_providers`
+row the user owns outright. Prompted by feedback that providers should be
+user-dependent data, not app-wide constants with a bolted-on override/hide
+layer — the fix is to make the already-working `user_providers` CRUD (add,
+edit, checkbox → "Delete selected") the single source of truth.
+
+- **Migration** `20260706200000_fold_builtin_providers_into_user_providers.sql`:
+  adds `user_providers.is_default boolean`; seeds the 6 baseline providers per
+  existing user (price = their old `provider_tariffs` override if present, else
+  the hardcoded default; Home flagged `is_default`); repoints existing
+  `charging_tariff_locations` rows from the bare enum (`'malanka'` etc.) to the
+  newly-seeded `user_providers` row so auto-resolution keeps using each user's
+  price; drops `provider_tariffs`.
+- **New users**: seeding isn't a DB trigger (GoTrue has silently dropped
+  `on_auth_user_created` before — see [[handle-new-user-trigger-dropped]]).
+  Instead `useSeedDefaultUserProviders()` (`src/hooks/use-user-providers-query.ts`)
+  lazy-inserts the 6 defaults the first time `user_providers` resolves empty,
+  mounted globally via `<DefaultProvidersSeed />` in `MobileShell` so it fires
+  regardless of which page loads first.
+- **Lib** (`src/lib/charging-tariffs.ts`): new `defaultUserProviderSeeds()` and
+  `findDefaultHomeProvider()`; `PROVIDER_TARIFF_PRESETS` kept only as the
+  fallback for historical bare-enum rows. The power-based auto-tier fallback
+  (no manual pick, no GPS match, low charger power) now resolves through the
+  user's `is_default` Home row instead of a hardcoded constant.
+- **Settings UI**: the separate "Provider tariffs" (built-in, price-override-only)
+  card is gone — merged into "Your providers", which now lists every provider
+  with editable AC/DC prices. Home has no checkbox (can't be selected for
+  delete); every other row can be repriced or removed like a custom one.
+- **Dashboard / charge screen / settings location form**: all 4 places that
+  used to hardcode the built-in provider list now enumerate `user_providers`
+  rows only, plus `custom` (manual price, always available).
+- Fixed a latent bug found while touching this: the dashboard's parked-charge
+  price estimate never passed its `estimateUserProviderId` into price
+  resolution, so picking a custom provider there silently priced at 0.
+- **Tests**: `charging-tariffs.test.mjs` covers the seed shape, the Home-excluded
+  auto-fallback, and legacy bare-enum resolution for historical data.
+
 ### energydata trip-summary cloud sync — web half
 
 Web side of letting no-ADB BYD trip logs reach VoltFlow (APK side still pending —

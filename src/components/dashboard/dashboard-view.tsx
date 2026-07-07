@@ -40,8 +40,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useLatestBydmateTripsQuery } from "@/hooks/use-bydmate-trips-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
-import { useProviderTariffOverrides } from "@/hooks/use-provider-tariffs-query";
-import { useUserProvidersQuery } from "@/hooks/use-user-providers-query";
+import { useUserProvidersQuery, useUserProviderMap } from "@/hooks/use-user-providers-query";
 import { usePageVisible } from "@/hooks/use-page-visible";
 import { chargingSessionsRefetchInterval, fetchSessions } from "@/hooks/use-sessions-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
@@ -96,15 +95,13 @@ const CHARGE_TYPE_OPTIONS: { value: ChargingTariffType; labelKey: TranslationKey
   { value: "fast_dc", labelKey: "dashboard.estimateTypeDc" },
 ];
 
-const BUILT_IN_PROVIDER_OPTIONS: { value: ChargingProviderType; label: string }[] = [
-  { value: "custom", label: PROVIDER_LABELS.custom },
-  { value: "home", label: PROVIDER_LABELS.home },
-  { value: "malanka", label: PROVIDER_LABELS.malanka },
-  { value: "evika", label: PROVIDER_LABELS.evika },
-  { value: "forevo", label: PROVIDER_LABELS.forevo },
-  { value: "zaryadka", label: PROVIDER_LABELS.zaryadka },
-  { value: "batterfly", label: PROVIDER_LABELS.batterfly },
-];
+// "custom" (manual price, no picked provider) is the only non-stored option —
+// every named provider (including Home) is a `user_providers` row now, seeded
+// on signup so it's always at least present as Home. See useSeedDefaultUserProviders.
+const CUSTOM_PROVIDER_OPTION: { value: ChargingProviderType; label: string } = {
+  value: "custom",
+  label: PROVIDER_LABELS.custom,
+};
 
 function defaultEstimatePowerKw(type: ChargingTariffType, homePowerKw?: number | null) {
   if (type === "fast_dc") return 65;
@@ -575,15 +572,15 @@ export function DashboardView() {
   } = useCarsQuery();
   const cars = carsResult?.cars;
   const preferredCarId = carsResult?.preferredCarId ?? null;
-  const providerTariffOverrides = useProviderTariffOverrides();
   const { data: userProviderRows = [] } = useUserProvidersQuery();
+  const userProviderMap = useUserProviderMap();
   const allProviderOptions = useMemo(() => {
     const userOpts = userProviderRows.map((p) => ({
       value: `up_${p.id}` as const,
       label: p.label,
       userProviderId: p.id,
     }));
-    return [...BUILT_IN_PROVIDER_OPTIONS, ...userOpts];
+    return [CUSTOM_PROVIDER_OPTION, ...userOpts];
   }, [userProviderRows]);
 
   /** Convert a select value to (providerType, userProviderId) pair. */
@@ -896,7 +893,8 @@ export function DashboardView() {
         fast_dc_price_per_kwh: fastDcPricePerKwh,
       },
       estimateProviderType,
-      providerTariffOverrides,
+      estimateUserProviderId,
+      userProviderMap,
     );
     const packEnergyKwh = energyNeededKwh(capacityKwh, soc, 100);
     const gridEnergyKwh = energyFromGridKwh(
@@ -924,11 +922,12 @@ export function DashboardView() {
     defaultPrice,
     estimatePowerKw,
     estimateProviderType,
+    estimateUserProviderId,
     estimateTariffType,
     fastDcPricePerKwh,
     homePricePerKwh,
     packCapacityKwh,
-    providerTariffOverrides,
+    userProviderMap,
     selectedCar?.default_efficiency_percent,
   ]);
 

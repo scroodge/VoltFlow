@@ -4,7 +4,6 @@ import type {
   ChargingTariffLocationRow,
   ChargingTariffType,
   Profile,
-  ProviderTariffRow,
   UserProviderRow,
 } from "../types/database.ts";
 
@@ -39,6 +38,16 @@ export const PROVIDER_LABELS: Record<ChargingProviderType, string> = {
   custom: "Custom",
 };
 
+/**
+ * Historical fallback only. Providers are now user-owned rows in `user_providers`
+ * (seeded from these same values on signup/first Settings load — see
+ * defaultUserProviderSeeds) — a user can reprice or delete any of them except
+ * Home. This table stays so `charging_sessions`/`charging_tariff_locations` rows
+ * still tagged with a bare enum value (from before the fold-in migration,
+ * `20260706200000_fold_builtin_providers_into_user_providers.sql`) keep resolving
+ * to a sensible price. Never read for new picks, which always go through
+ * `resolveUserProviderPrices`.
+ */
 export const PROVIDER_TARIFF_PRESETS: Record<
   Exclude<ChargingProviderType, "custom" | "user_provider">,
   { home: number; commercial_ac: number; fast_dc: number }
@@ -51,29 +60,29 @@ export const PROVIDER_TARIFF_PRESETS: Record<
   batterfly: { home: 0.50, commercial_ac: 0.50, fast_dc: 0.45 },
 };
 
-/** User-editable overrides of PROVIDER_TARIFF_PRESETS, keyed by provider. A missing
- * entry (or a missing provider key) falls back to the hardcoded preset.
- * Only applies to built-in providers — user-created providers have prices in UserProviderRow. */
-export type ProviderTariffOverrides = Partial<
-  Record<
-    Exclude<ChargingProviderType, "custom" | "user_provider">,
-    { home: number; commercial_ac: number; fast_dc: number }
-  >
->;
+/** The 6 providers every user's `user_providers` table is seeded with (existing
+ * users via the fold-in migration, new users via lazy-seed-on-first-load in
+ * settings-view.tsx). Home is permanent (`is_default`); the rest behave exactly
+ * like a provider the user typed in themselves — repriceable and deletable. */
+export function defaultUserProviderSeeds(): {
+  label: string;
+  home_price_per_kwh: number;
+  commercial_ac_price_per_kwh: number;
+  fast_dc_price_per_kwh: number;
+  is_default: boolean;
+}[] {
+  return (
+    ["home", "malanka", "evika", "forevo", "zaryadka", "batterfly"] as const
+  ).map((provider) => ({
+    label: PROVIDER_LABELS[provider],
+    home_price_per_kwh: PROVIDER_TARIFF_PRESETS[provider].home,
+    commercial_ac_price_per_kwh: PROVIDER_TARIFF_PRESETS[provider].commercial_ac,
+    fast_dc_price_per_kwh: PROVIDER_TARIFF_PRESETS[provider].fast_dc,
+    is_default: provider === "home",
+  }));
+}
 
 export type UserProviderMap = Record<string, UserProviderRow>;
-
-export function providerTariffsFromRows(rows: ProviderTariffRow[]): ProviderTariffOverrides {
-  const overrides: ProviderTariffOverrides = {};
-  for (const row of rows) {
-    overrides[row.provider_type] = {
-      home: row.home_price_per_kwh,
-      commercial_ac: row.commercial_ac_price_per_kwh,
-      fast_dc: row.fast_dc_price_per_kwh,
-    };
-  }
-  return overrides;
-}
 
 export function userProvidersFromRows(rows: UserProviderRow[]): UserProviderMap {
   const map: UserProviderMap = {};
@@ -81,6 +90,16 @@ export function userProvidersFromRows(rows: UserProviderRow[]): UserProviderMap 
     map[row.id] = row;
   }
   return map;
+}
+
+/** The user's permanent Home provider row, if their `user_providers` have been
+ * seeded yet. Used as the auto-tier fallback for home-power charging with no
+ * manual pick and no GPS match. */
+export function findDefaultHomeProvider(
+  userProviderMap: UserProviderMap | undefined,
+): UserProviderRow | null {
+  if (!userProviderMap) return null;
+  return Object.values(userProviderMap).find((row) => row.is_default) ?? null;
 }
 
 export function resolveUserProviderPrices(
@@ -99,7 +118,6 @@ export function resolveUserProviderPrices(
 
 export function resolveProviderTariff(
   providerType: Exclude<ChargingProviderType, "custom">,
-  overrides?: ProviderTariffOverrides,
   userProviderId?: string | null,
   userProviderMap?: UserProviderMap,
 ): { home: number; commercial_ac: number; fast_dc: number } {
@@ -108,7 +126,7 @@ export function resolveProviderTariff(
     if (userPrices) return userPrices;
     return { home: 0, commercial_ac: 0, fast_dc: 0 };
   }
-  return overrides?.[providerType] ?? PROVIDER_TARIFF_PRESETS[providerType];
+  return PROVIDER_TARIFF_PRESETS[providerType];
 }
 
 export function normalizeTariffType(value: unknown): ChargingTariffType {
@@ -141,12 +159,11 @@ export function resolveTariffPrice(
   tariffType: ChargingTariffType,
   profile: TariffPriceProfile | null | undefined,
   providerType: ChargingProviderType = "custom",
-  providerTariffs?: ProviderTariffOverrides,
   userProviderId?: string | null,
   userProviderMap?: UserProviderMap,
 ): number {
   if (providerType !== "custom") {
-    const preset = resolveProviderTariff(providerType, providerTariffs, userProviderId, userProviderMap);
+    const preset = resolveProviderTariff(providerType, userProviderId, userProviderMap);
     return preset[tariffType];
   }
   const fallback = Number(profile?.default_price_per_kwh ?? 0);
@@ -186,7 +203,6 @@ export function resolveSessionTariff(params: {
   location: { lat?: number | null; lon?: number | null } | null | undefined;
   locationPresets: ChargingTariffLocationRow[];
   profile: TariffPriceProfile | null | undefined;
-  providerTariffs?: ProviderTariffOverrides;
   userProviderMap?: UserProviderMap;
 }): TariffResolution {
   const manualPrice = Number(params.manualPricePerKwh ?? 0);
@@ -225,7 +241,6 @@ export function resolveSessionTariff(params: {
               type,
               params.profile,
               matchedProvider,
-              params.providerTariffs,
               matchedUserProviderId,
               params.userProviderMap,
             ),
@@ -235,12 +250,19 @@ export function resolveSessionTariff(params: {
   }
 
   const tariffType = resolveTariffTypeByPower(params.chargerPowerKw);
-  const autoProvider: ChargingProviderType = tariffType === "home" ? "home" : "custom";
+  // Home-tier auto-fallback resolves through the user's permanent Home provider
+  // row (is_default) so it reflects any price the user has set, not a hardcoded
+  // constant. Falls back to "custom" (profile.home_price_per_kwh) only if the
+  // seed hasn't run yet for this user (should not happen once seeded).
+  const defaultHomeProvider = findDefaultHomeProvider(params.userProviderMap);
+  const autoProvider: ChargingProviderType =
+    tariffType === "home" ? (defaultHomeProvider ? "user_provider" : "custom") : "custom";
+  const autoUserProviderId = autoProvider === "user_provider" ? (defaultHomeProvider?.id ?? null) : null;
   return {
     tariffType,
     providerType: autoProvider,
-    userProviderId: null,
-    pricePerKwh: resolveTariffPrice(tariffType, params.profile, autoProvider, params.providerTariffs),
+    userProviderId: autoUserProviderId,
+    pricePerKwh: resolveTariffPrice(tariffType, params.profile, autoProvider, autoUserProviderId, params.userProviderMap),
     source: "power",
     locationPresetId: null,
   };

@@ -4,6 +4,7 @@ import { type ReactNode, useEffect, useMemo } from "react";
 
 import { MateUpdateBanner } from "@/components/dashboard/mate-update-banner";
 import { ChargingSessionBackgroundSync } from "@/components/charging/charging-session-background-sync";
+import { DefaultProvidersSeed } from "@/components/settings/default-providers-seed";
 import { ChargingDevSourceProvider } from "@/components/dev/charging-dev-source-context";
 import { DashboardDevSnapshotProvider } from "@/components/dev/dashboard-dev-snapshot-context";
 import { VehicleDevSnapshotProvider } from "@/components/dev/vehicle-dev-snapshot-context";
@@ -52,6 +53,7 @@ export function MobileShell({ children }: { children: ReactNode }) {
       <VehicleDevSnapshotProvider>
       <ChargingDevSourceProvider>
       <ChargingSessionBackgroundSync />
+      <DefaultProvidersSeed />
       <OnboardingGate />
       <div className="mobile-page">
         <div

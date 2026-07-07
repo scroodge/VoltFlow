@@ -47,8 +47,7 @@ import { mapChargingSession, mapChargingTariffLocation } from "@/lib/db-map";
 import { queryKeys } from "@/lib/query-keys";
 import { useChargingSessionLiveSync } from "@/hooks/use-charging-session-live-sync";
 import { useChargingSessionAutoTariff } from "@/hooks/use-charging-session-auto-tariff";
-import { useProviderTariffOverrides } from "@/hooks/use-provider-tariffs-query";
-import { useUserProvidersQuery } from "@/hooks/use-user-providers-query";
+import { useUserProvidersQuery, useUserProviderMap } from "@/hooks/use-user-providers-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useSessionQuery } from "@/hooks/use-session-query";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
@@ -102,8 +101,8 @@ export function ChargingSessionScreen({
 
   const { data: session, error, isLoading } = useSessionQuery(sessionId);
   const { data: carsResult } = useCarsQuery();
-  const providerTariffOverrides = useProviderTariffOverrides();
   const { data: userProviderRows = [] } = useUserProvidersQuery();
+  const userProviderMap = useUserProviderMap();
   const { data: bydmateLive = [] } = useBydmateLiveQuery();
   const devSource = useChargingDevSource();
   const devOverrideActive = devSource?.isOverrideActive ?? false;
@@ -115,15 +114,15 @@ export function ChargingSessionScreen({
     [carsResult?.cars, session],
   );
 
+  // "custom" (manual price, no picked provider) is the only non-stored option —
+  // every named provider (including Home) is a `user_providers` row, seeded on
+  // signup so it's always at least present as Home.
   const allProviderOptions = useMemo(() => {
     const userOpts = userProviderRows.map((p) => ({
       value: `up_${p.id}` as const,
       label: p.label,
     }));
-    const builtIn = (["home", "malanka", "evika", "forevo", "zaryadka", "batterfly", "custom"] as const).map(
-      (value) => ({ value, label: t(tariffProviderKey(value)) }),
-    );
-    return [...builtIn, ...userOpts];
+    return [{ value: "custom" as const, label: t(tariffProviderKey("custom")) }, ...userOpts];
   }, [userProviderRows, t]);
 
   function parseProviderSelectValue(value: string | null | undefined): {
@@ -355,13 +354,10 @@ export function ChargingSessionScreen({
     (provider: ChargingProviderType, tariffType: ChargingTariffType) => {
       if (provider === "custom") return;
       const userProviderId = provider === "user_provider" ? userProviderIdDraft : undefined;
-      const userMap = userProviderRows.length > 0
-        ? Object.fromEntries(userProviderRows.map((r) => [r.id, r]))
-        : undefined;
-      const preset = resolveProviderTariff(provider, providerTariffOverrides, userProviderId, userMap);
+      const preset = resolveProviderTariff(provider, userProviderId, userProviderMap);
       setPriceDraft(String(preset[tariffType]));
     },
-    [providerTariffOverrides, userProviderIdDraft, userProviderRows],
+    [userProviderMap, userProviderIdDraft],
   );
 
   const tariffLocationMatch = useMemo(

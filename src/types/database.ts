@@ -86,16 +86,6 @@ export type ChargingTariffLocationRow = {
   updated_at: string;
 };
 
-export type ProviderTariffRow = {
-  user_id: string;
-  provider_type: Exclude<ChargingProviderType, "custom" | "user_provider">;
-  home_price_per_kwh: number;
-  commercial_ac_price_per_kwh: number;
-  fast_dc_price_per_kwh: number;
-  created_at: string;
-  updated_at: string;
-};
-
 export type UserProviderRow = {
   id: string;
   user_id: string;
@@ -103,6 +93,7 @@ export type UserProviderRow = {
   home_price_per_kwh: number;
   commercial_ac_price_per_kwh: number;
   fast_dc_price_per_kwh: number;
+  is_default: boolean;
   created_at: string;
   updated_at: string;
 };

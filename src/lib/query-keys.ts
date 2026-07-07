@@ -21,7 +21,6 @@ export const queryKeys = {
   vehicleCommands: (vehicleId: string | null) => ["vehicle-commands", vehicleId] as const,
   mateLatestRelease: ["mate-latest-release"] as const,
   tariffLocations: ["tariff-locations"] as const,
-  providerTariffs: ["provider-tariffs"] as const,
   userProviders: ["user-providers"] as const,
   serviceRecords: (carId: string) => ["service-records", carId] as const,
   serviceRecord: (id: string) => ["service-record", id] as const,
