@@ -621,6 +621,7 @@ export const dictionaries = {
         duration: "Duration",
         energy: "Energy",
         cost: "Cost",
+        fuel: "Fuel",
       },
       charts: {
         title: "Trip charts",
@@ -1816,9 +1817,10 @@ export const dictionaries = {
         maxSpeed: "Макс. хуткасць",
         avgSpeed: "Сярэд. хуткасць",
         empty: "За гэтую дату яшчэ няма паездак з тэлеметрыяй.",
-        duration: "Працягласць",
+         duration: "Працягласць",
         energy: "Энергія",
         cost: "Кошт",
+        fuel: "Паліва",
       },
       charts: {
         title: "Графікі паездкі",
@@ -3014,9 +3016,10 @@ export const dictionaries = {
         maxSpeed: "Максимальная",
         avgSpeed: "Средняя",
         empty: "За эту дату пока нет поездок с телеметрией.",
-        duration: "Длительность",
+         duration: "Длительность",
         energy: "Энергия",
         cost: "Стоимость",
+        fuel: "Топливо",
       },
       charts: {
         title: "Графики поездки",

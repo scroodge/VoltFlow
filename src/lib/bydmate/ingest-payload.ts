@@ -129,6 +129,20 @@ export const payloadSchema = z
     telemetry: telemetrySchema,
     diplus: optionalDiplusSchema,
     location: locationSchema,
+    autoservice: z
+      .object({
+        soc_percent: numericSchema,
+        power_kw: numericSchema,
+        gun_state: z.number().int().nullable().optional(),
+        bms_state: z.number().int().nullable().optional(),
+        charge_capacity_kwh: numericSchema,
+        charge_battery_volt: numericSchema,
+        battery_type: z.number().int().nullable().optional(),
+        lifetime_mileage_km: numericSchema,
+        lifetime_kwh: numericSchema,
+      })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 

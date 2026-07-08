@@ -237,6 +237,15 @@ export type BydmateLiveSnapshotRow = {
   diplus_voltage_12v?: number | null;
   diplus_gear?: string | number | null;
   mate_version?: string | null;
+  autoservice_soc_percent?: number | null;
+  autoservice_power_kw?: number | null;
+  autoservice_gun_state?: number | null;
+  autoservice_bms_state?: number | null;
+  autoservice_charge_capacity_kwh?: number | null;
+  autoservice_charge_battery_volt?: number | null;
+  autoservice_battery_type?: number | null;
+  autoservice_lifetime_mileage_km?: number | null;
+  autoservice_lifetime_kwh?: number | null;
 };
 
 export type MateAppReleaseRow = {
@@ -264,6 +273,15 @@ export type BydmateTelemetrySampleRow = {
   diplus_min_cell_voltage_v?: number | null;
   diplus_max_cell_voltage_v?: number | null;
   diplus_cell_delta_v?: number | null;
+  autoservice_soc_percent?: number | null;
+  autoservice_power_kw?: number | null;
+  autoservice_gun_state?: number | null;
+  autoservice_bms_state?: number | null;
+  autoservice_charge_capacity_kwh?: number | null;
+  autoservice_charge_battery_volt?: number | null;
+  autoservice_battery_type?: number | null;
+  autoservice_lifetime_mileage_km?: number | null;
+  autoservice_lifetime_kwh?: number | null;
 };
 
 export type BydmateTripRow = {
@@ -286,6 +304,7 @@ export type BydmateTripRow = {
   traction_energy_kwh?: number | null;
   power_sample_count?: number;
   source?: "telemetry" | "byd_energydata";
+  fuel_kwh?: number | null;
 };
 
 export type BydmateTripTrackPointRow = {

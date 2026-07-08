@@ -12,6 +12,7 @@ const tripSummarySchema = z
     distance_km: z.number().min(0).max(2000),
     energy_kwh: z.number().min(0).max(500),
     duration_seconds: z.number().int().min(0).max(24 * 60 * 60).optional(),
+    fuel_kwh: z.number().min(0).max(1000).optional(),
   })
   .refine((trip) => trip.end_timestamp >= trip.start_timestamp, {
     message: "end_timestamp must be >= start_timestamp",

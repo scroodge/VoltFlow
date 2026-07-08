@@ -648,6 +648,7 @@ function ChargingTab({
 // ─── Trips tab ────────────────────────────────────────────────────────────────
 
 function TripStatsGrid({ trip, tx }: { trip: BydmateTripRow; tx: HistoryTranslator }) {
+  const hasFuel = typeof trip.fuel_kwh === "number" && trip.fuel_kwh > 0;
   return (
     <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 border-t border-border px-2.5 py-2.5 min-[360px]:grid-cols-3">
       <MiniStat label={tx("vehicle.trips.maxSpeed")} value={`${fmt(trip.max_speed_kmh)} km/h`} />
@@ -656,6 +657,9 @@ function TripStatsGrid({ trip, tx }: { trip: BydmateTripRow; tx: HistoryTranslat
         label={tx("vehicle.trips.consumption")}
         value={`${fmt(trip.avg_consumption_kwh_100km, 1)} kWh/100`}
       />
+      {hasFuel ? (
+        <MiniStat label={tx("vehicle.trips.fuel")} value={`${fmt(trip.fuel_kwh, 2)} L`} />
+      ) : null}
       <MiniStat label={tx("vehicle.trips.regen")} value={`${fmt(trip.regen_energy_kwh, 2)} kWh`} />
       <MiniStat label={tx("vehicle.trips.traction")} value={formatTripTractionKwh(trip)} />
       <MiniStat
