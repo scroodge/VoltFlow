@@ -4,19 +4,21 @@ import {
   energyFromGridKwh,
   type ChargingParams,
 } from "./charging-math.ts";
+import { AUTO_CHARGING_DRIVE_STOP_SPEED_KMH, TELEMETRY_CHARGE_POWER_THRESHOLD_KW } from "./bydmate/telemetry-charging.ts";
 
-const CHARGE_POWER_THRESHOLD_KW = 0.1;
+const CHARGE_POWER_THRESHOLD_KW = TELEMETRY_CHARGE_POWER_THRESHOLD_KW;
 
-function isAcWallboxCharging(telemetry: Record<string, unknown>) {
-  const chargePowerKw =
-    finiteTelemetryNumber(telemetry.charge_power_kw) ?? finiteTelemetryNumber(telemetry.power_kw);
-  if (chargePowerKw != null && chargePowerKw > CHARGE_POWER_THRESHOLD_KW) {
-    return true;
-  }
-  if (telemetry.is_charging !== true) return false;
-  const soc = finiteTelemetryNumber(telemetry.soc);
-  if (soc != null && soc >= 100) return false;
-  return chargePowerKw != null && chargePowerKw > CHARGE_POWER_THRESHOLD_KW;
+/**
+ * Charging evidence for reconcile windows only — never falls back to `power_kw` (that's
+ * positive traction draw while *driving*, not charging) and requires the vehicle parked.
+ * Without the speed guard, a highway sample was mistaken for "still charging" and dragged
+ * `stopped_at` forward through an entire drive (car `way`, 2026-07-06).
+ */
+function isChargingEvidence(telemetry: Record<string, unknown>) {
+  const chargePowerKw = finiteTelemetryNumber(telemetry.charge_power_kw);
+  if (chargePowerKw == null || chargePowerKw <= CHARGE_POWER_THRESHOLD_KW) return false;
+  const speedKmh = finiteTelemetryNumber(telemetry.speed_kmh);
+  return speedKmh == null || speedKmh <= AUTO_CHARGING_DRIVE_STOP_SPEED_KMH;
 }
 
 export type ReconcileChargingSession = {
@@ -159,7 +161,7 @@ export function summarizeSessionTelemetry(
     if (kwhCharged != null && kwhCharged > 0) {
       maxKwhCharged = Math.max(maxKwhCharged ?? 0, kwhCharged);
     }
-    if (row.telemetry && isAcWallboxCharging(row.telemetry)) {
+    if (row.telemetry && isChargingEvidence(row.telemetry)) {
       if (!firstAcChargeAt) firstAcChargeAt = row.device_time;
       lastAcChargeAt = row.device_time;
     }
@@ -236,6 +238,11 @@ export function buildReconciledSessionPatch({
   liveSoc: number | null;
   nowMs: number;
 }) {
+  // No SOC evidence in the session's window (telemetry pruned/missing) and no live SOC to
+  // anchor to — measuredSocFromMate would fall back to start_percent and wipe a legit,
+  // already-recorded session. Leave it alone rather than guess.
+  if (summary.lastSocAt == null && liveSoc == null) return null;
+
   const startMs = Date.parse(session.started_at!);
   const measuredSoc = measuredSocFromMate(session, summary, liveSoc);
   const reachedTarget = measuredSoc + TELEMETRY_SOC_TOLERANCE >= session.target_percent;
@@ -272,14 +279,23 @@ export function buildReconciledSessionPatch({
     return null;
   }
 
+  // lastSocAt is deliberately excluded here: any sample with a SOC reading counts (including
+  // driving), so it kept dragging stopped_at through drives between charges (car `way`,
+  // 2026-07-06). It's only trustworthy as a last-resort anchor when the stored stopped_at
+  // itself is missing/invalid.
+  const storedStoppedMs = session.stopped_at ? Date.parse(session.stopped_at) : NaN;
+  const storedStoppedValid = Number.isFinite(storedStoppedMs) && storedStoppedMs >= startMs;
+
   const stopCandidates = [
-    summary.firstTargetSocAt,
-    summary.lastAcChargeAt,
-    summary.lastSocAt,
-    session.stopped_at,
-  ]
-    .map((value) => (value ? Date.parse(value) : NaN))
-    .filter((ms) => Number.isFinite(ms) && ms >= startMs);
+    ...[summary.firstTargetSocAt, summary.lastAcChargeAt, session.stopped_at]
+      .map((value) => (value ? Date.parse(value) : NaN))
+      .filter((ms) => Number.isFinite(ms) && ms >= startMs),
+    ...(storedStoppedValid
+      ? []
+      : [summary.lastSocAt]
+          .map((value) => (value ? Date.parse(value) : NaN))
+          .filter((ms) => Number.isFinite(ms) && ms >= startMs)),
+  ];
 
   const stoppedAtMs =
     stopCandidates.length > 0 ? Math.max(...stopCandidates) : Math.min(nowMs, startMs + 60_000);

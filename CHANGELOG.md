@@ -9,6 +9,50 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-07-07
+
+### Fixed: closed-session reconcile inflating finished charging sessions with a later charge's SOC
+
+Car `way`, 2026-07-06: a DC fast charge that really ran 16→38% got recorded as 16→68%
+with `stopped_at` rewritten to a highway sample mid-drive, double-counting the following
+AC session's energy. Root cause was three compounding bugs in the closed-session repair
+path (`src/lib/charging-session-reconcile-logic.ts` + `charging-session-reconcile.ts`),
+not the auto start/stop logic (which worked correctly):
+
+1. **Live-SOC bleed across sessions** — `measuredSocFromMate` used the car's live SOC
+   *fresh relative to now*, with no check that it belonged to the session being repaired.
+   Every later app-open during the next charge ratcheted the already-closed session's
+   `current_percent` up to the car's current SOC. Fix: `liveSocWithinSessionWindow()` in
+   `charging-session-reconcile.ts` now only passes `liveSoc` into the closed-session patch
+   when the live snapshot's `received_at` falls inside `[started_at, stopped_at + 5min]`.
+2. **Driving samples counted as charging evidence** — `isAcWallboxCharging` fell back to
+   `power_kw` (positive while driving) with no speed guard, so `stopped_at` got dragged
+   forward through an entire drive. Replaced with `isChargingEvidence()`: requires
+   `charge_power_kw > threshold` and the vehicle parked (`speed_kmh ≤ 5`), reusing the
+   same constants as the (already-correct) auto-session charging check.
+3. **`stopped_at` candidate list included `lastSocAt`** (any sample with a SOC reading,
+   charging or not) — dropped from the primary candidates; kept only as a last-resort
+   fallback when the stored `stopped_at` itself is missing/invalid.
+4. **Latent collapse risk** (found while reading, not yet observed in the wild): a
+   below-target session with no SOC telemetry in its window and no live SOC would fall
+   back to `start_percent`, wiping a legitimate recorded session. `buildReconciledSessionPatch`
+   now returns `null` (no-op) instead of guessing.
+
+Regression tests added to `charging-session-reconcile.test.mjs` modeled on the July-6
+shape (6 new cases); all pre-existing tests + full suite + `tsc` + `next build` pass.
+
+**Data repair:** three prod rows had already drifted from the bug — `712dd712…` (Jul 6,
+16→68% → corrected to 16→38%), `333a1835…` (Jun 30, 32→100% → corrected to 32→64%),
+`58f82cfb…` (Jul 3, 50→72% → corrected to 50→66%) — repaired directly via `psql` against
+the self-hosted pooler, values re-derived from `bydmate_telemetry_samples` (last real
+`charge_power_kw > 0` sample while parked, before the following drive).
+
+**Not yet done:** code changes are in the working tree, not yet committed or deployed; the
+bug is still live in prod until the next deploy — reconcile could re-corrupt the just-repaired
+rows (or others) if the app is opened again before shipping. Item G from the original research (skip
+re-scanning telemetry for consistent sessions older than ~48h, to cut egress) was not
+built — kept as a possible follow-up if needed.
+
 ## 2026-07-06
 
 ### Providers unified into user-owned data (Home permanent, rest fully deletable)

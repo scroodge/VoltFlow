@@ -275,6 +275,125 @@ test("buildSilenceClosePatch is a no-op for an already-closed session", () => {
   );
 });
 
+// Regression cases modeled on the July-6 shape: a DC session (16→38%) that got inflated
+// to 16→68% and its stopped_at dragged into the following drive, because reconcile
+// (a) used the car's current live SOC regardless of the session's own timeframe and
+// (b) counted driving samples (positive power_kw, no charge_power_kw) as charging evidence.
+const dcSession = {
+  ...baseSession,
+  start_percent: 16,
+  current_percent: 38,
+  target_percent: 100,
+  battery_capacity_kwh: 45.1,
+  charger_power_kw: 28,
+  price_per_kwh: 0.65,
+  charged_energy_kwh: 9.922,
+  estimated_cost: 6.4493,
+  status: "stopped",
+  started_at: "2026-07-06T05:56:56.676Z",
+  stopped_at: "2026-07-06T06:10:05.802Z",
+};
+
+test("summarizeSessionTelemetry ignores driving samples (positive power_kw, no charge_power_kw) as charging evidence", () => {
+  const summary = summarizeSessionTelemetry(
+    [
+      { device_time: "2026-07-06T05:56:56.676Z", telemetry: { soc: 16, charge_power_kw: 28 } },
+      { device_time: "2026-07-06T06:10:05.802Z", telemetry: { soc: 38, charge_power_kw: 0 } },
+      // driving home: no charge_power_kw, positive traction power_kw, highway speed
+      { device_time: "2026-07-06T06:35:19.414Z", telemetry: { soc: 30, power_kw: 15, speed_kmh: 105 } },
+    ],
+    dcSession,
+  );
+  assert.equal(summary.lastAcChargeAt, "2026-07-06T05:56:56.676Z");
+  assert.equal(summary.maxSoc, 38);
+});
+
+test("buildReconciledSessionPatch does not extend stopped_at into a later drive", () => {
+  const summary = summarizeSessionTelemetry(
+    [
+      { device_time: "2026-07-06T05:56:56.676Z", telemetry: { soc: 16, charge_power_kw: 28 } },
+      { device_time: "2026-07-06T06:10:05.802Z", telemetry: { soc: 38, charge_power_kw: 0 } },
+      { device_time: "2026-07-06T06:35:19.414Z", telemetry: { soc: 30, power_kw: 15, speed_kmh: 105 } },
+    ],
+    dcSession,
+  );
+  const patch = buildReconciledSessionPatch({
+    session: dcSession,
+    summary,
+    liveSoc: null,
+    nowMs: Date.parse("2026-07-06T09:00:00Z"),
+  });
+  // Already matches (stored values derived from SOC 38, stopped_at valid) → no-op.
+  assert.equal(patch, null);
+});
+
+test("buildReconciledSessionPatch does not absorb a later session's live SOC outside its window", () => {
+  // Simulates the orchestrator-level scoping: a live snapshot from the *next* (AC) charge,
+  // hours after this DC session closed, must not be passed in as this session's liveSoc.
+  const summary = summarizeSessionTelemetry(
+    [
+      { device_time: "2026-07-06T05:56:56.676Z", telemetry: { soc: 16, charge_power_kw: 28 } },
+      { device_time: "2026-07-06T06:10:05.802Z", telemetry: { soc: 38, charge_power_kw: 0 } },
+    ],
+    dcSession,
+  );
+  // liveSoc: null represents the scoped-out result (snapshot's received_at was outside
+  // [started_at, stopped_at + 5min], so the caller passes null instead of 68).
+  const patch = buildReconciledSessionPatch({
+    session: { ...dcSession, current_percent: 68, charged_energy_kwh: 23.452, estimated_cost: 15.2438 },
+    summary,
+    liveSoc: null,
+    nowMs: Date.parse("2026-07-06T09:00:00Z"),
+  });
+  assert.ok(patch);
+  assert.equal(patch.current_percent, 38);
+  assert.ok(patch.charged_energy_kwh < 15);
+});
+
+test("buildReconciledSessionPatch does not collapse a session with no SOC telemetry in window and no live SOC", () => {
+  const summary = summarizeSessionTelemetry([], dcSession);
+  const patch = buildReconciledSessionPatch({
+    session: { ...dcSession, current_percent: 68, charged_energy_kwh: 23.452, estimated_cost: 15.2438 },
+    summary,
+    liveSoc: null,
+    nowMs: Date.parse("2026-07-06T09:00:00Z"),
+  });
+  assert.equal(patch, null);
+});
+
+test("buildReconciledSessionPatch still trusts live SOC captured within the session's own window", () => {
+  // The AC session (85e619d9…): closed at 68% while telemetry only reached 63 — the live
+  // snapshot at close time is legitimate evidence and should still win.
+  const acSession = {
+    ...baseSession,
+    start_percent: 31,
+    current_percent: 68,
+    target_percent: 100,
+    battery_capacity_kwh: 45.1,
+    charger_power_kw: 4,
+    price_per_kwh: 0.2,
+    charged_energy_kwh: 16.687,
+    estimated_cost: 3.3374,
+    status: "stopped",
+    started_at: "2026-07-06T06:44:00Z",
+    stopped_at: "2026-07-06T10:10:59Z",
+  };
+  const summary = summarizeSessionTelemetry(
+    [
+      { device_time: "2026-07-06T06:44:00Z", telemetry: { soc: 31, charge_power_kw: 4 } },
+      { device_time: "2026-07-06T09:54:50Z", telemetry: { soc: 63, charge_power_kw: 4 } },
+    ],
+    acSession,
+  );
+  const patch = buildReconciledSessionPatch({
+    session: acSession,
+    summary,
+    liveSoc: 68, // scoped-in: snapshot received_at fell within [started_at, stopped_at+5min]
+    nowMs: Date.parse("2026-07-06T10:12:00Z"),
+  });
+  assert.equal(patch, null); // matches stored values already
+});
+
 test("buildSilenceClosePatch preserves overridden energy", () => {
   const lastSampleMs = NOW2 - 60 * 60_000;
   const summary = summarizeSessionTelemetry(
