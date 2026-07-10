@@ -6,6 +6,32 @@ go-ahead.** These are researched but **not built**. Shipped work lives in
 
 ---
 
+## 🟢 Telegram live-widget chat-list summary — APPROVED 2026-07-10
+
+**Goal:** keep the complete editable vehicle-status widget in the bot chat while
+showing a useful compact value in Telegram's chat list.
+
+**Constraint:** Telegram has no independent chat-list-preview field for a bot
+message. The chat list renders the beginning of the latest message, so the
+first line of the existing editable widget is the only reliable control point.
+
+**Options:**
+
+1. **Compact first line (recommended):** prepend `🔋 79% · P 41 694 км`, then
+   retain the car name/state, SOC bar, charging details, map link, and button
+   below. The chat list stays current because the same message is edited every
+   30 seconds.
+2. **Separate short message:** would make the list compact, but it would
+   clutter the conversation and leave the live widget no longer latest.
+3. **Keep the current header:** preserves the current widget order, but the
+   chat list continues to truncate the car/state instead of showing SOC and
+   mileage.
+
+**Recommendation:** option 1. User explicitly approved build and production
+deployment on 2026-07-10.
+
+---
+
 ## 🟢 Email verification for signup (onboarding) — DECIDED, awaiting build go-ahead
 
 **Decision (2026-07-01):** free-user signup should **require email verification**

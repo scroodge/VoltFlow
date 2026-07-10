@@ -52,6 +52,12 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+function chatListSummary(soc: number | null, odometer: number | null): string {
+  const battery = soc != null ? `🔋 ${soc}%` : "🔋 —";
+  const mileage = odometer != null ? `P ${odometer.toLocaleString("ru-RU")} км` : "P —";
+  return `${battery} · ${mileage}`;
+}
+
 type LiveWidgetRow = {
   user_id: string;
   vehicle_id: string;
@@ -82,6 +88,9 @@ function widgetHtml(data: {
   const lines: string[] = [];
   const name = escapeHtml(data.carName);
 
+  // Telegram's chat list previews the beginning of the latest message. Keep
+  // this concise, live line first while preserving the detailed card below.
+  lines.push(chatListSummary(data.soc, data.odometer));
   lines.push(`<b>${data.emoji} ${name}</b> · ${data.stateLabel}`);
 
   if (data.soc != null) {
