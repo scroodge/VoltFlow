@@ -11,6 +11,18 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-07-10
 
+### Fix History Analytics range chips jumping into a future period
+
+- Reproduced the anchor drift: Day July 10 → Week W28 → Month July (month-end anchor)
+  → Week W31 / July 27 → Day July 27, despite no forward navigation.
+- Analytics range chips now re-anchor from the user's current **local** calendar date
+  on every selection. Historical navigation remains available through the dedicated
+  range anchor controls.
+- Added pure regression coverage for the July 10 Day → Week → Month → Week → Day flow
+  and documented the behavior in `docs/CHART_OPTIMIZATION_SPEC.md`.
+
+---
+
 ### Fix false auto-charging sessions when Di+ says the gun is unplugged
 
 - Diagnosed car `way`: a parked 79% snapshot had no charge power and Di+ gun state

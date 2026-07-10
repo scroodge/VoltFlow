@@ -27,8 +27,10 @@ import { useTranslation } from "@/hooks/use-translation";
 import { buildAnalyticsSummary, consumptionByOutsideTemp } from "@/lib/bydmate/telemetry-buckets";
 import { computeHistoryPeriodSummary } from "@/lib/history-day-summary";
 import {
+  analyticsRangeAnchorForCurrentDate,
   isoWeekValueFromDate,
   isoWeekValueToAnchorDate,
+  localCalendarDate,
   parseAnalyticsRange,
   resolveTelemetryWindow,
   snapAnchorDateForRange,
@@ -59,7 +61,7 @@ function parseInitialAnchorDate(range: TelemetryHistoryRange, dateParam: string 
   if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
     return snapAnchorDateForRange(range, dateParam);
   }
-  return snapAnchorDateForRange(range, new Date().toISOString().slice(0, 10));
+  return snapAnchorDateForRange(range, localCalendarDate());
 }
 
 async function fetchAnalytics<T>(path: string): Promise<T> {
@@ -460,7 +462,7 @@ export function VehicleAnalyticsPanels({
   );
 
   const handleRangeChange = (range: TelemetryHistoryRange) => {
-    const nextDate = snapAnchorDateForRange(range, anchorDate);
+    const nextDate = analyticsRangeAnchorForCurrentDate(range);
     setHistoryRange(range);
     setAnchorDate(nextDate);
     notifyState(range, nextDate);

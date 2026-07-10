@@ -180,6 +180,22 @@ export function snapAnchorDateForRange(
   }
 }
 
+/** Browser-local YYYY-MM-DD; use for user-facing calendar defaults and range chips. */
+export function localCalendarDate(now = new Date()): string {
+  return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+}
+
+/**
+ * Range chips always begin at today's local calendar date. Historical browsing is
+ * handled by the dedicated day/week/month/quarter/year anchor controls instead.
+ */
+export function analyticsRangeAnchorForCurrentDate(
+  range: TelemetryHistoryRange,
+  now = new Date(),
+): string {
+  return snapAnchorDateForRange(range, localCalendarDate(now));
+}
+
 /** HTML `<input type="month">` value (YYYY-MM) for a calendar date anchor. */
 export function monthValueFromDate(dateStr: string): string {
   return dateStr.slice(0, 7);

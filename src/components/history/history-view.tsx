@@ -8,7 +8,11 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { BrandBadge } from "@/components/brand/BrandBadge";
 import { LogoFull } from "@/components/brand/LogoFull";
 import { VehicleAnalyticsPanels } from "@/components/vehicle/vehicle-analytics-panels";
-import { parseAnalyticsRange, type TelemetryHistoryRange } from "@/lib/bydmate/telemetry-ranges";
+import {
+  localCalendarDate,
+  parseAnalyticsRange,
+  type TelemetryHistoryRange,
+} from "@/lib/bydmate/telemetry-ranges";
 import { TripDetailPanel } from "@/components/vehicle/TripDetailPanel";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -973,7 +977,7 @@ export function HistoryView() {
 
   const analyticsRange = parseAnalyticsRange(searchParams.get("range"));
   const analyticsDate =
-    searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
+    searchParams.get("date") ?? localCalendarDate();
 
   const buildHistoryUrl = (
     nextTab: HistoryTab,
