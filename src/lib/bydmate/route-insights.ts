@@ -65,6 +65,18 @@ type RoutePreference = {
   isPark: boolean;
 };
 
+type RouteInsightInput = {
+  track: RouteInsightTrackPoint[];
+  outsideTempAvg: number | null;
+  batteryTempAvg: number | null;
+};
+
+function asFiniteNumber(value: number | string | null): number | null {
+  if (value == null) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function roundGrid(value: number) {
   return Math.round(value / GEO_PRECISION) * GEO_PRECISION;
 }
@@ -345,6 +357,71 @@ async function tripOutsideTempAvg(
   };
 }
 
+async function fetchRouteInsightInputs({
+  supabase,
+  userId,
+  vehicleId,
+  tripIds,
+}: {
+  supabase: SupabaseClient;
+  userId: string;
+  vehicleId: string;
+  tripIds: string[];
+}): Promise<Map<string, RouteInsightInput> | null> {
+  if (tripIds.length === 0) return new Map();
+
+  const { data, error } = await supabase.rpc("bydmate_route_insight_inputs", {
+    p_user_id: userId,
+    p_vehicle_id: vehicleId,
+    p_trip_ids: tripIds,
+    p_track_limit: 500,
+  });
+
+  // Keep route insights available during the short window where the web deployment
+  // has landed ahead of its matching database migration.
+  if (error) return null;
+
+  const inputs = new Map<string, RouteInsightInput>();
+  for (const row of (data ?? []) as {
+    trip_id: string;
+    track: unknown;
+    outside_temp_avg: number | string | null;
+    battery_temp_avg: number | string | null;
+  }[]) {
+    if (!Array.isArray(row.track)) continue;
+
+    const track = row.track.flatMap((point): RouteInsightTrackPoint[] => {
+      if (!point || typeof point !== "object") return [];
+      const candidate = point as Partial<RouteInsightTrackPoint>;
+      if (
+        typeof candidate.lat !== "number" ||
+        !Number.isFinite(candidate.lat) ||
+        typeof candidate.lon !== "number" ||
+        !Number.isFinite(candidate.lon) ||
+        typeof candidate.device_time !== "string"
+      ) {
+        return [];
+      }
+      return [{
+        lat: candidate.lat,
+        lon: candidate.lon,
+        device_time: candidate.device_time,
+        power_kw: typeof candidate.power_kw === "number" ? candidate.power_kw : null,
+        speed_kmh: typeof candidate.speed_kmh === "number" ? candidate.speed_kmh : null,
+        soc: typeof candidate.soc === "number" ? candidate.soc : null,
+      }];
+    });
+
+    inputs.set(row.trip_id, {
+      track,
+      outsideTempAvg: asFiniteNumber(row.outside_temp_avg),
+      batteryTempAvg: asFiniteNumber(row.battery_temp_avg),
+    });
+  }
+
+  return inputs;
+}
+
 export async function fetchRouteInsights({
   supabase,
   userId,
@@ -377,18 +454,38 @@ export async function fetchRouteInsights({
   );
 
   const tripRows = (trips ?? []) as BydmateTripRow[];
+  const routeInputs = await fetchRouteInsightInputs({
+    supabase,
+    userId,
+    vehicleId,
+    tripIds: tripRows.map((trip) => trip.id),
+  });
   const clusters = new Map<string, { label: string; trips: RouteTripRef[]; trackPoints: RouteInsightTrackPoint[] }>();
 
   for (const trip of tripRows) {
-    const { data: track, error: trackError } = await supabase
-      .from("bydmate_trip_track_points")
-      .select("lat, lon, device_time, power_kw, speed_kmh, soc")
-      .eq("user_id", userId)
-      .eq("trip_id", trip.id)
-      .order("device_time", { ascending: true })
-      .limit(500);
+    const routeInput = routeInputs?.get(trip.id);
+    let track = routeInput?.track;
+    let outsideTempAvg = routeInput?.outsideTempAvg ?? null;
+    let batteryTempAvg = routeInput?.batteryTempAvg ?? null;
 
-    if (trackError || !track || track.length < 2) continue;
+    if (routeInputs == null) {
+      const { data, error: trackError } = await supabase
+        .from("bydmate_trip_track_points")
+        .select("lat, lon, device_time, power_kw, speed_kmh, soc")
+        .eq("user_id", userId)
+        .eq("trip_id", trip.id)
+        .order("device_time", { ascending: true })
+        .limit(500);
+
+      if (trackError) continue;
+      track = data ?? [];
+
+      const temps = await tripOutsideTempAvg(supabase, userId, vehicleId, trip);
+      outsideTempAvg = temps?.outsideTempAvg ?? null;
+      batteryTempAvg = temps?.batteryTempAvg ?? null;
+    }
+
+    if (!track || track.length < 2) continue;
 
     const first = track[0];
     const last = track[track.length - 1];
@@ -401,15 +498,13 @@ export async function fetchRouteInsights({
       MAX_ROUTE_INSIGHT_TRACK_POINTS,
     );
 
-    const temps = await tripOutsideTempAvg(supabase, userId, vehicleId, trip);
-
     const ref: RouteTripRef = {
       tripId: trip.id,
       startedAt: trip.started_at,
       distanceKm: trip.distance_km,
       avgConsumptionKwh100: trip.avg_consumption_kwh_100km,
-      outsideTempAvg: temps?.outsideTempAvg ?? null,
-      batteryTempAvg: temps?.batteryTempAvg ?? null,
+      outsideTempAvg,
+      batteryTempAvg,
       avgSpeedKmh: trip.avg_speed_kmh,
       regenKwh: trip.regen_energy_kwh ?? null,
     };

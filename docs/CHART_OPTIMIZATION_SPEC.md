@@ -154,3 +154,19 @@ type ChartDescriptor = {
 - Trip-сводка стоимости использует `profiles.default_tariff` + `currency` из `use-app-preferences`.
 - Личные пресеты — строгий allowlist полей, никаких произвольных ключей телеметрии.
 - Фазы независимы; 1–4 без миграций, 5 — с миграцией.
+
+### Production query invariants (2026-07-10)
+- Phantom-drain is calculated server-side per UTC day. Never read an unpaginated raw
+  telemetry range: PostgREST caps responses at 1,000 rows, which silently turns a
+  high-frequency multi-day report into a partial day. Positive `charge_power_kw` is
+  charging; an explicit Di+ gun state `1` is unplugged and wins over stale
+  `is_charging` Boolean data.
+- The year SoH chart fetches one latest valid point per UTC day through its read RPC,
+  rather than one client query per calendar day. Its partial telemetry index exists
+  specifically for rows containing `soh_percent`.
+- Route insights use one bounded RPC for all displayed trips (tracks plus temperature
+  averages), instead of serial per-trip track and telemetry requests. The direct-query
+  fallback exists only while a web deployment waits for its matching migration.
+- Analytics charging sessions always resolve `vehicle_id` through
+  `cars.vehicle_alias` and filter `charging_sessions.car_id`. A user with two cars
+  must never see another car's charging cost or sessions in a vehicle period summary.

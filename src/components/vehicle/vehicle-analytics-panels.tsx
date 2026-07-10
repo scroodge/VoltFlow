@@ -359,6 +359,7 @@ export function VehicleAnalyticsPanels({
         type: "period-sessions",
         from: telemetryWindow.from,
         to: telemetryWindow.to,
+        vehicle_id: vehicleId,
       });
       return fetchAnalytics<{ sessions: ChargingSessionRow[] }>(
         `/api/vehicle/analytics?${params.toString()}`,

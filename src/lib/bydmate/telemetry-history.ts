@@ -8,6 +8,7 @@ import {
   type TelemetryHistoryRange,
 } from "@/lib/bydmate/telemetry-ranges";
 import { resolveChargingSessionSampleWindow } from "@/lib/bydmate/telemetry-session-window";
+import { mapSohDailyRows, normalizeSohPercent } from "@/lib/bydmate/soh-history-mapping";
 import type { BydmateDiplus, BydmateTelemetry, BydmateTelemetrySampleRow } from "@/types/database";
 
 type HourlyRow = {
@@ -307,17 +308,7 @@ const SOH_DAILY_PROBE_LIMIT = 20;
 const SOH_FETCH_CONCURRENCY = 25;
 
 export function parseSohPercent(telemetry: BydmateTelemetry): number | null {
-  const raw = telemetry.soh_percent;
-  if (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 && raw <= 100) {
-    return raw;
-  }
-  if (typeof raw === "string") {
-    const parsed = Number(raw);
-    if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 100) {
-      return parsed;
-    }
-  }
-  return null;
+  return normalizeSohPercent(telemetry.soh_percent);
 }
 
 export function enumerateCalendarDays(fromIso: string, toIso: string): string[] {
@@ -396,8 +387,7 @@ async function fetchSohSampleForDay({
   return null;
 }
 
-/** Year-range SOH chart: hourly rollups omit soh_percent, so probe one raw sample per day. */
-export async function fetchSohTelemetryHistory({
+async function fetchSohTelemetryHistoryFallback({
   supabase,
   userId,
   vehicleId,
@@ -416,4 +406,35 @@ export async function fetchSohTelemetryHistory({
   );
 
   return points.filter((point): point is TelemetryHistoryPoint => point != null);
+}
+
+/** Year-range SOH chart: one latest raw SOH point per UTC day, aggregated in Postgres. */
+export async function fetchSohTelemetryHistory({
+  supabase,
+  userId,
+  vehicleId,
+  anchorDate,
+}: {
+  supabase: SupabaseClient;
+  userId: string;
+  vehicleId: string | null;
+  anchorDate: string;
+}): Promise<TelemetryHistoryPoint[]> {
+  const window = resolveTelemetryWindow("year", anchorDate);
+  const { data, error } = await supabase.rpc("bydmate_soh_daily", {
+    p_user_id: userId,
+    p_vehicle_id: vehicleId,
+    p_from: window.from,
+    p_to: window.to,
+  });
+
+  // The direct fallback keeps a web deployment usable until its matching migration
+  // is applied. It is intentionally temporary: the RPC removes the 366-query fan-out.
+  if (error) {
+    return fetchSohTelemetryHistoryFallback({ supabase, userId, vehicleId, anchorDate });
+  }
+
+  return mapSohDailyRows(
+    (data ?? []) as { device_time: string; soh_percent: number | string | null }[],
+  );
 }

@@ -116,6 +116,12 @@ Success:
 
 Rows transition `pending` → `sent` when delivered. Poll interval on device: ~2.5 s.
 
+Before looking up pending rows, the endpoint atomically materializes any due recurring
+remote-command schedules for this authenticated vehicle. Schedules use a local IANA time
+zone, time of day and weekdays; only runs less than two minutes late are queued. A daemon
+that has been offline for longer therefore **skips** the missed run rather than executing a
+stale unlock, climate or window command on reconnect.
+
 ### Acknowledge results
 
 ```http

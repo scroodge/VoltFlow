@@ -132,3 +132,21 @@ Priority: **fresh live SOC (≤90s) > in-session telemetry > wall-clock math**. 
 - All user data scoped by `auth.uid()` — never bypass RLS in client code.
 - `screenshots/` is a separate Next.js project excluded from root `tsconfig.json` (App Store assets).
 - Pre-commit hook bumps patch version — `.git/hooks/pre-commit` (local, not committed).
+
+
+# Log papercuts
+
+When you encounter small friction while working—a failed tool call, confusing
+setup, flaky command, stale cache, misleading error, missing helper, or
+non-obvious gotcha—record it in `PAPERCUTS.md`.
+
+Create the file if it does not exist. Append one entry in this format:
+
+## YYYY-MM-DD HH:MM — <model>
+
+<What you were doing> → <what got in the way>. Include a possible cause or fix
+when useful.
+
+Log papercuts proactively when they occur, but do not interrupt the main task.
+Do not add duplicate entries. Papercuts are minor workflow friction, distinct
+from completed-work logs and real bugs or tracked issues. 

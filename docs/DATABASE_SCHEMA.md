@@ -307,6 +307,13 @@ Remote commands dispatched from the PWA to the vehicle via Mate.
 | `created_at` | timestamptz | |
 | `executed_at` | timestamptz | |
 
+### `vehicle_command_schedules`
+Recurring remote commands. Each row stores the user’s local `run_time`, IANA
+`time_zone`, selected Sunday–Saturday `days_of_week`, and calculated `next_run_at`.
+The Mate command-poll route atomically creates a normal `vehicle_commands` row only for
+runs that are at most two minutes late, then advances `next_run_at`; missed runs are
+skipped deliberately.
+
 ---
 
 ## Service Records

@@ -6,6 +6,28 @@ go-ahead.** These are researched but **not built**. Shipped work lives in
 
 ---
 
+## 🟢 Scheduled parked/off remote commands — APPROVED 2026-07-10
+
+**Goal:** execute recurring comfort commands while the car is parked/off, using the
+existing VoltFlow Mate survival daemon rather than a local APK timer.
+
+**Options considered:**
+
+1. **Materialize on Mate command poll (recommended):** store an IANA time zone,
+   local time, and weekdays on the server. When the authenticated Mate daemon polls,
+   the server atomically creates a normal pending `vehicle_commands` row for a due
+   schedule and advances its next run. A short lateness window drops missed runs,
+   preventing an old preheat command from firing hours late.
+2. Global `pg_cron` materialization: works independently of the daemon, but adds an
+   always-on scheduler dependency and still cannot execute without the daemon.
+3. APK-local timer: unreliable when Android has stopped the app; rejected.
+
+**Build:** schedule table + RLS, API CRUD, due-schedule materialization in the existing
+command poll transaction, focused tests, and a small PWA control for recurring climate/
+window actions. User explicitly approved build on 2026-07-10.
+
+---
+
 ## 🟢 Telegram live-widget chat-list summary — APPROVED 2026-07-10
 
 **Goal:** keep the complete editable vehicle-status widget in the bot chat while

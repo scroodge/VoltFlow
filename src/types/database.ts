@@ -210,6 +210,22 @@ export type VehicleCommandRow = {
   executed_at: string | null;
 };
 
+export type VehicleCommandScheduleRow = {
+  id: string;
+  user_id: string;
+  vehicle_id: string;
+  type: string;
+  params: Record<string, unknown>;
+  run_time: string;
+  days_of_week: number[];
+  time_zone: string;
+  enabled: boolean;
+  next_run_at: string;
+  last_enqueued_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type BydmateLocation = {
   lat?: number | null;
   lon?: number | null;

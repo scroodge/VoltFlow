@@ -11,6 +11,28 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-07-10
 
+### Repair analytics correctness and database query fan-out
+
+- Phantom drain no longer consumes a silently capped 1,000-row raw response. New
+  `bydmate_phantom_drain_daily` aggregates the full selected range in Postgres and
+  treats Di+ gun state `1` as unplugged before a stale `is_charging` fallback.
+- The year SoH chart now receives one valid latest sample per UTC day from
+  `bydmate_soh_daily` (with a partial SoH index), instead of up to 366 raw queries.
+- Route insights now fetch bounded track and temperature inputs for all visible trips
+  with one `bydmate_route_insight_inputs` call, removing the serial per-trip N+1
+  waterfall. All three callers retain correct, temporary fallbacks until their
+  matching migration is present.
+- Analytics resolves a selected telemetry `vehicle_id` through `cars.vehicle_alias`
+  and filters `charging_sessions.car_id`, fixing mixed charging costs/sessions for
+  multi-car users in monthly, period, and cost-per-km summaries.
+- Added focused response-mapping and session-scope regression tests; documented the
+  production query invariants in `docs/CHART_OPTIMIZATION_SPEC.md`.
+- Verification: focused tests pass, `npm run test` passes (100 existing globbed tests),
+  targeted ESLint passes, and `npm run build` passes. Local migration execution was
+  not possible because `127.0.0.1:54322` is not running; migration
+  `20260710170000_analytics_query_fanout_repairs.sql` still needs to be applied before
+  deploying the matching web code.
+
 ### Fix History Analytics range chips jumping into a future period
 
 - Reproduced the anchor drift: Day July 10 → Week W28 → Month July (month-end anchor)

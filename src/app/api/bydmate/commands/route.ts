@@ -43,6 +43,14 @@ export async function GET(request: Request) {
       return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
+    const { error: scheduleError } = await supabase.rpc("enqueue_due_vehicle_command_schedules", {
+      p_user_id: profile.id,
+      p_vehicle_id: vehicleId,
+    });
+    if (scheduleError) {
+      return Response.json({ ok: false, error: "Schedule materialization failed" }, { status: 500 });
+    }
+
     const { data: rows, error } = await supabase
       .from("vehicle_commands")
       .select("id, type, params, created_at")

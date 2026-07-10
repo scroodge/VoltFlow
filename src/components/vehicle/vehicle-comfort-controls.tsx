@@ -7,6 +7,7 @@ import {
   PanelBottomClose,
   PanelTopOpen,
   Snowflake,
+  Trash2,
   Wind,
 } from "lucide-react";
 
@@ -24,6 +25,10 @@ import {
   useVehicleCommandsQuery,
 } from "@/hooks/use-vehicle-commands-query";
 import {
+  useVehicleCommandSchedules,
+  useVehicleCommandSchedulesQuery,
+} from "@/hooks/use-vehicle-command-schedules-query";
+import {
   isControlAllowed,
   isRemoteReady,
   isTelemetryFresh,
@@ -35,7 +40,7 @@ import {
   VEHICLE_CONTROL_STALE_MS,
 } from "@/lib/vehicle/vehicle-control-guards";
 import { cn } from "@/lib/utils";
-import type { BydmateLiveSnapshotRow, VehicleCommandRow } from "@/types/database";
+import type { BydmateLiveSnapshotRow, VehicleCommandRow, VehicleCommandScheduleRow } from "@/types/database";
 
 function statusLabel(status: VehicleCommandRow["status"]) {
   switch (status) {
@@ -178,6 +183,8 @@ export function VehicleComfortControls({
   const { data: commands } = useVehicleCommandsQuery(vehicleId, {
     enabled: !collapsible || expanded,
   });
+  const { data: schedules } = useVehicleCommandSchedulesQuery(vehicleId, !collapsible || expanded);
+  const scheduleActions = useVehicleCommandSchedules(vehicleId);
   const sendCommand = useSendVehicleCommand(vehicleId);
   const [pendingId, setPendingId] = useState<string | null>(null);
 
@@ -278,6 +285,13 @@ export function VehicleComfortControls({
           />
         </section>
 
+        <ScheduleControls
+          schedules={schedules ?? []}
+          disabled={!allowed || scheduleActions.create.isPending}
+          onCreate={(input) => scheduleActions.create.mutate(input)}
+          onDelete={(id) => scheduleActions.remove.mutate(id)}
+        />
+
         <section className="space-y-2">
           <h3 className="text-sm font-medium">Климат</h3>
           <ActionGrid
@@ -303,6 +317,61 @@ export function VehicleComfortControls({
       </CardContent>
       ) : null}
     </Card>
+  );
+}
+
+const SCHEDULABLE_ACTIONS = [
+  ...CLIMATE_ACTIONS,
+  WINDOW_ACTIONS.find((action) => action.id === "windows-close")!,
+];
+const WEEKDAYS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+
+function ScheduleControls({
+  schedules,
+  disabled,
+  onCreate,
+  onDelete,
+}: {
+  schedules: VehicleCommandScheduleRow[];
+  disabled: boolean;
+  onCreate: (input: { type: string; params: Record<string, unknown>; run_time: string; days_of_week: number[]; time_zone: string }) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [actionId, setActionId] = useState(SCHEDULABLE_ACTIONS[0].id);
+  const [runTime, setRunTime] = useState("07:30");
+  const [days, setDays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const action = SCHEDULABLE_ACTIONS.find((item) => item.id === actionId) ?? SCHEDULABLE_ACTIONS[0];
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+
+  function toggleDay(day: number) {
+    setDays((current) => current.includes(day)
+      ? current.filter((value) => value !== day)
+      : [...current, day].sort((a, b) => a - b));
+  }
+
+  return (
+    <section className="space-y-3 border-t border-border/60 pt-4">
+      <div>
+        <h3 className="text-sm font-medium">Расписание</h3>
+        <p className="text-xs text-muted-foreground">Команда попадёт в очередь, когда parked/off daemon опросит VoltFlow.</p>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+        <select value={actionId} onChange={(event) => setActionId(event.target.value)} className="h-10 rounded-md border bg-background px-3 text-sm" disabled={disabled}>
+          {SCHEDULABLE_ACTIONS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+        </select>
+        <input type="time" value={runTime} onChange={(event) => setRunTime(event.target.value)} className="h-10 rounded-md border bg-background px-3 text-sm" disabled={disabled} />
+        <Button type="button" disabled={disabled || days.length === 0} onClick={() => onCreate({ type: action.type, params: action.params, run_time: runTime, days_of_week: days, time_zone: timeZone })}>Добавить</Button>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {WEEKDAYS.map((label, day) => <Button key={label} type="button" size="sm" variant={days.includes(day) ? "default" : "outline"} className="h-8 w-9 px-0" disabled={disabled} onClick={() => toggleDay(day)}>{label}</Button>)}
+      </div>
+      {schedules.length > 0 ? <ul className="space-y-1 text-xs">
+        {schedules.map((schedule) => <li key={schedule.id} className="flex items-center justify-between gap-2 rounded border border-border/60 px-2 py-1.5">
+          <span>{schedule.type} · {schedule.run_time.slice(0, 5)} · {schedule.days_of_week.map((day) => WEEKDAYS[day]).join(", ")}</span>
+          <Button type="button" size="icon" variant="ghost" className="size-7" aria-label="Удалить расписание" onClick={() => onDelete(schedule.id)}><Trash2 className="size-3.5" /></Button>
+        </li>)}
+      </ul> : null}
+    </section>
   );
 }
 

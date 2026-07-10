@@ -87,6 +87,7 @@ export async function GET(request: NextRequest) {
       const rows = await fetchPeriodChargingSessions({
         supabase: access.supabase,
         userId: access.userId,
+        vehicleId,
         from,
         to,
       });
