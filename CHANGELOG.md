@@ -9,6 +9,58 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-07-09
+
+### DiLink 5 full parity: fuel_kwh, autoservice FID fields, battery snapshots + idle drains
+
+Three-phase implementation to reach full BYDMate data collection parity with DiLink 5 vehicles:
+
+**Phase 1 — energydata fuel fix:**
+- Migration `20260708120000_add_fuel_kwh_to_trips.sql` — adds `fuel_kwh` column to `bydmate_trips`, updates `bydmate_ingest_trip_summaries` RPC to accept fuel_kwh
+- `src/lib/bydmate/trip-summary-payload.ts` — Zod schema accepts `fuel_kwh?: number | null`
+- `src/types/database.ts` — `BydmateTripRow.fuel_kwh?: number | null`
+- `src/components/history/history-view.tsx` — TripStatsGrid shows fuel when > 0 (PHEV indicator)
+- `src/lib/i18n.ts` — `fuel` key in ru/be/en dictionaries
+
+**Phase 2 — autoservice Binder fields:**
+- Migration `20260708130000_add_autoservice_fid_fields.sql` — 9 autoservice columns on `bydmate_telemetry_samples` + `bydmate_live_snapshots` (soc, power, gun state, BMS state, capacity, voltage, battery type, lifetime mileage, lifetime kWh)
+- `src/lib/bydmate/ingest-payload.ts` — `autoservice` object added (optional, passthrough)
+- `src/types/database.ts` — autoservice fields on both sample + snapshot row types
+
+**Phase 3 — battery snapshots + idle drains:**
+- Migration `20260708140000_battery_snapshots_and_idle_drains.sql` — `bydmate_battery_snapshots` (BMS health at charge session ends, SOC delta >= 5%) + `bydmate_idle_drains` (zero-km parked consumption)
+- Policies wrapped in `DO $$ ... EXCEPTION WHEN duplicate_object` for idempotency
+
+All 3 migrations applied to production. Build passes.
+
+**APK side not yet implemented** — user must add Binder reads in BYDMate-own repo.
+
+---
+
+## 2026-07-08
+
+### energydata trip-summary cloud sync — APK sender shipped (VoltFlow Mate v0.4.7)
+
+The missing APK half of the 2026-07-06 web work (BYDMate-own repo,
+[release v0.4.7](https://github.com/scroodge/BYDMate-own/releases/tag/v0.4.7)).
+New `TripSummaryCloudSync` posts locally imported energydata trips to
+`POST /api/bydmate/trip-summaries` after each `HistoryImporter.runSync()`:
+
+- Same auth as telemetry (`X-API-Key` / `X-Vehicle-Id` via `CloudTelemetryClient`);
+  endpoint derived from the configured telemetry URL. Hard-gated on Cloud Sync
+  linked + car named, data source ENERGYDATA only (ADB/DiPlus cars don't
+  double-report), Wi-Fi-only respected.
+- Batches ≤300 (server zod limit) with a `start_ts` watermark advanced only on
+  acknowledged batches; server upserts on `(user, vehicle, started_at)` so lost
+  acks re-send safely. Zero-km idle records and out-of-zod-range rows filtered
+  client-side (one bad element would 400 the whole batch).
+- 14 unit tests (`TripSummaryCloudSyncTest`); full suite green.
+
+**Verified in prod:** real DiLink 5 user synced 874 trips / 8,330 km (audit
+2026-07-08). Docs/onboarding follow-up still pending — see BACKLOG.
+
+---
+
 ## 2026-07-07
 
 ### Fixed: closed-session reconcile inflating finished charging sessions with a later charge's SOC

@@ -29,8 +29,11 @@ create index if not exists bydmate_battery_snapshots_user_vehicle_idx
 
 alter table public.bydmate_battery_snapshots enable row level security;
 
-create policy "battery_snapshots_select_own" on public.bydmate_battery_snapshots
-  for select using (auth.uid() = user_id);
+do $$ begin
+  create policy "battery_snapshots_select_own" on public.bydmate_battery_snapshots
+    for select using (auth.uid() = user_id);
+exception when duplicate_object then null;
+end $$;
 
 -- Idle drains: zero-km trips from energydata (parked energy consumption)
 create table if not exists public.bydmate_idle_drains (
@@ -51,5 +54,8 @@ create index if not exists bydmate_idle_drains_user_vehicle_idx
 
 alter table public.bydmate_idle_drains enable row level security;
 
-create policy "idle_drains_select_own" on public.bydmate_idle_drains
-  for select using (auth.uid() = user_id);
+do $$ begin
+  create policy "idle_drains_select_own" on public.bydmate_idle_drains
+    for select using (auth.uid() = user_id);
+exception when duplicate_object then null;
+end $$;

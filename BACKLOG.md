@@ -151,56 +151,17 @@ writes `energydata`; the Yuan UP doesn't.
 
 ---
 
-## 🟡 DiLink 5 full data collection — 3-phase plan, go-ahead 2026-07-08
+## ✅ DiLink 5 full data collection — DONE 2026-07-09
 
-Audit confirmed on real user `konev.alexey@gmail.com` (Yuan UP 2025, 874 trips synced).
-Full AndyShaman parity plan in 3 phases. See also `BACKLOG` energydata section below.
-
-### Phase 1: energydata completeness (no ADB) — IN PROGRESS
-
-| # | File | Change |
-|---|------|--------|
-| 1 | `supabase/migrations/...sql` | Add `fuel_kwh` column to `bydmate_trips` |
-| 2 | `src/lib/bydmate/trip-summary-payload.ts` | Add `fuel_kwh` optional field to Zod schema |
-| 3 | `supabase/migrations/...sql` (RPC) | Parse + store `fuel_kwh` in `bydmate_ingest_trip_summaries` |
-| 4 | `src/types/database.ts` | Add `fuel_kwh?: number \| null` to `BydmateTripRow` |
-| 5 | `src/components/history/history-view.tsx` | Show fuel in `TripStatsGrid` when > 0 |
-
-APK side (BYDMate-own repo):
-- `EnergyDataReader.kt`: add `fuel` to `BydTripRecord`
-- `HistoryImporter.kt`: include `fuel_kwh` in trip entity
-- Cloud sync sender: POST `fuel_kwh`, filter `is_deleted` rows
-
-### Phase 2: autoservice Binder reads (ADB required)
-
-New autoservice FID fields to read via `service call autoservice`:
-
-| Field | FID | Description |
-|-------|-----|-------------|
-| `soh_percent` | `FID_SOH` | BMS State of Health |
-| `power_kw` | `FID_ENGINE_POWER` | Signed engine power (replaces Di+) |
-| `charge_gun_state` | `FID_GUN_CONNECT_STATE` | Gun state (replaces Di+) |
-| `kwh_charged_bms` | `FID_CHARGING_CAPACITY` | Per-session BMS counter |
-| `odometer_bms_km` | `FID_LIFETIME_MILEAGE / 10` | BMS-authoritative odometer |
-| `lifetime_kwh` | `FID_LIFETIME_KWH` | Total energy throughput |
-| `battery_type` | `FID_BATTERY_TYPE` | LFP vs NCM |
-| `charge_battery_volt` | `FID_CHARGE_BATTERY_VOLT` | Charger HV voltage |
-
-APK: implement `FidRegistry.kt` + `AutoserviceClient.kt` reads
-Web: migration + telemetry route + UI updates
-
-### Phase 3: advanced collection
-
-- Battery snapshots on charge end (SOC delta ≥ 5%)
-- Idle drain table for zero-km trips
-- Catch-up charge reconstruction (cascade A/B/C with SOH)
-- Odometer-based trip energy (BMS `totalElecConsumption` delta)
+See [CHANGELOG](CHANGELOG.md) for full details. All 3 phases shipped + applied to prod.
+APK-side (BYDMate-own repo) still needs implementation for autoservice Binder reads.
 
 ---
 
-### energydata trip-summary cloud sync — web half DONE, APK half pending
+### energydata trip-summary cloud sync — web + APK halves DONE, docs follow-up pending
 
-**Web half shipped 2026-07-06** — see [CHANGELOG](CHANGELOG.md). Migration
+**Web half shipped 2026-07-06, APK half shipped 2026-07-08** (VoltFlow Mate v0.4.7,
+`TripSummaryCloudSync` in BYDMate-own) — see [CHANGELOG](CHANGELOG.md). Migration
 `20260706190000_bydmate_trip_summary_source.sql` (`bydmate_trips.source` +
 `bydmate_ingest_trip_summaries` RPC, applied to prod) + `POST /api/bydmate/trip-summaries`
 + "BYD log" trip badge.
