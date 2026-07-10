@@ -31,6 +31,18 @@ test("100% balance tail is not charging", () => {
   );
 });
 
+test("parked is_charging below 100% counts even at ~0 kW (regression: branch was dead code)", () => {
+  // e.g. charge ramp-up or a car reporting is_charging without charge_power_kw
+  assert.equal(
+    isMateAutoSessionCharging({ is_charging: true, charge_power_kw: 0, soc: 84 }, 0),
+    true,
+  );
+  assert.equal(
+    isMateAutoSessionCharging({ is_charging: true, charge_power_kw: null, soc: 84 }, 0),
+    true,
+  );
+});
+
 test("is_charging while driving is not charging", () => {
   assert.equal(
     isMateAutoSessionCharging({ is_charging: true, charge_power_kw: 0, soc: 84 }, 20),

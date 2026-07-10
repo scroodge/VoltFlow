@@ -658,7 +658,7 @@ function TripStatsGrid({ trip, tx }: { trip: BydmateTripRow; tx: HistoryTranslat
         value={`${fmt(trip.avg_consumption_kwh_100km, 1)} kWh/100`}
       />
       {hasFuel ? (
-        <MiniStat label={tx("vehicle.trips.fuel")} value={`${fmt(trip.fuel_kwh, 2)} L`} />
+        <MiniStat label={tx("vehicle.trips.fuel")} value={`${fmt(trip.fuel_kwh, 2)} kWh`} />
       ) : null}
       <MiniStat label={tx("vehicle.trips.regen")} value={`${fmt(trip.regen_energy_kwh, 2)} kWh`} />
       <MiniStat label={tx("vehicle.trips.traction")} value={formatTripTractionKwh(trip)} />

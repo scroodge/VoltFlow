@@ -87,7 +87,7 @@ export function isMateAutoSessionCharging(
   if (telemetry.is_charging !== true) return false;
   const soc = finiteTelemetryNumber(telemetry.soc);
   if (soc != null && soc >= 100) return false;
-  return chargePowerKw != null && chargePowerKw > TELEMETRY_CHARGE_POWER_THRESHOLD_KW;
+  return true;
 }
 
 /** @deprecated Use isMateAutoSessionCharging — kept so call sites can migrate. */

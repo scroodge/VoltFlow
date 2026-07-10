@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   buildReconciledSessionPatch,
   buildSilenceClosePatch,
+  liveSocWithinSessionWindow,
   measuredSocFromMate,
   OPEN_SESSION_SILENCE_MS,
   sessionNeedsReconcile,
@@ -392,6 +393,113 @@ test("buildReconciledSessionPatch still trusts live SOC captured within the sess
     nowMs: Date.parse("2026-07-06T10:12:00Z"),
   });
   assert.equal(patch, null); // matches stored values already
+});
+
+// ── liveSocWithinSessionWindow: corrupt stopped_at shapes ─────────────────────
+// A closed session's window end anchors on stopped_at when it's sane, else on
+// updated_at (the moment of the botched close). Unparseable everything → no window.
+
+const windowSession = {
+  started_at: "2026-07-06T06:44:00Z",
+  stopped_at: "2026-07-06T10:10:59Z",
+  updated_at: "2026-07-06T10:11:00Z",
+};
+
+test("liveSocWithinSessionWindow accepts a snapshot inside a valid window", () => {
+  const hit = liveSocWithinSessionWindow(windowSession, {
+    received_at: "2026-07-06T10:12:00Z", // within stopped_at + 5min pad
+    telemetry: { soc: 68 },
+  });
+  assert.ok(hit);
+  assert.equal(hit.soc, 68);
+  assert.equal(hit.receivedMs, Date.parse("2026-07-06T10:12:00Z"));
+});
+
+test("liveSocWithinSessionWindow rejects a later charge's snapshot with a corrupt stopped_at string", () => {
+  // Regression: stoppedMs = NaN used to collapse the window end to the snapshot's own
+  // received_at, so ANY later snapshot passed and a later charge's SOC bled in.
+  const hit = liveSocWithinSessionWindow(
+    { ...windowSession, stopped_at: "not-a-date" },
+    { received_at: "2026-07-08T09:00:00Z", telemetry: { soc: 97 } }, // 2 days later
+  );
+  assert.equal(hit, null);
+});
+
+test("liveSocWithinSessionWindow accepts a close-time snapshot despite stopped_at < started_at", () => {
+  // Regression: the backwards-stopped_at corruption (the exact shape reconcile repairs)
+  // used to reject every snapshot received after started_at.
+  const hit = liveSocWithinSessionWindow(
+    { ...windowSession, stopped_at: "2026-07-06T06:00:00Z" }, // before started_at
+    { received_at: "2026-07-06T10:12:00Z", telemetry: { soc: 68 } }, // near updated_at
+  );
+  assert.ok(hit);
+  assert.equal(hit.soc, 68);
+});
+
+test("liveSocWithinSessionWindow still rejects later snapshots when stopped_at is backwards", () => {
+  const hit = liveSocWithinSessionWindow(
+    { ...windowSession, stopped_at: "2026-07-06T06:00:00Z" },
+    { received_at: "2026-07-08T09:00:00Z", telemetry: { soc: 97 } },
+  );
+  assert.equal(hit, null);
+});
+
+// ── stopped_at candidate bounds ───────────────────────────────────────────────
+
+test("buildReconciledSessionPatch ignores a clock-skewed future stopped_at", () => {
+  // Regression: a future stopped_at passed the >= startMs filter, won Math.max, and was
+  // written back — the session appeared to run for days.
+  const future = {
+    ...bmsSession,
+    stopped_at: "2026-06-06T07:00:00.000+00:00", // 3 days in the future vs nowMs
+  };
+  const summary = summarizeSessionTelemetry(
+    [
+      { device_time: "2026-06-03T07:10:00Z", telemetry: { soc: 40, charge_power_kw: 4 } },
+      { device_time: "2026-06-03T07:30:00Z", telemetry: { soc: 49, charge_power_kw: 4 } },
+    ],
+    future,
+  );
+  const patch = buildReconciledSessionPatch({
+    session: future,
+    summary,
+    liveSoc: null,
+    nowMs: Date.parse("2026-06-03T08:00:00Z"),
+  });
+  assert.ok(patch);
+  assert.equal(patch.stopped_at, new Date(Date.parse("2026-06-03T07:30:00Z")).toISOString());
+});
+
+test("buildReconciledSessionPatch returns null instead of inventing a 1-minute duration", () => {
+  // Regression: no valid stopped_at, no post-start telemetry, no live SOC → the old
+  // fallback stamped stopped_at = started_at + 60s regardless of actual charging time.
+  const summary = summarizeSessionTelemetry(
+    // Only a pre-start sample (telemetry loads from started_at - 5min).
+    [{ device_time: "2026-06-03T07:03:00Z", telemetry: { soc: 71 } }],
+    baseSession, // stopped_at is backwards → invalid
+  );
+  const patch = buildReconciledSessionPatch({
+    session: baseSession,
+    summary,
+    liveSoc: null,
+    nowMs: Date.parse("2026-06-03T12:00:00Z"),
+  });
+  assert.equal(patch, null);
+});
+
+test("buildReconciledSessionPatch anchors stopped_at to the live snapshot when it is the only evidence", () => {
+  const receivedMs = Date.parse("2026-06-03T10:05:00Z");
+  const summary = summarizeSessionTelemetry([], baseSession); // no telemetry at all
+  const patch = buildReconciledSessionPatch({
+    session: baseSession, // backwards stopped_at → invalid
+    summary,
+    liveSoc: 100,
+    liveSocReceivedMs: receivedMs,
+    nowMs: Date.parse("2026-06-03T12:00:00Z"),
+  });
+  assert.ok(patch);
+  assert.equal(patch.status, "completed");
+  assert.equal(patch.stopped_at, new Date(receivedMs).toISOString());
 });
 
 test("buildSilenceClosePatch preserves overridden energy", () => {

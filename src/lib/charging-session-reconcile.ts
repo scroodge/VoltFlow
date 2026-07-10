@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   buildReconciledSessionPatch,
   buildSilenceClosePatch,
+  liveSocWithinSessionWindow,
   RECONCILE_LOOKBACK_DAYS,
   sessionNeedsReconcile,
   summarizeSessionTelemetry,
@@ -23,30 +24,6 @@ export {
 } from "@/lib/charging-session-reconcile-logic";
 
 const TELEMETRY_PAGE_SIZE = 1000;
-/** Matches the telemetry-loading pad below — a live snapshot outside this is from a
- *  later, unrelated charge, not evidence for this session. */
-const SESSION_WINDOW_PAD_MS = 5 * 60_000;
-
-/**
- * Live SOC is only trustworthy for a *closed* session's repair patch when it was captured
- * near that session's own timeframe. Without this, the car's *current* SOC (fresh relative
- * to now, unrelated to this session) bled into a closed session on every later app open,
- * ratcheting its current_percent up through an entirely separate subsequent charge (car
- * `way`, 2026-07-06: a stopped DC session absorbed the following AC session's SOC gain).
- */
-function liveSocWithinSessionWindow(
-  session: ChargingSessionRow,
-  liveRow: BydmateLiveSnapshotRow | null,
-): number | null {
-  if (!liveRow || !session.started_at) return null;
-  const receivedMs = Date.parse(liveRow.received_at);
-  const startMs = Date.parse(session.started_at);
-  if (!Number.isFinite(receivedMs) || !Number.isFinite(startMs)) return null;
-  const stoppedMs = session.stopped_at ? Date.parse(session.stopped_at) : NaN;
-  const endMs = Number.isFinite(stoppedMs) ? stoppedMs + SESSION_WINDOW_PAD_MS : receivedMs;
-  if (receivedMs < startMs || receivedMs > endMs) return null;
-  return snapshotSoc(liveRow);
-}
 
 async function loadSessionTelemetry(
   supabase: SupabaseClient,
@@ -127,12 +104,16 @@ async function reconcileOneSession({
         liveSoc,
         nowMs,
       })
-    : buildReconciledSessionPatch({
-        session,
-        summary,
-        liveSoc: liveSocWithinSessionWindow(session, liveRow),
-        nowMs,
-      });
+    : (() => {
+        const liveWithin = liveSocWithinSessionWindow(session, liveRow);
+        return buildReconciledSessionPatch({
+          session,
+          summary,
+          liveSoc: liveWithin?.soc ?? null,
+          liveSocReceivedMs: liveWithin?.receivedMs ?? null,
+          nowMs,
+        });
+      })();
   if (!patch) return null;
 
   const { error } = await supabase

@@ -9,6 +9,47 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-07-10
+
+### Fix the 7 bugs from the 2026-07-10 code review (reconcile windows, autoservice ingest gap, dead is_charging branch)
+
+All 7 confirmed findings from the review of a51e6c5 + 6177911:
+
+1. **[CRITICAL] autoservice columns always NULL** — new migration
+   `20260710120000_ingest_autoservice_fields.sql` redefines the 10-arg
+   `bydmate_ingest_telemetry` wrapper to extract `autoservice.*` from
+   `p_raw_payload` into the 9 `autoservice_*` columns on samples + live
+   snapshots (batch path calls the wrapper per sample, so both ingest routes are
+   covered; no route change needed). Live snapshots carry last-seen values
+   forward when a sample has no autoservice block (SoH-style carry-forward).
+   **Not yet applied to prod** — needs the psql pooler apply.
+2. **[HIGH] Corrupt `stopped_at` bypassed the live SOC window** and
+3. **[HIGH] backwards `stopped_at` blocked it** — `liveSocWithinSessionWindow`
+   moved into `charging-session-reconcile-logic.ts` (testable) and now anchors
+   the window end on `updated_at` (the moment of the botched close) whenever
+   `stopped_at` is unparseable or before `started_at`; no usable anchor → no
+   trusted window. Returns `{ soc, receivedMs }` so the caller can also use the
+   snapshot's receipt time as a stop anchor.
+4. **[HIGH] dead `is_charging` fallback** — `isMateAutoSessionCharging` now
+   returns `true` for parked `is_charging` below 100% SOC (the final return
+   repeated an always-false power check; auto-start never fired on
+   `is_charging`-only evidence).
+5. **[MEDIUM] 1-minute duration fallback** — `buildReconciledSessionPatch`
+   returns `null` (leave the row alone) when there is no plausible stop
+   evidence, instead of stamping `started_at + 60s`; the in-window live
+   snapshot's `received_at` now joins the last-resort stop candidates.
+6. **[MEDIUM] future `stopped_at` won `Math.max`** — stop candidates (and the
+   stored-stopped_at validity check) are capped at `nowMs + 60s` skew.
+7. **[LOW] `fuel_kwh` rendered as "L"** — TripStatsGrid unit fixed to `kWh`.
+   (Note: the `20260708120000` migration comment calls the source field "liters
+   equivalent" — if real PHEV data proves it's liters, rename the column
+   instead.)
+
+8 new regression tests (`charging-session-reconcile.test.mjs`,
+`telemetry-charging.test.mjs`); full suite 104 tests green, build passes.
+
+---
+
 ## 2026-07-09
 
 ### DiLink 5 full parity: fuel_kwh, autoservice FID fields, battery snapshots + idle drains

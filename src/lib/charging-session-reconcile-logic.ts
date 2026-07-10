@@ -5,6 +5,8 @@ import {
   type ChargingParams,
 } from "./charging-math.ts";
 import { AUTO_CHARGING_DRIVE_STOP_SPEED_KMH, TELEMETRY_CHARGE_POWER_THRESHOLD_KW } from "./bydmate/telemetry-charging.ts";
+import { snapshotSoc } from "./charging-live.ts";
+import type { BydmateLiveSnapshotRow } from "../types/database.ts";
 
 const CHARGE_POWER_THRESHOLD_KW = TELEMETRY_CHARGE_POWER_THRESHOLD_KW;
 
@@ -48,6 +50,46 @@ const TELEMETRY_SOC_TOLERANCE = 0.5;
 const OPEN_SESSION_SILENCE_MS = 15 * 60_000;
 
 export { RECONCILE_LOOKBACK_DAYS, TELEMETRY_SOC_TOLERANCE, OPEN_SESSION_SILENCE_MS };
+
+/** Matches the telemetry-loading pad — a live snapshot outside this is from a
+ *  later, unrelated charge, not evidence for this session. */
+export const SESSION_WINDOW_PAD_MS = 5 * 60_000;
+/** Device clocks can run slightly ahead of the server; allow that much future skew
+ *  before treating a stop candidate as garbage. */
+const STOP_CANDIDATE_FUTURE_SKEW_MS = 60_000;
+
+/**
+ * Live SOC is only trustworthy for a *closed* session's repair patch when it was captured
+ * near that session's own timeframe. Without this, the car's *current* SOC (fresh relative
+ * to now, unrelated to this session) bled into a closed session on every later app open,
+ * ratcheting its current_percent up through an entirely separate subsequent charge (car
+ * `way`, 2026-07-06: a stopped DC session absorbed the following AC session's SOC gain).
+ *
+ * A corrupt stopped_at (unparseable, or before started_at — the close-time corruption
+ * this repair path exists for) can't bound the window: falling back to the snapshot's
+ * own received_at made the check vacuous, and the raw stopped_at rejected everything.
+ * Anchor on updated_at instead — for a closed session it is the moment of the botched
+ * close, so snapshots from a later, unrelated charge still fall outside. No usable
+ * anchor → no trusted window → null.
+ */
+export function liveSocWithinSessionWindow(
+  session: { started_at: string | null; stopped_at: string | null; updated_at: string },
+  liveRow: BydmateLiveSnapshotRow | null,
+): { soc: number; receivedMs: number } | null {
+  if (!liveRow || !session.started_at) return null;
+  const receivedMs = Date.parse(liveRow.received_at);
+  const startMs = Date.parse(session.started_at);
+  if (!Number.isFinite(receivedMs) || !Number.isFinite(startMs)) return null;
+  const stoppedMs = session.stopped_at ? Date.parse(session.stopped_at) : NaN;
+  const endAnchorMs =
+    Number.isFinite(stoppedMs) && stoppedMs >= startMs
+      ? stoppedMs
+      : Date.parse(session.updated_at ?? "");
+  if (!Number.isFinite(endAnchorMs) || endAnchorMs < startMs) return null;
+  if (receivedMs < startMs || receivedMs > endAnchorMs + SESSION_WINDOW_PAD_MS) return null;
+  const soc = snapshotSoc(liveRow);
+  return soc == null ? null : { soc, receivedMs };
+}
 
 /** Mate telemetry/live SOC is truth; persisted wall-clock fields are not used here. */
 export function measuredSocFromMate(
@@ -231,11 +273,14 @@ export function buildReconciledSessionPatch({
   session,
   summary,
   liveSoc,
+  liveSocReceivedMs = null,
   nowMs,
 }: {
   session: ReconcileChargingSession;
   summary: ReturnType<typeof summarizeSessionTelemetry>;
   liveSoc: number | null;
+  /** When the liveSoc snapshot was received — a stop anchor when the stored stopped_at is unusable. */
+  liveSocReceivedMs?: number | null;
   nowMs: number;
 }) {
   // No SOC evidence in the session's window (telemetry pruned/missing) and no live SOC to
@@ -282,23 +327,30 @@ export function buildReconciledSessionPatch({
   // lastSocAt is deliberately excluded here: any sample with a SOC reading counts (including
   // driving), so it kept dragging stopped_at through drives between charges (car `way`,
   // 2026-07-06). It's only trustworthy as a last-resort anchor when the stored stopped_at
-  // itself is missing/invalid.
+  // itself is missing/invalid. Candidates past now (+ small skew) are clock garbage — a
+  // future stopped_at must not win Math.max and make the session look days long.
+  const nowCapMs = nowMs + STOP_CANDIDATE_FUTURE_SKEW_MS;
+  const isPlausibleStopMs = (ms: number) => Number.isFinite(ms) && ms >= startMs && ms <= nowCapMs;
   const storedStoppedMs = session.stopped_at ? Date.parse(session.stopped_at) : NaN;
-  const storedStoppedValid = Number.isFinite(storedStoppedMs) && storedStoppedMs >= startMs;
+  const storedStoppedValid = isPlausibleStopMs(storedStoppedMs);
 
   const stopCandidates = [
     ...[summary.firstTargetSocAt, summary.lastAcChargeAt, session.stopped_at]
       .map((value) => (value ? Date.parse(value) : NaN))
-      .filter((ms) => Number.isFinite(ms) && ms >= startMs),
+      .filter(isPlausibleStopMs),
     ...(storedStoppedValid
       ? []
-      : [summary.lastSocAt]
-          .map((value) => (value ? Date.parse(value) : NaN))
-          .filter((ms) => Number.isFinite(ms) && ms >= startMs)),
+      : [
+          ...(summary.lastSocAt ? [Date.parse(summary.lastSocAt)] : []),
+          ...(liveSocReceivedMs != null ? [liveSocReceivedMs] : []),
+        ].filter(isPlausibleStopMs)),
   ];
 
-  const stoppedAtMs =
-    stopCandidates.length > 0 ? Math.max(...stopCandidates) : Math.min(nowMs, startMs + 60_000);
+  // No plausible stop evidence at all — leave the row alone rather than invent a
+  // duration (the old startMs + 60s fallback stamped every such session as 1 minute).
+  if (stopCandidates.length === 0) return null;
+
+  const stoppedAtMs = Math.max(...stopCandidates);
 
   return {
     current_percent: progress.currentPercent,
