@@ -11,6 +11,30 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-07-10
 
+### Vercel Hobby efficiency: remove redundant proxy/API work
+
+- `src/proxy.ts` now bypasses public pages before creating a Supabase client and excludes
+  all `/api/`, PWA metadata, and icons in its matcher. Protected page redirects and the
+  authenticated `/login` redirect remain intact.
+- Trip reads now use the browser Supabase client under RLS, preserving the existing
+  energy enrichment and development API path. Realtime refreshes on trip creation or
+  completion; the 60-second fallback does not requery during every ingest update.
+- Command polling changed from 15 to 60 seconds in production (Realtime stays primary).
+  Active charging-session sample polling changed from 15 to 30 seconds and stops while
+  the tab is backgrounded.
+- The GitHub Mate release route now has a five-minute CDN cache. `vercel.json` runs a
+  docs/migrations/screenshots-only ignore command to avoid unnecessary build execution.
+  Vercel still counts canceled ignored deployments toward deployment/concurrency limits,
+  so this is build-time hygiene rather than a quota solution.
+- Added `src/proxy.test.mjs` matcher coverage. `npm run test` (100 tests) and
+  `npm run build` pass.
+
+The remaining dominant source of Vercel invocations is Mate telemetry ingest. The next
+recommended step is the separately scoped BYDMate APK flush-interval change, then
+measure Vercel Observability before considering an Edge Function port.
+
+---
+
 ### Fix the 7 bugs from the 2026-07-10 code review (reconcile windows, autoservice ingest gap, dead is_charging branch)
 
 All 7 confirmed findings from the review of a51e6c5 + 6177911:

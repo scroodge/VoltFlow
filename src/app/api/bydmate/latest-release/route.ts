@@ -4,6 +4,9 @@ export const runtime = "nodejs";
 
 const GITHUB_LATEST_RELEASE_URL =
   "https://api.github.com/repos/scroodge/BYDMate-own/releases/latest";
+const RELEASE_CACHE_HEADERS = {
+  "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+};
 
 type GithubReleasePayload = {
   tag_name?: unknown;
@@ -45,7 +48,7 @@ export async function GET() {
           error: "Could not fetch latest release from GitHub.",
           status: response.status,
         },
-        { status: 502 },
+        { status: 502, headers: RELEASE_CACHE_HEADERS },
       );
     }
 
@@ -56,7 +59,7 @@ export async function GET() {
     if (!version) {
       return NextResponse.json(
         { error: "Latest GitHub release tag has invalid version format." },
-        { status: 502 },
+        { status: 502, headers: RELEASE_CACHE_HEADERS },
       );
     }
 
@@ -69,21 +72,24 @@ export async function GET() {
           : new Date().toISOString();
     const apkUrl = typeof payload.html_url === "string" ? payload.html_url : null;
 
-    return NextResponse.json({
-      id: `github-release-${version}`,
-      version,
-      version_code: parseVersionCode(releaseNotes),
-      apk_url: apkUrl,
-      release_notes: releaseNotes,
-      published_at: publishedAt,
-      created_at: publishedAt,
-      source: "github",
-    });
+    return NextResponse.json(
+      {
+        id: `github-release-${version}`,
+        version,
+        version_code: parseVersionCode(releaseNotes),
+        apk_url: apkUrl,
+        release_notes: releaseNotes,
+        published_at: publishedAt,
+        created_at: publishedAt,
+        source: "github",
+      },
+      { headers: RELEASE_CACHE_HEADERS },
+    );
   } catch (error) {
     console.error("Latest BYDMate release API error:", error);
     return NextResponse.json(
       { error: "Could not fetch latest release from GitHub." },
-      { status: 502 },
+      { status: 502, headers: RELEASE_CACHE_HEADERS },
     );
   }
 }

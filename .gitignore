@@ -54,6 +54,7 @@ opencode.json
 .claude/
 .codegraph/
 .cursor/
+.codex/
 
 AGENTS.md
 CLAUDE.md

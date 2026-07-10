@@ -47,8 +47,8 @@ export function useBydmateChargingSessionSamplesQuery(
     queryFn: () => fetchChargingSessionSamples(sessionId, vehicleId),
     enabled: Boolean(sessionId) && !isDevMockChargingSessionId(sessionId),
     staleTime: isActiveChargingSession ? 10_000 : 60_000,
-    refetchInterval: isActiveChargingSession ? 15_000 : false,
-    refetchIntervalInBackground: isActiveChargingSession,
+    refetchInterval: isActiveChargingSession ? 30_000 : false,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: "always",
   });
 }

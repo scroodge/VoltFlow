@@ -70,7 +70,7 @@ export function useVehicleCommandsQuery(
     queryKey: queryKeys.vehicleCommands(vehicleId),
     queryFn: () => fetchVehicleCommands(vehicleId),
     enabled,
-    refetchInterval: enabled ? (devRoute ? 3_000 : 15_000) : false,
+    refetchInterval: enabled ? (devRoute ? 3_000 : 60_000) : false,
   });
 }
 

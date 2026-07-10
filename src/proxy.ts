@@ -12,13 +12,6 @@ const PUBLIC_PATHS = new Set([
   "/telegram",
   "/knowledge/search",
 ]);
-const PUBLIC_METADATA_PATHS = new Set([
-  "/apple-icon",
-  "/favicon.ico",
-  "/icon",
-  "/manifest.webmanifest",
-  "/sw.js",
-]);
 const DEV_AUTH_PREFIXES = [
   "/admin",
   "/api/admin",
@@ -102,15 +95,15 @@ export async function proxy(request: NextRequest) {
     });
   }
 
+  // Public pages do not need a GoTrue round trip. `/login` is the exception:
+  // authenticated visitors should still be redirected to the dashboard below.
+  if (isPublic && pathname !== "/login") {
+    return response;
+  }
+
   if (
     (isDevelopment && pathname.startsWith("/api/dev/")) ||
-    pathname.startsWith("/api/bydmate/") ||
-    (isDevelopment &&
-      pathname.startsWith("/api/vehicle/") &&
-      request.nextUrl.searchParams.get("dev") === "1") ||
-    PUBLIC_METADATA_PATHS.has(pathname) ||
-    pathname.startsWith("/icons/") ||
-    pathname.endsWith(".webmanifest")
+    pathname.startsWith("/api/bydmate/")
   ) {
     return response;
   }
@@ -173,6 +166,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|apple-icon|icon|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
