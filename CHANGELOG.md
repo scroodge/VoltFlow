@@ -11,6 +11,24 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-07-10
 
+### Agent guidance contract and skill map consolidated
+
+- `AGENTS.md` now clearly gates every tracked-file change behind a researched
+  `BACKLOG.md` plan and explicit approval; read-only reviews remain non-mutating.
+- Added a documentation-precedence order: `AGENTS.md` for workflow and durable
+  safeguards, canonical domain docs for detailed behavior, then source/tests for
+  suspected drift. `SKILLS.md` is explicitly navigational and never authoritative
+  over a domain doc.
+- Rewrote `SKILLS.md` around owner-file maps and verification commands. It no longer
+  duplicates volatile charging thresholds, removes the duplicated reconcile entry,
+  includes the plan/Agentmemory/Next.js startup gates, and makes branch creation safe
+  for dirty working trees.
+- Verified the Mate auto-start truth remains four consecutive parked charging samples
+  (`charging-auto-session-step.ts` and `docs/CHARGING_SESSIONS.md`); the former stale
+  two-sample instruction is gone.
+
+---
+
 ### Vercel Hobby efficiency: remove redundant proxy/API work
 
 - `src/proxy.ts` now bypasses public pages before creating a Supabase client and excludes

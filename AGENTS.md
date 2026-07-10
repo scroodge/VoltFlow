@@ -1,12 +1,16 @@
-## Agent workflow rule
+## Change gate
 
-**Always plan first, never build unasked.**
-1. Research the problem.
-2. Write the plan in [BACKLOG.md](BACKLOG.md) (options, trade-offs, recommendation).
-3. Show a short summary and ask the user: "Should I build this?"
-4. Wait for explicit go-ahead before writing any code or migrations.
+**Always plan first; never modify tracked project files unasked.** For a proposed
+change (code, migrations, behavior, or project documentation):
 
-Once a plan ships, move it from [BACKLOG.md](BACKLOG.md) to [CHANGELOG.md](CHANGELOG.md).
+1. Research the problem and the owning source/doc.
+2. Write options, trade-offs, and a recommendation in [BACKLOG.md](BACKLOG.md).
+3. Show a short summary and ask: **“Should I build this?”**
+4. Wait for explicit go-ahead before editing code, migrations, or project docs.
+
+Read-only investigation and review do not need a backlog entry, but must not change
+files. Once approved work ships, move its plan from `BACKLOG.md` to
+[CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -16,6 +20,23 @@ Once a plan ships, move it from [BACKLOG.md](BACKLOG.md) to [CHANGELOG.md](CHANG
 - **Shipped work log** → [CHANGELOG.md](CHANGELOG.md).
 - **How the system works** → [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (start here).
 
+## Documentation precedence
+
+Use the narrowest authoritative source for the area being changed:
+
+1. This file for agent workflow, security, migrations, test quirks, and durable
+   project invariants.
+2. The named canonical domain doc for detailed behavior: `docs/CHARGING_SESSIONS.md`,
+   `docs/TRIPS.md`, `supabase/TELEMETRY.md`, `supabase/BYDMATE_APK_API.md`, or the
+   relevant doc linked from `docs/ARCHITECTURE.md`.
+3. Source code and its focused tests for behavior not documented or suspected to have
+   drifted.
+4. `SKILLS.md` only for owner-file maps, verification commands, and safe workflow;
+   it does not override a canonical domain doc.
+
+If sources conflict, stop and reconcile them in the same approved documentation change
+instead of choosing a convenient copy.
+
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
 
@@ -24,7 +45,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Session startup
 
-- Ask agentmemory for relevant context using concepts such as `voltflow-mate-charging-sessions`, `bydmate-telemetry-source-of-truth`, `charging-session-sync`, `mate-auto-start-stop`, `charging-session-reconcile`. If unavailable, continue from this file and docs, then save progress back once available.
+- Ask agentmemory for relevant context using concepts such as `voltflow-mate-charging-sessions`, `bydmate-telemetry-source-of-truth`, `charging-session-sync`, `mate-auto-start-stop`, `charging-session-reconcile`. If unavailable, continue from this file and docs; do not block on it. After material approved work, save only a concise, verified outcome when memory is available.
 - Agentmemory MCP is configured in `opencode.json` — runs `npx -y @agentmemory/mcp`, expects service at `http://localhost:3111`.
 
 ## Commands
@@ -63,7 +84,7 @@ psql "$SUPABASE_POOLER_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/<file>.sql
 - **Telemetry ingest:** `POST /api/bydmate/telemetry` (Next.js route at `src/app/api/bydmate/telemetry/route.ts`) writes `bydmate_telemetry_samples` + `bydmate_live_snapshots`, then runs auto charging sessions, reconcile, and charge notifications
 - **Alt ingest path:** `supabase/functions/bydmate-telemetry/` is a simpler Deno Edge Function (same RPCs, minimal validation only)
 - **PWA:** manifest at `src/app/manifest.ts`, SW at `public/sw.js`, prod-only registration
-- **Other agent instructions:** `CLAUDE.md` delegates to this file; `docs/ARCHITECTURE.md` is the system overview + doc map (start there); `SKILLS.md` has per-area file maps and safe-change workflow; `docs/CHARGING_SESSIONS.md` and `docs/TRIPS.md` are canonical for their domains
+- **Other agent instructions:** `CLAUDE.md` delegates to this file; `docs/ARCHITECTURE.md` is the system overview + doc map (start there); `SKILLS.md` has owner-file maps and verification guidance; `docs/CHARGING_SESSIONS.md` and `docs/TRIPS.md` are canonical for their domains
 
 ## Hard-won rules
 
