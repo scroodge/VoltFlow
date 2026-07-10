@@ -11,6 +11,23 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-07-10
 
+### Fix false auto-charging sessions when Di+ says the gun is unplugged
+
+- Diagnosed car `way`: a parked 79% snapshot had no charge power and Di+ gun state
+  `1` (unplugged), but a stale `is_charging: true` created a zero-energy open session
+  and made the dashboard correctly—but misleadingly—show **Stop Charging**.
+- `isMateAutoSessionCharging` now accepts the normalized Di+ context and rejects the
+  stale Boolean fallback when gun state is explicitly `1`; a positive
+  `charge_power_kw` still wins as real charging evidence.
+- `processBydmateAutoChargingSessions` now passes each telemetry sample’s Di+ context
+  into the detector. Two subsequent unplug samples will close the existing false row
+  through the normal auto-stop path.
+- Added the regression test and updated `AGENTS.md` plus
+  `docs/CHARGING_SESSIONS.md` to document the precedence rule.
+- Focused charging suite: 45 passing. Production build and touched-file ESLint pass.
+
+---
+
 ### Agent guidance contract and skill map consolidated
 
 - `AGENTS.md` now clearly gates every tracked-file change behind a researched

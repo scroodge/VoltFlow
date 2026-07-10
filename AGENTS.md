@@ -106,7 +106,7 @@ psql "$SUPABASE_POOLER_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/<file>.sql
 
 Priority: **fresh live SOC (≤90s) > in-session telemetry > wall-clock math**. Never persist math-only completion while live SOC is fresh.
 
-- **Auto-start** requires 4 consecutive charging samples (`charge_power_kw`, never `power_kw`) within last 3 min, vehicle parked (`speed_kmh ≤ 5`), not 100% balance tail.
+- **Auto-start** requires 4 consecutive charging samples within last 3 min, vehicle parked (`speed_kmh ≤ 5`), and not a 100% balance tail. Prefer `charge_power_kw` (never traction `power_kw`); the `is_charging` fallback is invalid when Di+ explicitly reports gun state `1` (unplugged).
 - **Auto-stop** on 2 consecutive unplug samples or `speed_kmh > 5` (`CHARGING_DRIVE_SPEED_KMH` in `src/lib/charging-live.ts`).
 - **Drive-away guard:** fresh movement during an open session → close as `stopped` with live-derived SOC/energy/cost.
 - **Manual stop** (`src/actions/sessions.ts`): live → in-session telemetry → math. Never persist math-only 100% when telemetry shows unplug or drive-away below target.

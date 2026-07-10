@@ -76,6 +76,7 @@ export function isVehicleParkedForCharging(speedKmh: number | null | undefined) 
 export function isMateAutoSessionCharging(
   telemetry: Pick<BydmateTelemetry, "is_charging" | "charge_power_kw" | "soc">,
   speedKmh: number | null | undefined,
+  context?: TelemetryChargingDiplusContext | null,
 ) {
   if (!isVehicleParkedForCharging(speedKmh)) return false;
 
@@ -83,6 +84,10 @@ export function isMateAutoSessionCharging(
   if (chargePowerKw != null && chargePowerKw > TELEMETRY_CHARGE_POWER_THRESHOLD_KW) {
     return true;
   }
+
+  // `is_charging` can remain true after unplug. A known Di+ gun state of 1 is
+  // authoritative for that stale-flag case; do not create/keep an auto session.
+  if (finiteTelemetryNumber(readChargeGunState(context)) === 1) return false;
 
   if (telemetry.is_charging !== true) return false;
   const soc = finiteTelemetryNumber(telemetry.soc);

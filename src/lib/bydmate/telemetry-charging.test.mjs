@@ -43,6 +43,17 @@ test("parked is_charging below 100% counts even at ~0 kW (regression: branch was
   );
 });
 
+test("explicit Di+ unplug overrides a stale is_charging flag for auto sessions", () => {
+  assert.equal(
+    isMateAutoSessionCharging(
+      { is_charging: true, charge_power_kw: null, soc: 79 },
+      0,
+      { diplus: { charge_gun_state: 1 } },
+    ),
+    false,
+  );
+});
+
 test("is_charging while driving is not charging", () => {
   assert.equal(
     isMateAutoSessionCharging({ is_charging: true, charge_power_kw: 0, soc: 84 }, 20),

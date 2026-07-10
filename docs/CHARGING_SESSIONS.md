@@ -41,7 +41,7 @@ Implementation: `src/lib/bydmate/charging-auto-session.ts`, step logic in `charg
 
 | Rule | Value |
 | --- | --- |
-| Charging signal | `charge_power_kw > 0.1` **or** `is_charging` while parked and SOC &lt; 100% |
+| Charging signal | `charge_power_kw > 0.1` **or** `is_charging` while parked and SOC &lt; 100%; Di+ gun state `1` (explicit unplug) overrides a stale `is_charging` flag |
 | Never use | traction `power_kw` (was the cause of phantom sessions on 2026-06-03) |
 | Parked | `speed_kmh ≤ 5` (or unknown) |
 | Consecutive samples | **4** at ~1 Hz |

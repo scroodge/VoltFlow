@@ -12,6 +12,7 @@ import {
   finiteTelemetryNumber,
   isMateAutoSessionCharging,
   sanitizeChargerPowerKw,
+  telemetryChargingContext,
   telemetrySpeedKmh,
 } from "@/lib/bydmate/telemetry-charging";
 
@@ -286,7 +287,11 @@ export async function processBydmateAutoChargingSessions({
     }
 
     const speedKmh = telemetrySpeedKmh(sample.telemetry);
-    const isCharging = isMateAutoSessionCharging(sample.telemetry, speedKmh);
+    const isCharging = isMateAutoSessionCharging(
+      sample.telemetry,
+      speedKmh,
+      telemetryChargingContext(sample),
+    );
     const soc = finiteTelemetryNumber(sample.telemetry.soc);
     const chargePowerKw = finiteTelemetryNumber(sample.telemetry.charge_power_kw);
     const activeSession = activeByCarId.get(car.id) ?? null;
