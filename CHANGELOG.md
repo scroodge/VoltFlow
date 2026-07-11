@@ -11,6 +11,32 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-07-11
 
+### Estimate cost for no-charge driving days (session walk-back)
+
+- `Cost` on the Analytics "Day at a glance" card was previously `—` on any day with
+  no finished charging session, even when the car was clearly driving on energy from
+  a prior charge. New `estimateNoChargeDayPrice` (`src/lib/vehicle-analytics.ts`)
+  walks backward through recent finished sessions and picks the most recent one whose
+  `charged_energy_kwh` still covers all driving since it stopped — the charge that
+  day's driving is most plausibly still coming from — and returns its `price_per_kwh`.
+  Falls back to `null` (card falls back to `defaultPricePerKwh`) once no session
+  covers it or none exist.
+- The pure selection logic lives in `pickWalkBackSessionPrice`
+  (`src/lib/history-day-summary.ts`), separated from the Supabase I/O so it's unit
+  tested directly (`history-day-summary.test.mjs`, 6 cases) without mocking the
+  client.
+- `/api/vehicle/analytics?type=period-overview` accepts `estimateNoCharge=1` (sent
+  only for the Day range) and returns `estimatedNoChargeDayPricePerKwh`.
+  `HistoryDaySummaryCard` shows it as `≈$X.XX` with a distinct "estimated, not money
+  spent today" footnote — kept visually separate from the real `Cost` figure per the
+  BACKLOG proposal's recommendation, so nobody budgets off an imputed number.
+- See BACKLOG.md history for the option comparison (last-known-price, trailing
+  blended average, full weighted-average-cost ledger, and this one) and the EV
+  industry research (Tesla, ABRP, fleet cost-per-mile tools) that ruled out
+  ledger-grade precision as unnecessary for what's meant to be a plan/estimate.
+- Verification: `npx tsc --noEmit` clean, `npm run test` 108/108 (102 prior + 6 new),
+  targeted ESLint clean on all touched files, `npm run build` passes.
+
 ### Fix History lifetime map failure for long vehicle histories
 
 - Root cause confirmed on vehicle `way`: 355 trip IDs were embedded in one PostgREST

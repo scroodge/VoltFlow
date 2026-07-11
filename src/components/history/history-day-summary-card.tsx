@@ -84,6 +84,7 @@ export function HistoryDaySummaryCard({
   currency,
   scope = "day",
   requireCharging = true,
+  estimatedNoChargePricePerKwh = null,
 }: {
   summary: HistoryDaySummary | null;
   loading?: boolean;
@@ -92,6 +93,9 @@ export function HistoryDaySummaryCard({
   scope?: HistorySummaryScope;
   /** Charging tab: only when sessions exist. Analytics: trips-only days still show. */
   requireCharging?: boolean;
+  /** $/kWh from the session walk-back estimate (BACKLOG.md "Attribute cost to
+   * no-charge driving days") — used only when there's no real Cost to show. */
+  estimatedNoChargePricePerKwh?: number | null;
 }) {
   const { t } = useTranslation();
   const tx = t as Translator;
@@ -146,9 +150,16 @@ export function HistoryDaySummaryCard({
   const totalCost = summary.hasPricedSessions
     ? summary.chargingCost
     : fallbackCost;
+  const noChargeEstimatedCost =
+    totalCost == null && summary.driveKwh > 0
+      ? summary.driveKwh * (estimatedNoChargePricePerKwh ?? (defaultPricePerKwh > 0 ? defaultPricePerKwh : 0))
+      : null;
+  const showEstimatedCost = totalCost == null && noChargeEstimatedCost != null && noChargeEstimatedCost > 0;
   const costValue = totalCost != null
     ? formatCurrencyAmount(currency, totalCost, locale)
-    : "—";
+    : showEstimatedCost
+      ? `≈${formatCurrencyAmount(currency, noChargeEstimatedCost, locale)}`
+      : "—";
   const durationValue =
     summary.chargingDurationSec > 0 ? formatDuration(summary.chargingDurationSec) : "—";
   const distanceValue = summary.hasTrips ? `${fmt(summary.distanceKm, 0)} km` : "—";
@@ -205,6 +216,11 @@ export function HistoryDaySummaryCard({
       <p className="px-2.5 py-1.5 text-[10px] leading-snug text-muted-foreground">
         {tx("history.daySummary.acFootnote")}
       </p>
+      {showEstimatedCost ? (
+        <p className="px-2.5 pb-1.5 text-[10px] leading-snug text-muted-foreground">
+          {tx("history.daySummary.estimatedCostFootnote")}
+        </p>
+      ) : null}
     </section>
   );
 }

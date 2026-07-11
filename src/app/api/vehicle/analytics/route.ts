@@ -5,6 +5,7 @@ import {
   fetchRouteInsights,
 } from "@/lib/bydmate/route-insights";
 import {
+  estimateNoChargeDayPrice,
   fetchConsumptionBaseline,
   fetchCostPerKm,
   fetchMonthlyStats,
@@ -103,7 +104,8 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Missing from/to" }, { status: 400 });
       }
       const overlapWindow = params.get("overlap") === "1";
-      const [tripsResult, sessionsResult] = await Promise.allSettled([
+      const estimateNoCharge = params.get("estimateNoCharge") === "1";
+      const [tripsResult, sessionsResult, noChargePriceResult] = await Promise.allSettled([
         fetchPeriodTripsEnriched({
           supabase: access.supabase,
           userId: access.userId,
@@ -119,6 +121,15 @@ export async function GET(request: NextRequest) {
           from,
           to,
         }),
+        estimateNoCharge
+          ? estimateNoChargeDayPrice({
+              supabase: access.supabase,
+              userId: access.userId,
+              vehicleId,
+              dayFromIso: from,
+              dayToIso: to,
+            })
+          : Promise.resolve(null),
       ]);
       if (tripsResult.status === "rejected") {
         console.error("period-overview trips fetch failed:", tripsResult.reason);
@@ -126,13 +137,19 @@ export async function GET(request: NextRequest) {
       if (sessionsResult.status === "rejected") {
         console.error("period-overview sessions fetch failed:", sessionsResult.reason);
       }
+      if (noChargePriceResult.status === "rejected") {
+        console.error("period-overview no-charge price estimate failed:", noChargePriceResult.reason);
+      }
       const trips = tripsResult.status === "fulfilled" ? tripsResult.value : [];
       const sessionRows = sessionsResult.status === "fulfilled" ? sessionsResult.value : [];
+      const estimatedNoChargeDayPricePerKwh =
+        noChargePriceResult.status === "fulfilled" ? noChargePriceResult.value : null;
       return NextResponse.json({
         trips,
         sessions: sessionRows.map((row) =>
           mapChargingSession(row as Record<string, unknown>),
         ),
+        ...(estimateNoCharge ? { estimatedNoChargeDayPricePerKwh } : {}),
       });
     }
 

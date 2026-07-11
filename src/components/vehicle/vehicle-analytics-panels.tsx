@@ -351,10 +351,15 @@ export function VehicleAnalyticsPanels({
         to: telemetryWindow.to,
         vehicle_id: vehicleId,
       });
-      if (isDayRange) params.set("overlap", "1");
-      return fetchAnalytics<{ trips: PeriodTripRow[]; sessions: ChargingSessionRow[] }>(
-        `/api/vehicle/analytics?${params.toString()}`,
-      );
+      if (isDayRange) {
+        params.set("overlap", "1");
+        params.set("estimateNoCharge", "1");
+      }
+      return fetchAnalytics<{
+        trips: PeriodTripRow[];
+        sessions: ChargingSessionRow[];
+        estimatedNoChargeDayPricePerKwh?: number | null;
+      }>(`/api/vehicle/analytics?${params.toString()}`);
     },
   });
 
@@ -542,6 +547,7 @@ export function VehicleAnalyticsPanels({
             currency={currency}
             scope={historyRange}
             requireCharging={false}
+            estimatedNoChargePricePerKwh={periodOverviewQuery.data?.estimatedNoChargeDayPricePerKwh ?? null}
           />
         </div>
 

@@ -3,7 +3,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { enrichTripsWithEnergy } from "@/lib/bydmate/attach-trip-energy";
 import { chargingSessionAnalyticsScope } from "@/lib/charging-session-analytics-scope";
 import { collectPagedRows } from "@/lib/bydmate/paged-query";
+import { pickWalkBackSessionPrice } from "@/lib/history-day-summary";
 import type { BydmateTelemetry, ChargingSessionRow, BydmateTripRow } from "@/types/database";
+
+/** How many recent finished sessions to walk back through when estimating a
+ * no-charge day's cost. Bounded by battery capacity vs. daily consumption in
+ * practice — most accounts never need more than 1-2. */
+const NO_CHARGE_WALKBACK_SESSION_LIMIT = 10;
 
 export type MonthlyStats = {
   month: string;
@@ -193,6 +199,69 @@ export async function fetchPeriodChargingSessions({
 
   if (error) throw error;
   return (data ?? []) as ChargingSessionRow[];
+}
+
+/**
+ * Estimated $/kWh for a no-charge day (BACKLOG.md "Attribute cost to no-charge
+ * driving days", option 5). Walks backward through recent finished sessions
+ * looking for the most recent one whose `charged_energy_kwh` still covers all
+ * driving between its `stopped_at` and `dayToIso` — i.e. the charge this day's
+ * driving is most plausibly still coming from. Returns null when no session
+ * covers it (caller falls back to the user's default price, same as the
+ * existing charged-but-unpriced-session fallback).
+ */
+export async function estimateNoChargeDayPrice({
+  supabase,
+  userId,
+  vehicleId,
+  dayFromIso,
+  dayToIso,
+}: {
+  supabase: SupabaseClient;
+  userId: string;
+  vehicleId: string | null;
+  dayFromIso: string;
+  dayToIso: string;
+}): Promise<number | null> {
+  const carId = await resolveVehicleCarId({ supabase, userId, vehicleId });
+  const sessionScope = chargingSessionAnalyticsScope(vehicleId, carId);
+  if (sessionScope == null) return null;
+
+  const { data: candidateRows, error: sessionsError } = await supabase
+    .from("charging_sessions")
+    .select("stopped_at, charged_energy_kwh, price_per_kwh")
+    .eq("user_id", userId)
+    .match(sessionScope)
+    .in("status", ["completed", "stopped"])
+    .not("stopped_at", "is", null)
+    .lte("stopped_at", dayFromIso)
+    .order("stopped_at", { ascending: false })
+    .limit(NO_CHARGE_WALKBACK_SESSION_LIMIT);
+
+  if (sessionsError) throw sessionsError;
+  const candidates = (candidateRows ?? []) as Pick<
+    ChargingSessionRow,
+    "stopped_at" | "charged_energy_kwh" | "price_per_kwh"
+  >[];
+  if (candidates.length === 0) return null;
+
+  const lowerBoundIso = candidates[candidates.length - 1].stopped_at as string;
+  const vehicleFilter = vehicleId ? { vehicle_id: vehicleId } : {};
+  const { data: tripRows, error: tripsError } = await supabase
+    .from("bydmate_trips")
+    .select("distance_km, traction_energy_kwh, avg_consumption_kwh_100km, started_at")
+    .eq("user_id", userId)
+    .match(vehicleFilter)
+    .gt("started_at", lowerBoundIso)
+    .lte("started_at", dayToIso);
+
+  if (tripsError) throw tripsError;
+  const trips = (tripRows ?? []) as Pick<
+    BydmateTripRow,
+    "distance_km" | "traction_energy_kwh" | "avg_consumption_kwh_100km" | "started_at"
+  >[];
+
+  return pickWalkBackSessionPrice(candidates, trips);
 }
 
 export async function fetchPhantomDrain({

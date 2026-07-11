@@ -1,4 +1,4 @@
-import { resolveLocalCalendarDayWindow } from "@/lib/bydmate/telemetry-ranges";
+import { resolveLocalCalendarDayWindow } from "./bydmate/telemetry-ranges.ts";
 import type { BydmateTripRow, ChargingSessionRow } from "@/types/database";
 
 const BALANCE_THRESHOLD_KWH = 0.5;
@@ -44,7 +44,9 @@ function sessionDurationSec(session: ChargingSessionRow) {
   return (ended - started) / 1000;
 }
 
-function tripDriveKwh(trip: BydmateTripRow) {
+export function tripDriveKwh(
+  trip: Pick<BydmateTripRow, "traction_energy_kwh" | "distance_km" | "avg_consumption_kwh_100km">,
+) {
   const traction = trip.traction_energy_kwh;
   if (typeof traction === "number" && Number.isFinite(traction)) return traction;
 
@@ -61,6 +63,40 @@ function tripDriveKwh(trip: BydmateTripRow) {
   }
 
   return 0;
+}
+
+/**
+ * Session walk-back (BACKLOG.md "Attribute cost to no-charge driving days",
+ * option 5): given recent finished sessions (newest first, already filtered to
+ * `stopped_at <= the day being priced`) and the trips that fall after the
+ * oldest candidate's `stopped_at`, find the most recent session whose
+ * `charged_energy_kwh` still covers all driving since it ended — i.e. the
+ * charge today's driving is most plausibly still coming from. Returns null
+ * when no candidate covers it.
+ */
+export function pickWalkBackSessionPrice(
+  candidates: readonly {
+    stopped_at: string | null;
+    charged_energy_kwh: number;
+    price_per_kwh: number;
+  }[],
+  trips: readonly Pick<
+    BydmateTripRow,
+    "traction_energy_kwh" | "distance_km" | "avg_consumption_kwh_100km" | "started_at"
+  >[],
+): number | null {
+  for (const session of candidates) {
+    if (session.stopped_at == null) continue;
+    if (session.price_per_kwh <= 0 || session.charged_energy_kwh <= 0) continue;
+    const stoppedAt = session.stopped_at;
+    const cumulativeDriveKwh = trips
+      .filter((trip) => trip.started_at != null && trip.started_at > stoppedAt)
+      .reduce((sum, trip) => sum + tripDriveKwh(trip), 0);
+    if (cumulativeDriveKwh <= session.charged_energy_kwh) {
+      return session.price_per_kwh;
+    }
+  }
+  return null;
 }
 
 function verdictFromDelta(deltaKwh: number): HistoryDayVerdict {
