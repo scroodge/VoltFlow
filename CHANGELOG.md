@@ -11,6 +11,24 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-07-11
 
+### Fix History lifetime map failure for long vehicle histories
+
+- Root cause confirmed on vehicle `way`: 355 trip IDs were embedded in one PostgREST
+  `.in(...)` URL, which Nginx rejected with **414 Request-URI Too Large** before the
+  query reached PostgREST. The former single request was also silently capped at 1,000
+  points despite asking for 5,000.
+- Lifetime-map retrieval now uses the existing `bydmate_trips!inner(vehicle_id)`
+  relationship filter with `user_id`, eliminating the URL-sized ID list while keeping
+  the same vehicle and ownership scope.
+- The compact query paginates newest-first in 1,000-row ranges up to the intended
+  5,000-point display cap, then restores chronological order for the renderer.
+- Added pure pagination coverage for page assembly, short-page exit, exact cap, and
+  an empty cap. No migration is required.
+- Verification: focused tests pass, `npm run test` passes 102/102, targeted ESLint and
+  `npx tsc --noEmit` pass, and the live dev endpoint returns HTTP 200 with 5,000 ordered
+  points for `way`. `next build` was blocked by an independently running dev server and
+  its hanging build lock; that server was deliberately left untouched.
+
 ### Reduce telemetry-ingest latency and History Analytics load
 
 - The telemetry receiver now starts charge notifications, Telegram live-widget

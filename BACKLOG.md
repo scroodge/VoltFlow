@@ -6,33 +6,6 @@ go-ahead.** These are researched but **not built**. Shipped work lives in
 
 ---
 
-## 🔴 Fix History lifetime map 414 for vehicles with many trips — proposed 2026-07-11
-
-**Root cause (confirmed):** `fetchLifetimeTrackPoints` first loads every trip ID, then
-sends them all in a PostgREST `.in("trip_id", ids)` filter. Vehicle `way` currently has
-355 trips, producing an Nginx **414 Request-URI Too Large** before PostgREST reaches the
-database. The existing `.limit(5000)` also receives only the server's 1,000-row page.
-
-**Build:**
-
-1. Replace the two-query ID-list flow with a track-points query using the
-   `bydmate_trips!inner(vehicle_id)` relation filter plus `user_id`, keeping RLS/user
-   scope and chronological output intact.
-2. Page that compact query in 1,000-row ranges up to the existing 5,000-point display
-   cap, then reverse the collected newest-first points once for the map renderer.
-3. Add focused tests for multi-page assembly, ordering, the 5,000 cap, and empty maps.
-4. Verify the real `way` endpoint returns 200 without a long request URI; run focused
-   tests, `npm run test`, targeted lint, and `npm run build`.
-
-**No migration:** the relation and required indexes already exist. Add a dedicated
-`(user_id, device_time desc)` track-point index only if the repaired paginated query is
-still slow under production measurement.
-
-**Recommendation:** implement this minimal query rewrite first. It removes the 414 and
-restores the intended 5,000-point map limit without a schema change.
-
----
-
 ## 🟢 Scheduled parked/off remote commands — APPROVED 2026-07-10
 
 **Goal:** execute recurring comfort commands while the car is parked/off, using the
