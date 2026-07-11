@@ -6,6 +6,159 @@ go-ahead.** These are researched but **not built**. Shipped work lives in
 
 ---
 
+## 🟡 Attribute cost to no-charge driving days (energy carried from a prior charge)
+
+**Problem:** `Cost` everywhere in the app (Day/Week/Month "at a glance", period
+cost-per-km — `src/lib/history-day-summary.ts`, `src/lib/vehicle-analytics.ts:331-385`)
+is anchored entirely to when a charging session's `started_at` falls in the window, not
+to when the energy is actually consumed. If a user charges Monday and only drives
+Tue–Thu, those three days show `Cost —` even though they're burning paid-for
+electricity the whole time — the money is booked entirely on Monday. This is a
+**cash-flow view** ("what did I spend today"), not a **consumption view** ("what did
+today's driving cost me"). Both are legitimate; only the first exists today.
+
+**Data available:** each `charging_sessions` row has a resolved `price_per_kwh` (via
+`resolveSessionTariff` in `src/lib/charging-tariffs.ts` — manual entry, GPS-matched
+location preset, or power-tier auto-pick against the user's `user_providers` prices,
+which vary a lot: e.g. home ~$0.15/kWh vs fast DC ~$0.6–0.73/kWh) and
+`charged_energy_kwh`. Each `bydmate_trips` row has `traction_energy_kwh` (or a
+distance × avg-consumption fallback). `cars.battery_capacity_kwh` is a real per-car
+column (`not null check (battery_capacity_kwh > 0)`).
+
+**Options:**
+
+1. **Last-known-price carry-forward.** For a no-charge day with `driveKwh > 0`, look up
+   the most recent finished session's `price_per_kwh` before that day and estimate
+   `cost = driveKwh × lastPrice`. Trivial (one extra query per period, reused across all
+   days in it), no schema change.
+   - *Trade-off:* assumes the **entire** battery is priced at the last session's rate,
+     which is only true right after a full charge. Someone who tops up small amounts at
+     wildly different prices (home vs. fast-DC) gets a noisy, sometimes very wrong
+     number — e.g. a single expensive fast-DC top-up prices the next two weeks of
+     driving at the DC rate even after that energy is long gone.
+
+2. **Trailing blended (weighted-average) rate.** Average `price_per_kwh` over the last
+   N sessions or a lookback window (e.g. 30 days), weighted by `charged_energy_kwh`,
+   applied to no-charge days the same way as option 1. Smooths outliers, still one
+   aggregate query, no schema change, window size is a tunable constant.
+   - *Trade-off:* still an approximation — doesn't model actual depletion order, so it
+     can't guarantee the sum of daily estimates reconciles to actual total spend over a
+     period the way real inventory accounting would.
+
+3. **True weighted-average-cost (WAC) battery ledger** (proper energy-inventory
+   accounting, same method used for stock costing). Maintain a running "blended
+   price currently in the battery" per vehicle: on each finished charge, new blended
+   price = weighted average of (existing battery kWh × existing blended price) and
+   (charged kWh × session price); on each trip, debit `driveKwh` at the *current*
+   blended price (draws don't change the per-unit price, only future charges do) and
+   record that as the trip's imputed cost.
+   - *Trade-off:* the accurate answer, and the only option where daily estimates sum
+     correctly to real spend — but real cost: a new persisted ledger (table +
+     migration), a defined seed/starting state (battery contents before tracking
+     began have no known cost basis), strict chronological processing of interleaved
+     trips + charges (out-of-order/late telemetry, corrected sessions from
+     `reconcileChargingSessionsForUser` would need the ledger recomputed downstream),
+     and a backfill for existing history. Meaningfully more surface area than options
+     1–2.
+
+4. **Don't retrofit historical Cost at all** — add a separate, clearly-labeled
+   "energy currently in battery: ~$X (blended $Y/kWh)" stat on the live/charging
+   screen instead, computed live from the same blended-price idea but with no
+   historical day/period claim. Doesn't answer "what did today cost me", but doesn't
+   touch existing Cost semantics either.
+
+5. **Session walk-back (on-the-fly depletion, no ledger).** For a no-charge day, walk
+   backward through finished sessions ordered by `stopped_at`: for each session, check
+   whether cumulative `driveKwh` since that session's end has exceeded its
+   `charged_energy_kwh`. If not, price the day at that session's `price_per_kwh`. If it
+   has, move to the next older session and keep walking (self-terminating in practice —
+   battery capacity bounds how many days of driving one charge covers, so this rarely
+   walks past 1–2 sessions). Computed live from existing `charging_sessions` +
+   `bydmate_trips` rows each request; no new table, no migration, no backfill, no
+   recompute pipeline on session correction.
+   - *Trade-off:* implicitly LIFO — assumes the *most recent* charge's energy is used
+     first. Physically a battery mixes uniformly, so a small expensive top-up onto an
+     otherwise-cheap battery will overstate cost for the days right after it (until
+     that top-up's kWh amount is "used up" in the walk), and a top-up onto a
+     already-near-full battery will understate the cheap energy still underneath it.
+     Only true weighted-average (option 3) gets the mixing right — but option 5 is a
+     much closer approximation to it than options 1 or 2, at no persistence cost.
+
+**Industry comparison (2026-07-11 research):** no mainstream EV cost tool does
+per-session ledger accounting for "what did today's driving cost."
+- **Tesla's own trip-cost calculator:** `distance × vehicle efficiency (kWh/100km) ×
+  one user-set price/kWh` — a single flat rate, no per-session tracking at all.
+- **EV fleet cost-per-mile methodology** (the closest industry analogue to "cost per
+  day/trip" reporting): `(kWh/100mi × price/kWh) ÷ 100`, with guidance to manually
+  "blend in" a higher rate if public/DC-fast charging is used "regularly" — a coarse,
+  human-adjusted blend, not an automated weighted ledger.
+- **ABRP:** uses live per-station prices only for *forward* route planning; historical
+  cost reporting elsewhere in the category uses the same flat blended rate.
+- Nobody productizes option 3's accounting-grade precision — it's solving a problem
+  users of these tools don't appear to have. That said, none of them have per-vehicle
+  session history with real per-session prices sitting in a database either — they're
+  built for one-off trip planning, not tracking a specific car's actual charge log. This
+  app already has the data to do better than a flat rate for roughly the same cost as
+  computing one.
+
+**Recommendation (revised):** option 5, session walk-back. It reads as a plan/estimate,
+not audited accuracy, matching the stated goal — but unlike a flat blended average
+(the earlier recommendation here), it uses the actual price of the charge you're most
+plausibly still driving on, so a recent fast-DC top-up shows up as more expensive
+driving and a recent cheap home charge shows up as cheap driving, instead of smoothing
+both into one number. Same "no schema change" property as options 1–2, closer to
+option 3's accuracy without its migration/backfill/recompute cost. Show it as a
+distinct, clearly labeled **estimated** field, not folded into the existing `Cost`
+stat, so actual spend and imputed consumption cost stay visually distinguishable.
+Fallback when the walk-back exhausts all session history (e.g. very first days of
+account history, before any recorded charge): `defaultPricePerKwh` from the profile,
+same fallback already used elsewhere in `history-day-summary-card.tsx`.
+
+---
+
+## 🟡 Lifetime-map pagination: race-safety vs. round-trip latency
+
+`fetchLifetimeTrackPoints` (`src/lib/vehicle-analytics.ts`) pages through
+`bydmate_trip_track_points` via `collectPagedRows` (`src/lib/bydmate/paged-query.ts`),
+issuing up to 5 sequential `range()` requests for the default 5,000-point cap (shipped
+2026-07-11 to fix the 414 error for long histories — see CHANGELOG). Code review
+(2026-07-11) flagged two related issues neither fixed nor urgent enough to block:
+
+1. **Offset drift under concurrent writes:** pages are ordered `device_time desc` with
+   numeric `range(from, to)` offsets. If the vehicle is actively driving while the map
+   loads, a new track point can land between page fetches and shift every later row's
+   offset by one — a boundary row can appear duplicated or a row can be silently
+   dropped, showing as a small jog/gap on the rendered polyline. The old single-query
+   snapshot didn't have this window.
+2. **Sequential round trips reintroduce latency:** 5 awaited-in-order requests instead
+   of 1, for exactly the long-history vehicles the 414 fix targeted — risk of a slow
+   response or Vercel timeout with no `maxDuration` override on the route.
+
+**Options:**
+1. **Keyset (cursor) pagination** — page by `.lt("device_time", lastSeenCursor)`
+   instead of numeric offsets. Fixes the drift issue outright (immune to concurrent
+   inserts above the cursor) but stays sequential, so it doesn't address latency.
+2. **Fire all pages in parallel** (page count is known upfront: `ceil(limit/pageSize)`)
+   — fixes latency (~1 round trip instead of 5) but narrows, doesn't eliminate, the
+   drift window, and changes `collectPagedRows`'s short-circuit-on-short-page contract
+   (would need a rewrite of its existing tests).
+3. **Both:** parallel keyset pages aren't compositable (each cursor depends on the
+   previous page's last row), so getting both properties needs a different design,
+   e.g. a single server-side RPC that snapshots the page.
+4. **Leave as-is** — the drift is a rare, cosmetic map glitch; the latency risk is
+   real but unmeasured (no report of an actual timeout yet).
+
+**Recommendation:** option 1 (keyset) first if the map glitch is ever reported by a
+real user; otherwise leave as-is and revisit if `/api/vehicle/lifetime-map` shows up
+slow in practice. Not urgent — awaiting go-ahead.
+
+Related, same review pass: `collectPagedRows` itself isn't reused by the two
+pre-existing hand-rolled pagination loops in `src/lib/bydmate/telemetry-history.ts`
+and `src/lib/charging-session-reconcile.ts`. Worth migrating those to the shared
+helper the next time either file is touched, not as a standalone task.
+
+---
+
 ## 🟡 Partition `bydmate_telemetry_samples` by time (Plan A)
 
 The high-volume ~1 Hz append-only table. Retention is `DELETE`-based (bloat + vacuum

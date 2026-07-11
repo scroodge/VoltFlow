@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
 import { isDriveTelemetry, isParkStateTelemetry } from "@/lib/bydmate/gear";
+import { latestSampleByVehicle } from "@/lib/bydmate/latest-sample";
 import { finiteTelemetryNumber, isTelemetryCharging } from "@/lib/bydmate/telemetry-charging";
 import { editTelegramMessageText, sendTelegramMessage } from "@/lib/telegram/bot-send";
 
@@ -290,6 +291,7 @@ export async function updateTelegramLiveWidgets({
   const orderedSamples = [...samples].sort(
     (a, b) => Date.parse(a.device_time) - Date.parse(b.device_time),
   );
+  const latestSamples = latestSampleByVehicle(orderedSamples);
 
   const cars = await loadCars(supabase, userId, vehicleIds);
   const { data: profile } = await supabase
@@ -308,7 +310,7 @@ export async function updateTelegramLiveWidgets({
   let updated = 0;
 
   for (const vehicleId of vehicleIds) {
-    const lastSample = [...orderedSamples].reverse().find((s) => s.vehicle_id === vehicleId);
+    const lastSample = latestSamples.get(vehicleId);
     if (!lastSample) continue;
 
     const carInfo = cars.get(vehicleId);

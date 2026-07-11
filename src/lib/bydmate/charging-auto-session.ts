@@ -382,17 +382,13 @@ export async function processBydmateAutoChargingSessions({
     }
   }
 
-  const stateRowsToUpsert = vehicleIds.flatMap((vehicleId) => {
+  for (const vehicleId of vehicleIds) {
     const state = states.get(vehicleId);
-    if (!state) return [];
+    if (!state) continue;
     const deviceTime = latestDeviceTimes.get(vehicleId) ?? new Date().toISOString();
-    return [stateToRow(userId, vehicleId, deviceTime, state)];
-  });
-
-  if (stateRowsToUpsert.length > 0) {
     const { error: upsertError } = await supabase
       .from("bydmate_auto_charging_session_state")
-      .upsert(stateRowsToUpsert, {
+      .upsert(stateToRow(userId, vehicleId, deviceTime, state), {
         onConflict: "user_id,vehicle_id",
       });
     if (upsertError) throw new Error(upsertError.message);

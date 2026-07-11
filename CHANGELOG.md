@@ -57,6 +57,15 @@ Residual observation from the smoke run: the pre-existing lifetime-map request r
 500 and the lower route/SoH Analytics requests were slow. They were not changed under
 this approved scope and should be diagnosed separately.
 
+**Follow-up (code review):** the bulk-upsert for auto-session/charge-notification state
+turned per-vehicle failures into an all-vehicles-blocked failure on a multi-vehicle
+account (one bad row rolled back the whole batched statement), so both state writes are
+back to a per-vehicle loop — the single-pass latest-device-time lookup is unchanged.
+`period-overview` now uses `Promise.allSettled` so a session-fetch failure no longer
+blanks trip data too. `updateTelegramLiveWidgets` now reuses the shared
+`latestSampleByVehicle` helper instead of its own inline reverse-scan. The `period-trips`/
+`period-sessions` compatibility branches are intentionally kept as-is per the note above.
+
 ### Persist the onboarding car-generation choice
 
 - Independent gap found while investigating the distance bug: the onboarding

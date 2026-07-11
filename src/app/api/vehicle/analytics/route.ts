@@ -78,6 +78,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ trips });
     }
 
+    if (type === "period-sessions") {
+      const from = params.get("from");
+      const to = params.get("to");
+      if (!from || !to) {
+        return NextResponse.json({ error: "Missing from/to" }, { status: 400 });
+      }
+      const rows = await fetchPeriodChargingSessions({
+        supabase: access.supabase,
+        userId: access.userId,
+        vehicleId,
+        from,
+        to,
+      });
+      return NextResponse.json({
+        sessions: rows.map((row) => mapChargingSession(row as Record<string, unknown>)),
+      });
+    }
+
     if (type === "period-overview") {
       const from = params.get("from");
       const to = params.get("to");
@@ -85,7 +103,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Missing from/to" }, { status: 400 });
       }
       const overlapWindow = params.get("overlap") === "1";
-      const [trips, sessionRows] = await Promise.all([
+      const [tripsResult, sessionsResult] = await Promise.allSettled([
         fetchPeriodTripsEnriched({
           supabase: access.supabase,
           userId: access.userId,
@@ -102,29 +120,19 @@ export async function GET(request: NextRequest) {
           to,
         }),
       ]);
+      if (tripsResult.status === "rejected") {
+        console.error("period-overview trips fetch failed:", tripsResult.reason);
+      }
+      if (sessionsResult.status === "rejected") {
+        console.error("period-overview sessions fetch failed:", sessionsResult.reason);
+      }
+      const trips = tripsResult.status === "fulfilled" ? tripsResult.value : [];
+      const sessionRows = sessionsResult.status === "fulfilled" ? sessionsResult.value : [];
       return NextResponse.json({
         trips,
         sessions: sessionRows.map((row) =>
           mapChargingSession(row as Record<string, unknown>),
         ),
-      });
-    }
-
-    if (type === "period-sessions") {
-      const from = params.get("from");
-      const to = params.get("to");
-      if (!from || !to) {
-        return NextResponse.json({ error: "Missing from/to" }, { status: 400 });
-      }
-      const rows = await fetchPeriodChargingSessions({
-        supabase: access.supabase,
-        userId: access.userId,
-        vehicleId,
-        from,
-        to,
-      });
-      return NextResponse.json({
-        sessions: rows.map((row) => mapChargingSession(row as Record<string, unknown>)),
       });
     }
 
