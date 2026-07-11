@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { enrichTripsWithEnergy } from "@/lib/bydmate/attach-trip-energy";
 import { chargingSessionAnalyticsScope } from "@/lib/charging-session-analytics-scope";
+import { collectPagedRows } from "@/lib/bydmate/paged-query";
 import type { BydmateTelemetry, ChargingSessionRow, BydmateTripRow } from "@/types/database";
 
 export type MonthlyStats = {
@@ -394,27 +395,28 @@ export async function fetchLifetimeTrackPoints({
   vehicleId: string;
   limit?: number;
 }) {
-  const { data: trips, error: tripsError } = await supabase
-    .from("bydmate_trips")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("vehicle_id", vehicleId);
+  const rows = await collectPagedRows({
+    limit,
+    fetchPage: async (from, to) => {
+      const { data, error } = await supabase
+        .from("bydmate_trip_track_points")
+        .select("lat, lon, device_time, trip_id, bydmate_trips!inner(vehicle_id)")
+        .eq("user_id", userId)
+        .eq("bydmate_trips.vehicle_id", vehicleId)
+        .order("device_time", { ascending: false })
+        .range(from, to);
 
-  if (tripsError) throw tripsError;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
-  const tripIds = (trips ?? []).map((trip) => trip.id as string);
-  if (tripIds.length === 0) return [];
-
-  const { data, error } = await supabase
-    .from("bydmate_trip_track_points")
-    .select("lat, lon, device_time, trip_id")
-    .eq("user_id", userId)
-    .in("trip_id", tripIds)
-    .order("device_time", { ascending: false })
-    .limit(limit);
-
-  if (error) throw error;
-  return (data ?? []).reverse();
+  return rows.reverse().map((row) => ({
+    lat: row.lat,
+    lon: row.lon,
+    device_time: row.device_time,
+    trip_id: row.trip_id,
+  }));
 }
 
 export type ConsumptionBaselineResult = {

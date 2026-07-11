@@ -170,3 +170,9 @@ type ChartDescriptor = {
 - Analytics charging sessions always resolve `vehicle_id` through
   `cars.vehicle_alias` and filter `charging_sessions.car_id`. A user with two cars
   must never see another car's charging cost or sessions in a vehicle period summary.
+- History loads Analytics and trip-detail visualizations through conditional dynamic
+  imports. Charging and collapsed Trips views must not eagerly include the shared live
+  telemetry chart/map bundle.
+- A range change obtains trips and charging sessions through the single
+  `period-overview` API operation. The server starts both RLS-scoped reads together;
+  keep the older individual operations only for compatibility with older clients.

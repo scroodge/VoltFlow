@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { AcceptedTelemetry } from "@/lib/bydmate/telemetry-sanitizer";
 import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
+import { latestDeviceTimeByVehicle } from "@/lib/bydmate/latest-sample";
 import {
   finiteTelemetryNumber,
   isTelemetryCharging,
@@ -192,6 +193,7 @@ export async function processBydmateChargeNotifications({
   const orderedSamples = [...samples].sort(
     (a, b) => Date.parse(a.device_time) - Date.parse(b.device_time),
   );
+  const latestDeviceTimes = latestDeviceTimeByVehicle(orderedSamples);
 
   for (const sample of orderedSamples) {
     const previousState = states.get(sample.vehicle_id) ?? null;
@@ -218,16 +220,17 @@ export async function processBydmateChargeNotifications({
     }
   }
 
-  for (const vehicleId of vehicleIds) {
+  const stateRowsToUpsert = vehicleIds.flatMap((vehicleId) => {
     const state = states.get(vehicleId);
-    if (!state) continue;
+    if (!state) return [];
+    const deviceTime = latestDeviceTimes.get(vehicleId) ?? new Date().toISOString();
+    return [stateToRow(userId, vehicleId, deviceTime, state)];
+  });
 
-    const lastSample = [...orderedSamples].reverse().find((sample) => sample.vehicle_id === vehicleId);
-    const deviceTime = lastSample?.device_time ?? new Date().toISOString();
-
+  if (stateRowsToUpsert.length > 0) {
     const { error: upsertError } = await supabase
       .from("bydmate_charge_notification_state")
-      .upsert(stateToRow(userId, vehicleId, deviceTime, state), {
+      .upsert(stateRowsToUpsert, {
         onConflict: "user_id,vehicle_id",
       });
 

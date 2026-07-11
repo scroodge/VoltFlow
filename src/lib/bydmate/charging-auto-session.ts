@@ -15,6 +15,7 @@ import {
   telemetryChargingContext,
   telemetrySpeedKmh,
 } from "@/lib/bydmate/telemetry-charging";
+import { latestDeviceTimeByVehicle } from "@/lib/bydmate/latest-sample";
 
   /** Auto-start only from recent samples in a batch (avoids replaying old driving buffers). */
 const AUTO_START_MAX_SAMPLE_AGE_MS = 3 * 60_000;
@@ -230,6 +231,7 @@ export async function processBydmateAutoChargingSessions({
   const orderedSamples = [...samples].sort(
     (a, b) => Date.parse(a.device_time) - Date.parse(b.device_time),
   );
+  const latestDeviceTimes = latestDeviceTimeByVehicle(orderedSamples);
 
   const [{ data: cars, error: carsError }, { data: activeSessions, error: sessionsError }, { data: stateRows, error: stateError }] =
     await Promise.all([
@@ -380,14 +382,17 @@ export async function processBydmateAutoChargingSessions({
     }
   }
 
-  for (const vehicleId of vehicleIds) {
+  const stateRowsToUpsert = vehicleIds.flatMap((vehicleId) => {
     const state = states.get(vehicleId);
-    if (!state) continue;
-    const lastSample = [...orderedSamples].reverse().find((sample) => sample.vehicle_id === vehicleId);
-    const deviceTime = lastSample?.device_time ?? new Date().toISOString();
+    if (!state) return [];
+    const deviceTime = latestDeviceTimes.get(vehicleId) ?? new Date().toISOString();
+    return [stateToRow(userId, vehicleId, deviceTime, state)];
+  });
+
+  if (stateRowsToUpsert.length > 0) {
     const { error: upsertError } = await supabase
       .from("bydmate_auto_charging_session_state")
-      .upsert(stateToRow(userId, vehicleId, deviceTime, state), {
+      .upsert(stateRowsToUpsert, {
         onConflict: "user_id,vehicle_id",
       });
     if (upsertError) throw new Error(upsertError.message);

@@ -1,19 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { BrandBadge } from "@/components/brand/BrandBadge";
 import { LogoFull } from "@/components/brand/LogoFull";
-import { VehicleAnalyticsPanels } from "@/components/vehicle/vehicle-analytics-panels";
 import {
   localCalendarDate,
   parseAnalyticsRange,
   type TelemetryHistoryRange,
 } from "@/lib/bydmate/telemetry-ranges";
-import { TripDetailPanel } from "@/components/vehicle/TripDetailPanel";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDuration } from "@/lib/charging-math";
@@ -27,6 +26,16 @@ import { computeHistoryDaySummary } from "@/lib/history-day-summary";
 import { formatCurrencyAmount, type Currency, type Locale, type TranslationKey } from "@/lib/i18n";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import type { BydmateTripRow, ChargingSessionRow } from "@/types/database";
+
+const VehicleAnalyticsPanels = dynamic(() =>
+  import("@/components/vehicle/vehicle-analytics-panels").then(
+    (module) => module.VehicleAnalyticsPanels,
+  ),
+);
+
+const TripDetailPanel = dynamic(() =>
+  import("@/components/vehicle/TripDetailPanel").then((module) => module.TripDetailPanel),
+);
 
 type HistoryTranslator = (key: TranslationKey, values?: Record<string, string | number>) => string;
 

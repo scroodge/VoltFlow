@@ -243,26 +243,33 @@ export async function POST(request: Request) {
       return Response.json({ ok: false, error: "Telemetry ingest failed" }, { status: 500 });
     }
 
+    const activityUpdates: PromiseLike<unknown>[] = [];
+    const activityTime = new Date().toISOString();
+
     // First-ever telemetry for this user → mark the car connected so the
     // post-login onboarding gate clears. The null guard keeps this a one-time
     // write; once set the column is non-null and we skip on every later ingest.
     if (!profile.vehicle_connected_at) {
-      await supabase
-        .from("profiles")
-        .update({ vehicle_connected_at: new Date().toISOString() })
-        .eq("id", profile.id)
-        .is("vehicle_connected_at", null);
+      activityUpdates.push(
+        supabase
+          .from("profiles")
+          .update({ vehicle_connected_at: activityTime })
+          .eq("id", profile.id)
+          .is("vehicle_connected_at", null),
+      );
     }
 
     // Every telemetry sample resets the inactivity timer.
-    await supabase
-      .from("profiles")
-      .update({ last_active_at: new Date().toISOString() })
-      .eq("id", profile.id);
+    activityUpdates.push(
+      supabase
+        .from("profiles")
+        .update({ last_active_at: activityTime })
+        .eq("id", profile.id),
+    );
 
     const lastSample = samples.at(-1);
-    const { data: persistedRow, error: persistedError } = lastSample
-      ? await supabase
+    const persistedLookup = lastSample
+      ? supabase
           .from("bydmate_live_snapshots")
           .select(
             "vehicle_id, received_at, device_time, diplus, diplus_min_cell_voltage_v, diplus_max_cell_voltage_v, diplus_cell_delta_v",
@@ -270,7 +277,13 @@ export async function POST(request: Request) {
           .eq("user_id", profile.id)
           .eq("vehicle_id", lastSample.vehicle_id)
           .maybeSingle()
-      : { data: null, error: null };
+      : Promise.resolve({ data: null, error: null });
+
+    const [, persistedResult] = await Promise.all([
+      Promise.all(activityUpdates),
+      persistedLookup,
+    ]);
+    const { data: persistedRow, error: persistedError } = persistedResult;
 
     if (persistedError) {
       return Response.json({ ok: false, error: "Persisted telemetry lookup failed" }, { status: 500 });
@@ -289,48 +302,36 @@ export async function POST(request: Request) {
       });
     }
 
-    let chargeNotifications = { sent: 0, thresholds: [] as number[] };
-    try {
-      chargeNotifications = await processBydmateChargeNotifications({
-        supabase,
-        userId: profile.id,
-        samples,
-        previousTelemetry: previousTelemetryBeforeSanitize,
-      });
-    } catch {
-      chargeNotifications = { sent: 0, thresholds: [] };
-    }
+    const chargeNotificationsPromise = processBydmateChargeNotifications({
+      supabase,
+      userId: profile.id,
+      samples,
+      previousTelemetry: previousTelemetryBeforeSanitize,
+    }).catch(() => ({ sent: 0, thresholds: [] as number[] }));
 
-    let telegramWidgets = { updated: 0 };
-    try {
-      telegramWidgets = await updateTelegramLiveWidgets({
-        supabase,
-        userId: profile.id,
-        samples,
-        receivedAt,
-      });
-    } catch {
-      telegramWidgets = { updated: 0 };
-    }
+    const telegramWidgetsPromise = updateTelegramLiveWidgets({
+      supabase,
+      userId: profile.id,
+      samples,
+      receivedAt,
+    }).catch(() => ({ updated: 0 }));
 
-    let autoChargingSessions: {
-      started: number;
-      stopped: number;
-      sessionIds: string[];
-      error?: string;
-    } = { started: 0, stopped: 0, sessionIds: [] };
-    try {
-      autoChargingSessions = await processBydmateAutoChargingSessions({
-        supabase,
-        userId: profile.id,
-        samples,
-      });
-    } catch (autoSessionError) {
+    const autoChargingSessionsPromise = processBydmateAutoChargingSessions({
+      supabase,
+      userId: profile.id,
+      samples,
+    }).catch((autoSessionError: unknown) => {
       const message =
         autoSessionError instanceof Error ? autoSessionError.message : "Auto session failed";
       console.error("bydmate auto charging session:", message);
-      autoChargingSessions = { started: 0, stopped: 0, sessionIds: [], error: message };
-    }
+      return { started: 0, stopped: 0, sessionIds: [] as string[], error: message };
+    });
+
+    const [chargeNotifications, telegramWidgets, autoChargingSessions] = await Promise.all([
+      chargeNotificationsPromise,
+      telegramWidgetsPromise,
+      autoChargingSessionsPromise,
+    ]);
 
     // Only reconcile when auto-session processing actually opened/closed a row.
     // Reconcile reads sessions + samples back from Supabase, so running it on

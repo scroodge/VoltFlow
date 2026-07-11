@@ -53,6 +53,10 @@ type Translator = (key: TranslationKey, values?: Record<string, string | number>
 
 type PeriodTripRow = BydmateTripRow & { outside_temp_avg?: number | null };
 
+const EMPTY_PERIOD_TRIPS: PeriodTripRow[] = [];
+const EMPTY_PERIOD_SESSIONS: ChargingSessionRow[] = [];
+const EMPTY_HISTORY_POINTS: TelemetryHistoryPoint[] = [];
+
 function fmt(value: number | null | undefined, digits = 1) {
   return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
 }
@@ -338,30 +342,17 @@ export function VehicleAnalyticsPanels({
 
   const isDayRange = historyRange === "day";
 
-  const periodTripsQuery = useQuery({
-    queryKey: ["vehicle-analytics", "period-trips", historyRange, anchorDate, vehicleId],
+  const periodOverviewQuery = useQuery({
+    queryKey: ["vehicle-analytics", "period-overview", historyRange, anchorDate, vehicleId],
     queryFn: () => {
       const params = new URLSearchParams({
-        type: "period-trips",
+        type: "period-overview",
         from: telemetryWindow.from,
         to: telemetryWindow.to,
         vehicle_id: vehicleId,
       });
       if (isDayRange) params.set("overlap", "1");
-      return fetchAnalytics<{ trips: PeriodTripRow[] }>(`/api/vehicle/analytics?${params.toString()}`);
-    },
-  });
-
-  const periodSessionsQuery = useQuery({
-    queryKey: ["vehicle-analytics", "period-sessions", historyRange, anchorDate, vehicleId],
-    queryFn: () => {
-      const params = new URLSearchParams({
-        type: "period-sessions",
-        from: telemetryWindow.from,
-        to: telemetryWindow.to,
-        vehicle_id: vehicleId,
-      });
-      return fetchAnalytics<{ sessions: ChargingSessionRow[] }>(
+      return fetchAnalytics<{ trips: PeriodTripRow[]; sessions: ChargingSessionRow[] }>(
         `/api/vehicle/analytics?${params.toString()}`,
       );
     },
@@ -376,8 +367,8 @@ export function VehicleAnalyticsPanels({
     enabled: isDayRange,
   });
 
-  const periodTrips = periodTripsQuery.data?.trips ?? [];
-  const periodSessions = periodSessionsQuery.data?.sessions ?? [];
+  const periodTrips = periodOverviewQuery.data?.trips ?? EMPTY_PERIOD_TRIPS;
+  const periodSessions = periodOverviewQuery.data?.sessions ?? EMPTY_PERIOD_SESSIONS;
 
   const periodSummary = useMemo(
     () =>
@@ -390,7 +381,7 @@ export function VehicleAnalyticsPanels({
     [periodSessions, periodTrips, telemetryWindow.from, telemetryWindow.to],
   );
 
-  const periodSummaryLoading = periodTripsQuery.isLoading || periodSessionsQuery.isLoading;
+  const periodSummaryLoading = periodOverviewQuery.isLoading;
 
   const periodCostPerKm = useMemo(() => {
     if (!periodSummary.hasPricedSessions || periodSummary.distanceKm <= 0) return null;
@@ -432,7 +423,7 @@ export function VehicleAnalyticsPanels({
       ),
   });
 
-  const historyPoints = historyQuery.data ?? [];
+  const historyPoints = historyQuery.data ?? EMPTY_HISTORY_POINTS;
 
   const summary = useMemo(
     () =>
@@ -561,15 +552,15 @@ export function VehicleAnalyticsPanels({
             baseline={baseline}
             historyPoints={historyPoints}
             anchorDate={anchorDate}
-            isLoading={historyQuery.isLoading || periodTripsQuery.isLoading}
-            hasSummaryError={Boolean(historyQuery.error || periodTripsQuery.error)}
-            hasTripsError={Boolean(periodTripsQuery.error)}
+            isLoading={historyQuery.isLoading || periodOverviewQuery.isLoading}
+            hasSummaryError={Boolean(historyQuery.error || periodOverviewQuery.error)}
+            hasTripsError={Boolean(periodOverviewQuery.error)}
             historyLoading={historyQuery.isLoading}
             historyError={Boolean(historyQuery.error)}
           />
         ) : (
           <>
-            {historyQuery.isLoading || periodTripsQuery.isLoading ? (
+            {historyQuery.isLoading || periodOverviewQuery.isLoading ? (
               <AnalyticsSummaryStatsLoading />
             ) : (
               <AnalyticsSummaryStats summary={summary} chargedKwh={periodSummary.chargedKwh > 0 ? periodSummary.chargedKwh : null} />
@@ -635,7 +626,7 @@ export function VehicleAnalyticsPanels({
           <p className="mt-1 text-sm text-muted-foreground">
             {t("vehicle.analytics.chargingTrendsSubtitle")}
           </p>
-          {periodSessionsQuery.isLoading ? (
+          {periodOverviewQuery.isLoading ? (
             <div className="mt-5 grid gap-3 md:grid-cols-2">
               <Skeleton className="h-52 rounded-2xl" />
               <Skeleton className="h-52 rounded-2xl" />

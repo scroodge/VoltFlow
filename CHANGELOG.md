@@ -11,6 +11,34 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-07-11
 
+### Reduce telemetry-ingest latency and History Analytics load
+
+- The telemetry receiver now starts charge notifications, Telegram live-widget
+  updates, and auto charging-session processing together after persistence. Each
+  failure remains isolated, and reconciliation still waits for the auto-session
+  result because it depends on its start/stop events.
+- Auto-session and charge-notification state now compute the latest device time in
+  one pass and bulk-upsert all vehicle rows once per table. This changes repeated
+  `O(vehicles × samples)` reverse scans to `O(samples + vehicles)` and removes
+  per-vehicle state-write round trips for multi-vehicle batches.
+- Profile activity writes and persisted-snapshot verification now run concurrently
+  after the ingest RPC, without changing the first-connection null guard.
+- History dynamically imports Analytics only when that tab is selected and trip
+  visualizations only when a detail panel opens. The production React loadable
+  manifest contains separate dynamic entries for both boundaries, keeping the shared
+  chart/map chunks out of inactive Charging and collapsed Trips paths.
+- Analytics range changes now call the new `period-overview` operation once; its
+  RLS-scoped trip and charging-session reads start concurrently. The older individual
+  operations remain available for compatibility.
+- Verification: focused efficiency/charging tests pass, `npm run test` passes 102/102,
+  the separately excluded charging-auto-session suite passes 4/4, targeted server/lib
+  ESLint passes, and `npm run build` passes. A local authenticated development smoke
+  request returned HTTP 200 with both `trips` and `sessions` arrays.
+
+Residual observation from the smoke run: the pre-existing lifetime-map request returned
+500 and the lower route/SoH Analytics requests were slow. They were not changed under
+this approved scope and should be diagnosed separately.
+
 ### Persist the onboarding car-generation choice
 
 - Independent gap found while investigating the distance bug: the onboarding

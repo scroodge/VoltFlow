@@ -78,6 +78,38 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ trips });
     }
 
+    if (type === "period-overview") {
+      const from = params.get("from");
+      const to = params.get("to");
+      if (!from || !to) {
+        return NextResponse.json({ error: "Missing from/to" }, { status: 400 });
+      }
+      const overlapWindow = params.get("overlap") === "1";
+      const [trips, sessionRows] = await Promise.all([
+        fetchPeriodTripsEnriched({
+          supabase: access.supabase,
+          userId: access.userId,
+          vehicleId,
+          from,
+          to,
+          overlapWindow,
+        }),
+        fetchPeriodChargingSessions({
+          supabase: access.supabase,
+          userId: access.userId,
+          vehicleId,
+          from,
+          to,
+        }),
+      ]);
+      return NextResponse.json({
+        trips,
+        sessions: sessionRows.map((row) =>
+          mapChargingSession(row as Record<string, unknown>),
+        ),
+      });
+    }
+
     if (type === "period-sessions") {
       const from = params.get("from");
       const to = params.get("to");
