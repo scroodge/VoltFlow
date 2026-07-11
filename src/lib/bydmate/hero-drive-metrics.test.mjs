@@ -156,9 +156,20 @@ test("dedupeTripsBySource drops energydata twins for gen2_2025", () => {
     ["tel-1", "byd-2"],
   );
 
-  // gen1_2024 (DiLink 3) has no energydata source — trips pass through untouched.
-  assert.equal(dedupeTripsBySource(trips, "gen1_2024").length, 3);
-  assert.equal(dedupeTripsBySource(trips, null).length, 3);
+  // model_generation defaults to gen1_2024, and prod has DiLink 5 cars still
+  // carrying it — observed energydata rows activate the dedupe regardless.
+  assert.deepEqual(
+    dedupeTripsBySource(trips, "gen1_2024").map((trip) => trip.id),
+    ["tel-1", "byd-2"],
+  );
+  assert.deepEqual(
+    dedupeTripsBySource(trips, null).map((trip) => trip.id),
+    ["tel-1", "byd-2"],
+  );
+
+  // True DiLink 3 data (telemetry only) passes through untouched.
+  const telemetryOnly = [telemetryTrip, { ...telemetryTrip, id: "tel-2" }];
+  assert.equal(dedupeTripsBySource(telemetryOnly, "gen1_2024").length, 2);
 });
 
 test("computeHeroDriveMetrics does not double-count energydata twins", () => {

@@ -22,12 +22,18 @@ function tripIntervalMs(trip: BydmateTripRow): [number, number] | null {
  * energydata row when a telemetry trip overlaps it in time; keep it when no
  * telemetry twin exists (e.g. the daemon was offline for that trip). DiLink 3
  * cars (gen1_2024) have no energydata source, so their trips pass through.
+ *
+ * `model_generation` defaults to gen1_2024 at onboarding and prod has DiLink 5
+ * cars still carrying that default, so the presence of energydata rows also
+ * activates the dedupe — a car that uploads them is energydata-capable no
+ * matter what its car row claims.
  */
 export function dedupeTripsBySource(
   trips: BydmateTripRow[],
   modelGeneration: CarGeneration | null | undefined,
 ): BydmateTripRow[] {
-  if (modelGeneration !== "gen2_2025") return trips;
+  const hasEnergydata = trips.some((trip) => trip.source === "byd_energydata");
+  if (modelGeneration !== "gen2_2025" && !hasEnergydata) return trips;
 
   const telemetryIntervals = trips
     .filter((trip) => trip.source !== "byd_energydata")

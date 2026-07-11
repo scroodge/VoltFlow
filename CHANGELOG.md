@@ -25,6 +25,11 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
   no telemetry twin are kept (daemon offline). `gen1_2024` (DiLink 3) trips pass
   through untouched. `computeHeroDriveMetrics` dedupes before summing and picks the
   latest trip from the deduped list, so km/1% prefers the SOC-bearing telemetry row.
+- Hardened after user re-test: `cars.model_generation` defaults to `gen1_2024` at
+  onboarding and Cl's DiLink 5 car still carried that default, which would have
+  skipped the dedupe. Observed `byd_energydata` rows now also activate it — a car
+  that uploads energydata summaries is energydata-capable regardless of what its
+  car row claims. True DiLink 3 data (telemetry-only) still passes through.
 - `VehicleLiveView` passes `matchedCar.model_generation` into the metric.
 - Verified against Cl's prod data with equivalent SQL: dedupe yields 18 trips /
   114.7 km, matching the SOC sanity check (~105–115 km).
