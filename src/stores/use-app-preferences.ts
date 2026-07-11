@@ -1,6 +1,7 @@
 import { createJSONStorage, persist } from "zustand/middleware";
 import { create } from "zustand";
 
+import { isCarGeneration, type CarGeneration } from "@/lib/car-generations";
 import {
   isCurrency,
   isLocale,
@@ -21,6 +22,7 @@ type AppPreferencesState = {
   currency: Currency;
   locale: Locale;
   onboardingSkipped: boolean;
+  onboardingCarGeneration: CarGeneration | null;
   setSelectedCarId: (id: string | null) => void;
   setDefaultPricePerKwh: (n: number) => void;
   setTariffPrices: (input: {
@@ -31,6 +33,7 @@ type AppPreferencesState = {
   setCurrency: (currency: Currency) => void;
   setLocale: (locale: Locale) => void;
   setOnboardingSkipped: (skipped: boolean) => void;
+  setOnboardingCarGeneration: (generation: CarGeneration | null) => void;
 };
 
 const noopStorage = {
@@ -60,6 +63,8 @@ export const useAppPreferences = create(
       setCurrency: (currency) => set({ currency }),
       setLocale: (locale) => set({ locale }),
       setOnboardingSkipped: (onboardingSkipped) => set({ onboardingSkipped }),
+      setOnboardingCarGeneration: (onboardingCarGeneration) =>
+        set({ onboardingCarGeneration }),
     }),
     {
       name: appPreferencesStorageKey,
@@ -104,6 +109,9 @@ export const useAppPreferences = create(
             typeof saved?.onboardingSkipped === "boolean"
               ? saved.onboardingSkipped
               : current.onboardingSkipped,
+          onboardingCarGeneration: isCarGeneration(saved?.onboardingCarGeneration)
+            ? saved.onboardingCarGeneration
+            : current.onboardingCarGeneration,
         };
       },
       /* zustand typings expect the full store; we only persist primitives. */
@@ -116,6 +124,7 @@ export const useAppPreferences = create(
         currency: s.currency,
         locale: s.locale,
         onboardingSkipped: s.onboardingSkipped,
+        onboardingCarGeneration: s.onboardingCarGeneration,
       }) as unknown as AppPreferencesState,
     },
   ),

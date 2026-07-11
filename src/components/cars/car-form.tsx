@@ -23,6 +23,7 @@ import {
   type CarGeneration,
 } from "@/lib/car-generations";
 import { useTranslation } from "@/hooks/use-translation";
+import { useAppPreferences } from "@/stores/use-app-preferences";
 import type { Car } from "@/types/database";
 
 type CarFormProps = {
@@ -41,7 +42,13 @@ export function CarForm({
   onSubmit,
 }: CarFormProps) {
   const { t } = useTranslation();
-  const initialGeneration = car?.model_generation ?? "gen1_2024";
+  const onboardingCarGeneration = useAppPreferences(
+    (s) => s.onboardingCarGeneration,
+  );
+  // New cars default to the generation declared during onboarding; without one
+  // we keep the historical gen1_2024 default.
+  const initialGeneration =
+    car?.model_generation ?? onboardingCarGeneration ?? "gen1_2024";
   const initialPreset = carGenerationPresets[initialGeneration];
   const [generation, setGeneration] = useState<CarGeneration>(
     initialGeneration,

@@ -380,17 +380,8 @@ function VehicleLiveContent({
         trips: fixtureTrips ?? recentTrips,
         snapshot,
         batteryCapacityKwh,
-        modelGeneration: matchedCar?.model_generation ?? null,
       }),
-    [
-      sessions,
-      matchedCar?.id,
-      matchedCar?.model_generation,
-      fixtureTrips,
-      recentTrips,
-      snapshot,
-      batteryCapacityKwh,
-    ],
+    [sessions, matchedCar?.id, fixtureTrips, recentTrips, snapshot, batteryCapacityKwh],
   );
   // Active charging session for this car. The ~1 Hz persist/auto-complete is owned globally
   // by ChargingSessionBackgroundSync (MobileShell), so here we only read it for display.

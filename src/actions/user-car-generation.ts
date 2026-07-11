@@ -26,3 +26,22 @@ export async function getUserCarGeneration(): Promise<{
       : null,
   };
 }
+
+export async function setUserCarGeneration(
+  generation: CarGeneration,
+): Promise<{ ok: boolean }> {
+  if (!isCarGeneration(generation)) return { ok: false };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false };
+
+  const { error } = await supabase
+    .from("cars")
+    .update({ model_generation: generation })
+    .eq("user_id", user.id);
+
+  return { ok: !error };
+}

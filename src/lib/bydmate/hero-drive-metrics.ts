@@ -1,4 +1,3 @@
-import type { CarGeneration } from "@/lib/car-generations";
 import type { BydmateLiveSnapshotRow, BydmateTripRow, ChargingSessionRow } from "@/types/database";
 
 // Cloud summaries and daemon telemetry disagree on trip boundaries by up to a
@@ -17,24 +16,14 @@ function tripIntervalMs(trip: BydmateTripRow): [number, number] | null {
 }
 
 /**
- * Only DiLink 5 cars (gen2_2025) sync `byd_energydata` cloud trip summaries,
- * which duplicate the trips the Mate telemetry daemon already records. Drop an
- * energydata row when a telemetry trip overlaps it in time; keep it when no
- * telemetry twin exists (e.g. the daemon was offline for that trip). DiLink 3
- * cars (gen1_2024) have no energydata source, so their trips pass through.
- *
- * `model_generation` defaults to gen1_2024 at onboarding and prod has DiLink 5
- * cars still carrying that default, so the presence of energydata rows also
- * activates the dedupe — a car that uploads them is energydata-capable no
- * matter what its car row claims.
+ * `byd_energydata` cloud trip summaries duplicate the trips the Mate telemetry
+ * daemon already records. Drop an energydata row when a telemetry trip overlaps
+ * it in time; keep it when no telemetry twin exists (e.g. the daemon was offline
+ * for that trip). Whether a car syncs energydata tracks firmware, not model
+ * generation — DiLink 3 (gen1_2024) cars produce them too — so this keys purely
+ * on the presence of energydata rows in the list, never on `model_generation`.
  */
-export function dedupeTripsBySource(
-  trips: BydmateTripRow[],
-  modelGeneration: CarGeneration | null | undefined,
-): BydmateTripRow[] {
-  const hasEnergydata = trips.some((trip) => trip.source === "byd_energydata");
-  if (modelGeneration !== "gen2_2025" && !hasEnergydata) return trips;
-
+export function dedupeTripsBySource(trips: BydmateTripRow[]): BydmateTripRow[] {
   const telemetryIntervals = trips
     .filter((trip) => trip.source !== "byd_energydata")
     .map(tripIntervalMs)
@@ -175,14 +164,12 @@ export function computeHeroDriveMetrics({
   trips,
   snapshot,
   batteryCapacityKwh,
-  modelGeneration,
 }: {
   sessions: ChargingSessionRow[];
   carId: string | null;
   trips: BydmateTripRow[];
   snapshot: Pick<BydmateLiveSnapshotRow, "telemetry">;
   batteryCapacityKwh: number | null;
-  modelGeneration?: CarGeneration | null;
 }): {
   distanceSinceChargeKm: number | null;
   kmPerPercentSoc: number | null;
@@ -190,7 +177,7 @@ export function computeHeroDriveMetrics({
   const lastCharge = findLastFinishedChargeSession(sessions, carId);
   const anchorStoppedAt = lastCharge?.stopped_at ?? lastCharge?.started_at ?? null;
   const liveDistanceKm = snapshot.telemetry.current_trip_distance_km;
-  const dedupedTrips = dedupeTripsBySource(trips, modelGeneration);
+  const dedupedTrips = dedupeTripsBySource(trips);
   const latestTrip = dedupedTrips[0] ?? null;
 
   return {

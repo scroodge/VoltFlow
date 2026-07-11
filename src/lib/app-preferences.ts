@@ -1,3 +1,4 @@
+import { isCarGeneration, type CarGeneration } from "./car-generations.ts";
 import {
   defaultCurrency,
   defaultLocale,
@@ -18,6 +19,7 @@ export type PersistedAppPreferences = {
   currency: Currency;
   locale: Locale;
   onboardingSkipped: boolean;
+  onboardingCarGeneration: CarGeneration | null;
 };
 
 type StorageLike = {
@@ -81,6 +83,13 @@ export function parsePersistedAppPreferences(
       preferences.onboardingSkipped = state.onboardingSkipped;
     }
 
+    if (
+      state.onboardingCarGeneration === null ||
+      isCarGeneration(state.onboardingCarGeneration)
+    ) {
+      preferences.onboardingCarGeneration = state.onboardingCarGeneration;
+    }
+
     return preferences;
   } catch {
     return null;
@@ -104,4 +113,5 @@ export const initialAppPreferences: PersistedAppPreferences = {
   currency: defaultCurrency,
   locale: defaultLocale,
   onboardingSkipped: false,
+  onboardingCarGeneration: null,
 };

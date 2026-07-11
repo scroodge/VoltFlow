@@ -5,6 +5,7 @@ import { ArrowLeft, ArrowRight, Car, Check, Download, Loader2, RefreshCw } from 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+import { setUserCarGeneration } from "@/actions/user-car-generation";
 import { LogoFull } from "@/components/brand/LogoFull";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,9 @@ export default function OnboardingPage() {
   const { t } = useTranslation();
   const router = useRouter();
   const setOnboardingSkipped = useAppPreferences((s) => s.setOnboardingSkipped);
+  const setOnboardingCarGeneration = useAppPreferences(
+    (s) => s.setOnboardingCarGeneration,
+  );
   const { data: connection } = useVehicleConnection();
   const connected = connection?.connected ?? false;
 
@@ -71,17 +75,30 @@ export default function OnboardingPage() {
     }
   }, []);
 
+  // The toggle answer is the user's declaration about their car. Commit it on
+  // every exit path: to local preferences (seeds the car form for accounts
+  // without a car yet) and to any existing car rows (fire-and-forget).
+  const persistCarGeneration = useCallback(() => {
+    setOnboardingCarGeneration(carGeneration);
+    void setUserCarGeneration(carGeneration).catch(() => {});
+  }, [carGeneration, setOnboardingCarGeneration]);
+
   function goToLink() {
+    persistCarGeneration();
     setStep("link");
     // Generate the code on the way in (driven by the click, not an effect).
     if (!linkCode) void generateCode();
   }
 
   function handleSkip() {
+    persistCarGeneration();
     setOnboardingSkipped(true);
     router.push("/dashboard");
   }
 
+  // No persist here: the connected screen can appear without the install step
+  // (already-linked account revisiting /onboarding), where the toggle was never
+  // shown — writing its untouched default would clobber a deliberate setting.
   function handleEnter() {
     router.push("/dashboard");
   }

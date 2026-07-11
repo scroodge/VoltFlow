@@ -11,6 +11,27 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-07-11
 
+### Persist the onboarding car-generation choice
+
+- Independent gap found while investigating the distance bug: the onboarding
+  "2025+ / 2024" toggle only switched which Mate install steps were displayed and was
+  never saved, and the car form defaults new cars to `gen1_2024`. A gen2 owner who
+  answers the toggle correctly could still end up with a `gen1_2024` row. (Cl's own
+  car is correctly `gen1_2024`, so his label was never the distance-bug cause — that
+  fix keys on energydata presence, not generation — but the field still drives
+  charger presets and knowledge-base filtering, so it should reflect reality.)
+- The toggle answer is now committed on onboarding exits (Next → link step, Skip):
+  stored in app preferences (`onboardingCarGeneration`, validated by
+  `isCarGeneration` on parse/merge) and written to any existing car rows via the new
+  `setUserCarGeneration` server action (RLS-scoped). The connected-screen "Enter"
+  intentionally does not persist — an already-linked account revisiting /onboarding
+  never sees the toggle, and writing its untouched default would clobber a
+  deliberate setting.
+- `CarForm` (create mode) now seeds its generation default from the persisted
+  onboarding choice, falling back to the historical `gen1_2024`.
+- Verification: `npm run test` 102/102, ESLint clean on all five touched files,
+  `npm run build` passes.
+
 ### Fix "distance since charge" double-counting energydata trip twins
 
 - User Cl's live view showed 198.2 km "driven since charge" — impossible for a 50%
@@ -18,19 +39,18 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
   (2026-07-03), 18 `telemetry` trips (114.7 km) each had a near-identical
   `byd_energydata` cloud-summary twin (11 rows, 83.5 km) from the Mate v0.4.7
   trip-summary sync, and `sumDistanceSinceCharge` summed both: 114.7 + 83.5 = 198.2.
-- New `dedupeTripsBySource(trips, modelGeneration)` in
-  `src/lib/bydmate/hero-drive-metrics.ts`: for `gen2_2025` cars (DiLink 5 — the only
-  generation that emits `byd_energydata` summaries), an energydata row is dropped
-  when a telemetry trip overlaps it in time (±5 min tolerance); energydata rows with
-  no telemetry twin are kept (daemon offline). `gen1_2024` (DiLink 3) trips pass
-  through untouched. `computeHeroDriveMetrics` dedupes before summing and picks the
-  latest trip from the deduped list, so km/1% prefers the SOC-bearing telemetry row.
-- Hardened after user re-test: `cars.model_generation` defaults to `gen1_2024` at
-  onboarding and Cl's DiLink 5 car still carried that default, which would have
-  skipped the dedupe. Observed `byd_energydata` rows now also activate it — a car
-  that uploads energydata summaries is energydata-capable regardless of what its
-  car row claims. True DiLink 3 data (telemetry-only) still passes through.
-- `VehicleLiveView` passes `matchedCar.model_generation` into the metric.
+- New `dedupeTripsBySource(trips)` in `src/lib/bydmate/hero-drive-metrics.ts`: an
+  energydata row is dropped when a telemetry trip overlaps it in time (±5 min
+  tolerance); energydata rows with no telemetry twin are kept (daemon was offline).
+  `computeHeroDriveMetrics` dedupes before summing and picks the latest trip from the
+  deduped list, so km/1% prefers the SOC-bearing telemetry row.
+- Keys purely on the presence of `byd_energydata` rows, **not** on
+  `cars.model_generation`. Cl's car is genuinely `gen1_2024` (DiLink 3) yet still
+  syncs energydata summaries — energydata capability tracks firmware, not model
+  generation — so gating on generation would have wrongly skipped exactly the user
+  who reported the bug. (An earlier iteration gated on `gen2_2025`; that parameter
+  was proven dead — with no energydata rows there is nothing to drop regardless of
+  generation — and removed.)
 - Verified against Cl's prod data with equivalent SQL: dedupe yields 18 trips /
   114.7 km, matching the SOC sanity check (~105–115 km).
 - Also repaired a stale assertion in `hero-drive-metrics.test.mjs`

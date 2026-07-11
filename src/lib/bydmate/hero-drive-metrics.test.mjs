@@ -117,7 +117,7 @@ test("resolveKmPerPercentSoc falls back to consumption when SOC delta is too sma
   assert.ok(kmPerPercent != null && Math.abs(kmPerPercent - 3) < 0.001);
 });
 
-test("dedupeTripsBySource drops energydata twins for gen2_2025", () => {
+test("dedupeTripsBySource drops energydata twins, keeps orphans", () => {
   const telemetryTrip = {
     ...baseTrip,
     id: "tel-1",
@@ -150,26 +150,17 @@ test("dedupeTripsBySource drops energydata twins for gen2_2025", () => {
   };
   const trips = [telemetryTrip, energydataTwin, energydataOrphan];
 
-  const deduped = dedupeTripsBySource(trips, "gen2_2025");
+  // The twin overlapping a telemetry trip is dropped; the orphan (no telemetry
+  // twin — daemon was offline) is kept. This holds regardless of the car's
+  // declared generation, since energydata capability tracks firmware.
   assert.deepEqual(
-    deduped.map((trip) => trip.id),
+    dedupeTripsBySource(trips).map((trip) => trip.id),
     ["tel-1", "byd-2"],
   );
 
-  // model_generation defaults to gen1_2024, and prod has DiLink 5 cars still
-  // carrying it — observed energydata rows activate the dedupe regardless.
-  assert.deepEqual(
-    dedupeTripsBySource(trips, "gen1_2024").map((trip) => trip.id),
-    ["tel-1", "byd-2"],
-  );
-  assert.deepEqual(
-    dedupeTripsBySource(trips, null).map((trip) => trip.id),
-    ["tel-1", "byd-2"],
-  );
-
-  // True DiLink 3 data (telemetry only) passes through untouched.
+  // Telemetry-only list passes through untouched (nothing to dedupe).
   const telemetryOnly = [telemetryTrip, { ...telemetryTrip, id: "tel-2" }];
-  assert.equal(dedupeTripsBySource(telemetryOnly, "gen1_2024").length, 2);
+  assert.equal(dedupeTripsBySource(telemetryOnly).length, 2);
 });
 
 test("computeHeroDriveMetrics does not double-count energydata twins", () => {
@@ -211,7 +202,6 @@ test("computeHeroDriveMetrics does not double-count energydata twins", () => {
     trips,
     snapshot: { telemetry: {} },
     batteryCapacityKwh: 45.1,
-    modelGeneration: "gen2_2025",
   });
   assert.equal(metrics.distanceSinceChargeKm, 5.1);
 });
