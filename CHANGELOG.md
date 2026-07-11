@@ -106,6 +106,27 @@ this approved scope and should be diagnosed separately.
 
 ## 2026-07-10
 
+### Scheduled parked/off remote commands
+Recurring comfort commands (climate/window actions) now run while the car is parked
+and off, using the existing VoltFlow Mate poll daemon instead of a local APK timer.
+- New `vehicle_command_schedules` table (RLS, owner-scoped) storing an IANA time zone,
+  local run time, and weekdays per schedule.
+- The authenticated Mate command-poll transaction atomically materializes any due
+  schedule into a normal pending `vehicle_commands` row via
+  `enqueue_due_vehicle_command_schedules`, then advances `next_run_at`
+  (`next_vehicle_command_schedule_run`). Missed runs older than 2 minutes are
+  deliberately skipped so a stale preheat/unlock never fires late.
+- Migration `20260710150000_vehicle_command_schedules.sql` applied to self-hosted prod
+  (`supabase.mykid.life`) 2026-07-10.
+- API CRUD + a PWA control for recurring climate/window actions.
+
+### Telegram live-widget chat-list summary
+The bot chat list only ever showed the beginning of the latest live-widget message, so
+it truncated to the car name/state. The same editable widget message now opens with a
+compact first line (`🔋 79% · P 41 694 км`) before the full car name/state, SOC bar,
+charging details, and map link — so the chat list stays useful without a second
+message cluttering the conversation.
+
 ### Repair analytics correctness and database query fan-out
 
 - Phantom drain no longer consumes a silently capped 1,000-row raw response. New
@@ -581,6 +602,31 @@ Built Option A from the backlog plan, in `settings-view.tsx` + `i18n.ts` only:
 
 ---
 
+## 2026-07-01
+
+### Signup email verification required
+Free-user signup now requires clicking a confirmation email instead of instant
+autoconfirmed access. Root cause of "no signup email ever arrives": GoTrue ran with
+`ENABLE_EMAIL_AUTOCONFIRM=true`, so no mailer send was ever triggered.
+- Server (contabo `/opt/supabase`): `.env` → `ENABLE_EMAIL_AUTOCONFIRM=false`;
+  `docker-compose.yml` auth service adds `GOTRUE_MAILER_SUBJECTS_CONFIRMATION` (bilingual
+  static subject — GoTrue does not template subjects) and
+  `GOTRUE_MAILER_TEMPLATES_CONFIRMATION` pointing at a trilingual (`ru`/`be`/`en`)
+  `confirmation.html` hosted by host nginx. Applied + `auth` container restarted healthy;
+  existing 28 users and Google OAuth unaffected.
+- Link uses the same prefetch-proof **token_hash** pattern as password reset (plain-GET
+  email prefetchers like Apple Mail Privacy Protection or Telegram's preview bot cannot
+  burn the token, since verification only happens client-side on `/auth/confirm`).
+- Client: `src/app/auth/confirm/page.tsx` calls `verifyOtp({ type: 'signup', token_hash })`
+  on mount then routes to `/onboarding`; `/auth/confirm` added to `PUBLIC_PATHS` in
+  `src/proxy.ts`; `login-form.tsx` shows a "check your inbox" panel + Resend
+  (`supabase.auth.resend`) on signup with no session, and surfaces `email_not_confirmed`
+  on sign-in with the same resend affordance. i18n keys added in en/be/ru.
+- Also fixed in the same session: a pre-existing `npm run build` break in
+  `scripts/test-live-widget.ts` blocking Vercel builds on `main`.
+
+---
+
 ## 2026-06-30
 
 ### Inline charging on `/vehicle` Live + Charge tab removed
@@ -606,9 +652,10 @@ Validated on car `way` (45.1 kWh): the BMS counter `telemetry.kwh_charged`
 grid truth, because ~1.7 kW of active battery thermal management draws from the OBC
 output before the cells. **Correct cost formula stays `SOC_delta% × capacity ÷ 100`,
 efficiency ≈ 100 %.** `kwh_charged` is retained for diagnostics/thermal monitoring only.
-> ⚠️ Follow-up: any code path that used `maxKwhCharged` for cost, or
-> `deriveChargePowerFromEnergyDeltaKw` on the power display, must be reverted — those
-> understate cost / show misleading cell-side power. Tracked in [BACKLOG.md](BACKLOG.md).
+> ✅ Follow-up done 2026-07-10 (`a1ff0b2`): `buildReconciledSessionPatch` now always
+> derives energy/cost from `SOC_delta% × capacity ÷ 100`; the display power in
+> `charging-session-screen.tsx` uses the di+ grid-side integer, not
+> `deriveChargePowerFromEnergyDeltaKw`. Both stay defined for diagnostics only.
 
 ### Storage bucket write policies
 `20260630120000` restricts insert/update/delete on the five knowledge/service buckets
