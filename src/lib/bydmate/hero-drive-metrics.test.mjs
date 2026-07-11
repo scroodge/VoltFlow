@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   computeHeroDriveMetrics,
+  dedupeTripsBySource,
   findLastFinishedChargeSession,
   formatHeroDistanceKm,
   formatKmPerPercent,
@@ -116,6 +117,94 @@ test("resolveKmPerPercentSoc falls back to consumption when SOC delta is too sma
   assert.ok(kmPerPercent != null && Math.abs(kmPerPercent - 3) < 0.001);
 });
 
+test("dedupeTripsBySource drops energydata twins for gen2_2025", () => {
+  const telemetryTrip = {
+    ...baseTrip,
+    id: "tel-1",
+    source: "telemetry",
+    started_at: "2026-07-06T04:25:45.000Z",
+    ended_at: "2026-07-06T04:40:17.000Z",
+    distance_km: 5.1,
+  };
+  const energydataTwin = {
+    ...baseTrip,
+    id: "byd-1",
+    source: "byd_energydata",
+    started_at: "2026-07-06T04:23:24.000Z",
+    ended_at: "2026-07-06T04:40:34.000Z",
+    distance_km: 5,
+    soc_start: null,
+    soc_end: null,
+    sample_count: 0,
+  };
+  const energydataOrphan = {
+    ...baseTrip,
+    id: "byd-2",
+    source: "byd_energydata",
+    started_at: "2026-07-05T10:00:00.000Z",
+    ended_at: "2026-07-05T10:20:00.000Z",
+    distance_km: 4,
+    soc_start: null,
+    soc_end: null,
+    sample_count: 0,
+  };
+  const trips = [telemetryTrip, energydataTwin, energydataOrphan];
+
+  const deduped = dedupeTripsBySource(trips, "gen2_2025");
+  assert.deepEqual(
+    deduped.map((trip) => trip.id),
+    ["tel-1", "byd-2"],
+  );
+
+  // gen1_2024 (DiLink 3) has no energydata source — trips pass through untouched.
+  assert.equal(dedupeTripsBySource(trips, "gen1_2024").length, 3);
+  assert.equal(dedupeTripsBySource(trips, null).length, 3);
+});
+
+test("computeHeroDriveMetrics does not double-count energydata twins", () => {
+  const sessions = [
+    {
+      id: "s1",
+      car_id: "car-a",
+      status: "stopped",
+      stopped_at: "2026-07-03T11:54:40.000Z",
+      started_at: "2026-07-03T07:44:57.000Z",
+      created_at: "2026-07-03T07:44:57.000Z",
+    },
+  ];
+  const trips = [
+    {
+      ...baseTrip,
+      id: "tel-1",
+      source: "telemetry",
+      started_at: "2026-07-06T04:25:45.000Z",
+      ended_at: "2026-07-06T04:40:17.000Z",
+      distance_km: 5.1,
+    },
+    {
+      ...baseTrip,
+      id: "byd-1",
+      source: "byd_energydata",
+      started_at: "2026-07-06T04:23:24.000Z",
+      ended_at: "2026-07-06T04:40:34.000Z",
+      distance_km: 5,
+      soc_start: null,
+      soc_end: null,
+      sample_count: 0,
+    },
+  ];
+
+  const metrics = computeHeroDriveMetrics({
+    sessions,
+    carId: "car-a",
+    trips,
+    snapshot: { telemetry: {} },
+    batteryCapacityKwh: 45.1,
+    modelGeneration: "gen2_2025",
+  });
+  assert.equal(metrics.distanceSinceChargeKm, 5.1);
+});
+
 test("computeHeroDriveMetrics returns null distance without finished session", () => {
   const metrics = computeHeroDriveMetrics({
     sessions: [],
@@ -131,5 +220,5 @@ test("formatters render dash for missing values", () => {
   assert.equal(formatHeroDistanceKm(null), "—");
   assert.equal(formatKmPerPercent(undefined), "—");
   assert.equal(formatHeroDistanceKm(42.18), "42.2 km");
-  assert.equal(formatKmPerPercent(4.2), "4.2 km/1%");
+  assert.equal(formatKmPerPercent(4.2), "4.2 ");
 });

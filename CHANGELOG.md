@@ -9,6 +9,30 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-07-11
+
+### Fix "distance since charge" double-counting energydata trip twins
+
+- User Cl's live view showed 198.2 km "driven since charge" — impossible for a 50%
+  SOC drop at 2.1 km/%. Prod DB confirmed: since the last finished charge
+  (2026-07-03), 18 `telemetry` trips (114.7 km) each had a near-identical
+  `byd_energydata` cloud-summary twin (11 rows, 83.5 km) from the Mate v0.4.7
+  trip-summary sync, and `sumDistanceSinceCharge` summed both: 114.7 + 83.5 = 198.2.
+- New `dedupeTripsBySource(trips, modelGeneration)` in
+  `src/lib/bydmate/hero-drive-metrics.ts`: for `gen2_2025` cars (DiLink 5 — the only
+  generation that emits `byd_energydata` summaries), an energydata row is dropped
+  when a telemetry trip overlaps it in time (±5 min tolerance); energydata rows with
+  no telemetry twin are kept (daemon offline). `gen1_2024` (DiLink 3) trips pass
+  through untouched. `computeHeroDriveMetrics` dedupes before summing and picks the
+  latest trip from the deduped list, so km/1% prefers the SOC-bearing telemetry row.
+- `VehicleLiveView` passes `matchedCar.model_generation` into the metric.
+- Verified against Cl's prod data with equivalent SQL: dedupe yields 18 trips /
+  114.7 km, matching the SOC sanity check (~105–115 km).
+- Also repaired a stale assertion in `hero-drive-metrics.test.mjs`
+  (`formatKmPerPercent` no longer embeds the "km/1%" unit — it lives in the label).
+- Verification: focused tests 9/9, `npm run test` 102/102, targeted ESLint clean
+  (file-level errors pre-exist unchanged), `npm run build` passes.
+
 ## 2026-07-10
 
 ### Repair analytics correctness and database query fan-out
