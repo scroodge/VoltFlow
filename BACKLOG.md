@@ -6,51 +6,6 @@ go-ahead.** These are researched but **not built**. Shipped work lives in
 
 ---
 
-## 🟡 Currency-aware defaults for Settings → Economics tariff prices
-
-**Problem:** every tariff price field (`profiles.default_price_per_kwh`,
-`home_price_per_kwh`, `commercial_ac_price_per_kwh`, `fast_dc_price_per_kwh`) defaults
-to a flat **`0.12`** in the database (migrations `20260512100000_profiles_default_tariff.sql`,
-`20260617111000_three_tariff_and_location_presets.sql`), regardless of currency. The
-built-in `PROVIDER_TARIFF_PRESETS` (`src/lib/charging-tariffs.ts`) are the same flat
-numbers (e.g. `home: 0.15, commercial_ac: 0.54, fast_dc: 0.54`) reused across all 4
-currencies. `handleCurrencyChange` (`settings-view.tsx:717`) only persists
-`preferred_currency` — it never touches or rescales the price fields. `0.12` is
-roughly right for EUR home rates; for BYN, USD, or RUB it's either implausibly cheap or
-just the wrong order of magnitude, and nothing in the UI signals that to the user —
-they'd have to already know their local rate and manually correct every field.
-
-**Note:** I don't have verified, current real-world electricity tariffs for
-BYN/USD/RUB to hardcode — whatever numbers get used here need a sourced check
-(official tariff schedules, not a training-data guess) before shipping, same care as
-was taken researching the BYN symbol itself.
-
-**Options:**
-
-1. **Reset-on-currency-change prompt (recommended).** When `handleCurrencyChange`
-   fires, if the user's current price fields still equal the *previous* currency's
-   defaults (i.e. untouched), offer a toast/inline prompt: "Switch tariff prices to
-   typical `<newCurrency>` rates?" with an explicit accept — non-destructive, never
-   silently overwrites a price the user actually customized.
-2. **Per-currency default constants only at account creation.** Infer currency from
-   signup locale, seed `profiles` with per-currency defaults once. Simplest, zero
-   retroactive-mutation risk — but doesn't help existing users who already picked BYN
-   and are sitting on the wrong-scale `0.12`.
-3. **Contextual hint, no data mutation.** Show a small "typical home rate: ~X `<symbol>`/kWh"
-   next to each price field, sourced per currency, purely informational. Zero risk,
-   but doesn't fix the underlying default — just helps users notice it's wrong.
-4. **Auto-rescale silently on currency change.** Rejected outright: any heuristic for
-   "was this customized" can misfire and silently overwrite a real number the user
-   set — a financial field is the wrong place to guess.
-
-**Recommendation:** option 1, with option 3 as a cheap complement regardless of which
-path is chosen (helps even before a currency switch, e.g. a first-time BYN user setting
-up tariffs from scratch, not just people switching currency later). Needs real sourced
-tariff numbers per currency before implementation — flag if you have a source, otherwise
-that's a research sub-step before building.
-
----
-
 ## 🟡 Lifetime-map pagination: race-safety vs. round-trip latency
 
 `fetchLifetimeTrackPoints` (`src/lib/vehicle-analytics.ts`) pages through

@@ -173,6 +173,23 @@ export function CarForm({
             />
             <p className="text-muted-foreground text-xs">{t("cars.wallboxHelp")}</p>
           </div>
+          {mode === "create" ? (
+            <div className="space-y-2">
+              <Label htmlFor="home_price_per_kwh">{t("cars.homePrice")}</Label>
+              <Input
+                id="home_price_per_kwh"
+                name="home_price_per_kwh"
+                type="text"
+                inputMode="decimal"
+                pattern="[0-9]*[,.]?[0-9]*"
+                step="any"
+                min={0}
+                placeholder={t("cars.homePricePlaceholder") as string}
+                className="min-h-[52px] rounded-2xl text-lg"
+              />
+              <p className="text-muted-foreground text-xs">{t("cars.homePriceHelp")}</p>
+            </div>
+          ) : null}
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="home_charger_lat">{t("cars.homeGeofence")}</Label>

@@ -9,6 +9,66 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-07-12 (revised)
+
+### Ask the user's home price instead of guessing per-currency defaults
+
+- Reverted the same-day "currency-aware defaults" work: a global country/currency
+  tariff lookup isn't realistic to build or keep accurate (no reliable free API,
+  and the 4-currency table already needed guessed figures for 2 of 3 tiers on 2
+  currencies) — users can be from any country, and only the user actually knows
+  their local rate. Removed `CURRENCY_DEFAULT_TARIFFS` (`charging-tariffs.ts`),
+  the "Typical rate" hints and currency-change reset-prompt in
+  `settings-view.tsx`, and their i18n keys.
+- Car creation (`/cars/new`, `CarForm` in `mode="create"` only — the onboarding
+  screen is a pure ADB/link-code install wizard with no other profile fields, so
+  it wasn't the right fit) now asks an optional "Home charging price" question.
+  If filled in, `new-car-form.tsx` persists it to `profiles.home_price_per_kwh`/
+  `default_price_per_kwh` after the car is created; if left blank, nothing is
+  written and the column default applies.
+- New migration `20260712120000_profiles_tariff_neutral_default.sql`: changes
+  the `profiles` tariff columns' DB default from the old guessed `0.12` to a
+  neutral `1` — an obvious placeholder rather than a number that quietly implied
+  real, currency-calibrated accuracy. `ALTER COLUMN ... SET DEFAULT` only; no
+  data rewrite, existing users' values untouched. **Not yet applied** — local
+  Supabase wasn't running this session; apply via `npm run db:migrations:up`
+  locally or the prod `psql -f` recipe per `AGENTS.md`.
+- Verification: `npx tsc --noEmit` clean, `npm run test` 108/108, targeted ESLint
+  clean on touched files (pre-existing unrelated issues in `settings-view.tsx`
+  untouched by this diff), `npm run build` passes.
+
+---
+
+## 2026-07-12
+
+### Currency-aware defaults for Settings → Economics tariff prices
+
+- Every tariff price field defaulted to a flat `0.12` regardless of currency, and
+  switching currency never rescaled it — implausible for BYN/USD/RUB. Researched
+  current typical rates per currency (sourced where noted, reasoned estimates
+  elsewhere — see comments in the new constant) and implemented BACKLOG.md's
+  recommended non-destructive fix.
+- New `CURRENCY_DEFAULT_TARIFFS` (`src/lib/charging-tariffs.ts`): home/commercial-AC/
+  fast-DC typical rates per currency. EUR/USD home and EU/US DC-fast figures are
+  sourced (EIA 2026 US residential average, European DC-fast median); BYN home is
+  sourced (Belarus's regulated within-norm household tariff, June 2026 decree); RUB
+  home is a blended regional average (Moscow/St Petersburg/national). AC tiers and
+  BYN/RUB commercial/DC tiers are reasoned estimates (no direct public-charging-network
+  pricing found for Belarus/Russia) — flagged inline as needing verification before
+  being treated as authoritative.
+- `handleCurrencyChange` (`settings-view.tsx`) now offers a toast prompt — "Switch
+  tariff prices to typical rates for this currency?" with an explicit Update action —
+  only when the user's current prices still equal the *previous* currency's defaults
+  (i.e. untouched). Never silently overwrites a price the user actually customized.
+- Each of the 3 tariff price fields also shows a small "Typical rate: X" hint using
+  the new constant, independent of the prompt (helps first-time setup too, not just
+  currency switches).
+- Verification: `npx tsc --noEmit` clean, `npm run test` 108/108, targeted ESLint
+  clean on touched files (pre-existing unrelated issues in `settings-view.tsx`
+  untouched by this diff), `npm run build` passes.
+
+---
+
 ## 2026-07-11 (continued)
 
 ### Show the new Belarusian ruble (BYN) graphic symbol in place of "Br"

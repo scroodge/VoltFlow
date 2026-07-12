@@ -6,7 +6,6 @@ import type {
   Profile,
   UserProviderRow,
 } from "../types/database.ts";
-
 export const COMMERCIAL_AC_MIN_KW = 4;
 export const FAST_DC_MIN_KW = 10;
 

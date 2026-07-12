@@ -533,6 +533,9 @@ export const dictionaries = {
       battery: "Useable battery (kWh)",
       wallbox: "Wallbox kW",
       wallboxHelp: "Matches your AC pedestal limit.",
+      homePrice: "Home charging price (optional)",
+      homePricePlaceholder: "e.g. 0.15",
+      homePriceHelp: "Only you know your local rate — leave blank to set it later in Settings.",
       efficiency: "AC efficiency",
       efficiencyHelp:
         "Grid-to-battery loss factor for cost math. Leave at the default unless you've measured your own.",
@@ -1733,6 +1736,9 @@ export const dictionaries = {
       battery: "Карысная батарэя (кВт·г)",
       wallbox: "Wallbox кВт",
       wallboxHelp: "Адпавядае ліміту вашай AC-стойкі.",
+      homePrice: "Цана хатняй зарадкі (неабавязкова)",
+      homePricePlaceholder: "напр. 0.15",
+      homePriceHelp: "Толькі вы ведаеце свой мясцовы тарыф — можна пакінуць пустым і задаць пазней у Наладах.",
       efficiency: "AC-эфектыўнасць",
       efficiencyHelp:
         "Каэфіцыент страт сетка-батарэя для разліку кошту. Пакіньце па змаўчанні, калі не вымяралі свой.",
@@ -2933,6 +2939,9 @@ export const dictionaries = {
       battery: "Полезная батарея (кВт·ч)",
       wallbox: "Зарядная станция в  кВт",
       wallboxHelp: "Соответствует лимиту вашей AC-стойки.",
+      homePrice: "Цена домашней зарядки (необязательно)",
+      homePricePlaceholder: "напр. 0.15",
+      homePriceHelp: "Только вы знаете свой локальный тариф — можно оставить пустым и задать позже в Настройках.",
       efficiency: "AC-эффективность",
       efficiencyHelp:
         "Коэффициент потерь сеть-батарея для расчёта стоимости. Оставьте по умолчанию, если не измеряли свой.",
