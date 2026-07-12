@@ -9,6 +9,21 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-07-12 — /insights follow-ups (workflow hardening)
+
+### Data-ownership rule in the change gate
+
+- Added to `AGENTS.md` → Change gate: plans for user-facing data models must state
+  data ownership (user-owned vs app-owned) and storage location (Postgres vs
+  localStorage) and confirm both before building; per-user preference data
+  defaults to client-side. Motivated by two past rework cycles (provider tariffs,
+  GPS coords) surfaced by the 2026-07-12 `/insights` report.
+- Sibling changes outside this repo, same session: `/release-apk` skill in
+  BYDMate-own (`.claude/skills/release-apk/SKILL.md` — full release flow ending
+  in a mandatory prod-telemetry check) plus a matching release rule in that
+  repo's `AGENTS.md`; auto-lint PostToolUse hook in this repo's untracked
+  `.claude/settings.local.json`.
+
 ## 2026-07-12 (revised)
 
 ### Ask the user's home price instead of guessing per-currency defaults

@@ -8,6 +8,12 @@ change (code, migrations, behavior, or project documentation):
 3. Show a short summary and ask: **“Should I build this?”**
 4. Wait for explicit go-ahead before editing code, migrations, or project docs.
 
+For any user-facing data model (tariffs, GPS coords, preferences), the plan must state
+**who owns the data** (user-owned vs app-owned) and **where it lives** (Postgres vs
+localStorage) and get those two choices confirmed before building — per-user
+preference data defaults to client-side storage. Past rework: app-owned provider
+tariffs and DB-stored GPS coords both had to be rebuilt the other way.
+
 Read-only investigation and review do not need a backlog entry, but must not change
 files. Once approved work ships, move its plan from `BACKLOG.md` to
 [CHANGELOG.md](CHANGELOG.md).
