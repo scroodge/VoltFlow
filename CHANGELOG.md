@@ -26,6 +26,16 @@ localizations. Added `min-w-0`, safe word wrapping, and overflow clipping while
 preserving the existing responsive grid. Targeted ESLint passed; the production
 build stalled in the environment after starting and was interrupted.
 
+### Dashboard Yuan UP vehicle image
+
+Moved the transparent `yuanup.png` asset to `public/images/cars/yuan-up.png` and
+rendered it between the selected car name and battery ring. Both current car
+generations map to this shared artwork until distinct 2024/2025 images are added.
+The targeted lint command is currently blocked by an existing `dashboard-view.tsx`
+`react-hooks/set-state-in-effect` error in the estimate-tariff effect.
+The image is intentionally compact at 132px wide by 48px high inside the left
+battery column, leaving the right-side stats untouched.
+
 ## 2026-07-12 — /insights follow-ups (workflow hardening)
 
 ### Data-ownership rule in the change gate

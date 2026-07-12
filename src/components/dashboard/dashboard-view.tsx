@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BatteryCharging, CarFront, Route } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
@@ -103,6 +104,11 @@ const CUSTOM_PROVIDER_OPTION: { value: ChargingProviderType; label: string } = {
   value: "custom",
   label: PROVIDER_LABELS.custom,
 };
+
+const CAR_IMAGE_BY_GENERATION = {
+  gen1_2024: "/images/cars/yuan-up.png",
+  gen2_2025: "/images/cars/yuan-up.png",
+} as const;
 
 function defaultEstimatePowerKw(type: ChargingTariffType, homePowerKw?: number | null) {
   if (type === "fast_dc") return 65;
@@ -639,6 +645,9 @@ export function DashboardView() {
 
   const selectedCar =
     cars?.find((c) => c.id === selectedCarId) ?? cars?.[0] ?? null;
+  const selectedCarImage = selectedCar
+    ? CAR_IMAGE_BY_GENERATION[selectedCar.model_generation]
+    : null;
   const scopedVehicleId = selectedCar?.vehicle_alias ?? null;
 
   const baseBydmateSnapshot = useMemo(
@@ -1098,6 +1107,20 @@ export function DashboardView() {
 
             <div className="mt-3 grid grid-cols-[132px_minmax(0,1fr)] items-center gap-4">
               <div className="relative pb-4">
+                {selectedCarImage ? (
+                  <div className="-mt-12 mb-12 flex h-12 w-[132px] items-center justify-center overflow-hidden">
+                    <Image
+                      src={selectedCarImage}
+                      alt=""
+                      aria-hidden="true"
+                      width={2000}
+                      height={780}
+                      sizes="132px"
+                      className="h-full w-full object-contain"
+                      priority
+                    />
+                  </div>
+                ) : null}
                 <BatteryRing
                   percent={currentPercent}
                   status={loadingSessions ? (t("dashboard.syncing") as string) : statusLabel}
