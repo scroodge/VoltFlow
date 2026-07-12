@@ -547,7 +547,7 @@ function DashboardLoadingSkeleton() {
           </div>
           <Skeleton className="h-7 w-16 rounded-full" />
         </div>
-        <div className="mt-3 grid grid-cols-[132px_minmax(0,1fr)] items-center gap-4">
+        <div className="mt-3 grid grid-cols-[116px_minmax(0,1fr)] items-center gap-3">
           <Skeleton className="aspect-square max-w-[132px] rounded-full" />
           <div className="space-y-3">
             <Skeleton className="h-10 w-full rounded-xl" />
@@ -1105,10 +1105,10 @@ export function DashboardView() {
               </div>
             </div>
 
-            <div className="mt-3 grid grid-cols-[132px_minmax(0,1fr)] items-center gap-4">
+        <div className="mt-3 grid grid-cols-[116px_minmax(0,1fr)] items-center gap-3">
               <div className="relative pb-4">
                 {selectedCarImage ? (
-                  <div className="-mt-12 mb-12 flex h-12 w-[132px] items-center justify-center overflow-hidden">
+                  <div className="-mt-8 mb-8 flex h-12 w-[116px] items-center justify-center overflow-hidden">
                     <Image
                       src={selectedCarImage}
                       alt=""
