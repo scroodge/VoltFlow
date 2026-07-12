@@ -9,6 +9,23 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-07-12 — UI localization and responsive fixes
+
+### Russian bottom-navigation label overflow
+
+Updated `src/components/layout/BottomNavigation.tsx` so every bottom-navigation
+item can shrink within the five-column grid and its localized label wraps inside a
+consistent, centered line box. This keeps `База знаний` readable on narrow screens
+without shortening the Russian translation.
+
+### Analytics summary cards — narrow-screen overflow fix
+
+Updated `src/components/vehicle/telemetry-analytics-charts.tsx` so analytics
+summary card values and units wrap within the card at narrow widths and longer
+localizations. Added `min-w-0`, safe word wrapping, and overflow clipping while
+preserving the existing responsive grid. Targeted ESLint passed; the production
+build stalled in the environment after starting and was interrupted.
+
 ## 2026-07-12 — /insights follow-ups (workflow hardening)
 
 ### Data-ownership rule in the change gate

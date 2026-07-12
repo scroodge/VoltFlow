@@ -25,3 +25,11 @@ repeated, low-value preamble turns (hit "denial #13" in one session) for
 files where the answer is obviously "none/none/none." Consider scoping the
 gate to source code under `src/`/`supabase/` rather than docs/memory/config,
 or caching "already answered for this file" across compaction boundaries.
+
+## 2026-07-12 — Codex
+
+Running `npx eslint ... && npm run build` → ESLint completed, but `next build`
+stalled after “Creating an optimized production build ...” with no further output
+for several minutes; process inspection was blocked by the environment (`ps`
+operation not permitted / `pgrep` could not get the process list). The run was
+interrupted after the source change had already linted successfully.

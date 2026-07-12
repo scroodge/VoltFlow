@@ -126,17 +126,17 @@ export function AnalyticsSummaryStats({
           <div
             key={item.id}
             className={cn(
-              "flex min-h-[4.75rem] min-w-0 flex-col justify-between rounded-2xl border p-3",
+              "flex min-h-[4.75rem] min-w-0 flex-col justify-between overflow-hidden rounded-2xl border p-3",
               item.accent
                 ? "border-primary/20 bg-primary/[0.06]"
                 : "border-border bg-white/[0.02]",
             )}
           >
             <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">{tx(item.labelKey)}</p>
-            <p className="mt-2 font-heading text-xl font-bold leading-none tabular-nums tracking-tight">
-              <span className="text-foreground">{item.value}</span>
+            <p className="mt-2 flex min-w-0 flex-wrap items-baseline gap-x-1 gap-y-0.5 font-heading text-xl font-bold leading-none tabular-nums tracking-tight">
+              <span className="min-w-0 break-words text-foreground">{item.value}</span>
               {item.unit ? (
-                <span className="ml-1 text-[11px] font-semibold text-muted-foreground">{item.unit}</span>
+                <span className="min-w-0 break-words text-[11px] font-semibold text-muted-foreground">{item.unit}</span>
               ) : null}
             </p>
           </div>

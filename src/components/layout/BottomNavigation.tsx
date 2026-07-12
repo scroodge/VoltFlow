@@ -39,7 +39,7 @@ export function BottomNavigation() {
               key={href}
               href={linkHref}
               className={cn(
-                "relative flex min-h-[52px] flex-col items-center justify-center rounded-2xl text-[11px] font-semibold transition-colors",
+                "relative flex min-h-[52px] min-w-0 flex-col items-center justify-center rounded-2xl px-0.5 text-[11px] font-semibold transition-colors",
                 active
                   ? "bg-white/[0.06] text-[var(--voltflow-green)]"
                   : "text-muted-foreground hover:text-foreground",
@@ -52,7 +52,12 @@ export function BottomNavigation() {
               ) : (
                 <Icon className="mb-1 size-5 shrink-0" aria-hidden />
               )}
-              <span className={showElevated ? "mt-2" : ""}>
+              <span
+                className={cn(
+                  "flex min-h-[2em] max-w-full items-center justify-center break-words text-center leading-tight",
+                  showElevated && "mt-2",
+                )}
+              >
                 {t(label) || fallback}
               </span>
             </Link>
