@@ -12,3 +12,16 @@ appears to match on tool name only, not parameters. Also, the stale assertion
 in `src/lib/bydmate/hero-drive-metrics.test.mjs` (`formatKmPerPercent` unit
 string) made `npm test` baselines noisy until fixed; when a formatter's unit
 moves into the UI label, update its test in the same change.
+
+## 2026-07-12 — Claude Sonnet 5
+
+GateGuard's fact-forcing pre-hook demands a fresh 4-fact preamble (importers,
+API surface, data schema, verbatim instruction) before literally every first
+Bash/Edit/Write call *per file* in a session — including trivial files
+(memory notes, i18n string additions, a one-line CHANGELOG entry) and even
+re-fires mid-multi-file-edit after context compaction resets its "seen this
+file" tracking. Over a long multi-file session this adds a large number of
+repeated, low-value preamble turns (hit "denial #13" in one session) for
+files where the answer is obviously "none/none/none." Consider scoping the
+gate to source code under `src/`/`supabase/` rather than docs/memory/config,
+or caching "already answered for this file" across compaction boundaries.

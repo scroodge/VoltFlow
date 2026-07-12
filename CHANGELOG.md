@@ -30,9 +30,10 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
   the `profiles` tariff columns' DB default from the old guessed `0.12` to a
   neutral `1` — an obvious placeholder rather than a number that quietly implied
   real, currency-calibrated accuracy. `ALTER COLUMN ... SET DEFAULT` only; no
-  data rewrite, existing users' values untouched. **Not yet applied** — local
-  Supabase wasn't running this session; apply via `npm run db:migrations:up`
-  locally or the prod `psql -f` recipe per `AGENTS.md`.
+  data rewrite, existing users' values untouched. **Applied to self-hosted
+  prod 2026-07-12** via `psql` (local Supabase/Docker wasn't running this
+  session, so applied directly against the pooler per the recipe in
+  `docs/OPS_LOCAL.md`); verified all 4 column defaults now read `1`.
 - Verification: `npx tsc --noEmit` clean, `npm run test` 108/108, targeted ESLint
   clean on touched files (pre-existing unrelated issues in `settings-view.tsx`
   untouched by this diff), `npm run build` passes.

@@ -1,9 +1,6 @@
 // Donation / premium support configuration. Level-1 flow: users pay via one of
 // the channels below, then send a receipt (screenshot/PDF) to the Telegram bot
 // or email; an admin then grants premium in /admin/users.
-//
-// ⚠️ FILL THESE IN before shipping — the card numbers and bot link are
-// placeholders. Everything else (buymeacoffee, email) is live.
 
 export type SupportCard = {
   /** Card number, shown verbatim and copyable. */
@@ -12,11 +9,18 @@ export type SupportCard = {
   bank: string;
 };
 
-/** Bank cards for transfers (primarily RU/BY users). TODO: real numbers. */
+/**
+ * Bank cards for transfers (primarily RU/BY users). Card numbers come from
+ * env vars (not secret — meant to be shown publicly for incoming transfers —
+ * but keeping them out of source means rotating a card doesn't need a code
+ * deploy). Set NEXT_PUBLIC_SUPPORT_CARD_BY / NEXT_PUBLIC_SUPPORT_CARD_RU in
+ * Vercel project settings. A card is omitted from the list if its env var
+ * isn't set.
+ */
 export const SUPPORT_CARDS: readonly SupportCard[] = [
-  { number: "XXXX XXXX XXXX XXXX", bank: "БАНК" },
-  { number: "XXXX XXXX XXXX XXXX", bank: "БАНК" },
-];
+  { number: process.env.NEXT_PUBLIC_SUPPORT_CARD_BY ?? "", bank: "BSB Bank  Беларусь" },
+  { number: process.env.NEXT_PUBLIC_SUPPORT_CARD_RU ?? "", bank: "Т-Банк, РФ" },
+].filter((card) => card.number !== "");
 
 /** International tip jar. */
 export const SUPPORT_BUYMEACOFFEE_URL = "https://buymeacoffee.com/scroodge";
