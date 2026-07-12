@@ -12,6 +12,7 @@ import {
   ChargingStatsGrid,
   type ChargingStat,
 } from "@/components/charging/ChargingStatsGrid";
+import { CurrencyAmount } from "@/components/currency-amount";
 import {
   useChargingDevLiveOverride,
   useChargingDevSource,
@@ -408,35 +409,37 @@ export function ChargingSessionScreen({
       ? String(session.price_per_kwh > 0 ? session.price_per_kwh : defaultPricePerKwh)
       : priceDraft;
   const displayCurrentCost =
-    effectivePricePerKwh > 0
-      ? formatCurrencyAmount(
-          currency,
-          costFromGridEnergy(derived.chargedEnergyKwh, effectivePricePerKwh),
-          locale,
-        )
-      : "—";
+    effectivePricePerKwh > 0 ? (
+      <CurrencyAmount
+        currency={currency}
+        value={costFromGridEnergy(derived.chargedEnergyKwh, effectivePricePerKwh)}
+        locale={locale}
+      />
+    ) : (
+      "—"
+    );
   const displayCostAtFull =
-    effectivePricePerKwh > 0
-      ? formatCurrencyAmount(
-          currency,
-          costFromGridEnergy(
-            energyFromGridKwh(
-              energyNeededKwh(
-                session.battery_capacity_kwh,
-                session.start_percent,
-                100,
-              ),
-              session.efficiency_percent,
-            ),
-            effectivePricePerKwh,
+    effectivePricePerKwh > 0 ? (
+      <CurrencyAmount
+        currency={currency}
+        value={costFromGridEnergy(
+          energyFromGridKwh(
+            energyNeededKwh(session.battery_capacity_kwh, session.start_percent, 100),
+            session.efficiency_percent,
           ),
-          locale,
-        )
-      : "—";
+          effectivePricePerKwh,
+        )}
+        locale={locale}
+      />
+    ) : (
+      "—"
+    );
   const displayFinalCost =
-    session.estimated_cost > 0
-      ? formatCurrencyAmount(currency, session.estimated_cost, locale)
-      : "—";
+    session.estimated_cost > 0 ? (
+      <CurrencyAmount currency={currency} value={session.estimated_cost} locale={locale} />
+    ) : (
+      "—"
+    );
 
   const chargeParams = toParams(session);
   const startedAtMs = session.started_at ? Date.parse(session.started_at) : null;

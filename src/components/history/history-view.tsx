@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -8,6 +9,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { BrandBadge } from "@/components/brand/BrandBadge";
 import { LogoFull } from "@/components/brand/LogoFull";
+import { CurrencyAmount } from "@/components/currency-amount";
 import {
   localCalendarDate,
   parseAnalyticsRange,
@@ -23,7 +25,7 @@ import { useLatestBydmateTripsQuery, useBydmateTripsQuery, useTripMonthDatesQuer
 import { useTranslation } from "@/hooks/use-translation";
 import { HistoryDaySummaryCard } from "@/components/history/history-day-summary-card";
 import { computeHistoryDaySummary } from "@/lib/history-day-summary";
-import { formatCurrencyAmount, type Currency, type Locale, type TranslationKey } from "@/lib/i18n";
+import { type Currency, type Locale, type TranslationKey } from "@/lib/i18n";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import type { BydmateTripRow, ChargingSessionRow } from "@/types/database";
 
@@ -348,7 +350,7 @@ function MiniCalendar({
 
 // ─── Shared stat components ───────────────────────────────────────────────────
 
-function CompactStatRow({ label, value }: { label: string; value: string }) {
+function CompactStatRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-2 px-2.5 py-1.5">
       <dt className="min-w-0 truncate text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
@@ -411,7 +413,7 @@ function SessionStatsBlock({
       {session.price_per_kwh > 0 ? (
         <CompactStatRow
           label={tx("history.cost")}
-          value={formatCurrencyAmount(currency, session.estimated_cost, locale)}
+          value={<CurrencyAmount currency={currency} value={session.estimated_cost} locale={locale} />}
         />
       ) : null}
       <CompactStatRow label="Tariff" value={tariffLabel} />

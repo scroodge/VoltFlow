@@ -12,6 +12,7 @@ import { startChargingSession, stopChargingSession } from "@/actions/sessions";
 import { BrandBadge } from "@/components/brand/BrandBadge";
 import { ChargingBolt } from "@/components/brand/ChargingBolt";
 import { LogoFull } from "@/components/brand/LogoFull";
+import { CurrencyAmount, currencyTextWithIcon } from "@/components/currency-amount";
 import {
   useDashboardDevSnapshot,
   useDashboardDevSnapshotOverride,
@@ -408,9 +409,11 @@ function ParkChargeEstimatePanel({
   const durationText = parkEstimate
     ? formatDuration(Math.round(parkEstimate.durationSeconds))
     : "—";
-  const costText = parkEstimate
-    ? formatCurrencyAmount(currency, parkEstimate.cost, locale)
-    : "—";
+  const costText: ReactNode = parkEstimate ? (
+    <CurrencyAmount currency={currency} value={parkEstimate.cost} locale={locale} />
+  ) : (
+    "—"
+  );
   const detailText = parkEstimate
     ? `${t("dashboard.estimateDetailCompact", {
         energy: fmt(parkEstimate.gridEnergyKwh, 1),
@@ -1440,7 +1443,10 @@ export function DashboardView() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="energy-price">
-                {t("dashboard.price", { currency: currencySymbols[currency] })}
+                {currencyTextWithIcon(
+                  t("dashboard.price", { currency: currencySymbols[currency] }) as string,
+                  currency,
+                )}
               </Label>
               <Input
                 id="energy-price"

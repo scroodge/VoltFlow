@@ -9,6 +9,59 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-07-11 (continued)
+
+### Show the new Belarusian ruble (BYN) graphic symbol in place of "Br"
+
+- The National Bank of Belarus approved a new graphic symbol for BYN on
+  2026-01-27 (a stylized Cyrillic "Б"), but it has no Unicode codepoint yet
+  (submitted for encoding 2026-04-13) — so it can't be typed as text. Added it
+  as an inline SVG icon instead: `public/byn-symbol.svg` (source asset) and
+  `<BynSymbol>` (`src/components/brand/BynSymbol.tsx`), rendered with
+  `fill="currentColor"` so it adapts to text color/theme like the surrounding
+  text.
+- New `formatCurrencyParts` (`src/lib/i18n.ts`) exposes `Intl.NumberFormat`'s
+  parts array instead of a joined string, so the currency-symbol part can be
+  swapped for the icon while every other currency (EUR/USD/RUB) and all
+  locale-specific positioning/grouping/decimal rules stay byte-identical to
+  before. `formatCurrencyAmount` now delegates to it — unchanged output for
+  every existing string-based caller.
+- New `<CurrencyAmount currency value locale />` (`src/components/currency-amount.tsx`)
+  renders those parts, using `<BynSymbol>` for the BYN currency part. Wired
+  into every on-screen money-amount display that was previously a JSX child of
+  `formatCurrencyAmount`: Day summary cost, session costs (live, history,
+  charging screen), service records/stats, and the dashboard park-cost
+  estimate. Several shared stat-row components (`HeroMetric`, `MiniStat`,
+  `CompactStat`, `CompactStatRow`, `ChargingStat.value`) had their `value`
+  prop widened from `string` to `ReactNode` to accept it — backward compatible
+  since a string is already a valid `ReactNode`.
+- **Deliberately left as plain text** (architecturally can't render an icon):
+  chart axis unit label (`vehicle-analytics-panels.tsx`), and every
+  `t(..., { cost/price: formatCurrencyAmount(...) })` translation
+  interpolation (`dashboard.chargingProgress`, `dashboard.estimateDetailCompact`)
+  — translation strings only accept string substitutions.
+- **Follow-up, same day:** the Settings currency picker and tariff/price labels
+  are now also converted. Checked Base UI's actual `SelectValue` type
+  definitions (`node_modules/@base-ui/react/select/value/SelectValue.d.ts`)
+  instead of guessing — it accepts a `children: (value) => ReactNode`
+  render-prop, so the closed-trigger display (not just the open dropdown) can
+  render the icon too. New `currencyTextWithIcon(text, currency)`
+  (`src/components/currency-amount.tsx`) finds the plain-text symbol inside an
+  already-translated string (e.g. "Home tariff (Br/kWh)") and swaps just that
+  substring for `<BynSymbol>` — reused for the picker's `SelectItem`/`SelectValue`
+  and the 3 settings tariff labels + dashboard price label, with no changes to
+  `translate()` itself. The one remaining plain-text spot,
+  `settings-view.tsx`'s location-override price `<Input placeholder>`, stays
+  text — an HTML attribute can't hold rich content.
+  Verification: `tsc --noEmit` clean, `npm run test` 108/108, targeted ESLint
+  clean on touched files, `npm run build` passes.
+- Verification: `npx tsc --noEmit` clean, `npm run test` 108/108, targeted
+  ESLint clean on all touched files (pre-existing unrelated warnings/errors in
+  `vehicle-live-view.tsx`/`history-view.tsx` untouched by this diff), `npm run
+  build` passes.
+
+---
+
 ## 2026-07-11
 
 ### Estimate cost for no-charge driving days (session walk-back)

@@ -26,6 +26,7 @@ import {
 
 import { BrandBadge } from "@/components/brand/BrandBadge";
 import { LogoFull } from "@/components/brand/LogoFull";
+import { CurrencyAmount } from "@/components/currency-amount";
 import { useVehicleDevSnapshotOverride } from "@/components/dev/vehicle-dev-snapshot-context";
 import { VehicleAnalyticsTeaser } from "@/components/vehicle/vehicle-analytics-teaser";
 import { VehicleControlPanel } from "@/components/vehicle/vehicle-control-panel";
@@ -75,7 +76,6 @@ import {
   resolvePreferredTripDistanceKm,
   trackPathDistanceKm,
 } from "@/lib/bydmate/trip-distance";
-import { formatCurrencyAmount } from "@/lib/i18n";
 import type { Currency, Locale, TranslationKey } from "@/lib/i18n";
 import {
   deriveDashboardVehicleMode,
@@ -109,7 +109,8 @@ function fmtTemp(value: number | null | undefined, digits = 1) {
   return `${value.toFixed(digits)} °C`;
 }
 
-function isMissingMetricValue(value: string) {
+function isMissingMetricValue(value: ReactNode) {
+  if (typeof value !== "string") return false;
   return value === "—" || value.includes("—%") || /^—\s/.test(value);
 }
 
@@ -688,7 +689,7 @@ function HeroMetric({
 }: {
   icon: typeof Gauge;
   label: string;
-  value: string;
+  value: ReactNode;
 }) {
   return (
     <div className="rounded-xl border border-border bg-white/[0.03] p-2.5">
@@ -724,7 +725,7 @@ function ChargingModeCard({
     return {
       timeLeftLabel: secsLeft != null && secsLeft > 0 ? formatDuration(secsLeft * 1000) : null,
       deliveredLabel: `${deliveredKwh.toFixed(2)} kWh`,
-      fullCostLabel: formatCurrencyAmount(currency, fullCost, locale),
+      fullCostLabel: <CurrencyAmount currency={currency} value={fullCost} locale={locale} />,
     };
   }, [session, telemetry.soc, currency, locale]);
   const items = [
@@ -1266,7 +1267,7 @@ function formatTripCostStr(
   currency: Currency,
   pricePerKwh: number,
   locale: Locale,
-): string | null {
+): ReactNode | null {
   const distanceKm = trip.distance_km;
   const energyKwh =
     typeof trip.traction_energy_kwh === "number" && Number.isFinite(trip.traction_energy_kwh)
@@ -1277,12 +1278,15 @@ function formatTripCostStr(
   const costValue =
     energyKwh != null && pricePerKwh > 0 ? energyKwh * pricePerKwh : null;
 
-  return costValue != null
-    ? formatCurrencyAmount(currency, costValue, locale, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })
-    : null;
+  return costValue != null ? (
+    <CurrencyAmount
+      currency={currency}
+      value={costValue}
+      locale={locale}
+      minimumFractionDigits={2}
+      maximumFractionDigits={2}
+    />
+  ) : null;
 }
 
 function ExpandedTripPanel({
@@ -1581,7 +1585,7 @@ function SummaryPill({ label, value }: { label: string; value: string }) {
   );
 }
 
-function MiniStat({ label, value }: { label: string; value: string }) {
+function MiniStat({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div>
       <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>

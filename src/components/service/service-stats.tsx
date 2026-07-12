@@ -3,9 +3,9 @@
 import { useMemo } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CurrencyAmount } from "@/components/currency-amount";
 import { useTranslation } from "@/hooks/use-translation";
 import { useUserServiceCategoriesQuery } from "@/hooks/use-service-categories";
-import { formatCurrencyAmount } from "@/lib/i18n";
 import type { Currency, Locale, TranslationKey } from "@/lib/i18n";
 import {
   BUILT_IN_SERVICE_CATEGORIES,
@@ -89,7 +89,7 @@ export function ServiceStats({
               {t("service.stats.totalSpent") as string}
             </p>
             <p className="mt-1 text-lg font-bold text-[var(--voltflow-green)]">
-              {formatCurrencyAmount(currency, totalSpent, locale)}
+              <CurrencyAmount currency={currency} value={totalSpent} locale={locale} />
             </p>
           </CardContent>
         </Card>
@@ -99,7 +99,7 @@ export function ServiceStats({
               {t("service.stats.thisYear") as string}
             </p>
             <p className="mt-1 text-lg font-bold">
-              {formatCurrencyAmount(currency, thisYear, locale)}
+              <CurrencyAmount currency={currency} value={thisYear} locale={locale} />
             </p>
           </CardContent>
         </Card>
@@ -109,7 +109,7 @@ export function ServiceStats({
               {t("service.stats.avgCost") as string}
             </p>
             <p className="mt-1 text-lg font-bold">
-              {formatCurrencyAmount(currency, avgCost, locale)}
+              <CurrencyAmount currency={currency} value={avgCost} locale={locale} />
             </p>
           </CardContent>
         </Card>
@@ -135,7 +135,7 @@ export function ServiceStats({
                   <span className="text-muted-foreground">
                     {t("service.stats.count", { count })}
                     {" · "}
-                    {formatCurrencyAmount(currency, total, locale)}
+                    <CurrencyAmount currency={currency} value={total} locale={locale} />
                   </span>
                 </div>
                 <div className="h-2 rounded-full bg-white/[0.06]">

@@ -28,6 +28,7 @@ import { deleteAccount } from "@/actions/account";
 import { sendTestPush } from "@/actions/push";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { LegalSettingsRow } from "@/components/legal/legal-document-view";
+import { currencyTextWithIcon } from "@/components/currency-amount";
 import { FreeRetentionNotice } from "@/components/premium/free-retention-notice";
 import { ClusterBackgroundsSettings } from "@/components/settings/cluster-backgrounds-settings";
 import { SettingsGroup, SettingsGroupDivider, SettingsPageHeader } from "@/components/settings/settings-section";
@@ -1407,12 +1408,16 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                   id="pref-currency"
                   className="h-11 w-full rounded-2xl text-sm"
                 >
-                  <SelectValue />
+                  <SelectValue>
+                    {(value: Currency | null) =>
+                      value ? currencyTextWithIcon(currencyLabels[value], value) : null
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {currencies.map((item) => (
                     <SelectItem key={item} value={item}>
-                      {currencyLabels[item]}
+                      {currencyTextWithIcon(currencyLabels[item], item)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1424,7 +1429,10 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
 
             <div className="space-y-2">
               <Label htmlFor="pref-price-home">
-                {t("settings.locationTariffs.homeTariff", { currency: currencySymbols[currency] })}
+                {currencyTextWithIcon(
+                  t("settings.locationTariffs.homeTariff", { currency: currencySymbols[currency] }) as string,
+                  currency,
+                )}
               </Label>
               <Input
                 key={homePricePerKwh}
@@ -1442,7 +1450,10 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="pref-price-ac">
-                {t("settings.locationTariffs.acTariff", { currency: currencySymbols[currency] })}
+                {currencyTextWithIcon(
+                  t("settings.locationTariffs.acTariff", { currency: currencySymbols[currency] }) as string,
+                  currency,
+                )}
               </Label>
               <Input
                 key={commercialAcPricePerKwh}
@@ -1460,7 +1471,10 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="pref-price-dc">
-                {t("settings.locationTariffs.dcTariff", { currency: currencySymbols[currency] })}
+                {currencyTextWithIcon(
+                  t("settings.locationTariffs.dcTariff", { currency: currencySymbols[currency] }) as string,
+                  currency,
+                )}
               </Label>
               <Input
                 key={fastDcPricePerKwh}

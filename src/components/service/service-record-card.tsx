@@ -11,9 +11,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { CurrencyAmount } from "@/components/currency-amount";
 import { useTranslation } from "@/hooks/use-translation";
 import { useUserServiceCategoriesQuery } from "@/hooks/use-service-categories";
-import { formatCurrencyAmount } from "@/lib/i18n";
 import type { Currency, Locale, TranslationKey } from "@/lib/i18n";
 import {
   BUILT_IN_SERVICE_CATEGORIES,
@@ -106,7 +106,7 @@ export function ServiceRecordCard({
             <div>
               <span className="text-muted-foreground">{t("service.form.partsCost") as string}</span>
               <p className="font-semibold">
-                {formatCurrencyAmount(currency, record.parts_cost, locale)}
+                <CurrencyAmount currency={currency} value={record.parts_cost} locale={locale} />
               </p>
             </div>
           )}
@@ -114,14 +114,14 @@ export function ServiceRecordCard({
             <div>
               <span className="text-muted-foreground">{t("service.form.laborCost") as string}</span>
               <p className="font-semibold">
-                {formatCurrencyAmount(currency, record.labor_cost, locale)}
+                <CurrencyAmount currency={currency} value={record.labor_cost} locale={locale} />
               </p>
             </div>
           )}
           <div>
             <span className="text-muted-foreground">{t("service.form.totalCost") as string}</span>
             <p className="font-semibold text-[var(--voltflow-green)]">
-              {formatCurrencyAmount(currency, total, locale)}
+              <CurrencyAmount currency={currency} value={total} locale={locale} />
             </p>
           </div>
         </div>

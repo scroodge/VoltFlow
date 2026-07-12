@@ -42,12 +42,16 @@ export const currencyLabels: Record<Currency, string> = {
 export const isCurrency = (value: string): value is Currency =>
   currencies.includes(value as Currency);
 
-export function formatCurrencyAmount(
+/** Locale-correct currency parts (sign, digits, grouping, and the currency
+ * symbol/code as its own part) — lets callers render the currency part as a
+ * custom icon (see `<CurrencyAmount>`) while everything else stays exactly
+ * what `Intl.NumberFormat` would have produced. */
+export function formatCurrencyParts(
   currency: Currency,
   value: number,
   locale: Locale,
   options?: { minimumFractionDigits?: number; maximumFractionDigits?: number },
-) {
+): Intl.NumberFormatPart[] {
   const localeCode = locale === "be" ? "be-BY" : locale === "ru" ? "ru-RU" : "en-US";
   const minimumFractionDigits = options?.minimumFractionDigits ?? 2;
   const maximumFractionDigits = options?.maximumFractionDigits ?? 2;
@@ -57,7 +61,18 @@ export function formatCurrencyAmount(
     currency,
     minimumFractionDigits,
     maximumFractionDigits,
-  }).format(value);
+  }).formatToParts(value);
+}
+
+export function formatCurrencyAmount(
+  currency: Currency,
+  value: number,
+  locale: Locale,
+  options?: { minimumFractionDigits?: number; maximumFractionDigits?: number },
+) {
+  return formatCurrencyParts(currency, value, locale, options)
+    .map((part) => part.value)
+    .join("");
 }
 
 export const dictionaries = {

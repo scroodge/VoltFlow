@@ -1,9 +1,12 @@
 "use client";
 
+import type { ReactNode } from "react";
+
+import { CurrencyAmount } from "@/components/currency-amount";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDuration } from "@/lib/charging-math";
 import type { HistoryDaySummary, HistorySummaryScope } from "@/lib/history-day-summary";
-import { formatCurrencyAmount, type Currency, type Locale, type TranslationKey } from "@/lib/i18n";
+import { type Currency, type Locale, type TranslationKey } from "@/lib/i18n";
 import { useTranslation } from "@/hooks/use-translation";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import { cn } from "@/lib/utils";
@@ -22,7 +25,7 @@ function fmt(value: number, digits = 1) {
   return value.toFixed(digits);
 }
 
-function CompactStat({ label, value }: { label: string; value: string }) {
+function CompactStat({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="min-w-0 px-2 py-2 text-center">
       <p className="truncate text-[9px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
@@ -155,11 +158,16 @@ export function HistoryDaySummaryCard({
       ? summary.driveKwh * (estimatedNoChargePricePerKwh ?? (defaultPricePerKwh > 0 ? defaultPricePerKwh : 0))
       : null;
   const showEstimatedCost = totalCost == null && noChargeEstimatedCost != null && noChargeEstimatedCost > 0;
-  const costValue = totalCost != null
-    ? formatCurrencyAmount(currency, totalCost, locale)
-    : showEstimatedCost
-      ? `≈${formatCurrencyAmount(currency, noChargeEstimatedCost, locale)}`
-      : "—";
+  const costValue: ReactNode =
+    totalCost != null ? (
+      <CurrencyAmount currency={currency} value={totalCost} locale={locale} />
+    ) : showEstimatedCost ? (
+      <>
+        ≈<CurrencyAmount currency={currency} value={noChargeEstimatedCost} locale={locale} />
+      </>
+    ) : (
+      "—"
+    );
   const durationValue =
     summary.chargingDurationSec > 0 ? formatDuration(summary.chargingDurationSec) : "—";
   const distanceValue = summary.hasTrips ? `${fmt(summary.distanceKm, 0)} km` : "—";

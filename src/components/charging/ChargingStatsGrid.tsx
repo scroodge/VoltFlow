@@ -1,8 +1,10 @@
+import type { ReactNode } from "react";
+
 import { cn } from "@/lib/utils";
 
 export type ChargingStat = {
   label: string;
-  value: string;
+  value: ReactNode;
   accent?: "green" | "cyan" | "blue";
 };
 
