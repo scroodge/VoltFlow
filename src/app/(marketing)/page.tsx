@@ -1,6 +1,6 @@
 "use client";
 
-import { Gauge, LocateFixed, Send, Smartphone, Zap } from "lucide-react";
+import { BookOpen, Gauge, LocateFixed, Send, Smartphone, Zap } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -202,6 +202,33 @@ export default function LandingPage() {
                     <Send className="size-4" aria-hidden />
                     {t("landing.telegramAction")}
                   </a>
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 voltflow-card p-4">
+            <div className="flex gap-3">
+              <div className="grid size-10 shrink-0 place-items-center rounded-2xl border border-border bg-white/[0.04] text-[var(--voltflow-green)]">
+                <BookOpen className="size-5" aria-hidden />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-heading text-base font-bold">
+                  {t("landing.knowledgeTitle")}
+                </p>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  {t("landing.knowledgeBody")}
+                </p>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="mt-3 h-11 w-full rounded-full border-border bg-white/[0.03] font-heading text-sm font-bold"
+                  asChild
+                >
+                  <Link href="/knowledge">
+                    <BookOpen className="size-4" aria-hidden />
+                    {t("landing.knowledgeAction")}
+                  </Link>
                 </Button>
               </div>
             </div>

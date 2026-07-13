@@ -42,6 +42,33 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
   fallback, and the discharged-idle guard), `npm run test` 108/108, `npx tsc --noEmit`
   clean, targeted ESLint clean, `npm run build` passes.
 
+### Public, no-login access to the knowledge base
+
+- `/telegram` (+ `/telegram/category/[slug]`, `/telegram/article/[slug]`) was already a
+  fully public, unauthenticated route with SEO metadata and a static-data fallback —
+  built for the Telegram Mini App but works for any browser. `/knowledge`
+  (`src/app/(app)/knowledge/page.tsx`) sat inside the authenticated `(app)` shell
+  (`MobileShell`, bottom nav, onboarding banners) with no SEO metadata and no subpages
+  of its own.
+- `KnowledgePage` now checks for a session server-side via `getCurrentUser()`
+  (`src/lib/supabase/knowledge.ts`) and `redirect("/telegram")`s anonymous visitors
+  before fetching knowledge data; logged-in users see the unchanged in-app experience.
+  No data-model change — knowledge content is app-owned, curated in
+  `src/app/admin/knowledge/`.
+- The redirect alone left the feature undiscoverable: the marketing landing page
+  (`src/app/(marketing)/page.tsx`) had no link to it. Added a "BYD knowledge base"
+  card (new `landing.knowledgeTitle/knowledgeBody/knowledgeAction` keys in
+  `src/lib/i18n.ts`, all three locales) linking to `/knowledge`, right below the
+  existing Telegram card in the hero section.
+- **Root-cause correction:** the redirect in `KnowledgePage` never ran for anonymous
+  visitors — this app uses Next.js 16's renamed `middleware.ts` → `src/proxy.ts`, whose
+  edge-level `PUBLIC_PATHS` gate already listed `/telegram` and `/knowledge/search` but
+  not `/knowledge` itself, so unauthenticated requests were bounced to
+  `/login?next=/knowledge` before the page component ever loaded. Added `/knowledge` to
+  `PUBLIC_PATHS` in `src/proxy.ts`; the page-level redirect to `/telegram` now actually
+  executes for anonymous visitors.
+- Verification: `npx tsc --noEmit` clean, targeted ESLint clean on all touched files.
+
 ### Per-tariff charging efficiency (AC ≈98%, fast DC ≈90%)
 
 - **Why.** SOC-derived energy is *battery-side*; providers meter *grid-side*. The old

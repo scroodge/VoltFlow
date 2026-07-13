@@ -144,6 +144,10 @@ export const dictionaries = {
       telegramBody:
         "Open VoltFlow right inside Telegram — no install needed. Track charging and browse the BYD knowledge base from the Mini App.",
       telegramAction: "Open in Telegram",
+      knowledgeTitle: "BYD knowledge base",
+      knowledgeBody:
+        "Charging guides, maintenance tips, and accessories for BYD Yuan UP owners — no account needed.",
+      knowledgeAction: "Browse knowledge base",
       liveCockpit: "Live cockpit",
       demoCar: "BYD Yuan UP",
       statusCharging: "Charging",
@@ -1349,6 +1353,10 @@ export const dictionaries = {
       telegramBody:
         "Адкрыйце VoltFlow прама ў Telegram — без усталёўкі. Сачыце за зарадкай і глядзіце базу ведаў BYD у Mini App.",
       telegramAction: "Адкрыць у Telegram",
+      knowledgeTitle: "База ведаў BYD",
+      knowledgeBody:
+        "Інструкцыі па зарадцы, абслугоўванні і аксэсуарах для ўладальнікаў BYD Yuan UP — без рэгістрацыі.",
+      knowledgeAction: "Адкрыць базу ведаў",
       liveCockpit: "Жывая кабіна",
       demoCar: "BYD Yuan UP",
       statusCharging: "Зарадка",
@@ -2556,6 +2564,10 @@ export const dictionaries = {
       telegramBody:
         "Откройте VoltFlow прямо в Telegram — без установки. Следите за зарядкой и смотрите базу знаний BYD в Mini App.",
       telegramAction: "Открыть в Telegram",
+      knowledgeTitle: "База знаний BYD",
+      knowledgeBody:
+        "Гайды по зарядке, обслуживанию и аксессуарам для владельцев BYD Yuan UP — без регистрации.",
+      knowledgeAction: "Открыть базу знаний",
       liveCockpit: "Живой кокпит",
       demoCar: "BYD Yuan UP",
       statusCharging: "Зарядка",

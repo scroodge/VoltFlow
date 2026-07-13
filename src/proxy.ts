@@ -10,6 +10,7 @@ const PUBLIC_PATHS = new Set([
   "/auth/callback/recovery",
   "/auth/confirm",
   "/telegram",
+  "/knowledge",
   "/knowledge/search",
 ]);
 const DEV_AUTH_PREFIXES = [
