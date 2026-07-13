@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
 import { costFromGridEnergy, deriveChargingState } from "@/lib/charging-math";
+import { efficiencyPercentForTariff } from "@/lib/charging-efficiency";
 import { mapChargingTariffLocation, mapUserProvider } from "@/lib/db-map";
 import { resolveStopProgressForSession } from "@/lib/charging-session-finalize";
 import {
@@ -130,7 +131,7 @@ export async function startChargingSession(input: z.infer<typeof startSchema>) {
       target_percent: targetPercent,
       battery_capacity_kwh: car.battery_capacity_kwh,
       charger_power_kw: chargerPowerKw,
-      efficiency_percent: car.default_efficiency_percent,
+      efficiency_percent: efficiencyPercentForTariff(car, tariff.tariffType),
       tariff_type: tariff.tariffType,
       provider_type: tariff.providerType,
       user_provider_id: tariff.userProviderId,

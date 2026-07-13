@@ -539,6 +539,9 @@ export const dictionaries = {
       efficiency: "AC efficiency",
       efficiencyHelp:
         "Grid-to-battery loss factor for cost math. Leave at the default unless you've measured your own.",
+      dcEfficiency: "Fast DC efficiency",
+      dcEfficiencyHelp:
+        "Fast DC loses more than AC — the charger meters before its own cable and cooling. Default 90%.",
       advanced: "Advanced",
       save: "Save vehicle",
       update: "Save changes",
@@ -1742,6 +1745,9 @@ export const dictionaries = {
       efficiency: "AC-эфектыўнасць",
       efficiencyHelp:
         "Каэфіцыент страт сетка-батарэя для разліку кошту. Пакіньце па змаўчанні, калі не вымяралі свой.",
+      dcEfficiency: "Эфектыўнасць хуткай DC",
+      dcEfficiencyHelp:
+        "На хуткай DC страт больш, чым на AC — зарадка лічыць да свайго кабеля і ахаладжэння. Па змаўчанні 90%.",
       advanced: "Дадаткова",
       save: "Захаваць аўто",
       update: "Захаваць змены",
@@ -2945,6 +2951,9 @@ export const dictionaries = {
       efficiency: "AC-эффективность",
       efficiencyHelp:
         "Коэффициент потерь сеть-батарея для расчёта стоимости. Оставьте по умолчанию, если не измеряли свой.",
+      dcEfficiency: "Эффективность быстрой DC",
+      dcEfficiencyHelp:
+        "На быстрой DC потерь больше, чем на AC — зарядка считает до своего кабеля и охлаждения. По умолчанию 90%.",
       advanced: "Дополнительно",
       save: "Сохранить авто",
       update: "Сохранить изменения",

@@ -37,7 +37,9 @@ export type Car = {
   model_generation: CarGeneration;
   battery_capacity_kwh: number;
   default_charger_power_kw: number;
+  /** AC efficiency — home and commercial. Fast DC uses fast_dc_efficiency_percent. */
   default_efficiency_percent: number;
+  fast_dc_efficiency_percent: number;
   home_charger_lat?: number | null;
   home_charger_lon?: number | null;
   home_charger_radius_m?: number | null;

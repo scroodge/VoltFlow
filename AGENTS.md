@@ -113,12 +113,13 @@ psql "$SUPABASE_POOLER_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/<file>.sql
 Priority: **fresh live SOC (≤90s) > in-session telemetry > wall-clock math**. Never persist math-only completion while live SOC is fresh.
 
 - **Auto-start** requires 4 consecutive charging samples within last 3 min, vehicle parked (`speed_kmh ≤ 5`), and not a 100% balance tail. Prefer `charge_power_kw` (never traction `power_kw`); the `is_charging` fallback is invalid when Di+ explicitly reports gun state `1` (unplugged).
+- **Parked telemetry is ~1 sample/minute, not 1 Hz** (driving is ~1 Hz), so those 4 confirmation samples span ~4 real minutes — on a DC charger that is ~10% SOC. Sessions are therefore **backdated**: `start_percent` comes from the last pre-charge (idle) SOC when it is fresh (≤30 min) and not above the streak's first charging SOC, else from the streak's first charging sample; `started_at` is always the streak's first charging sample. Never take `start_percent` from the confirming sample. See `docs/CHARGING_SESSIONS.md` → Backdating.
 - **Auto-stop** on 2 consecutive unplug samples or `speed_kmh > 5` (`CHARGING_DRIVE_SPEED_KMH` in `src/lib/charging-live.ts`).
 - **Drive-away guard:** fresh movement during an open session → close as `stopped` with live-derived SOC/energy/cost.
 - **Manual stop** (`src/actions/sessions.ts`): live → in-session telemetry → math. Never persist math-only 100% when telemetry shows unplug or drive-away below target.
 - **Charts:** `/api/vehicle/charging-sessions/[sessionId]/samples` resolves `vehicle_id` from `cars.vehicle_alias` → live snapshot → telemetry. Do **not** default to `DEV_WAY_VEHICLE_ID` (`"way"`) in production code.
 - If `current_percent` is stale in Postgres but telemetry samples are current, the PWA was likely closed — not an ingest bug.
-- **Energy/cost = `SOC_delta% × battery_capacity_kwh ÷ 100`, efficiency ≈ 100%** (capacity per-car, never hardcoded). The BMS counter `kwh_charged` is **cell-only** (~47% low) — never use it for cost or the power display; diagnostics only. See `docs/CHARGING_SESSIONS.md`.
+- **Energy/cost = `SOC_delta% × battery_capacity_kwh ÷ 100 ÷ efficiency`** (capacity per-car, never hardcoded). SOC-derived energy is **battery-side**; providers meter **grid-side**, so efficiency is **per-tariff, not per-car** (`efficiencyPercentForTariff`): **AC ≈98%** (`cars.default_efficiency_percent`), **fast DC ≈90%** (`cars.fast_dc_efficiency_percent`) — measured, not guessed. Never assume 100%: that under-reported every DC charge by ~9%. The BMS counter `kwh_charged` is **cell-only** (~47% low) — never use it for cost or the power display; diagnostics only. See `docs/CHARGING_SESSIONS.md`.
 
 ### Migrations
 

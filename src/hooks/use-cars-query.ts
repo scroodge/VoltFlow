@@ -5,6 +5,10 @@ import { toast } from "sonner";
 
 import { createCar, updateCar } from "@/actions/cars";
 import { isCarGeneration } from "@/lib/car-generations";
+import {
+  DEFAULT_AC_EFFICIENCY_PERCENT,
+  DEFAULT_FAST_DC_EFFICIENCY_PERCENT,
+} from "@/lib/charging-efficiency";
 import { devFetch, isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { createClient } from "@/lib/supabase/client";
 import { mapCar } from "@/lib/db-map";
@@ -82,7 +86,10 @@ export function useCreateCarMutation() {
         model_generation: isCarGeneration(generationRaw) ? generationRaw : "gen1_2024",
         battery_capacity_kwh: parseDecimalInput(String(formData.get("battery_capacity_kwh") ?? "")) || 75,
         default_charger_power_kw: parseDecimalInput(String(formData.get("default_charger_power_kw") ?? "")) || 4.4,
-        default_efficiency_percent: Number(formData.get("default_efficiency_percent")) || 90,
+        default_efficiency_percent:
+          Number(formData.get("default_efficiency_percent")) || DEFAULT_AC_EFFICIENCY_PERCENT,
+        fast_dc_efficiency_percent:
+          Number(formData.get("fast_dc_efficiency_percent")) || DEFAULT_FAST_DC_EFFICIENCY_PERCENT,
         created_at: new Date().toISOString(),
       };
 
@@ -140,6 +147,9 @@ export function useUpdateCarMutation(carId: string) {
                 default_efficiency_percent:
                   Number(formData.get("default_efficiency_percent")) ||
                   car.default_efficiency_percent,
+                fast_dc_efficiency_percent:
+                  Number(formData.get("fast_dc_efficiency_percent")) ||
+                  car.fast_dc_efficiency_percent,
               }
             : car,
         ),

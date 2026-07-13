@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { carGenerations, isCarGeneration } from "@/lib/car-generations";
+import {
+  DEFAULT_AC_EFFICIENCY_PERCENT,
+  DEFAULT_FAST_DC_EFFICIENCY_PERCENT,
+} from "@/lib/charging-efficiency";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeFormDecimal } from "@/lib/number-input";
 
@@ -16,7 +20,12 @@ const carSchema = z.object({
     .number()
     .min(50)
     .max(100)
-    .default(90),
+    .default(DEFAULT_AC_EFFICIENCY_PERCENT),
+  fast_dc_efficiency_percent: z.coerce
+    .number()
+    .min(50)
+    .max(100)
+    .default(DEFAULT_FAST_DC_EFFICIENCY_PERCENT),
   home_charger_lat: z.preprocess(
     (value) => (value === "" || value == null ? null : value),
     z.coerce.number().min(-90).max(90).nullable().optional(),
@@ -39,6 +48,7 @@ function parseCarFormData(formData: FormData) {
     battery_capacity_kwh: normalizeFormDecimal(formData.get("battery_capacity_kwh")),
     default_charger_power_kw: normalizeFormDecimal(formData.get("default_charger_power_kw")),
     default_efficiency_percent: formData.get("default_efficiency_percent"),
+    fast_dc_efficiency_percent: formData.get("fast_dc_efficiency_percent"),
     home_charger_lat: formData.get("home_charger_lat"),
     home_charger_lon: formData.get("home_charger_lon"),
     home_charger_radius_m: formData.get("home_charger_radius_m"),

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { deriveSessionProgressFromSoc } from "@/lib/charging-math";
+import { efficiencyPercentForTariff } from "@/lib/charging-efficiency";
 import { mapChargingTariffLocation, mapUserProvider } from "@/lib/db-map";
 import { resolveSessionTariff, userProvidersFromRows } from "@/lib/charging-tariffs";
 import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
@@ -32,6 +33,9 @@ const DEFAULT_TARGET_PERCENT = 100;
 export type { AutoChargingSessionState, AutoChargingSessionAction } from "@/lib/bydmate/charging-auto-session-step";
 export { nextAutoChargingSessionStep } from "@/lib/bydmate/charging-auto-session-step";
 
+const AUTO_CHARGING_STATE_COLUMNS =
+  "user_id,vehicle_id,consecutive_charging_samples,consecutive_unplug_samples,last_is_charging,last_device_time,streak_start_percent,streak_start_device_time,last_idle_percent,last_idle_device_time";
+
 type AutoChargingStateRow = {
   user_id: string;
   vehicle_id: string;
@@ -39,13 +43,27 @@ type AutoChargingStateRow = {
   consecutive_unplug_samples: number;
   last_is_charging: boolean;
   last_device_time: string | null;
+  streak_start_percent: number | string | null;
+  streak_start_device_time: string | null;
+  last_idle_percent: number | string | null;
+  last_idle_device_time: string | null;
 };
+
+function numericOrNull(value: number | string | null | undefined): number | null {
+  if (value == null) return null;
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 function stateFromRow(row: AutoChargingStateRow): AutoChargingSessionState {
   return {
     consecutiveChargingSamples: row.consecutive_charging_samples,
     consecutiveUnplugSamples: row.consecutive_unplug_samples,
     lastIsCharging: row.last_is_charging === true,
+    streakStartPercent: numericOrNull(row.streak_start_percent),
+    streakStartDeviceTime: row.streak_start_device_time,
+    lastIdlePercent: numericOrNull(row.last_idle_percent),
+    lastIdleDeviceTime: row.last_idle_device_time,
   };
 }
 
@@ -62,6 +80,10 @@ function stateToRow(
     consecutive_unplug_samples: state.consecutiveUnplugSamples,
     last_is_charging: state.lastIsCharging,
     last_device_time: deviceTime,
+    streak_start_percent: state.streakStartPercent,
+    streak_start_device_time: state.streakStartDeviceTime,
+    last_idle_percent: state.lastIdlePercent,
+    last_idle_device_time: state.lastIdleDeviceTime,
   };
 }
 
@@ -109,6 +131,7 @@ async function startSessionFromTelemetry({
   car,
   sample,
   startPercent,
+  startedAt,
   chargerPowerKw,
 }: {
   supabase: SupabaseClient;
@@ -116,9 +139,10 @@ async function startSessionFromTelemetry({
   car: Car;
   sample: TelemetryPayload;
   startPercent: number;
+  /** Backdated to when charging actually began — see nextAutoChargingSessionStep. */
+  startedAt: string;
   chargerPowerKw: number;
 }) {
-  const startedAt = sample.device_time;
   await closeOpenChargingSessions(supabase, userId, startedAt);
   const chargeType =
     typeof (sample.telemetry as Record<string, unknown>).charge_type === "string"
@@ -146,7 +170,7 @@ async function startSessionFromTelemetry({
       target_percent: DEFAULT_TARGET_PERCENT,
       battery_capacity_kwh: car.battery_capacity_kwh,
       charger_power_kw: chargerPower,
-      efficiency_percent: car.default_efficiency_percent,
+      efficiency_percent: efficiencyPercentForTariff(car, tariff.tariffType),
       tariff_type: tariff.tariffType,
       provider_type: tariff.providerType,
       user_provider_id: tariff.userProviderId,
@@ -194,7 +218,9 @@ async function stopSessionFromTelemetry({
       targetPercent: session.target_percent,
       batteryCapacityKwh: car.battery_capacity_kwh,
       chargerPowerKw: session.charger_power_kw,
-      efficiencyPercent: car.default_efficiency_percent,
+      // The session's own snapshot, not the car's AC default — efficiency is per-tariff,
+      // and this session may be a DC one.
+      efficiencyPercent: session.efficiency_percent,
       pricePerKwh: session.price_per_kwh,
     },
     currentPercent,
@@ -239,9 +265,7 @@ export async function processBydmateAutoChargingSessions({
       supabase.from("charging_sessions").select("*").eq("user_id", userId).eq("status", "charging"),
       supabase
         .from("bydmate_auto_charging_session_state")
-        .select(
-          "user_id,vehicle_id,consecutive_charging_samples,consecutive_unplug_samples,last_is_charging,last_device_time",
-        )
+        .select(AUTO_CHARGING_STATE_COLUMNS)
         .eq("user_id", userId)
         .in("vehicle_id", vehicleIds),
     ]);
@@ -328,6 +352,7 @@ export async function processBydmateAutoChargingSessions({
       speedKmh,
       hasActiveSession: activeByCarId.has(car.id),
       chargerPowerKw: chargePowerKw ?? car.default_charger_power_kw,
+      deviceTime: sample.device_time,
     });
 
     states.set(sample.vehicle_id, step.state);
@@ -354,6 +379,7 @@ export async function processBydmateAutoChargingSessions({
               : (lastLocationByVehicle.get(sample.vehicle_id) ?? sample.location),
         },
         startPercent: step.action.startPercent,
+        startedAt: step.action.startedAt,
         chargerPowerKw: step.action.chargerPowerKw,
       });
       if (sessionId) {

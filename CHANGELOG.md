@@ -9,6 +9,69 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-07-13
+
+### Backdate auto-started charging sessions to when charging really began
+
+- **Symptom.** A 66 kW DC charge on car `way` billed by the provider at 18.40 kWh /
+  21m30s was recorded as 12.18 kWh / 17m20s — a third of the cost missing.
+- **Root cause, from prod telemetry.** Auto-start needs 4 consecutive charging samples
+  (`AUTO_CHARGING_MIN_CONSECUTIVE_START_SAMPLES`), a threshold written assuming the ~1 Hz
+  ingest seen while driving. But while **parked and charging the Mate throttles to ~1
+  sample per minute** — so the streak costs ~4 *minutes*, not ~4 seconds. The car arrived
+  at 46% SOC and the session only opened at 56%, discarding 10% SOC ≈ 4.5 kWh. At 4 kW
+  home AC the same latency is only ~0.27 kWh, which is why it never surfaced before; a DC
+  charger makes it 16× more expensive.
+- **Fix.** `nextAutoChargingSessionStep` now carries the streak's first charging sample
+  and the last pre-charge (idle) reading, and backdates the session: `start_percent`
+  prefers the idle SOC (guarded — must be ≤ the first charging SOC, and ≤30 min old, or it
+  may predate an untracked drive), falling back to the streak's first charging sample;
+  `started_at` is always the streak's first charging sample. The 4-sample confirmation is
+  unchanged — detection stays conservative, only the recorded start rewinds. Replaying
+  today's session through the new logic gives 46% → 83% = 16.7 kWh over ~20.6 min, against
+  the provider's 18.40 kWh / 21m30s; the residual ~9% is grid-to-battery DC loss (see
+  Known gap below).
+- Migration `20260713090000_bydmate_auto_charging_backdate_state.sql` adds four nullable
+  columns to `bydmate_auto_charging_session_state` (`streak_start_percent`,
+  `streak_start_device_time`, `last_idle_percent`, `last_idle_device_time`) so the streak
+  survives across ingest batches. **Applied to self-hosted prod 2026-07-13** via `psql`;
+  all four columns verified present.
+- Docs reconciled: `docs/CHARGING_SESSIONS.md` (new "Backdating the start" section, plus
+  the sample-cadence correction in the auto-start table) and the `AGENTS.md` hard-won rule.
+- Verification: auto-session tests 7/7 (3 new — the real DC scenario, the stale-idle
+  fallback, and the discharged-idle guard), `npm run test` 108/108, `npx tsc --noEmit`
+  clean, targeted ESLint clean, `npm run build` passes.
+
+### Per-tariff charging efficiency (AC ≈98%, fast DC ≈90%)
+
+- **Why.** SOC-derived energy is *battery-side*; providers meter *grid-side*. The old
+  invariant said efficiency ≈ 100%, which was validated **on AC only** (SOC × capacity
+  2.706 kWh vs 2.760 kWh grid truth, −2%). Today's DC charge measured −9.3% (16.69 kWh
+  absorbed vs 18.40 kWh metered), so a single per-car figure cannot serve both: setting it
+  to 90% fixes DC and breaks AC by the same margin.
+- New `src/lib/charging-efficiency.ts` → `efficiencyPercentForTariff(car, tariffType)`:
+  `fast_dc` reads the new `cars.fast_dc_efficiency_percent` (default **90**), everything
+  else reads `cars.default_efficiency_percent`, whose meaning is now explicitly **AC**
+  (default **98**). Wired into both session-creation paths — Mate auto-start
+  (`charging-auto-session.ts`) and manual start (`actions/sessions.ts`).
+- Also fixed: `stopSessionFromTelemetry` computed the final energy from
+  `car.default_efficiency_percent` instead of the session's own `efficiency_percent`
+  snapshot, which would have silently applied the AC figure to a DC session on close.
+- Both figures are user-editable in the car form (Advanced), with en/ru/be strings.
+- Migration `20260713100000_cars_fast_dc_efficiency.sql` adds
+  `cars.fast_dc_efficiency_percent` (numeric, not null, default 90, check 0–100).
+  **Applied to self-hosted prod 2026-07-13.**
+- **Prod data repaired** (car `way`, user-owned settings): AC efficiency 100 → 98, DC → 90.
+  Today's DC session `13b0210b` rewritten to what the new code would have produced —
+  start 46% @ 04:42:05 (was 56% @ 04:45:19), **18.541 kWh / 20.6 min / cost 10.20** against
+  the provider's 18.40 kWh / 21m30s / 10.12, i.e. within 0.8%. Previously 12.177 kWh /
+  17m20s / 6.70. The open home session was recomputed at 98%.
+- Verification: `npm run test` 113/113 (5 new efficiency tests), auto-session 7/7,
+  `npx tsc --noEmit` clean, targeted ESLint clean, `npm run build` passes.
+- Docs: `docs/CHARGING_SESSIONS.md` energy/cost section rewritten (the formula now shows the
+  `÷ efficiency` step and the per-tariff table with both measurements); `AGENTS.md`
+  invariant updated — it previously asserted "efficiency ≈ 100%".
+
 ## 2026-07-12 — UI localization and responsive fixes
 
 ### Russian bottom-navigation label overflow

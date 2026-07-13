@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DEFAULT_FAST_DC_EFFICIENCY_PERCENT } from "@/lib/charging-efficiency";
 import {
   Select,
   SelectContent,
@@ -67,6 +68,9 @@ export function CarForm({
       car?.default_efficiency_percent ??
         initialPreset.default_efficiency_percent,
     ),
+  );
+  const [dcEfficiency, setDcEfficiency] = useState(
+    String(car?.fast_dc_efficiency_percent ?? DEFAULT_FAST_DC_EFFICIENCY_PERCENT),
   );
 
   const generationItems = carGenerations.map((value) => ({
@@ -255,6 +259,23 @@ export function CarForm({
                 className="min-h-[52px] rounded-2xl text-lg"
               />
               <p className="text-muted-foreground text-xs">{t("cars.efficiencyHelp")}</p>
+
+              <Label htmlFor="fast_dc_efficiency_percent" className="pt-2">
+                {t("cars.dcEfficiency")}
+              </Label>
+              <Input
+                id="fast_dc_efficiency_percent"
+                name="fast_dc_efficiency_percent"
+                type="number"
+                inputMode="numeric"
+                min={70}
+                max={100}
+                step="1"
+                value={dcEfficiency}
+                onChange={(event) => setDcEfficiency(event.target.value)}
+                className="min-h-[52px] rounded-2xl text-lg"
+              />
+              <p className="text-muted-foreground text-xs">{t("cars.dcEfficiencyHelp")}</p>
             </div>
           </details>
         </CardContent>

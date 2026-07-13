@@ -44,10 +44,31 @@ Implementation: `src/lib/bydmate/charging-auto-session.ts`, step logic in `charg
 | Charging signal | `charge_power_kw > 0.1` **or** `is_charging` while parked and SOC &lt; 100%; Di+ gun state `1` (explicit unplug) overrides a stale `is_charging` flag |
 | Never use | traction `power_kw` (was the cause of phantom sessions on 2026-06-03) |
 | Parked | `speed_kmh ≤ 5` (or unknown) |
-| Consecutive samples | **4** at ~1 Hz |
-| Sample age | start only if `device_time` within **3 minutes** of newest sample in batch |
+| Consecutive samples | **4** — but see Backdating below: while parked and charging the Mate sends ~1 sample/**minute**, not ~1 Hz, so these 4 samples span ~4 minutes of real charging |
+| Sample age | start only if the *confirming* `device_time` is within **3 minutes** of newest sample in batch |
 | Car match | `cars.vehicle_alias` = Mate `vehicle_id` |
-| DB state | `bydmate_auto_charging_session_state` (migration `20260602120000`) |
+| DB state | `bydmate_auto_charging_session_state` (migrations `20260602120000`, `20260713090000`) |
+
+### Backdating the start (why `start_percent` ≠ SOC at detection)
+
+The confirmation streak above costs ~4 minutes of wall clock, which on a fast DC charger
+is ~10% SOC (~4.5 kWh). The session is therefore **not** opened at the SOC of the sample
+that confirmed it. `nextAutoChargingSessionStep` carries two extra readings and rewinds:
+
+| Preference | `start_percent` |
+| --- | --- |
+| 1 (best) | SOC of the last **non-charging** sample — the true pre-plug-in reading — when it is no older than `AUTO_CHARGING_BACKDATE_MAX_IDLE_GAP_MS` (**30 min**) and is **not above** the streak's first charging SOC |
+| 2 | SOC of the streak's **first charging sample** |
+| 3 | SOC of the confirming sample (only when no streak history survives) |
+
+`started_at` is always the streak's **first charging sample**. The plug went in somewhere
+between the idle reading and that sample, so using the idle sample's timestamp would
+wrongly include driving time in the session's duration.
+
+Both guards are load-bearing. An idle SOC **above** the first charging sample means the
+car discharged in between, so that reading is stale and using it would claim energy the
+charger never delivered. An idle reading **older than 30 minutes** may predate an
+untracked drive, so it is ignored in favour of the first charging sample.
 
 ### Auto-stop
 
@@ -100,16 +121,34 @@ Session card **«Старт → Итог»** shows `start_percent → current_pe
 **Energy and cost are derived from SOC, not from the BMS energy counter.**
 
 ```
-charged_energy_kwh = (current_percent − start_percent) / 100 × battery_capacity_kwh
+battery_kwh        = (current_percent − start_percent) / 100 × battery_capacity_kwh
+charged_energy_kwh = battery_kwh ÷ (efficiency_percent / 100)     ← grid-side, what you pay
 estimated_cost     = charged_energy_kwh × price_per_kwh
 ```
 
-with **efficiency ≈ 100 %**. `battery_capacity_kwh` is snapshotted per session from the
-car (per-user, hand-entered) — **never hardcode** it.
+`battery_capacity_kwh` is snapshotted per session from the car (per-user, hand-entered) —
+**never hardcode** it. `efficiency_percent` is likewise snapshotted per session, and is
+chosen **per tariff** (`efficiencyPercentForTariff`, `src/lib/charging-efficiency.ts`).
 
-Why ~100 % and not the configured efficiency: BYD calibrates the SOC display against the
-**charger input** (grid-side), so the user's configured pack capacity already implies
-grid-side accounting. Validated on car `way` (45.1 kWh, AC 4.6 kW):
+### Efficiency is per-tariff, not per-car
+
+The SOC-derived number is **battery-side**; providers meter **grid-side**. The gap between
+them is small on AC and large on fast DC, so one figure per car cannot serve both.
+
+| Charge type | Efficiency | Column | Evidence (car `way`, 45.1 kWh) |
+| --- | --- | --- | --- |
+| Home / commercial **AC** | **≈98 %** | `cars.default_efficiency_percent` | SOC × capacity 2.706 kWh vs car-display grid truth 2.760 kWh over 36 min at 4.6 kW → −2 % |
+| **Fast DC** | **≈90 %** | `cars.fast_dc_efficiency_percent` | 16.69 kWh absorbed (46 %→83 %) vs **18.40 kWh metered by the provider**, 21m30s at ~66 kW, 2026-07-13 → −9.3 % |
+
+Why AC is nearly lossless in this accounting: BYD calibrates the SOC display against the
+**charger input**, so the configured pack capacity already implies near-grid-side numbers
+on AC. A DC dispenser has no such alignment — it meters upstream of its own cable and
+cooling, and the pack sheds far more heat at a 66 kW C-rate.
+
+Both columns are user-editable in the car form (Advanced). Never assume 100 %: before
+2026-07-13 the app used a flat efficiency and under-reported every DC charge by ~9 %.
+
+For reference, the other candidate energy sources, same AC session:
 
 | Source | kWh / 36 min | vs grid truth |
 | --- | --- | --- |
