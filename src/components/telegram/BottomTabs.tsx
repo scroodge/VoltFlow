@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, HelpCircle, Home, Menu, ShoppingBag } from "lucide-react";
+import { BookOpen, Calculator, HelpCircle, Home, ShoppingBag } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -16,7 +16,9 @@ const tabs = [
   { id: "guides", label: "Гайды", icon: BookOpen },
   { id: "faq", label: "Вопросы", icon: HelpCircle },
   { id: "buy", label: "Купить", icon: ShoppingBag },
-  { id: "more", label: "Еще", icon: Menu },
+  // Was "Еще" behind a hamburger — it is the charging calculator, the most concretely
+  // useful tool here. Name it.
+  { id: "more", label: "Калькулятор", icon: Calculator },
 ] satisfies Array<{
   id: TelegramTab;
   label: string;

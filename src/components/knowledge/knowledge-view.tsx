@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { ArticleList } from "@/components/telegram/ArticleList";
 import { BuyCatalog } from "@/components/telegram/BuyCatalog";
@@ -29,17 +29,41 @@ export function KnowledgeView({ data, generation, activeTab, onTabChange }: Know
   const [guideCategory, setGuideCategory] = useState<string | "All">("All");
   const telegram = useTelegramWebApp();
 
-  const articleCategories = useMemo(() => {
-    const categoryMap = new Map<string, string>();
-    for (const article of data?.articles ?? []) {
-      categoryMap.set(article.categorySlug, article.category);
-    }
-    return Array.from(categoryMap.entries()).map(([slug, title]) => ({ slug, title }));
-  }, [data?.articles]);
-
   const filteredArticles = useMemo(
     () => filterArticlesByGeneration(data?.articles ?? [], generation),
     [data?.articles, generation],
+  );
+
+  /**
+   * One taxonomy, derived from the articles actually on screen, feeding *both* the home
+   * tiles and the guides chips. These used to be two hand-written lists that had already
+   * drifted apart: "Эксплуатация" was a home card with no matching chip, and "Батарея"
+   * was a chip with no card.
+   */
+  const articleCategories = useMemo(() => {
+    const bySlug = new Map<string, { slug: string; title: string; count: number }>();
+    for (const article of filteredArticles) {
+      const existing = bySlug.get(article.categorySlug);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        bySlug.set(article.categorySlug, {
+          slug: article.categorySlug,
+          title: article.category,
+          count: 1,
+        });
+      }
+    }
+    return Array.from(bySlug.values()).sort((a, b) => b.count - a.count);
+  }, [filteredArticles]);
+
+  /** A section tile must land you *in* that section, not on an unfiltered list. */
+  const openCategory = useCallback(
+    (slug: string) => {
+      setGuideCategory(slug);
+      onTabChange("guides");
+    },
+    [onTabChange],
   );
   const filteredAccessories = useMemo(
     () => filterArticlesByGeneration(data?.accessories ?? [], generation),
@@ -72,9 +96,9 @@ export function KnowledgeView({ data, generation, activeTab, onTabChange }: Know
         {activeTab === "home" ? (
           <KnowledgeHome
             key={generation}
-            isTelegram={telegram.isTelegram}
-            onNavigate={onTabChange}
             generation={generation}
+            categories={articleCategories}
+            onOpenCategory={openCategory}
             data={filteredData}
           />
         ) : null}
@@ -92,18 +116,27 @@ export function KnowledgeView({ data, generation, activeTab, onTabChange }: Know
               <ArticleList articles={filteredArticles} generation={generation} />
             ) : null}
             {guideCategory !== "All" ? (
-              <ArticleList
-                articles={filteredArticles.filter(
-                  (article) => article.categorySlug === guideCategory,
-                )}
-                generation={generation}
-                semanticCategory={guideCategory}
-                eyebrow={
-                  articleCategories.find((category) => category.slug === guideCategory)
-                    ?.title ?? "Гайды"
-                }
-                title="Статьи раздела"
-              />
+              (() => {
+                const active = articleCategories.find(
+                  (category) => category.slug === guideCategory,
+                );
+                return (
+                  <ArticleList
+                    articles={filteredArticles.filter(
+                      (article) => article.categorySlug === guideCategory,
+                    )}
+                    generation={generation}
+                    semanticCategory={guideCategory}
+                    eyebrow={active?.title ?? "Гайды"}
+                    title="Статьи раздела"
+                    placeholder={
+                      active
+                        ? `Поиск в разделе «${active.title}»`
+                        : "Поиск по всем статьям"
+                    }
+                  />
+                );
+              })()
             ) : null}
             {!filteredArticles.length ? (
               <p className="text-sm leading-6 text-muted-foreground">
@@ -121,16 +154,7 @@ export function KnowledgeView({ data, generation, activeTab, onTabChange }: Know
             spareParts={data?.spareParts}
           />
         ) : null}
-        {activeTab === "more" ? (
-          <div className="space-y-5">
-            <Calculators />
-            <div className="voltflow-card p-4 text-sm leading-6 text-muted-foreground">
-              Следующие фазы пока намеренно не включены: импорт из Telegram,
-              семантический поиск, AI-помощник, embeddings, аналитика и
-              дополнительные интеграции VoltFlow.
-            </div>
-          </div>
-        ) : null}
+        {activeTab === "more" ? <Calculators /> : null}
       </div>
     </div>
   );

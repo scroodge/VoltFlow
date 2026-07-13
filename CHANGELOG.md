@@ -42,6 +42,52 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
   fallback, and the discharged-idle guard), `npm run test` 108/108, `npx tsc --noEmit`
   clean, targeted ESLint clean, `npm run build` passes.
 
+### Knowledge base (`/telegram`): make the catalog navigable
+
+The KB had two navigation systems that disagreed with each other, and neither reliably got
+you into a category. Found by walking the live catalog at phone width.
+
+- **Category cards now actually filter.** `KnowledgeHome`'s `quickCards` sent **Зарядка**,
+  **Эксплуатация** *and* **Обслуживание** to `tab: "guides"` with **no category** — three
+  different-looking buttons landing on the same unfiltered "Все гайды" list, forcing the
+  user to re-pick the category they had just clicked. A section tile now opens Guides with
+  that category already selected (`onOpenCategory` → sets `guideCategory` + switches tab),
+  and the article search box scopes to it ("Поиск в разделе «Зарядка»").
+- **One taxonomy instead of two that had already drifted.** The home cards were a
+  hand-written list; the guides chips were derived from the data. They disagreed:
+  "Эксплуатация" was a card with **no matching chip and no articles at all**, and
+  "Батарея" was a chip with no card. Both now render from a single `articleCategories`
+  derived from the articles on screen (with counts), so they cannot drift apart again.
+- **Section tiles carry article counts** ("Зарядка · 3 статьи"). The cheapest possible
+  trust signal — it tells you whether a section is worth a tap before you spend one.
+- **"Еще" was hiding the best tool.** The `more` tab is the charging time/energy/cost
+  calculator, buried behind a hamburger icon and the least informative word available (and
+  given a *calculator* icon on the home grid while still labelled "Еще", so icon and label
+  contradicted each other). Renamed to **Калькулятор** with the calculator icon.
+- **"Популярные статьи" were not popular.** The list was
+  `articles.filter(categorySlug === "charging").slice(0, 4)` — the first four *charging*
+  articles in insertion order. No popularity signal exists in the data. Replaced with
+  **"Недавно обновленные"**, sorted by `updatedAt` (which `toTelegramArticle` really does
+  fill from `articles.updated_at`), so the label matches the data. A real popularity list
+  would need a view counter; deliberately not invented.
+- **Three internal roadmap notices removed from the product**: "База знаний сейчас ведется
+  вручную… будут добавлены позже", "Остальные инструменты подготовлены для следующих фаз",
+  and a `voltflow-card` listing the next-phase backlog. The calculator screen also rendered
+  **a card per unbuilt calculator** ("В следующей фазе") — a catalog of things the user
+  cannot use. All gone; the screen now shows the one calculator that works.
+- **Home H1 "Умный поиск" → "База знаний".** The title named a feature; it now names the
+  place, with search as the instrument on it.
+- **The generation switch stopped eating the viewport.** It sat in the sticky header on
+  every tab, costing ~60px of a ~700px screen forever, for a set-once choice that
+  `useAutoDetectCarGeneration` already guesses. It now scrolls away with the content.
+- Correction to the review itself: the Guides search is **not** a separate plain-text
+  filter as first reported — it is the same `useSemanticKnowledgeSearch` engine, scoped to
+  articles and the active category. Nothing to unify; the real defect was that the
+  placeholder never said it was scoped, which it now does.
+- Verification: `npm run test` 122/122, `npx tsc --noEmit` clean, ESLint clean on all
+  touched files, `npm run build` passes; walked home → section tile → filtered guides in
+  the browser at 430px.
+
 ### Dashboard status-card polish + a dev component gallery
 
 Four dashboard-card issues, plus the variant workshop that makes them checkable.

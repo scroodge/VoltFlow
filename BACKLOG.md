@@ -6,6 +6,84 @@ go-ahead.** These are researched but **not built**. Shipped work lives in
 
 ---
 
+## 🟡 Real article popularity (view counter) for the knowledge base
+
+Follow-up to the KB navigation work (see CHANGELOG 2026-07-13). "Популярные статьи" was
+removed because no popularity signal existed; home now shows honest "Недавно обновленные".
+This adds the missing signal so "Популярные" can come back as a true statement.
+
+### Data ownership — needs confirmation before building (per the AGENTS.md change gate)
+
+Two different things, two different homes:
+
+- **The counts themselves are app-owned aggregate content metrics → Postgres.** They are
+  not per-user preference data, so the "prefer client-side storage" default does not apply.
+- **"Have I already counted this article in this session?" is per-user → `localStorage`.**
+  Used purely to stop a refresh from inflating the count. Never sent to the DB.
+
+**Please confirm both before I build.**
+
+### The trap that shapes the design
+
+`knowledge_articles` has a `BEFORE UPDATE` trigger, `set_knowledge_articles_updated_at`,
+which sets `updated_at = now()` (migration `20260516120000_knowledge_cms.sql:96`). So a
+`view_count` column on that table, incremented with an `UPDATE`, would **bump `updated_at`
+on every single view** — silently turning the "Недавно обновленные" list into "most
+recently *viewed*". Any design that writes to `knowledge_articles` has to defeat that
+trigger. The cleanest answer is not to write to that table at all.
+
+Second constraint: the KB is **public** (`"Everyone can read published articles"` grants
+`select` to `anon`). There is no `anon` write policy, and adding one is not something to do
+casually — RLS cannot restrict *which column* an update touches, so an `anon UPDATE` policy
+on `knowledge_articles` would let anyone rewrite article bodies. A `SECURITY DEFINER` RPC
+that only touches the counter is the safe way to let anonymous readers increment.
+
+### Options — where the count lives
+
+1. **Separate `knowledge_article_views` counter table (recommended).**
+   `article_id uuid primary key references knowledge_articles(id) on delete cascade`,
+   `view_count bigint not null default 0`, `last_viewed_at timestamptz`. Incremented by a
+   `SECURITY DEFINER` RPC (`increment_knowledge_article_view(p_slug text)`) that upserts.
+   `knowledge_articles` is never written to, so the `updated_at` trigger — and the recency
+   list — stay correct by construction. One extra join (or a second small query) to read
+   counts. No RLS hole: `anon` gets `execute` on the RPC only.
+2. **`view_count` column on `knowledge_articles`.** Fewer moving parts to read, but it must
+   defeat the `updated_at` trigger — either by rewriting the trigger to skip when only
+   `view_count` changed, or by having the RPC restore the old `updated_at`. Both are the
+   kind of subtlety that breaks quietly a year later, and it puts a hot write path on the
+   content table.
+3. **Event table, one row per view** (`article_id`, `viewed_at`, coarse source). Enables
+   real trending ("популярное за месяц") and later analytics. But it grows without bound and
+   needs its own retention/prune job — and this project is actively working *down* Supabase
+   egress/storage and is on Vercel's free tier. Wrong default at current scale; option 1
+   can be upgraded to this later if trending is ever wanted.
+
+### Options — how the view is recorded
+
+- **a. Client POST after render (recommended).** The article page fires a one-shot
+  `POST /api/knowledge/articles/[slug]/view` from the client, guarded by a
+  `localStorage` set of already-counted slugs (per session/day). The route uses the service
+  role to call the RPC. Survives Next.js caching, does not count prefetches, and bots that
+  do not run JS are excluded for free.
+- **b. Increment during the server render.** One line, but wrong: Next prefetch and
+  crawlers would inflate it, it cannot dedupe a refresh, and it puts a DB write in the
+  render path of a cached page.
+
+### Using it
+
+Bring back a **"Популярные"** section on home, sorted by `view_count` desc — but only once
+there is data: with every count at 0 the list is meaningless. Guard it — show "Популярные"
+only when the top article has, say, ≥ 5 views, otherwise keep "Недавно обновленные". Never
+re-introduce a label the data cannot back.
+
+**Recommendation:** option **1 + a**. One idempotent migration (`IF NOT EXISTS`, per the
+self-hosted rules), one RPC, one API route, one small client hook, and a guarded home
+section. No change to `knowledge_articles`, so nothing I shipped today regresses.
+
+Proposed 2026-07-13; awaiting go-ahead.
+
+---
+
 ## 🟡 Separate car model from generation and choose model-specific dashboard art
 
 The `cars` table currently stores only `model_generation` (`gen1_2024` or

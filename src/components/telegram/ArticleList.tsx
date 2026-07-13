@@ -11,7 +11,10 @@ export function ArticleList({
   articles,
   generation,
   semanticCategory,
-  placeholder = "Искать статьи",
+  // Say what the box actually searches. It is the same semantic engine as the home
+  // search, but scoped to articles (and to one category when one is picked) — an
+  // unlabelled box gives no cue why the same query returns different results here.
+  placeholder = "Поиск по всем статьям",
   title = "Статьи базы знаний",
   eyebrow = "Все гайды",
 }: {

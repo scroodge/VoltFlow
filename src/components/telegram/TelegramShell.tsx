@@ -137,13 +137,17 @@ export function TelegramShell({ data }: { data?: TelegramKnowledgeData }) {
             </div>
           </div>
 
-          <section
-            className="rounded-lg border border-border bg-white/[0.03] p-1.5"
-            aria-label="Поколение автомобиля"
-          >
-            <GenerationFilter value={generation} onChange={setGeneration} />
-          </section>
         </header>
+
+        {/* Scrolls away with the content rather than pinning: this is a set-once choice
+            (already guessed by useAutoDetectCarGeneration), and inside the sticky header
+            it cost ~60px of a ~700px viewport on every screen, forever. */}
+        <section
+          className="mt-2 rounded-lg border border-border bg-white/[0.03] p-1.5"
+          aria-label="Поколение автомобиля"
+        >
+          <GenerationFilter value={generation} onChange={setGeneration} />
+        </section>
 
         <KnowledgeView
           data={data}
