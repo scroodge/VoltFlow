@@ -42,6 +42,87 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
   fallback, and the discharged-idle guard), `npm run test` 108/108, `npx tsc --noEmit`
   clean, targeted ESLint clean, `npm run build` passes.
 
+### Dashboard status-card polish + a dev component gallery
+
+Four dashboard-card issues, plus the variant workshop that makes them checkable.
+
+- **Last-seen time under the status badge.** The badge said *Parking* / *Last seen* but
+  never *when*. The status column is now a stack: badge, then a muted
+  `dashboard.lastSeen` line ("Data from car 47m ago"), shown only for `parked` and
+  `stale` — `driving` and both charging modes are fresh by definition (≤90 s), so a
+  timestamp there is noise. The `timeAgo()` helper was a private function inside
+  `vehicle-live-view.tsx`; it is now `src/lib/time-ago.ts` (`timeAgoParts` +
+  `formatTimeAgo`), shared by both views and covered by 6 tests — including the
+  clamp that stops a car clock running ahead of the phone from rendering "−12s ago".
+- **Car image no longer collides with the vehicle name.** Root cause: the card body was
+  `grid … items-center`, so the short left cell (image + ring) re-centred against a right
+  cell whose height changes per mode — 4 driving tiles vs. the tall park calculator vs.
+  1–2 stat tiles. The image was lifted into the header by a hard-coded `-mt-8` tuned for
+  one mode, so it landed on the `h1` in the others. Fixed by giving the image its own
+  in-flow row (`mb-1`, no negative margin), so it sits in the same place in every status.
+- **Range badge no longer clips the ring — or drifts far below it.** The `≈ 244 km` badge
+  is absolutely positioned at the bottom of its container, which only reserved `pb-4` —
+  less than the badge's own height — so it overlapped the circle. It is now anchored to a
+  `relative pb-9` wrapper around the **ring itself** rather than the grid cell: the cell
+  stretches to the tallest column (the park calculator), which would otherwise drop the
+  badge to the very bottom of the card, far under the circle.
+- **"No data" no longer reports "Parking".** `deriveDashboardVehicleMode` returned
+  `"parked"` when there was **no snapshot at all** — inventing a state we had no evidence
+  for, so a car that had never reported showed a confident "Парковка". It now returns
+  `"stale"`. `canStartChargingSession` already accepted `stale`, so the Start button and
+  park calculator are unaffected. Behaviour is now: an **old** snapshot keeps its last
+  known percent, the "Давно не обновлялось" badge, and the time-since line; **no**
+  snapshot shows `—` and no timestamp. Covered by 3 new tests.
+- **The dev "No Data" mode actually tests no data.** `dashboard-dev-snapshot-context.tsx`
+  returned `buildParkedSnapshot(seed)` for `nodata` — the *same fixture as `park`* — so
+  the mode rendered as "Parking" with a live 64% SOC, the exact opposite of what it
+  claimed to test. It now resolves to `null`, and `useDashboardDevSnapshotOverride` no
+  longer lets its `?? base` fallback hand the real snapshot back.
+- **New dev "Stale" mode** (`?devSnapshot=stale`, plus a toolbar button). The
+  car-reported-then-went-quiet case had no fixture and so was unreachable in the running
+  app: a real parked snapshot backdated 47 minutes, well past `LIVE_SNAPSHOT_STALE_MS`.
+  Verifies the intended contract — an old snapshot keeps its last known SOC and range,
+  the badge reads "Давно не обновлялось", and the line under it reads "Данные с авто 47
+  мин назад"; `nodata` instead shows `—` and no timestamp.
+- **Dead space in the charging modes removed.** The right column is only one or two stat
+  tiles there, against a much taller ring column, and top-aligning them left a large gap
+  below. The column is now `flex flex-col justify-center`, so the tiles sit centred on
+  the ring; the taller modes (driving's 4 tiles, the park calculator) are unaffected.
+- **No status word inside the ring at all.** `BatteryRing`'s `status` prop is now
+  optional (`string | null`) and the dashboard card stops passing it entirely — the ring
+  is a bare number, since the badge directly above already names the state and the
+  last-seen line supplies the *when*. (The prop stays because the charging screen and
+  the landing page still label their rings; while there, the label is now width-clamped
+  and truncates instead of spilling outside the circle, which long strings like
+  "Зарядка (live)" and "В движении" were doing.)
+- **No more fabricated percent.** `currentPercent` used to fall through to
+  `Number(startPct)` — the manual start-percent input — so a car that had never reported
+  showed a confident **42 %**. It is now `number | null`, `BatteryRing` renders `—` when
+  unknown, and the pack tile degrades to `— / 45 kWh`.
+- **The park calculator remembers its last choices.** Tariff, provider and power now
+  persist to **localStorage** via the existing `useAppPreferences` zustand store
+  (user-owned preference data, per the AGENTS.md change gate — no migration, no Postgres
+  column). The three `*Touched` flags persist alongside the values and set the
+  precedence: a field the user set by hand survives a reload, while an untouched field
+  keeps auto-filling from the GPS-matched tariff location. Stored once per user, not per
+  car.
+- **New `/dev/gallery` page** (dev-only, linked from the `/dev` index). Renders all eight
+  status-card variants — the five vehicle modes plus no-data, no-image and long-name —
+  side by side on a frozen clock with hand-built props, then `BatteryRing` in six
+  isolated states. Each card sits in the PWA's real **430px phone frame** (the
+  `.mobile-page` width), so the gallery shows what a phone shows rather than a stretched
+  desktop column; the frames wrap to a grid on a wide screen and stack to one column on a
+  narrow one. Chosen over Storybook: `DashboardView` is wired into react-query,
+  Supabase and zustand, so every story would need those providers mocked, for a second
+  build pipeline to maintain. This exercises the components, not the data plumbing; the
+  fully wired card still lives at `/dev/site/dashboard` behind its mode toolbar.
+  `statusBadgeClass` moved to `src/lib/vehicle-live-mode.ts` as
+  `dashboardStatusBadgeClass` so the gallery can reuse it without importing the whole
+  dashboard.
+- Verification: `npm run test` 119/119 (6 new), charging auto-session 7/7,
+  `npx tsc --noEmit` clean, ESLint clean on every touched file, `npm run build` passes
+  (122 pages).
+
 ### Public, no-login access to the knowledge base
 
 - `/telegram` (+ `/telegram/category/[slug]`, `/telegram/article/[slug]`) was already a

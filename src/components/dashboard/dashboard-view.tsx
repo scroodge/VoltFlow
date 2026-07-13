@@ -72,10 +72,12 @@ import { PROVIDER_LABELS, resolveTariffPrice } from "@/lib/charging-tariffs";
 import { ensureNotificationsPermission, ensurePushSubscription } from "@/lib/push/client";
 import { queryKeys } from "@/lib/query-keys";
 import { createClient } from "@/lib/supabase/client";
+import { formatTimeAgo } from "@/lib/time-ago";
 import { cn } from "@/lib/utils";
 import {
   canStartChargingSession,
   dashboardVehicleStatusLabelKey,
+  dashboardStatusBadgeClass as statusBadgeClass,
   deriveDashboardVehicleMode,
   isChargingTelemetry,
   isFreshLiveSnapshot,
@@ -309,20 +311,6 @@ function liveVehicleSummaryTitle(
   return t("dashboard.liveVehicleSpeed", {
     speed: formatNumber(telemetry.speed_kmh, 0),
   });
-}
-
-function statusBadgeClass(mode: DashboardVehicleMode) {
-  switch (mode) {
-    case "app_charging":
-    case "live_charging":
-      return "text-[var(--voltflow-green)]";
-    case "driving":
-      return "text-[var(--voltflow-cyan)]";
-    case "stale":
-      return "text-muted-foreground";
-    default:
-      return "text-[var(--voltflow-green)]";
-  }
 }
 
 function DashboardSummaryCard({
@@ -736,16 +724,46 @@ export function DashboardView() {
   const [manualTariffType, setManualTariffType] = useState<"auto" | ChargingTariffType>(
     "auto",
   );
-  const [estimateTariffType, setEstimateTariffType] = useState<ChargingTariffType>("home");
-  const [estimateProviderType, setEstimateProviderType] =
-    useState<ChargingProviderType>("home");
-  const [estimateUserProviderId, setEstimateUserProviderId] = useState<string | null>(null);
-  const [estimatePowerKw, setEstimatePowerKw] = useState(
-    String(defaultEstimatePowerKw("home", selectedCar?.default_charger_power_kw)),
+  // The park calculator's last choices survive a reload (localStorage, via the
+  // app-preferences store). The `*Touched` flags persist alongside the values and
+  // decide precedence: a field the user set by hand stays put, while an untouched
+  // field keeps auto-filling from the GPS-matched tariff location below.
+  const savedEstimateTariffType = useAppPreferences((s) => s.parkEstimateTariffType);
+  const savedEstimateProviderType = useAppPreferences((s) => s.parkEstimateProviderType);
+  const savedEstimateUserProviderId = useAppPreferences(
+    (s) => s.parkEstimateUserProviderId,
   );
-  const [estimateTariffTouched, setEstimateTariffTouched] = useState(false);
-  const [estimateProviderTouched, setEstimateProviderTouched] = useState(false);
-  const [estimatePowerTouched, setEstimatePowerTouched] = useState(false);
+  const savedEstimatePowerKw = useAppPreferences((s) => s.parkEstimatePowerKw);
+  const savedEstimateTariffTouched = useAppPreferences(
+    (s) => s.parkEstimateTariffTouched,
+  );
+  const savedEstimateProviderTouched = useAppPreferences(
+    (s) => s.parkEstimateProviderTouched,
+  );
+  const savedEstimatePowerTouched = useAppPreferences((s) => s.parkEstimatePowerTouched);
+  const setParkEstimatePrefs = useAppPreferences((s) => s.setParkEstimate);
+
+  const [estimateTariffType, setEstimateTariffType] = useState<ChargingTariffType>(
+    savedEstimateTariffType ?? "home",
+  );
+  const [estimateProviderType, setEstimateProviderType] =
+    useState<ChargingProviderType>(savedEstimateProviderType ?? "home");
+  const [estimateUserProviderId, setEstimateUserProviderId] = useState<string | null>(
+    savedEstimateUserProviderId,
+  );
+  const [estimatePowerKw, setEstimatePowerKw] = useState(
+    savedEstimatePowerKw ??
+      String(defaultEstimatePowerKw("home", selectedCar?.default_charger_power_kw)),
+  );
+  const [estimateTariffTouched, setEstimateTariffTouched] = useState(
+    savedEstimateTariffTouched,
+  );
+  const [estimateProviderTouched, setEstimateProviderTouched] = useState(
+    savedEstimateProviderTouched,
+  );
+  const [estimatePowerTouched, setEstimatePowerTouched] = useState(
+    savedEstimatePowerTouched,
+  );
   const [submitting, setSubmitting] = useState(false);
   const [stopping, setStopping] = useState(false);
   const hasMounted = useSyncExternalStore(
@@ -758,6 +776,17 @@ export function DashboardView() {
   const liveStartPct = liveStartPercent(latestBydmateSnapshot);
 
   const statusLabel = String(t(dashboardVehicleStatusLabelKey(vehicleMode)));
+
+  // How long ago the car actually reported. Only meaningful for the non-live modes:
+  // driving and both charging modes are fresh by definition (<=90s), so a "12s ago"
+  // line there is noise.
+  const lastSeenLabel =
+    (vehicleMode === "parked" || vehicleMode === "stale") &&
+    latestBydmateSnapshot?.received_at
+      ? formatTimeAgo(latestBydmateSnapshot.received_at, nowMs, (key, values) =>
+          String(t(key, values)),
+        )
+      : null;
 
   const hasLiveChargingData =
     isChargingTelemetry(latestBydmateSnapshot) &&
@@ -776,20 +805,28 @@ export function DashboardView() {
     !activeSession &&
     canStartChargingSession(vehicleMode);
 
-  const currentPercent = forceDevParkMode
+  // null when the car has never reported a SOC and no session carries one. Showing
+  // "—" beats falling back to the manual start-percent input, which used to render a
+  // confident-looking number the car never sent.
+  const currentPercent: number | null = forceDevParkMode
     ? (latestBydmateSoc ?? 64)
     : liveActive?.currentPercent ??
       activeSession?.current_percent ??
       latestBydmateSoc ??
       latestSession?.current_percent ??
-      Number(startPct);
+      null;
 
   const packCapacityKwh = selectedCar?.battery_capacity_kwh;
-  const availableKwh = availableBatteryKwh(packCapacityKwh, currentPercent);
+  const availableKwh =
+    currentPercent == null
+      ? null
+      : availableBatteryKwh(packCapacityKwh, currentPercent);
   const packTileValue =
-    packCapacityKwh != null
+    packCapacityKwh != null && availableKwh != null
       ? `${fmt(availableKwh, 1)} / ${fmt(packCapacityKwh, 0)} kWh`
-      : "-- kWh";
+      : packCapacityKwh != null
+        ? `— / ${fmt(packCapacityKwh, 0)} kWh`
+        : "-- kWh";
 
   const ringToggleAriaLabel =
     ringDisplay === "percent"
@@ -1098,17 +1135,27 @@ export function DashboardView() {
                   {selectedCar?.name ?? "EV"}
                 </h1>
               </div>
-              <div
-                className={`rounded-full border border-border bg-white/[0.04] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] ${statusBadgeClass(vehicleMode)}`}
-              >
-                {loadingSessions ? (t("dashboard.syncing") as string) : statusLabel}
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                <div
+                  className={`rounded-full border border-border bg-white/[0.04] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] ${statusBadgeClass(vehicleMode)}`}
+                >
+                  {loadingSessions ? (t("dashboard.syncing") as string) : statusLabel}
+                </div>
+                {lastSeenLabel && !loadingSessions ? (
+                  <p
+                    className="text-right text-[10px] leading-4 text-muted-foreground"
+                    suppressHydrationWarning
+                  >
+                    {t("dashboard.lastSeen", { value: lastSeenLabel })}
+                  </p>
+                ) : null}
               </div>
             </div>
 
-        <div className="mt-3 grid grid-cols-[116px_minmax(0,1fr)] items-center gap-3">
-              <div className="relative pb-4">
+        <div className="mt-3 grid grid-cols-[116px_minmax(0,1fr)] items-stretch gap-3">
+              <div>
                 {selectedCarImage ? (
-                  <div className="-mt-8 mb-8 flex h-12 w-[116px] items-center justify-center overflow-hidden">
+                  <div className="mb-1 flex h-12 w-[116px] items-center justify-center overflow-hidden">
                     <Image
                       src={selectedCarImage}
                       alt=""
@@ -1121,23 +1168,32 @@ export function DashboardView() {
                     />
                   </div>
                 ) : null}
-                <BatteryRing
-                  percent={currentPercent}
-                  status={loadingSessions ? (t("dashboard.syncing") as string) : statusLabel}
-                  charging={
-                    vehicleMode === "app_charging" || vehicleMode === "live_charging"
-                  }
-                  size="compact"
-                  displayMode={ringDisplay}
-                  energyKwh={availableKwh}
-                  toggleAriaLabel={ringToggleAriaLabel}
-                  onToggleDisplay={() =>
-                    setRingDisplay((mode) => (mode === "percent" ? "energy" : "percent"))
-                  }
-                />
-                <RangeBadge value={rangeDetail} />
+                {/* The badge anchors to the ring, not to the grid cell — the cell
+                    stretches to the tallest column (the park calculator), which would
+                    otherwise drop the badge far below the circle. */}
+                <div className="relative pb-9">
+                  <BatteryRing
+                    percent={currentPercent}
+                    charging={
+                      vehicleMode === "app_charging" || vehicleMode === "live_charging"
+                    }
+                    size="compact"
+                    displayMode={ringDisplay}
+                    energyKwh={availableKwh}
+                    toggleAriaLabel={ringToggleAriaLabel}
+                    onToggleDisplay={() =>
+                      setRingDisplay((mode) =>
+                        mode === "percent" ? "energy" : "percent",
+                      )
+                    }
+                  />
+                  <RangeBadge value={rangeDetail} />
+                </div>
               </div>
-              <div className="min-w-0 space-y-3">
+              {/* Centred, not top-aligned: in the charging modes the right column is
+                  only one or two stat tiles against a much taller ring, which left a
+                  large dead gap underneath them. */}
+              <div className="flex min-w-0 flex-col justify-center gap-3">
                 {cars.length > 1 ? (
                   <Select
                     items={cars.map((car) => ({
@@ -1205,17 +1261,30 @@ export function DashboardView() {
                       setEstimatePowerKw={(value) => {
                         setEstimatePowerTouched(true);
                         setEstimatePowerKw(value);
+                        setParkEstimatePrefs({
+                          parkEstimatePowerKw: value,
+                          parkEstimatePowerTouched: true,
+                        });
                       }}
                       setEstimateProviderType={(value) => {
                         setEstimateProviderTouched(true);
                         setEstimateProviderType(value);
+                        setParkEstimatePrefs({
+                          parkEstimateProviderType: value,
+                          parkEstimateProviderTouched: true,
+                        });
                       }}
                       setEstimateUserProviderId={(value) => {
                         setEstimateUserProviderId(value);
+                        setParkEstimatePrefs({ parkEstimateUserProviderId: value });
                       }}
                       setEstimateTariffType={(value) => {
                         setEstimateTariffTouched(true);
                         setEstimateTariffType(value);
+                        setParkEstimatePrefs({
+                          parkEstimateTariffType: value,
+                          parkEstimateTariffTouched: true,
+                        });
                       }}
                       t={(key, values) => String(t(key, values))}
                       allProviderOptions={allProviderOptions}

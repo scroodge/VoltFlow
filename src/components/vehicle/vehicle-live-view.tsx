@@ -77,6 +77,7 @@ import {
   trackPathDistanceKm,
 } from "@/lib/bydmate/trip-distance";
 import type { Currency, Locale, TranslationKey } from "@/lib/i18n";
+import { formatTimeAgo } from "@/lib/time-ago";
 import {
   deriveDashboardVehicleMode,
   resolveLiveSnapshotForVehicle,
@@ -191,15 +192,6 @@ type Translator = (key: TranslationKey, values?: Record<string, string | number>
 
 function localeCode(locale: Locale) {
   return locale === "be" ? "be-BY" : locale === "ru" ? "ru-RU" : "en-US";
-}
-
-function timeAgo(iso: string, nowMs: number, t: Translator) {
-  const seconds = Math.max(0, Math.round((nowMs - Date.parse(iso)) / 1000));
-  if (seconds < 60) return t("vehicle.timeAgoSeconds", { value: seconds });
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return t("vehicle.timeAgoMinutes", { value: minutes });
-  const hours = Math.round(minutes / 60);
-  return t("vehicle.timeAgoHours", { value: hours });
 }
 
 function useClientMounted() {
@@ -609,7 +601,9 @@ function Hero({
           </h1>
           <p className="mt-1 text-xs text-muted-foreground" suppressHydrationWarning>
             {hasMounted
-              ? t("vehicle.lastUpdate", { value: timeAgo(snapshot.received_at, nowMs, t) })
+              ? t("vehicle.lastUpdate", {
+                  value: formatTimeAgo(snapshot.received_at, nowMs, t) ?? "\u2014",
+                })
               : "\u00a0"}
           </p>
         </div>

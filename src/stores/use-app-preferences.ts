@@ -11,7 +11,14 @@ import {
 import {
   appPreferencesStorageKey,
   initialAppPreferences,
+  isChargingProviderType,
+  isChargingTariffType,
+  type PersistedParkEstimate,
 } from "@/lib/app-preferences";
+import type {
+  ChargingProviderType,
+  ChargingTariffType,
+} from "@/types/database";
 
 type AppPreferencesState = {
   selectedCarId: string | null;
@@ -23,6 +30,14 @@ type AppPreferencesState = {
   locale: Locale;
   onboardingSkipped: boolean;
   onboardingCarGeneration: CarGeneration | null;
+  parkEstimateTariffType: ChargingTariffType | null;
+  parkEstimateProviderType: ChargingProviderType | null;
+  parkEstimateUserProviderId: string | null;
+  parkEstimatePowerKw: string | null;
+  parkEstimateTariffTouched: boolean;
+  parkEstimateProviderTouched: boolean;
+  parkEstimatePowerTouched: boolean;
+  setParkEstimate: (patch: Partial<PersistedParkEstimate>) => void;
   setSelectedCarId: (id: string | null) => void;
   setDefaultPricePerKwh: (n: number) => void;
   setTariffPrices: (input: {
@@ -65,6 +80,7 @@ export const useAppPreferences = create(
       setOnboardingSkipped: (onboardingSkipped) => set({ onboardingSkipped }),
       setOnboardingCarGeneration: (onboardingCarGeneration) =>
         set({ onboardingCarGeneration }),
+      setParkEstimate: (patch) => set(patch),
     }),
     {
       name: appPreferencesStorageKey,
@@ -112,6 +128,35 @@ export const useAppPreferences = create(
           onboardingCarGeneration: isCarGeneration(saved?.onboardingCarGeneration)
             ? saved.onboardingCarGeneration
             : current.onboardingCarGeneration,
+          parkEstimateTariffType: isChargingTariffType(saved?.parkEstimateTariffType)
+            ? saved.parkEstimateTariffType
+            : current.parkEstimateTariffType,
+          parkEstimateProviderType: isChargingProviderType(
+            saved?.parkEstimateProviderType,
+          )
+            ? saved.parkEstimateProviderType
+            : current.parkEstimateProviderType,
+          parkEstimateUserProviderId:
+            typeof saved?.parkEstimateUserProviderId === "string" ||
+            saved?.parkEstimateUserProviderId === null
+              ? saved.parkEstimateUserProviderId
+              : current.parkEstimateUserProviderId,
+          parkEstimatePowerKw:
+            typeof saved?.parkEstimatePowerKw === "string"
+              ? saved.parkEstimatePowerKw
+              : current.parkEstimatePowerKw,
+          parkEstimateTariffTouched:
+            typeof saved?.parkEstimateTariffTouched === "boolean"
+              ? saved.parkEstimateTariffTouched
+              : current.parkEstimateTariffTouched,
+          parkEstimateProviderTouched:
+            typeof saved?.parkEstimateProviderTouched === "boolean"
+              ? saved.parkEstimateProviderTouched
+              : current.parkEstimateProviderTouched,
+          parkEstimatePowerTouched:
+            typeof saved?.parkEstimatePowerTouched === "boolean"
+              ? saved.parkEstimatePowerTouched
+              : current.parkEstimatePowerTouched,
         };
       },
       /* zustand typings expect the full store; we only persist primitives. */
@@ -125,6 +170,13 @@ export const useAppPreferences = create(
         locale: s.locale,
         onboardingSkipped: s.onboardingSkipped,
         onboardingCarGeneration: s.onboardingCarGeneration,
+        parkEstimateTariffType: s.parkEstimateTariffType,
+        parkEstimateProviderType: s.parkEstimateProviderType,
+        parkEstimateUserProviderId: s.parkEstimateUserProviderId,
+        parkEstimatePowerKw: s.parkEstimatePowerKw,
+        parkEstimateTariffTouched: s.parkEstimateTariffTouched,
+        parkEstimateProviderTouched: s.parkEstimateProviderTouched,
+        parkEstimatePowerTouched: s.parkEstimatePowerTouched,
       }) as unknown as AppPreferencesState,
     },
   ),

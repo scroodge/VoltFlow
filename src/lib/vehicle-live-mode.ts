@@ -60,7 +60,9 @@ export function deriveDashboardVehicleMode({
   hasActiveSession: boolean;
   staleMs?: number;
 }): DashboardVehicleMode {
-  if (!snapshot) return hasActiveSession ? "app_charging" : "parked";
+  // No snapshot at all means the car has never reported — that is "no contact", not
+  // "parked". Claiming "parked" here invented a state we have no evidence for.
+  if (!snapshot) return hasActiveSession ? "app_charging" : "stale";
 
   const fresh = isFreshLiveSnapshot(snapshot, nowMs, staleMs);
   if (fresh && isDriveTelemetry(snapshot)) return "driving";
@@ -99,6 +101,21 @@ export function vehicleStatusLabelKey(mode: DashboardVehicleMode): TranslationKe
     case "parked":
     default:
       return "vehicle.status.parking";
+  }
+}
+
+/** Tailwind text colour for the dashboard status badge. */
+export function dashboardStatusBadgeClass(mode: DashboardVehicleMode) {
+  switch (mode) {
+    case "app_charging":
+    case "live_charging":
+      return "text-[var(--voltflow-green)]";
+    case "driving":
+      return "text-[var(--voltflow-cyan)]";
+    case "stale":
+      return "text-muted-foreground";
+    default:
+      return "text-[var(--voltflow-green)]";
   }
 }
 

@@ -64,6 +64,7 @@ const publicRoutes: DevRoute[] = [
 ];
 
 const fixtureRoutes: DevRoute[] = [
+  directRoute("Component gallery", "/dev/gallery", Beaker),
   directRoute("WB API debug", "/dev/api", Server),
   directRoute("Vehicle fixture controls", "/dev/vehicle-telemetry-fixtures", Beaker),
   directRoute("DiPlus diagnostics", "/dev/bydmate-diplus", Beaker),

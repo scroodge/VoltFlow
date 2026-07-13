@@ -20,8 +20,10 @@ export function BatteryRing({
   toggleAriaLabel,
   onToggleDisplay,
 }: {
-  percent: number;
-  status: string;
+  /** null when no SOC is known from any source — renders "—" rather than a guess. */
+  percent: number | null;
+  /** Omit to render no status line (e.g. when the car has not reported in). */
+  status?: string | null;
   detail?: string | null;
   charging?: boolean;
   size?: "default" | "compact";
@@ -31,7 +33,8 @@ export function BatteryRing({
   toggleAriaLabel?: string;
   onToggleDisplay?: () => void;
 }) {
-  const value = Math.max(0, Math.min(100, percent));
+  const known = typeof percent === "number" && Number.isFinite(percent);
+  const value = known ? Math.max(0, Math.min(100, percent)) : 0;
   const radius = 92;
   const circumference = 2 * Math.PI * radius;
   const compact = size === "compact";
@@ -60,18 +63,30 @@ export function BatteryRing({
             compact ? "text-4xl" : "text-6xl",
           )}
         >
-          {Math.round(value)}
-          <span className={cn("text-muted-foreground", compact ? "text-base" : "text-2xl")}>%</span>
+          {known ? Math.round(value) : "—"}
+          {known ? (
+            <span
+              className={cn("text-muted-foreground", compact ? "text-base" : "text-2xl")}
+            >
+              %
+            </span>
+          ) : null}
         </p>
       )}
-      <p
-        className={cn(
-          "font-semibold uppercase text-muted-foreground",
-          compact ? "mt-1 text-[9px] tracking-[0.18em]" : "mt-2 text-xs tracking-[0.24em]",
-        )}
-      >
-        {status}
-      </p>
+      {status ? (
+        // Clamped to the ring's inner width: long labels ("Charging (live)",
+        // "В движении") used to spill out past the circle.
+        <p
+          className={cn(
+            "mx-auto truncate font-semibold uppercase text-muted-foreground",
+            compact
+              ? "mt-1 max-w-[84px] text-[9px] tracking-[0.14em]"
+              : "mt-2 max-w-[180px] text-xs tracking-[0.24em]",
+          )}
+        >
+          {status}
+        </p>
+      ) : null}
       {detail ? (
         <p
           className={cn(

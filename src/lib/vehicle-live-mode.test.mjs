@@ -219,3 +219,40 @@ test("parked AC charging blocks driving mode", () => {
     false,
   );
 });
+
+test("no snapshot at all → stale, not parked", () => {
+  // A car that has never reported is out of contact. Reporting "parked" claimed a
+  // state we had no evidence for, and showed "Parking" on a dashboard with no data.
+  assert.equal(
+    deriveDashboardVehicleMode({
+      snapshot: null,
+      nowMs: NOW,
+      hasActiveSession: false,
+    }),
+    "stale",
+  );
+  assert.equal(
+    deriveDashboardVehicleMode({
+      snapshot: undefined,
+      nowMs: NOW,
+      hasActiveSession: false,
+    }),
+    "stale",
+  );
+});
+
+test("no snapshot but an open app session still wins → app_charging", () => {
+  assert.equal(
+    deriveDashboardVehicleMode({
+      snapshot: null,
+      nowMs: NOW,
+      hasActiveSession: true,
+    }),
+    "app_charging",
+  );
+});
+
+test("stale still allows starting a charging session", () => {
+  // The Start button must stay usable for a car we have not heard from.
+  assert.equal(canStartChargingSession("stale"), true);
+});

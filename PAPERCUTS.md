@@ -33,3 +33,14 @@ stalled after “Creating an optimized production build ...” with no further o
 for several minutes; process inspection was blocked by the environment (`ps`
 operation not permitted / `pgrep` could not get the process list). The run was
 interrupted after the source change had already linted successfully.
+
+## 2026-07-13 19:20 — Sonnet 5
+
+Verifying dashboard modes on `/dev/site/dashboard` → the `DashboardDevToolbar`
+(`src/components/dev/dashboard-dev-toolbar.tsx`) keeps the **LIVE** pill visually
+highlighted even when another mode is active (PARK/CHARGE/NO DATA highlight *as well*,
+so two look selected at once). `aria-pressed` also reports LIVE while the card renders
+the other mode. Cosmetic and dev-only, but it makes the toolbar untrustworthy when
+checking which fixture is actually applied — cross-check the `?devSnapshot=` query
+param instead. Untouched by the status-card work; likely a stale `mode` read or a
+class-precedence issue in the pill styling.
