@@ -6,6 +6,36 @@ go-ahead.** These are researched but **not built**. Shipped work lives in
 
 ---
 
+## 🟡 Separate car model from generation and choose model-specific dashboard art
+
+The `cars` table currently stores only `model_generation` (`gen1_2024` or
+`gen2_2025`), which is insufficient for users with Yuan Plus, Dolphin, Seal, or
+another vehicle. The dashboard image mapping therefore cannot safely distinguish a
+Yuan UP from another model.
+
+**Options:**
+
+1. Add a `model_key` column to `cars` with a constrained app-supported enum, default
+   existing rows to `yuan_up`, expose the model selector in the car form, and map
+   dashboard art by `model_key` while keeping generation separate — explicit,
+   backwards-compatible, and safe for future model images.
+2. Infer the model from the user-entered nickname — no migration, but unreliable and
+   would show incorrect artwork for names like “Family car”.
+3. Keep Yuan UP art for every car — no code or schema work, but misleading for every
+   non-Yuan-UP vehicle.
+
+**Recommendation:** option 1. Add an idempotent migration for `cars.model_key` with
+   `yuan_up` as the existing-row default, define the allowed model keys in shared
+   TypeScript, add localized model labels and a required Settings/car-form selector,
+   and use a generic car icon when a model has no image. Keep `model_generation`
+   independent because generation applies within a model. Existing RLS remains
+   user-scoped; verify the migration, create/update flows, dashboard fallback, and
+   localized settings labels before applying it to production.
+
+Proposed 2026-07-12; awaiting go-ahead.
+
+---
+
 ## 🟡 Lifetime-map pagination: race-safety vs. round-trip latency
 
 `fetchLifetimeTrackPoints` (`src/lib/vehicle-analytics.ts`) pages through
