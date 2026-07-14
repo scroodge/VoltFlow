@@ -6,14 +6,16 @@ loadEnvFile(".env.local");
 const args = new Set(process.argv.slice(2));
 const configureWebhook = args.has("--webhook");
 const token = process.env.TELEGRAM_BOT_TOKEN;
+// Mirrors DEFAULT_SITE_URL in src/lib/site-url.ts (a .mjs script cannot import the TS module).
+const DEFAULT_SITE_URL = "https://voltflow.life";
 const webAppUrl =
   process.env.TELEGRAM_WEB_APP_URL ??
   withPath(process.env.NEXT_PUBLIC_SITE_URL, "/telegram") ??
-  "https://volt-flow-beige.vercel.app/telegram";
+  `${DEFAULT_SITE_URL}/telegram`;
 const webhookUrl =
   process.env.TELEGRAM_WEBHOOK_URL ??
   withPath(process.env.NEXT_PUBLIC_SITE_URL, "/api/telegram/webhook") ??
-  "https://volt-flow-beige.vercel.app/api/telegram/webhook";
+  `${DEFAULT_SITE_URL}/api/telegram/webhook`;
 const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
 
 if (!token) {

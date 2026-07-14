@@ -11,7 +11,7 @@ License
 
 ## **Установить на телефон:** [инструкция для iPhone и Android](INSTALL.md)
 
-Рабочая версия проекта: [https://volt-flow-beige.vercel.app/](https://volt-flow-beige.vercel.app/)
+Рабочая версия проекта: [https://voltflow.life/](https://voltflow.life/)
 
 ## Project docs / Документация проекта
 

@@ -4,6 +4,7 @@ import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
 import { isDriveTelemetry, isParkStateTelemetry } from "@/lib/bydmate/gear";
 import { latestSampleByVehicle } from "@/lib/bydmate/latest-sample";
 import { finiteTelemetryNumber, isTelemetryCharging } from "@/lib/bydmate/telemetry-charging";
+import { siteUrl as canonicalSiteUrl } from "@/lib/site-url";
 import { editTelegramMessageText, sendTelegramMessage } from "@/lib/telegram/bot-send";
 
 const THROTTLE_MS = 30_000;
@@ -303,8 +304,7 @@ export async function updateTelegramLiveWidgets({
   const chatId = ((profile as Record<string, unknown> | null)?.telegram_id as number | null) ?? null;
   if (chatId == null) return { updated: 0 };
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://volt-flow-beige.vercel.app";
-  const webAppUrl = `${siteUrl.replace(/\/$/, "")}/vehicle`;
+  const webAppUrl = canonicalSiteUrl("/vehicle");
 
   const nowMs = new Date(receivedAt).getTime();
   let updated = 0;

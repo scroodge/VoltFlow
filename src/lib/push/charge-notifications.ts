@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AcceptedTelemetry } from "@/lib/bydmate/telemetry-sanitizer";
 import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
 import { latestDeviceTimeByVehicle } from "@/lib/bydmate/latest-sample";
+import { DEFAULT_SITE_URL } from "@/lib/site-url";
 import {
   finiteTelemetryNumber,
   isTelemetryCharging,
@@ -237,5 +238,5 @@ export async function processBydmateChargeNotifications({
 }
 
 function withPath(base: string | undefined, path: string) {
-  return `${(base ?? "https://volt-flow-beige.vercel.app").replace(/\/$/, "")}${path}`;
+  return `${(base ?? DEFAULT_SITE_URL).replace(/\/$/, "")}${path}`;
 }

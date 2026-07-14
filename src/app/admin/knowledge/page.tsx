@@ -7,20 +7,22 @@ import {
   getAdminArticles,
   getAdminFAQ,
   getAdminSpareParts,
+  getAdminServiceProviders,
   getCategories,
 } from "@/lib/supabase/knowledge";
 import type { ArticleStatus } from "@/types/knowledge";
 
 export default async function KnowledgeAdminPage() {
-  const [articles, faq, accessories, spareParts, categories] = await Promise.all([
+  const [articles, faq, accessories, spareParts, serviceProviders, categories] = await Promise.all([
     getAdminArticles(),
     getAdminFAQ(),
     getAdminAccessories(),
     getAdminSpareParts(),
+    getAdminServiceProviders(),
     getCategories(),
   ]);
 
-  const allStatuses = [...articles, ...faq, ...accessories, ...spareParts].map((item) => item.status);
+  const allStatuses = [...articles, ...faq, ...accessories, ...spareParts, ...serviceProviders].map((item) => item.status);
   const counts = countStatuses(allStatuses);
 
   return (
@@ -28,11 +30,12 @@ export default async function KnowledgeAdminPage() {
       title="Админка базы знаний"
       description="Управление русской базой знаний BYD YUAN UP для Telegram Mini App."
     >
-      <section className="grid gap-4 md:grid-cols-6">
+      <section className="grid gap-4 md:grid-cols-7">
         <Metric label="Статьи" value={articles.length} href="/admin/knowledge/articles" />
         <Metric label="Вопросы" value={faq.length} href="/admin/knowledge/faq" />
         <Metric label="Аксессуары" value={accessories.length} href="/admin/knowledge/accessories" />
         <Metric label="Запчасти" value={spareParts.length} href="/admin/knowledge/spare-parts" />
+        <Metric label="Сервис" value={serviceProviders.length} href="/admin/knowledge/service-providers" />
         <Metric label="Разделы" value={categories.length} href="/admin/knowledge/categories" />
         <Metric label="Опубликовано" value={counts.published} href="/telegram" />
       </section>
@@ -62,6 +65,9 @@ export default async function KnowledgeAdminPage() {
           </Link>
           <Link className="min-h-10 rounded-lg border border-border px-4 py-2 text-sm font-semibold" href="/admin/knowledge/spare-parts/new">
             Новая запчасть
+          </Link>
+          <Link className="min-h-10 rounded-lg border border-border px-4 py-2 text-sm font-semibold" href="/admin/knowledge/service-providers/new">
+            Новый сервис
           </Link>
         </div>
       </section>

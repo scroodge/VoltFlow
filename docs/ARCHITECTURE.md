@@ -128,7 +128,7 @@ restores. Breaking one of them causes the classic bugs (frozen percent, false
 | **Notifications** | Web push (charge thresholds) + Telegram vehicle-state events | [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | `src/lib/push/*`, `src/lib/telegram/*` |
 | **Remote commands** | Abstract commands PWA → car via Mate poller (lock, set SOC limit, …) | [supabase/BYDMATE_APK_API.md](../supabase/BYDMATE_APK_API.md) | `src/app/api/bydmate/commands/*`, `vehicle_commands` |
 | **Premium & retention** | Entitlements, tiered telemetry retention, admin tools | [PREMIUM_ADMIN.md](PREMIUM_ADMIN.md) | `is_user_premium()`, `purge_old_bydmate_telemetry_by_tier()` |
-| **Knowledge base** | Telegram-style CMS + semantic search | README §Knowledge, [SKILLS.md](../SKILLS.md) | `src/app/telegram/*`, `src/lib/knowledge-search.ts` |
+| **Knowledge base** | Telegram-style CMS + semantic search + service catalog | README §Knowledge, [SKILLS.md](../SKILLS.md) | `src/app/telegram/*`, `src/lib/knowledge-search.ts` |
 | **Database** | Tables, RLS, RPCs, enums, storage buckets | [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | `supabase/migrations/` |
 | **PWA / shell** | Install, service worker, mobile nav, i18n (en/be/ru) | [INSTALL.md](../INSTALL.md), README §PWA | `src/app/manifest.ts`, `src/components/layout/*` |
 

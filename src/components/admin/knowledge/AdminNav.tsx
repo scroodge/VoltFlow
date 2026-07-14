@@ -6,6 +6,7 @@ const navItems = [
   { href: "/admin/knowledge/faq", label: "Вопросы" },
   { href: "/admin/knowledge/accessories", label: "Аксессуары" },
   { href: "/admin/knowledge/spare-parts", label: "Запчасти" },
+  { href: "/admin/knowledge/service-providers", label: "Сервис" },
   { href: "/admin/knowledge/categories", label: "Разделы" },
 ];
 

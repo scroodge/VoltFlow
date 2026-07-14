@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { siteUrl } from "@/lib/site-url";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -43,10 +45,7 @@ export async function POST(request: Request) {
 }
 
 async function sendTelegramMessage(botToken: string, chatId: number | string) {
-  const webAppUrl =
-    process.env.TELEGRAM_WEB_APP_URL ??
-    withPath(process.env.NEXT_PUBLIC_SITE_URL, "/telegram") ??
-    "https://volt-flow-beige.vercel.app/telegram";
+  const webAppUrl = process.env.TELEGRAM_WEB_APP_URL ?? siteUrl("/telegram");
 
   await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: "POST",
@@ -67,9 +66,4 @@ async function sendTelegramMessage(botToken: string, chatId: number | string) {
       disable_web_page_preview: true,
     }),
   }).catch(() => undefined);
-}
-
-function withPath(base: string | undefined, path: string) {
-  if (!base) return null;
-  return `${base.replace(/\/$/, "")}${path}`;
 }

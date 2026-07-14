@@ -11,11 +11,13 @@ import {
   createCategory,
   createFAQ,
   createSparePart,
+  createServiceProvider,
   deleteAccessory,
   deleteArticle,
   deleteCategory,
   deleteFAQ,
   deleteSparePart,
+  deleteServiceProvider,
   requireAdmin,
   updateAccessory,
   updateArticle,
@@ -23,6 +25,7 @@ import {
   updateCategory,
   updateFAQ,
   updateSparePart,
+  updateServiceProvider,
 } from "@/lib/supabase/knowledge";
 import { createClient } from "@/lib/supabase/server";
 import type {
@@ -35,6 +38,7 @@ import type {
   KnowledgeArticleSection,
   SparePartImage,
   SparePartInput,
+  ServiceProviderInput,
 } from "@/types/knowledge";
 
 export type AdminFormState = {
@@ -213,6 +217,45 @@ export async function deleteSparePartAction(formData: FormData) {
   revalidateKnowledge();
 }
 
+export async function createServiceProviderAction(
+  _state: AdminFormState,
+  formData: FormData,
+): Promise<AdminFormState> {
+  const guard = await requireAdmin();
+  if (!guard.ok) return { message: "Нет доступа администратора." };
+
+  const input = parseServiceProviderForm(formData);
+  if (isFormState(input)) return input;
+
+  await createServiceProvider(input);
+  revalidateKnowledge();
+  redirect("/admin/knowledge/service-providers");
+}
+
+export async function updateServiceProviderAction(
+  id: string,
+  _state: AdminFormState,
+  formData: FormData,
+): Promise<AdminFormState> {
+  const guard = await requireAdmin();
+  if (!guard.ok) return { message: "Нет доступа администратора." };
+
+  const input = parseServiceProviderForm(formData);
+  if (isFormState(input)) return input;
+
+  await updateServiceProvider(id, input);
+  revalidateKnowledge();
+  redirect("/admin/knowledge/service-providers");
+}
+
+export async function deleteServiceProviderAction(formData: FormData) {
+  const guard = await requireAdmin();
+  if (!guard.ok) redirect("/admin/knowledge");
+
+  await deleteServiceProvider(stringValue(formData, "id"));
+  revalidateKnowledge();
+}
+
 export async function upsertCategoryAction(
   _state: AdminFormState,
   formData: FormData,
@@ -364,6 +407,33 @@ async function parseSparePartForm(formData: FormData): Promise<SparePartInput | 
   if (!input.model_generations.length) {
     errors.model_generations = "Выберите хотя бы одно поколение.";
   }
+  if (!statuses.includes(input.status)) errors.status = "Выберите корректный статус.";
+  return Object.keys(errors).length ? { errors, values: formValues(formData) } : input;
+}
+
+function parseServiceProviderForm(formData: FormData): ServiceProviderInput | AdminFormState {
+  const input: ServiceProviderInput = {
+    name: stringValue(formData, "name"),
+    provider_type: providerTypeValue(formData),
+    city: nullableString(formData, "city"),
+    service_area: nullableString(formData, "service_area"),
+    description: nullableString(formData, "description"),
+    services: multilineValue(formData, "services"),
+    price_from: nullableNumberValue(formData, "price_from"),
+    currency: stringValue(formData, "currency") || "BYN",
+    external_links: externalLinksValue(formData),
+    model_generations: formData.getAll("model_generations").map(String).filter(isCarGeneration),
+    image_url: nullableString(formData, "image_url"),
+    image_alt: nullableString(formData, "image_alt"),
+    status: statusValue(formData),
+    sort_order: numberValue(formData, "sort_order"),
+    verified_at: nullableString(formData, "verified_at"),
+  };
+
+  const errors: Record<string, string> = {};
+  if (!input.name) errors.name = "Название обязательно.";
+  if (!input.services.length) errors.services = "Добавьте хотя бы одну услугу.";
+  if (!input.model_generations.length) errors.model_generations = "Выберите хотя бы одно поколение.";
   if (!statuses.includes(input.status)) errors.status = "Выберите корректный статус.";
   return Object.keys(errors).length ? { errors, values: formValues(formData) } : input;
 }
@@ -526,6 +596,13 @@ function numberValue(formData: FormData, name: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function nullableNumberValue(formData: FormData, name: string) {
+  const value = stringValue(formData, name);
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
 function listValue(formData: FormData, name: string) {
   return stringValue(formData, name)
     .split(",")
@@ -615,6 +692,13 @@ function priorityValue(formData: FormData): AccessoryPriority {
   return priorities.includes(value as AccessoryPriority)
     ? (value as AccessoryPriority)
     : "useful";
+}
+
+function providerTypeValue(formData: FormData): ServiceProviderInput["provider_type"] {
+  const value = stringValue(formData, "provider_type");
+  return ["service_center", "mobile_service", "detailer", "parts_and_service", "other"].includes(value)
+    ? (value as ServiceProviderInput["provider_type"])
+    : "service_center";
 }
 
 function slugify(value: string) {

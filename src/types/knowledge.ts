@@ -110,6 +110,32 @@ export type SparePartItem = {
   updated_at: string;
 };
 
+export type ServiceProviderLink = {
+  label: string;
+  url: string;
+};
+
+export type ServiceProviderItem = {
+  id: string;
+  name: string;
+  provider_type: "service_center" | "mobile_service" | "detailer" | "parts_and_service" | "other";
+  city: string | null;
+  service_area: string | null;
+  description: string | null;
+  services: string[];
+  price_from: number | null;
+  currency: string;
+  external_links: ServiceProviderLink[];
+  model_generations: CarGeneration[];
+  image_url: string | null;
+  image_alt: string | null;
+  status: ArticleStatus;
+  sort_order: number;
+  verified_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ArticleInput = {
   slug: string;
   title: string;
@@ -169,6 +195,11 @@ export type SparePartInput = {
   sort_order: number;
 };
 
+export type ServiceProviderInput = Omit<
+  ServiceProviderItem,
+  "id" | "created_at" | "updated_at"
+>;
+
 export type CategoryInput = {
   slug: string;
   title: string;
@@ -186,4 +217,5 @@ export type TelegramKnowledgeData = {
   faq: TelegramFAQItem[];
   accessories: TelegramAccessoryItem[];
   spareParts: SparePartItem[];
+  serviceProviders: ServiceProviderItem[];
 };

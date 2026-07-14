@@ -32,6 +32,7 @@ import { currencyTextWithIcon } from "@/components/currency-amount";
 import { FreeRetentionNotice } from "@/components/premium/free-retention-notice";
 import { ClusterBackgroundsSettings } from "@/components/settings/cluster-backgrounds-settings";
 import { SettingsGroup, SettingsGroupDivider, SettingsPageHeader } from "@/components/settings/settings-section";
+import { siteUrl } from "@/lib/site-url";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1379,7 +1380,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
               </div>
               <p className="text-muted-foreground text-sm">
                 {t("settings.cloud.endpointURL")}{" "}
-                <span className="font-mono">https://volt-flow-beige.vercel.app/api/bydmate/telemetry</span>
+                <span className="font-mono">{siteUrl("/api/bydmate/telemetry")}</span>
               </p>
             </div>
           ) : null}

@@ -15,7 +15,7 @@ const tabs = [
   { id: "home", label: "Главная", icon: Home },
   { id: "guides", label: "Гайды", icon: BookOpen },
   { id: "faq", label: "Вопросы", icon: HelpCircle },
-  { id: "buy", label: "Купить", icon: ShoppingBag },
+  { id: "buy", label: "Каталог", icon: ShoppingBag },
   // Was "Еще" behind a hamburger — it is the charging calculator, the most concretely
   // useful tool here. Name it.
   { id: "more", label: "Калькулятор", icon: Calculator },

@@ -34,7 +34,7 @@ BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 SUPABASE_URL = os.environ.get("NEXT_PUBLIC_SUPABASE_URL", "").rstrip("/")
 ANON_KEY = os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
 SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
-SITE_URL = os.environ.get("NEXT_PUBLIC_SITE_URL", "https://volt-flow-beige.vercel.app").rstrip("/")
+SITE_URL = os.environ.get("NEXT_PUBLIC_SITE_URL", "https://voltflow.life").rstrip("/")
 CORS_ORIGIN = os.environ.get("TELEGRAM_CORS_ORIGIN", SITE_URL)
 PORT = int(os.environ.get("TELEGRAM_API_PORT") or os.environ.get("PORT") or "8787")
 

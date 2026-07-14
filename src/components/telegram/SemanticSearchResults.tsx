@@ -124,15 +124,49 @@ export function SemanticSearchResults({
           </>
         );
 
-        return result.source_url?.startsWith("/") ? (
-          <Link
-            key={result.id}
-            href={result.source_url}
-            className="voltflow-card block p-4 transition hover:border-[var(--voltflow-cyan)]/60 focus-visible:ring-3 focus-visible:ring-[var(--voltflow-cyan)]/30"
-          >
-            {card}
-          </Link>
-        ) : (
+        const internalHref = getInternalResultHref(result);
+        const externalHref = isExternalHref(result.source_url) ? result.source_url : null;
+
+        if (internalHref) {
+          return (
+            <Link
+              key={result.id}
+              href={internalHref}
+              className="voltflow-card block p-4 transition hover:border-[var(--voltflow-cyan)]/60 focus-visible:ring-3 focus-visible:ring-[var(--voltflow-cyan)]/30"
+            >
+              {card}
+            </Link>
+          );
+        }
+
+        if (externalHref) {
+          return (
+            <a
+              key={result.id}
+              href={externalHref}
+              target="_blank"
+              rel="noreferrer"
+              className="voltflow-card block p-4 transition hover:border-[var(--voltflow-cyan)]/60 focus-visible:ring-3 focus-visible:ring-[var(--voltflow-cyan)]/30"
+            >
+              {card}
+            </a>
+          );
+        }
+
+        const catalogHref = getCatalogResultHref(result);
+        if (catalogHref) {
+          return (
+            <Link
+              key={result.id}
+              href={catalogHref}
+              className="voltflow-card block p-4 transition hover:border-[var(--voltflow-cyan)]/60 focus-visible:ring-3 focus-visible:ring-[var(--voltflow-cyan)]/30"
+            >
+              {card}
+            </Link>
+          );
+        }
+
+        return (
           <article key={result.id} className="voltflow-card p-4">
             {card}
           </article>
@@ -140,6 +174,23 @@ export function SemanticSearchResults({
       })}
     </section>
   );
+}
+
+function getInternalResultHref(result: KnowledgeSearchResult) {
+  if (result.source_url?.startsWith("/")) return result.source_url;
+  if (result.source_type === "faq") return "/telegram?tab=faq";
+  return null;
+}
+
+function getCatalogResultHref(result: KnowledgeSearchResult) {
+  if (result.source_type === "accessory" || result.source_type === "spare_part") {
+    return "/telegram?tab=buy";
+  }
+  return null;
+}
+
+function isExternalHref(value: string | null) {
+  return Boolean(value && /^https?:\/\//i.test(value));
 }
 
 function categoryLabel(category: string) {

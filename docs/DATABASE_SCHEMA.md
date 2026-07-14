@@ -421,6 +421,23 @@ M2M self-join on `knowledge_articles`.
 Flattened knowledge records with pgvector embeddings for semantic search.
 | `id` uuid PK | `title` | `content` | `category` | `source_type` | `source_url` | `telegram_message_id` | `source_id` uuid | `source_slug` | `model_generations` text[] | `tags` text[] | `embedding` vector(1536) | `is_published` boolean |
 
+### `service_providers`
+App-owned public directory of repair shops, mobile services, detailers, and purchasable
+service offers. Published rows are readable anonymously; admin users manage the catalog.
+Booking and payment remain external links.
+
+| Column | Purpose |
+|---|---|
+| `name` | Provider or service name |
+| `provider_type` | Service center, mobile service, detailer, parts and service, or other |
+| `city`, `service_area` | Location and coverage |
+| `services` jsonb | Services offered, one string per item |
+| `price_from`, `currency` | Optional starting price |
+| `external_links` jsonb | Contact, booking, website, or payment links |
+| `model_generations` text[] | Compatible Yuan Up generations |
+| `verified_at` | Optional date of last catalog verification |
+| `status` | `draft`, `published`, or `archived` |
+
 ---
 
 ## Admin

@@ -88,6 +88,7 @@ export const staticTelegramKnowledgeData: TelegramKnowledgeData = {
   faq: russianTelegramKnowledgeData.faq,
   accessories: russianTelegramKnowledgeData.accessories,
   spareParts: russianTelegramKnowledgeData.spareParts,
+  serviceProviders: russianTelegramKnowledgeData.serviceProviders,
 };
 
 export function getArticleBySlug(slug: string) {

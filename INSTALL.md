@@ -1,10 +1,10 @@
 # Установка VoltFlow на телефон
 
-Рабочий адрес приложения: [https://volt-flow-beige.vercel.app/](https://volt-flow-beige.vercel.app/)
+Рабочий адрес приложения: [https://voltflow.life/](https://voltflow.life/)
 
 ## iPhone и iPad
 
-1. Откройте ссылку [https://volt-flow-beige.vercel.app/](https://volt-flow-beige.vercel.app/) в **Safari**.
+1. Откройте ссылку [https://voltflow.life/](https://voltflow.life/) в **Safari**.
 2. Нажмите кнопку **Share** внизу экрана.
 3. Выберите **Add to Home Screen**.
 4. Оставьте название `VoltFlow` или задайте свое.
@@ -16,7 +16,7 @@
 
 ## Android
 
-1. Откройте ссылку [https://volt-flow-beige.vercel.app/](https://volt-flow-beige.vercel.app/) в **Chrome**.
+1. Откройте ссылку [https://voltflow.life/](https://voltflow.life/) в **Chrome**.
 2. Если Chrome предложит установить приложение, нажмите **Install**.
 3. Если предложения нет, откройте меню Chrome.
 4. Выберите **Install app** или **Add to Home screen**.

@@ -1,13 +1,15 @@
 import { createHash, randomBytes, randomInt } from "node:crypto";
 
+import { siteUrl } from "@/lib/site-url";
 import { createServiceClient } from "@/lib/supabase/service";
 
 export const BYDMATE_LINK_CODE_TTL_MS = 10 * 60 * 1000;
 export const BYDMATE_LINK_CODE_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 export const BYDMATE_LINK_CODE_MAX_FAILED_ATTEMPTS = 10;
 
-const DEFAULT_TELEMETRY_ENDPOINT =
-  "https://volt-flow-beige.vercel.app/api/bydmate/telemetry";
+// Handed back to Mate on redeem, which persists it as its sync URL — so this is
+// what moves an already-paired car to a new domain without a re-link.
+const DEFAULT_TELEMETRY_ENDPOINT = siteUrl("/api/bydmate/telemetry");
 
 function linkCodePepper(): string {
   const pepper = process.env.BYDMATE_LINK_CODE_PEPPER?.trim();

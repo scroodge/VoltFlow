@@ -19,6 +19,9 @@ import type {
   SparePartImage,
   SparePartInput,
   SparePartItem,
+  ServiceProviderInput,
+  ServiceProviderItem,
+  ServiceProviderLink,
   TelegramKnowledgeData,
 } from "@/types/knowledge";
 import type {
@@ -65,6 +68,12 @@ type RawSparePart = Omit<
   images: unknown;
   model_generations?: unknown;
   knowledge_categories?: CategoryRelation;
+};
+
+type RawServiceProvider = Omit<ServiceProviderItem, "services" | "external_links" | "model_generations"> & {
+  services: unknown;
+  external_links: unknown;
+  model_generations?: unknown;
 };
 
 export async function getCurrentUser() {
@@ -338,6 +347,67 @@ export async function getPublishedAccessories() {
   return (data ?? []).map((item) => mapAccessory(item as RawAccessory));
 }
 
+export async function getPublishedServiceProviders() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("service_providers")
+    .select("*")
+    .eq("status", "published")
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []).map((item) => mapServiceProvider(item as RawServiceProvider));
+}
+
+export async function getAdminServiceProviders() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("service_providers")
+    .select("*")
+    .order("sort_order", { ascending: true })
+    .order("updated_at", { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []).map((item) => mapServiceProvider(item as RawServiceProvider));
+}
+
+export async function getAdminServiceProvider(id: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("service_providers")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapServiceProvider(data as RawServiceProvider) : null;
+}
+
+export async function createServiceProvider(input: ServiceProviderInput) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("service_providers")
+    .insert(input)
+    .select("id")
+    .single();
+
+  if (error) throw error;
+  return data.id as string;
+}
+
+export async function updateServiceProvider(id: string, input: ServiceProviderInput) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("service_providers").update(input).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteServiceProvider(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("service_providers").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function getAdminAccessories() {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -499,17 +569,18 @@ export async function getTelegramKnowledgeDataWithFallback(
   fallback: TelegramKnowledgeData,
 ) {
   try {
-    const [categories, articles, faq, accessories, spareParts, viewCounts] =
+    const [categories, articles, faq, accessories, spareParts, serviceProviders, viewCounts] =
       await Promise.all([
         getCategories(),
         getPublishedArticles(),
         getPublishedFAQ(),
         getPublishedAccessories(),
         getPublishedSpareParts(),
+        getPublishedServiceProviders(),
         getArticleViewCounts(),
       ]);
 
-    if (!articles.length && !faq.length && !accessories.length && !spareParts.length) {
+    if (!articles.length && !faq.length && !accessories.length && !spareParts.length && !serviceProviders.length) {
       return fallback;
     }
 
@@ -531,6 +602,9 @@ export async function getTelegramKnowledgeDataWithFallback(
         ? accessories.map(toTelegramAccessory)
         : fallback.accessories,
       spareParts: spareParts.length ? spareParts : fallback.spareParts,
+      serviceProviders: serviceProviders.length
+        ? serviceProviders
+        : fallback.serviceProviders,
     };
   } catch {
     return fallback;
@@ -821,6 +895,17 @@ function parseExternalLinks(value: unknown): AccessoryExternalLink[] {
       };
     })
     .filter((item): item is AccessoryExternalLink => Boolean(item));
+}
+
+function mapServiceProvider(row: RawServiceProvider): ServiceProviderItem {
+  return {
+    ...row,
+    services: parseStringArray(row.services),
+    external_links: parseExternalLinks(row.external_links) as ServiceProviderLink[],
+    model_generations: parseModelGenerations(row.model_generations),
+    status: row.status as ServiceProviderItem["status"],
+    provider_type: row.provider_type as ServiceProviderItem["provider_type"],
+  };
 }
 
 function parseImages(value: unknown): SparePartImage[] {

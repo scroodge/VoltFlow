@@ -4,25 +4,29 @@ import { useState } from "react";
 
 import { AccessoriesCatalog } from "@/components/telegram/AccessoriesCatalog";
 import { SparePartsCatalog } from "@/components/telegram/SparePartsCatalog";
+import { ServiceCatalog } from "@/components/telegram/ServiceCatalog";
 import type { CarGeneration } from "@/lib/car-generations";
 import { cn } from "@/lib/utils";
 import type { TelegramKnowledgeData } from "@/types/knowledge";
 
-type BuyTab = "accessories" | "spare-parts";
+type BuyTab = "accessories" | "spare-parts" | "service";
 
 const tabs = [
   { id: "accessories", label: "Аксессуары" },
   { id: "spare-parts", label: "Запчасти" },
+  { id: "service", label: "Сервис" },
 ] satisfies Array<{ id: BuyTab; label: string }>;
 
 export function BuyCatalog({
   accessories,
   generation,
   spareParts,
+  serviceProviders,
 }: {
   accessories?: TelegramKnowledgeData["accessories"];
   generation: CarGeneration;
   spareParts?: TelegramKnowledgeData["spareParts"];
+  serviceProviders?: TelegramKnowledgeData["serviceProviders"];
 }) {
   const [activeTab, setActiveTab] = useState<BuyTab>("accessories");
 
@@ -30,14 +34,14 @@ export function BuyCatalog({
     <section className="space-y-4" aria-labelledby="buy-title">
       <div>
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--voltflow-cyan)]">
-          Купить
+          Каталог
         </p>
         <h2 id="buy-title" className="mt-1 font-heading text-2xl font-bold">
-          Аксессуары и запчасти
+          Аксессуары, запчасти и сервис
         </h2>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 rounded-lg border border-border bg-white/[0.03] p-1">
+      <div className="grid grid-cols-3 gap-2 rounded-lg border border-border bg-white/[0.03] p-1">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
 
@@ -61,8 +65,10 @@ export function BuyCatalog({
 
       {activeTab === "accessories" ? (
         <AccessoriesCatalog generation={generation} items={accessories} compactHeader />
-      ) : (
+      ) : activeTab === "spare-parts" ? (
         <SparePartsCatalog generation={generation} items={spareParts} compactHeader />
+      ) : (
+        <ServiceCatalog generation={generation} providers={serviceProviders} />
       )}
     </section>
   );

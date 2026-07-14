@@ -152,6 +152,7 @@ export function KnowledgeView({ data, generation, activeTab, onTabChange }: Know
             accessories={data?.accessories}
             generation={generation}
             spareParts={data?.spareParts}
+            serviceProviders={data?.serviceProviders}
           />
         ) : null}
         {activeTab === "more" ? <Calculators /> : null}

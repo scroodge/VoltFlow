@@ -44,6 +44,24 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-07-14
 
+### Clickable semantic accessory results
+
+Semantic search cards now work for accessory and spare-part results. Relative internal
+URLs use Next navigation, valid `http(s)` product URLs open as external links, and results
+without a URL fall back to the Buy tab instead of rendering as dead cards.
+
+### Service-provider catalog
+
+Added an app-owned Postgres service directory beside accessories and spare parts. The
+Telegram catalog is now `Аксессуары`, `Запчасти`, and `Сервис`, with provider cards for
+service centers, mobile services, detailers, and parts-and-service businesses. Cards show
+location, services, optional starting price, verification status, and external contact or
+booking links. Added admin CRUD at `/admin/knowledge/service-providers`.
+
+Migration: `20260714130000_service_providers.sql`. It is idempotent and has not yet been
+applied to production; the catalog remains empty until the migration is applied and
+providers are entered.
+
 ### Knowledge search: admit when there is no answer (+ a relevance eval)
 
 - **Correction to yesterday's verdict.** I recorded that search relevance was "weak". That

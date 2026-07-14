@@ -127,6 +127,12 @@ Priority: **fresh live SOC (≤90s) > in-session telemetry > wall-clock math**. 
 - Never delete old migration files; keep as active history until a deliberate squash.
 - See `supabase/MIGRATIONS_AUDIT.md` for the full chain and pooler-based apply commands.
 
+### Knowledge base & semantic search
+
+- **Any function using pgvector operators must pin `search_path`.** The `vector` type lives in the `extensions` schema, so `<=>` resolves only when `extensions` is on the path. The API roles (`anon`, `authenticated`, `service_role`) have **no** `search_path` set, so PostgREST never gets it and every call 500s with `42883: operator does not exist: extensions.vector <=> extensions.vector`. Declare `set search_path = public, extensions` on the function. This is a **self-hosted-only** failure — psql (whose default path includes `extensions`) and Supabase Cloud both hide it, so it passes review and dies in prod. It cost a total, silent search outage; see migration `20260714090000`.
+- **Measure retrieval before tuning it.** `npm run search:eval` (`scripts/knowledge-search-eval.mjs`) runs 12 real queries against a running dev server and asserts the expected top hit; two cases are content gaps that pass by *correctly refusing to answer*. A "search is bad" report turned out to be **10/12 correct** plus two missing articles — and naively raising `match_threshold` would have dropped a right answer, because the scores overlap (correct hit `0.423` vs wrong hit `0.417`). Presentation confidence lives in `src/lib/knowledge-search-confidence.ts`; keep its constants in sync with the eval script.
+- **Article view counts must not live on `knowledge_articles`.** That table has a `BEFORE UPDATE` trigger (`set_knowledge_articles_updated_at`) stamping `updated_at = now()`, so a `view_count` column there would bump `updated_at` on every page view and turn "recently updated" into "recently viewed". Counts live in `knowledge_article_views`, written only through the `increment_knowledge_article_view` `SECURITY DEFINER` RPC — the KB is public, and RLS cannot restrict *which column* an `UPDATE` touches, so `anon` must never hold write privileges on the content tables.
+
 ### Test quirks
 
 - Tests use Node's built-in test runner with `--experimental-strip-types` (no Vitest/Jest).

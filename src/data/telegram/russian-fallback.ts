@@ -281,4 +281,5 @@ export const russianTelegramKnowledgeData: TelegramKnowledgeData = {
       updated_at: "2026-05-18T00:00:00.000Z",
     },
   ],
+  serviceProviders: [],
 };

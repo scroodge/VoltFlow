@@ -6,6 +6,168 @@ go-ahead.** These are researched but **not built**. Shipped work lives in
 
 ---
 
+## 🔴 Domain migration → voltflow.life
+
+New domain `voltflow.life` is bought and pointed at Vercel. Two *separate* old-domain
+families have to move, and they are unrelated to each other:
+
+| Family | What it is | Where it lives |
+|---|---|---|
+| `volt-flow-beige.vercel.app` | the app's public URL | hardcoded in ~8 source files |
+| `mykid.life` subdomains | backend infra (Supabase, Telegram proxy, Grafana) | Contabo + `.env` |
+
+Only **3 files** literally contain the string `mykid`, so a find-and-replace on that
+string misses almost the whole job. The bulk of the work is the `vercel.app` URL.
+
+### Facts established (verified 2026-07-14, not assumed)
+
+- **Telemetry ingest is healthy.** Last sample 5 s ago, 22 499 in 24 h. Nothing is broken
+  right now.
+- **The Vercel redirect is domain-level `308` → apex `voltflow.life`**, so it also covers
+  `/api/bydmate/telemetry`. **This is safe.** Mate uses OkHttp, whose `buildRedirectRequest`
+  sets `maintainBody = true` exactly when the code is 307/308 — so the POST is re-issued to
+  the new host with method and body intact. Verified against 48 h of ingest: no cliff, 6
+  vehicles, continuous. (An earlier note here claimed OkHttp refuses to follow 308 on POST.
+  That was wrong — it reads the RFC's *user-agent* rule, not OkHttp's code.)
+  The auth key travels as **`X-API-Key`** (`CloudTelemetryClient.kt:48`), not
+  `Authorization`, so OkHttp's cross-host `Authorization`-stripping does not apply either.
+- **Canonical domain: `voltflow.life` (apex).** ✅ Resolved 2026-07-14 — `www` and
+  `volt-flow-beige.vercel.app` both `308` → apex. Before this, both apex and `www` were
+  attached to Production with no redirect between them, which browsers treat as **different
+  origins** (split auth cookies, PWA installs, push subscriptions, `localStorage`).
+- **Vercel Attack Challenge Mode is ON** (`x-vercel-mitigated: challenge`). Non-browser
+  clients get a JS challenge page. This is already why Telegram traffic detours via
+  `bot.mykid.life` (see `src/lib/telegram/api-url.ts`).
+- **The Mate APK never talks to Supabase directly.** Its only hosts are
+  `volt-flow-beige.vercel.app` + third parties (ABRP, Iternio, GitHub, OpenRouter).
+  → Moving `supabase.mykid.life` **cannot** break the APK. This de-risks the infra move.
+- **The APK's telemetry URL is server-controlled at pairing.** `SettingsViewModel.kt:800`
+  writes `result.endpointUrl` (returned by link-code redeem) into persisted settings.
+  → Re-linking is a **remote migration path**; no APK release is required to move a car.
+  → Conversely, existing installs have the **old URL persisted**, so a new APK default
+  does *not* move them.
+- **12 production rows hold absolute `supabase.mykid.life` Storage URLs**:
+  `accessories.image_url` (6), `knowledge_articles.images` (4),
+  `knowledge_articles.content` (1), `spare_parts.images` (1). These 404 the moment the old
+  Supabase host stops serving, and nothing in the code would warn.
+- **`localStorage` is safe.** Only `voltflow:last_active_touch` and `voltflow:last_gps` —
+  both disposable. No tariffs or preferences are lost in an origin change.
+
+### The load-bearing invariant
+
+> **`volt-flow-beige.vercel.app/api/bydmate/telemetry` must keep resolving — by serving or
+> by redirecting — forever.**
+
+Vercel never releases a project's `.vercel.app` hostname, so this costs nothing to honour.
+It matters because the APK is the one client that **cannot be force-updated** — it sits in
+a car, and its sync URL is persisted in SharedPreferences. Any plan whose correctness
+depends on "and then everyone updates the APK" silently loses telemetry from whoever
+doesn't. The `308` currently satisfies this. What would **violate** it is ever *removing*
+the old domain from the Vercel project.
+
+### Phase 0 — canonical domain ✅ DONE (2026-07-14)
+
+`voltflow.life` is Production; `www.voltflow.life` and `volt-flow-beige.vercel.app` both
+`308` → apex. Single hop for the APK, one origin for browsers. Nothing further required.
+
+**Optional cleanup, not urgent.** Serving `/api/bydmate/*` directly on the old host — flip
+it to *Connect to an environment → Production* and move the redirect into `src/proxy.ts`
+with a path exemption — would halve the request count on the telemetry path (today every
+sample is a `308` + a re-issued POST) and remove the dependency on client redirect-following
+entirely. Worth doing on Hobby tier, but it is an efficiency win, not a correctness fix.
+
+### Phase 1 — frontend URL switch
+
+Set `NEXT_PUBLIC_SITE_URL=https://voltflow.life` in Vercel, then replace the hardcoded
+`volt-flow-beige.vercel.app` fallbacks:
+
+| File | What |
+|---|---|
+| `src/lib/bydmate/link-code.ts:10` | `DEFAULT_TELEMETRY_ENDPOINT` — **also the remote migration path** |
+| `src/lib/push/charge-notifications.ts:240` | notification click-through base |
+| `src/lib/telegram/live-widget.ts:306` | Telegram widget site URL |
+| `src/lib/email/inactivity-warning.ts:13` | login link in emails |
+| `src/app/api/telegram/webhook/route.ts:49` | Mini App URL |
+| `src/components/settings/settings-view.tsx:1382` | telemetry endpoint shown to users |
+| `scripts/configure-telegram-bot.mjs:12,16` | Mini App + webhook URLs |
+| `scripts/telegram-miniapp-server.py:37` | site URL / CORS origin |
+| `README.md`, `INSTALL.md` | public docs |
+
+Then re-run `scripts/configure-telegram-bot.mjs` and update the **BotFather** Mini App URL.
+Add a `sitemap.ts`/`robots.ts` (neither exists) so the marketing + knowledge pages get a
+canonical host for SEO.
+
+**Push notifications:** subscriptions are origin-scoped. Existing ones keep working, but a
+user who reinstalls the PWA from the new origin gets a *second* subscription → possible
+duplicate charge notifications until the old one expires. Worth a dedupe pass.
+
+### Phase 2 — backend infra (`mykid.life` → `voltflow.life`)
+
+Approved in principle. Safe because the APK doesn't touch Supabase. Must be **dual-served**
+(both hostnames valid simultaneously), never cut over:
+
+1. DNS: add `supabase.voltflow.life`, `bot.voltflow.life` → Contabo IP.
+2. nginx: add the new names to `server_name` **alongside** the old ones; issue certs
+   (`certbot --expand`). Both hostnames now serve.
+3. **Backfill the 12 stored Storage URLs** (`accessories`, `knowledge_articles`,
+   `spare_parts`) old → new host. Idempotent `UPDATE ... replace(...)` migration.
+4. GoTrue: update `API_EXTERNAL_URL`, `SITE_URL`, `URI_ALLOW_LIST` (must include the new
+   app origin **and** keep the old during overlap). Update the nginx-hosted recovery/confirm
+   email templates.
+5. Resend: verify `voltflow.life` (SPF/DKIM) and move the auth-email sender domain.
+6. Flip `NEXT_PUBLIC_SUPABASE_URL` in Vercel + `.env`/`.env.local`; redeploy.
+   `NEXT_PUBLIC_TELEGRAM_API_BASE_URL` → `https://bot.voltflow.life/voltflow`
+   (currently hardcoded in `src/lib/telegram/api-url.ts:10`).
+7. Update `docs/OPS_LOCAL.md` (pooler host), `supabase/MIGRATIONS_AUDIT.md`, Grafana.
+8. **Keep the old hostnames serving for ≥1 release cycle.** Service-worker-cached PWA
+   clients have the old Supabase URL baked into their JS bundle and will keep calling it
+   until the SW updates.
+
+### Phase 3 — Mate APK: move every install on upgrade, with no re-link
+
+Goal: **installing the new APK repoints an existing car at the new domain — no reconnect,
+no re-pairing.**
+
+Changing `SettingsRepository.DEFAULT_CLOUD_SYNC_URL` (`SettingsRepository.kt:92`) is **not
+enough on its own**. The endpoint is persisted in Room (`settings` table, key
+`cloud_sync_url`, written at link time by `SettingsViewModel.kt:800`), and
+`getString(key, default)` returns the *stored* value — the new default would reach fresh
+installs only.
+
+So add a **one-shot settings migration**, mirroring the existing v2.4.17 precedent
+(`BYDMateApp.kt:49-54`, gated on `KEY_MIGRATION_V2_4_17`):
+
+1. `SettingsRepository`: point `DEFAULT_CLOUD_SYNC_URL` at
+   `https://voltflow.life/api/bydmate/telemetry`; add
+   `LEGACY_CLOUD_SYNC_HOSTS = setOf("volt-flow-beige.vercel.app")` and
+   `KEY_MIGRATION_DOMAIN = "migration_domain_voltflow_done"` + its
+   `isMigrationDomainDone()` / `setMigrationDomainDone()` pair.
+2. `BYDMateApp` init: if the flag is unset, read `cloud_sync_url`; if it is **blank or its
+   host is in `LEGACY_CLOUD_SYNC_HOSTS`**, rewrite it to the new default. Then set the flag.
+
+**Match on host, rewrite only the known-legacy value.** A user who pointed Mate at a
+self-hosted or custom endpoint must be left alone — a blanket overwrite would silently
+hijack their config. This is the one way this migration can do harm, so it is the one rule
+that matters.
+
+Also update `tools/voltflow_cmd.conf.example:6` (CommandDaemon's on-device conf) and the
+`volt-flow-beige` URLs in the Kotlin tests.
+
+**This does not retire the `308`.** A user who never installs the new APK keeps posting to
+`volt-flow-beige.vercel.app` forever, and must keep working. The redirect stays permanently;
+the migration is what moves everyone who *does* upgrade, without asking them to re-link.
+
+### Open question
+
+Is Attack Challenge Mode deliberate? It challenges every non-browser client, which is a
+standing hazard for the telemetry and Telegram paths and the reason for the
+`bot.mykid.life` detour. Worth a WAF bypass rule for `/api/bydmate/*` rather than living
+with it.
+
+Proposed 2026-07-14 — **not built, awaiting go-ahead.**
+
+---
+
 ## 🟡 Knowledge base content gaps (two missing articles)
 
 The 12-query relevance eval (`npm run search:eval`) passes 12/12 — but two of those pass by
