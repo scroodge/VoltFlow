@@ -8,14 +8,15 @@ const configureWebhook = args.has("--webhook");
 const token = process.env.TELEGRAM_BOT_TOKEN;
 // Mirrors DEFAULT_SITE_URL in src/lib/site-url.ts (a .mjs script cannot import the TS module).
 const DEFAULT_SITE_URL = "https://voltflow.life";
+const DEFAULT_TELEGRAM_EDGE_URL = "https://bot.voltflow.life";
 const webAppUrl =
   process.env.TELEGRAM_WEB_APP_URL ??
   withPath(process.env.NEXT_PUBLIC_SITE_URL, "/telegram") ??
   `${DEFAULT_SITE_URL}/telegram`;
 const webhookUrl =
   process.env.TELEGRAM_WEBHOOK_URL ??
-  withPath(process.env.NEXT_PUBLIC_SITE_URL, "/api/telegram/webhook") ??
-  `${DEFAULT_SITE_URL}/api/telegram/webhook`;
+  withPath(process.env.TELEGRAM_EDGE_URL, "/api/telegram/webhook") ??
+  `${DEFAULT_TELEGRAM_EDGE_URL}/api/telegram/webhook`;
 const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
 
 if (!token) {
@@ -41,7 +42,7 @@ await callTelegram("setMyCommands", {
 if (configureWebhook) {
   const body = {
     url: webhookUrl,
-    allowed_updates: ["message"],
+      allowed_updates: ["message", "edited_message"],
     drop_pending_updates: false,
   };
   if (webhookSecret) body.secret_token = webhookSecret;

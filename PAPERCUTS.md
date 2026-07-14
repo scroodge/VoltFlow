@@ -47,3 +47,6 @@ class-precedence issue in the pill styling.
 ## 2026-07-14 11:?? — Codex
 
 While verifying service-provider semantic-search indexing against the self-hosted Supabase pooler, DNS could not resolve `supabase.mykid.life`; local code checks can continue, but live database verification is blocked until DNS/network access returns.
+## 2026-07-14 12:00 — Codex
+
+While running the real Ollama verifier, Node and curl intermittently returned `ENOTFOUND` for `dev.offtech.by`; the same endpoint had responded successfully moments earlier. This looks like transient local DNS resolution and the verifier correctly failed closed.

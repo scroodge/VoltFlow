@@ -5,6 +5,7 @@ import hmac
 import json
 import os
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -37,6 +38,10 @@ SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 SITE_URL = os.environ.get("NEXT_PUBLIC_SITE_URL", "https://voltflow.life").rstrip("/")
 CORS_ORIGIN = os.environ.get("TELEGRAM_CORS_ORIGIN", SITE_URL)
 PORT = int(os.environ.get("TELEGRAM_API_PORT") or os.environ.get("PORT") or "8787")
+LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "").rstrip("/")
+LLM_MODEL = os.environ.get("LLM_MODEL", "")
+LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
+LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS") or "512")
 
 
 if not all([BOT_TOKEN, SUPABASE_URL, ANON_KEY, SERVICE_ROLE_KEY]):
@@ -215,14 +220,29 @@ class TelegramApiHandler(BaseHTTPRequestHandler):
             return
 
         update = self.read_json(required=False)
-        chat_id = ((update or {}).get("message") or {}).get("chat", {}).get("id")
+        message = (update or {}).get("message") or (update or {}).get("edited_message") or {}
+        chat_id = (message.get("chat") or {}).get("id")
         if not chat_id:
             self.write_json(200, {"ok": True})
             return
 
-        text = ((update or {}).get("message") or {}).get("text", "").strip()
+        text = (message.get("text") or message.get("caption") or "").strip()
         if text.startswith("/start") or text.startswith("/app") or text == "":
             send_telegram_message(chat_id)
+
+        event = normalize_group_event(update or {})
+        if event:
+            try:
+                upsert_telegram_group_event(event)
+                threading.Thread(
+                    target=process_telegram_group_event,
+                    args=(event,),
+                    daemon=True,
+                ).start()
+            except RuntimeError as exc:
+                # Telegram should still receive a fast success response. The
+                # update_id/message identity makes a later retry idempotent.
+                print(f"telegram group event store failed: {exc}", file=sys.stderr)
 
         self.write_json(200, {"ok": True})
 
@@ -374,6 +394,214 @@ def supabase_request(method, path, payload=None, key="", headers=None, expect_em
     if expect_empty or not raw:
         return None
     return json.loads(raw)
+
+
+def normalize_group_event(update):
+    edited = bool(update.get("edited_message"))
+    message = update.get("edited_message") or update.get("message") or {}
+    chat = message.get("chat") or {}
+    chat_type = chat.get("type")
+    message_id = message.get("message_id")
+    chat_id = chat.get("id")
+    if chat_type not in {"group", "supergroup"} or message_id is None or chat_id is None:
+        return None
+
+    user = message.get("from") or {}
+    media_type, media_file_id = resolve_group_media(message)
+    chat_username = clean_telegram_username(chat.get("username"))
+    source_url = f"https://t.me/{chat_username}/{message_id}" if chat_username else None
+
+    return {
+        "update_id": update.get("update_id"),
+        "event_type": "edited" if edited else "new",
+        "chat_id": chat_id,
+        "chat_type": chat_type,
+        "chat_title": (chat.get("title") or "").strip() or None,
+        "chat_username": chat_username,
+        "message_id": message_id,
+        "telegram_user_id": user.get("id"),
+        "username": clean_telegram_username(user.get("username")),
+        "display_name": " ".join(
+            part for part in [user.get("first_name"), user.get("last_name")] if part
+        ) or None,
+        "sent_at": telegram_time_to_iso(message.get("date")),
+        "edited_at": telegram_time_to_iso(message.get("edit_date")),
+        "text": (message.get("text") or message.get("caption") or "").strip(),
+        "reply_to_message_id": (message.get("reply_to_message") or {}).get("message_id"),
+        "media_type": media_type,
+        "media_file_id": media_file_id,
+        "protected_content": message.get("has_protected_content") is True,
+        "source_url": source_url,
+        "raw_update": update,
+    }
+
+
+def upsert_telegram_group_event(event):
+    supabase_request(
+        "POST",
+        "/rest/v1/telegram_group_events?on_conflict=chat_id%2Cmessage_id",
+        event,
+        key=SERVICE_ROLE_KEY,
+        headers={"prefer": "resolution=merge-duplicates,return=minimal"},
+        expect_empty=True,
+    )
+
+
+def process_telegram_group_event(event):
+    if event["protected_content"]:
+        update_telegram_group_verification(
+            event,
+            {
+                "status": "ignored",
+                "last_error": "protected_content",
+                "processed_at": utc_now(),
+            },
+        )
+        return
+    if not event["text"]:
+        update_telegram_group_verification(
+            event,
+            {"status": "ignored", "last_error": "empty_text", "processed_at": utc_now()},
+        )
+        return
+    if not LLM_BASE_URL or not LLM_MODEL or not LLM_API_KEY:
+        update_telegram_group_verification(
+            event,
+            {"status": "failed", "last_error": "llm_not_configured", "processed_at": utc_now()},
+        )
+        return
+
+    try:
+        result = verify_telegram_text(event["text"])
+        update_telegram_group_verification(
+            event,
+            {
+                "status": "processed",
+                "intent": result["intent"],
+                "confidence": result["confidence"],
+                "title": result["title"],
+                "item_type": result["item_type"],
+                "city": result["city"],
+                "generation": result["generation"],
+                "price": result["price"],
+                "currency": result["currency"],
+                "contact": result["contact"],
+                "actionable": result["actionable"],
+                "needs_review": result["needs_review"],
+                "verification_reason": result["reason"],
+                "verified_at": utc_now(),
+                "processed_at": utc_now(),
+                "last_error": None,
+            },
+        )
+    except Exception as exc:
+        print(f"telegram group event verification failed: {exc}", file=sys.stderr)
+        update_telegram_group_verification(
+            event,
+            {"status": "failed", "last_error": "llm_request_failed", "processed_at": utc_now()},
+        )
+
+
+def update_telegram_group_verification(event, values):
+    query = urllib.parse.urlencode(
+        {"chat_id": f"eq.{event['chat_id']}", "message_id": f"eq.{event['message_id']}"}
+    )
+    supabase_request(
+        "PATCH",
+        f"/rest/v1/telegram_group_events?{query}",
+        values,
+        key=SERVICE_ROLE_KEY,
+        headers={"prefer": "return=minimal"},
+        expect_empty=True,
+    )
+
+
+def verify_telegram_text(text):
+    base_url = LLM_BASE_URL if LLM_BASE_URL.endswith("/v1") else f"{LLM_BASE_URL}/v1"
+    prompt = (
+        "You verify Telegram group messages for a BYD Yuan UP community marketplace. "
+        "Return ONLY valid JSON with keys: intent, confidence, title, item_type, city, "
+        "generation, price, currency, contact, actionable, needs_review, reason. "
+        "intent must be sell, wanted, service, question, irrelevant, or ambiguous. "
+        "item_type must be accessory, spare_part, service, car, other, or null. "
+        "Never invent details. actionable is true only for a clear sell, wanted, or service. "
+        "Set needs_review true when ambiguous or unsafe."
+    )
+    payload = {
+        "model": LLM_MODEL,
+        "temperature": 0,
+        "max_tokens": LLM_MAX_TOKENS,
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": text},
+        ],
+    }
+    request = urllib.request.Request(
+        f"{base_url}/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        method="POST",
+        headers={
+            "authorization": f"Bearer {LLM_API_KEY}",
+            "content-type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=15) as response:
+        body = json.loads(response.read().decode("utf-8"))
+    content = (((body.get("choices") or [{}])[0]).get("message") or {}).get("content") or ""
+    content = content.strip().removeprefix("```json").removesuffix("```").strip()
+    value = json.loads(content)
+    return normalize_verification_result(value)
+
+
+def normalize_verification_result(value):
+    intents = {"sell", "wanted", "service", "question", "irrelevant", "ambiguous"}
+    item_types = {"accessory", "spare_part", "service", "car", "other"}
+    intent = value.get("intent") if value.get("intent") in intents else "ambiguous"
+    confidence = value.get("confidence") if isinstance(value.get("confidence"), (int, float)) else 0
+    confidence = max(0, min(1, confidence))
+    needs_review = bool(value.get("needs_review")) or intent == "ambiguous" or confidence < 0.75
+    actionable = bool(value.get("actionable")) and intent in {"sell", "wanted", "service"} and not needs_review
+    return {
+        "intent": intent,
+        "confidence": confidence,
+        "title": value.get("title") if isinstance(value.get("title"), str) else None,
+        "item_type": value.get("item_type") if value.get("item_type") in item_types else None,
+        "city": value.get("city") if isinstance(value.get("city"), str) else None,
+        "generation": value.get("generation") if isinstance(value.get("generation"), str) else None,
+        "price": value.get("price") if isinstance(value.get("price"), (int, float)) else None,
+        "currency": value.get("currency") if isinstance(value.get("currency"), str) else None,
+        "contact": value.get("contact") if isinstance(value.get("contact"), str) else None,
+        "actionable": actionable,
+        "needs_review": needs_review,
+        "reason": value.get("reason") if isinstance(value.get("reason"), str) else "No explanation returned.",
+    }
+
+
+def utc_now():
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def clean_telegram_username(username):
+    value = str(username or "").strip().lstrip("@")
+    return value or None
+
+
+def telegram_time_to_iso(value):
+    if not isinstance(value, (int, float)):
+        return None
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(value))
+
+
+def resolve_group_media(message):
+    photos = message.get("photo") or []
+    if photos and photos[-1].get("file_id"):
+        return "photo", photos[-1]["file_id"]
+    for media_type in ["video", "document", "audio", "voice", "sticker"]:
+        media = message.get(media_type) or {}
+        if media.get("file_id"):
+            return media_type, media["file_id"]
+    return None, None
 
 
 def send_telegram_message(chat_id):

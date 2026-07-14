@@ -11,6 +11,27 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-07-14
 
+### Telegram group event inbox and Ollama context-verification foundation
+
+- Added a configurable Ollama-compatible verifier for Telegram context using
+  `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`, and `LLM_MAX_TOKENS`.
+- Kept OpenAI embeddings and the existing 1536-dimensional knowledge search unchanged.
+- Added strict, fail-closed intent parsing with seller, buyer, service, question,
+  irrelevant, and ambiguous outcomes.
+- Added Telegram group-message normalization for new and edited messages, captions,
+  media identifiers, replies, protected content, source links, and deduplication keys.
+- Added and applied `20260714150000_telegram_group_events.sql` to self-hosted
+  Supabase at `supabase.voltflow.life`; the raw inbox is RLS-enabled and inaccessible
+  to `anon` and `authenticated` roles.
+- Updated the live Telegram Python edge to idempotently upsert group events while
+  preserving `/start` and `/app` behavior.
+- Verification: 11 focused tests, TypeScript, ESLint, Python normalization smoke test,
+  and production migration privilege checks passed.
+
+---
+
+## 2026-07-14
+
 ### Domain migration → `voltflow.life` (Phases 0–2 shipped)
 
 Moved the app and its backend infra off `volt-flow-beige.vercel.app` / `mykid.life`.
