@@ -473,6 +473,8 @@ def process_telegram_group_event(event):
 
     try:
         result = verify_telegram_text(event["text"])
+        if result["actionable"]:
+            upsert_community_listing(event, result)
         update_telegram_group_verification(
             event,
             {
@@ -505,6 +507,33 @@ def process_telegram_group_event(event):
 def update_telegram_group_verification(event, values):
     query = urllib.parse.urlencode(
         {"chat_id": f"eq.{event['chat_id']}", "message_id": f"eq.{event['message_id']}"}
+    )
+
+
+def upsert_community_listing(event, result):
+    listing = {
+        "telegram_user_id": event["telegram_user_id"],
+        "listing_type": result["intent"],
+        "title": result["title"] or event["text"][:120],
+        "description": event["text"],
+        "item_type": result["item_type"] or "other",
+        "city": result["city"],
+        "generation": result["generation"],
+        "price": result["price"],
+        "currency": result["currency"],
+        "contact_link": event["source_url"],
+        "source_chat_id": event["chat_id"],
+        "source_message_id": event["message_id"],
+        # Edits return a published listing to draft for fresh moderation.
+        "status": "draft",
+    }
+    supabase_request(
+        "POST",
+        "/rest/v1/community_listings?on_conflict=source_chat_id%2Csource_message_id",
+        listing,
+        key=SERVICE_ROLE_KEY,
+        headers={"prefer": "resolution=merge-duplicates,return=minimal"},
+        expect_empty=True,
     )
     supabase_request(
         "PATCH",
