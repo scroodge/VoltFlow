@@ -7,7 +7,7 @@
 export function telegramApiUrl(path: string) {
   const base =
     process.env.NEXT_PUBLIC_TELEGRAM_API_BASE_URL?.trim() ??
-    "https://bot.mykid.life/voltflow";
+    "https://bot.voltflow.life/voltflow";
   if (!base) return path;
   return `${base.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
 }
