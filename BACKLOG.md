@@ -6,124 +6,159 @@ go-ahead.** These are researched but **not built**. Shipped work lives in
 
 ---
 
-## 🔴 Domain migration → voltflow.life
+## Telegram community marketplace for `@Voltflowscr_bot`
 
-New domain `voltflow.life` is bought and pointed at Vercel. Two *separate* old-domain
-families have to move, and they are unrelated to each other:
+### Goal
 
-| Family | What it is | Where it lives |
-|---|---|---|
-| `volt-flow-beige.vercel.app` | the app's public URL | hardcoded in ~8 source files |
-| `mykid.life` subdomains | backend infra (Supabase, Telegram proxy, Grafana) | Contabo + `.env` |
+Turn relevant posts from the BYD Telegram group into searchable, temporary
+community listings without mixing them into the curated VoltFlow knowledge base:
 
-Only **3 files** literally contain the string `mykid`, so a find-and-replace on that
-string misses almost the whole job. The bulk of the work is the `vercel.app` URL.
+- `Продам` / `есть в наличии` → seller offer;
+- `Куплю` / `ищу` / `нужен` → buyer request;
+- technical questions → existing knowledge-base search;
+- unrelated or unsafe messages → ignored or moderation queue.
 
-### Facts established (verified 2026-07-14, not assumed)
+### Current repo facts
 
-- **Telemetry ingest is healthy.** Last sample 5 s ago, 22 499 in 24 h. Nothing is broken
-  right now.
-- **The Vercel redirect is domain-level `308` → apex `voltflow.life`**, so it also covers
-  `/api/bydmate/telemetry`. **This is safe.** Mate uses OkHttp, whose `buildRedirectRequest`
-  sets `maintainBody = true` exactly when the code is 307/308 — so the POST is re-issued to
-  the new host with method and body intact. Verified against 48 h of ingest: no cliff, 6
-  vehicles, continuous. (An earlier note here claimed OkHttp refuses to follow 308 on POST.
-  That was wrong — it reads the RFC's *user-agent* rule, not OkHttp's code.)
-  The auth key travels as **`X-API-Key`** (`CloudTelemetryClient.kt:48`), not
-  `Authorization`, so OkHttp's cross-host `Authorization`-stripping does not apply either.
-- **Canonical domain: `voltflow.life` (apex).** ✅ Resolved 2026-07-14 — `www` and
-  `volt-flow-beige.vercel.app` both `308` → apex. Before this, both apex and `www` were
-  attached to Production with no redirect between them, which browsers treat as **different
-  origins** (split auth cookies, PWA installs, push subscriptions, `localStorage`).
-- **Vercel Attack Challenge Mode is ON** (`x-vercel-mitigated: challenge`). Non-browser
-  clients get a JS challenge page. This is already why Telegram traffic detours via
-  `bot.mykid.life` (see `src/lib/telegram/api-url.ts`).
-- **The Mate APK never talks to Supabase directly.** Its only hosts are
-  `volt-flow-beige.vercel.app` + third parties (ABRP, Iternio, GitHub, OpenRouter).
-  → Moving `supabase.mykid.life` **cannot** break the APK. This de-risks the infra move.
-- **The APK's telemetry URL is server-controlled at pairing.** `SettingsViewModel.kt:800`
-  writes `result.endpointUrl` (returned by link-code redeem) into persisted settings.
-  → Re-linking is a **remote migration path**; no APK release is required to move a car.
-  → Conversely, existing installs have the **old URL persisted**, so a new APK default
-  does *not* move them.
-- **12 production rows hold absolute `supabase.mykid.life` Storage URLs**:
-  `accessories.image_url` (6), `knowledge_articles.images` (4),
-  `knowledge_articles.content` (1), `spare_parts.images` (1). These 404 the moment the old
-  Supabase host stops serving, and nothing in the code would warn.
-- **`localStorage` is safe.** Only `voltflow:last_active_touch` and `voltflow:last_gps` —
-  both disposable. No tariffs or preferences are lost in an origin change.
+- `@Voltflowscr_bot` already has a webhook path at `/api/telegram/webhook`.
+- `bot.voltflow.life` already proxies Telegram auth, link, and webhook traffic because
+  Vercel may serve a Security Checkpoint before Next.js runs.
+- The webhook currently responds only to `/start`, `/app`, and empty messages.
+- The knowledge base already has OpenAI embeddings, pgvector/HNSW search, source-type
+  filtering, generation filtering, and confidence rules.
+- The repository explicitly describes Telegram group import as a future phase.
 
-### The load-bearing invariant
+### Options and recommendation
 
-> **`volt-flow-beige.vercel.app/api/bydmate/telemetry` must keep resolving — by serving or
-> by redirecting — forever.**
+#### Option A — Extend the existing bot edge and Next.js pipeline (recommended)
 
-Vercel never releases a project's `.vercel.app` hostname, so this costs nothing to honour.
-It matters because the APK is the one client that **cannot be force-updated** — it sits in
-a car, and its sync URL is persisted in SharedPreferences. Any plan whose correctness
-depends on "and then everyone updates the APK" silently loses telemetry from whoever
-doesn't. The `308` currently satisfies this. What would **violate** it is ever *removing*
-the old domain from the Vercel project.
+Telegram delivers updates to `bot.voltflow.life`; the Python edge verifies the Telegram
+secret and forwards group-message events to a private Next.js ingestion endpoint. The
+Next.js endpoint classifies, normalizes, moderates, stores, embeds, and expires listings.
 
-### Phase 0 — canonical domain ✅ DONE (2026-07-14)
+Pros: reuses the existing bot, proxy, deployment, secrets, and OpenAI/vector search;
+keeps business logic in the main codebase; easiest to test with the existing bot.
 
-`voltflow.life` is Production; `www.voltflow.life` and `volt-flow-beige.vercel.app` both
-`308` → apex. Single hop for the APK, one origin for browsers. Nothing further required.
+Trade-off: the bot must be added to the test group, made an administrator or given the
+needed message visibility, and Telegram privacy settings must allow the intended group
+messages to reach it.
 
-**Optional cleanup, not urgent.** Serving `/api/bydmate/*` directly on the old host — flip
-it to *Connect to an environment → Production* and move the redirect into `src/proxy.ts`
-with a path exemption — would halve the request count on the telemetry path (today every
-sample is a `308` + a re-issued POST) and remove the dependency on client redirect-following
-entirely. Worth doing on Hobby tier, but it is an efficiency win, not a correctness fix.
+#### Option B — Separate Python marketplace worker on `bot.voltflow.life`
 
-### Phase 1 — frontend URL switch
+The Python edge stores and classifies group messages itself, then syncs records to
+Supabase. This isolates Telegram traffic but duplicates validation, retries, OpenAI,
+and database logic. It is not recommended for the first version.
 
-Set `NEXT_PUBLIC_SITE_URL=https://voltflow.life` in Vercel, then replace the hardcoded
-`volt-flow-beige.vercel.app` fallbacks:
+#### Option C — Import only manually forwarded messages
 
-| File | What |
+An admin forwards selected messages to the bot, which turns them into listings. This is
+the safest moderation path but does not provide automatic group matching.
+
+Build Option A in stages: observe and classify first, publish only admin-approved
+listings second, then add expiry and matching, and finally optional notifications.
+
+### Approved implementation increment: Ollama context verification
+
+The user approved building the first increment one function at a time. OpenAI
+embeddings remain unchanged (`text-embedding-3-small`, `vector(1536)`). Ollama is
+used only for Telegram-message context verification and structured extraction:
+
+- configurable OpenAI-compatible client using `LLM_BASE_URL`, `LLM_MODEL`,
+  `LLM_API_KEY`, and `LLM_MAX_TOKENS`;
+- strict JSON result for intent, confidence, title, item type, city, generation,
+  price, and moderation decision;
+- deterministic checks remain the first safety layer;
+- ambiguous or failed verification becomes a draft/review result, never automatic
+  publication;
+- unit-test the verifier before wiring it into Telegram ingestion;
+- preserve existing `/start`, `/app`, and Mini App behavior.
+
+Ownership: verification output is app-owned operational data in Postgres when it is
+later attached to a Telegram event; no user preference or localStorage data is
+introduced by this increment.
+
+### Proposed data model
+
+Create an app-owned Postgres table `community_listings`:
+
+| Field | Purpose |
 |---|---|
-| `src/lib/bydmate/link-code.ts:10` | `DEFAULT_TELEMETRY_ENDPOINT` — **also the remote migration path** |
-| `src/lib/push/charge-notifications.ts:240` | notification click-through base |
-| `src/lib/telegram/live-widget.ts:306` | Telegram widget site URL |
-| `src/lib/email/inactivity-warning.ts:13` | login link in emails |
-| `src/app/api/telegram/webhook/route.ts:49` | Mini App URL |
-| `src/components/settings/settings-view.tsx:1382` | telemetry endpoint shown to users |
-| `scripts/configure-telegram-bot.mjs:12,16` | Mini App + webhook URLs |
-| `scripts/telegram-miniapp-server.py:37` | site URL / CORS origin |
-| `README.md`, `INSTALL.md` | public docs |
+| `id` | Listing identity |
+| `owner_user_id`, `telegram_user_id` | Author ownership and attribution |
+| `listing_type` | `sell` or `wanted` |
+| `title`, `description` | Normalized public text |
+| `item_type` | `accessory`, `spare_part`, `service`, `car`, or `other` |
+| `category`, `model_generations`, `city` | Search and hard filters |
+| `price`, `currency` | Optional price |
+| `contact_link` | Telegram/message/contact destination |
+| `source_chat_id`, `source_message_id` | Deduplication and source link |
+| `status` | `draft`, `published`, `sold`, `expired`, `removed` |
+| `expires_at` | Automatic listing expiry |
+| `embedding` | Semantic matching vector |
 
-Then re-run `scripts/configure-telegram-bot.mjs` and update the **BotFather** Mini App URL.
-Add a `sitemap.ts`/`robots.ts` (neither exists) so the marketing + knowledge pages get a
-canonical host for SEO.
+The normalized listing is user-owned content in Postgres and must be editable and
+deletable by its author. The original Telegram update should not become permanent
+knowledge content. Store only the minimum source identifiers needed for attribution,
+moderation, deduplication, and a Telegram deep link; keep raw message payloads out of
+the public table or retain them only briefly in a restricted moderation table.
 
-**Push notifications:** subscriptions are origin-scoped. Existing ones keep working, but a
-user who reinstalls the PWA from the new origin gets a *second* subscription → possible
-duplicate charge notifications until the old one expires. Worth a dedupe pass.
+### Search and matching
 
-### Phase 2 — backend infra (`mykid.life` → `voltflow.life`)
+- Add source type `market_listing` to the existing vector-search contract.
+- Keep curated knowledge and marketplace results as separate result groups.
+- Technical question → knowledge; buy/search intent → wanted requests and seller offers;
+  broad queries → both with clear labels.
+- Match buyer requests to active seller offers using embedding similarity plus hard
+  filters for item type, generation, city, status, and expiry.
+- Never match or publish expired, sold, removed, or unmoderated records.
 
-Approved in principle. Safe because the APK doesn't touch Supabase. Must be **dual-served**
-(both hostnames valid simultaneously), never cut over:
+### Moderation, privacy, and expiry
 
-1. DNS: add `supabase.voltflow.life`, `bot.voltflow.life` → Contabo IP.
-2. nginx: add the new names to `server_name` **alongside** the old ones; issue certs
-   (`certbot --expand`). Both hostnames now serve.
-3. **Backfill the 12 stored Storage URLs** (`accessories`, `knowledge_articles`,
-   `spare_parts`) old → new host. Idempotent `UPDATE ... replace(...)` migration.
-4. GoTrue: update `API_EXTERNAL_URL`, `SITE_URL`, `URI_ALLOW_LIST` (must include the new
-   app origin **and** keep the old during overlap). Update the nginx-hosted recovery/confirm
-   email templates.
-5. Resend: verify `voltflow.life` (SPF/DKIM) and move the auth-email sender domain.
-6. Flip `NEXT_PUBLIC_SUPABASE_URL` in Vercel + `.env`/`.env.local`; redeploy.
-   `NEXT_PUBLIC_TELEGRAM_API_BASE_URL` → `https://bot.voltflow.life/voltflow`
-   (currently hardcoded in `src/lib/telegram/api-url.ts:10`).
-7. Update `docs/OPS_LOCAL.md` (pooler host), `supabase/MIGRATIONS_AUDIT.md`, Grafana.
-8. **Keep the old hostnames serving for ≥1 release cycle.** Service-worker-cached PWA
-   clients have the old Supabase URL baked into their JS bundle and will keep calling it
-   until the SW updates.
+- First release stores all detected posts as `draft`.
+- Admin can approve, edit, reject, mark sold, or remove a listing.
+- Use deterministic intent cues first (`продам`, `куплю`, `ищу`, `нужен`, prices,
+  contact handles); use an optional structured model classifier only for ambiguous text.
+- Do not expose phone numbers or personal metadata beyond what the author chose to
+  publish; provide a delete/report path.
+- Deduplicate edits and repeated forwards by chat/message identity.
+- Expire listings after 30 days initially, with a renewal action.
+- Delete the derived embedding when the listing is deleted.
 
-### Phase 3 — Mate APK: move every install on upgrade, with no re-link
+### Test deployment
+
+- Use `@Voltflowscr_bot` and the existing `bot.voltflow.life` edge service.
+- Add the bot to a private test group and configure the webhook with the current
+  secret-token check.
+- Start with an observe-only flag so no public listing is created accidentally.
+- Test edits, replies, media/captions, forwards, deleted messages, duplicate updates,
+  `/start`, and group privacy behavior before enabling publishing.
+
+### Data ownership decision required before build
+
+- **Normalized listing:** user-owned, Postgres, author can edit/delete it.
+- **Moderation/source metadata:** app-owned operational data, restricted Postgres,
+  minimum retention needed for audit and deduplication.
+- **Raw Telegram message text:** recommendation is not to retain it permanently;
+  keep only a short-lived restricted copy if moderation requires it.
+- **Embeddings:** app-owned derived search data, deleted with the listing.
+
+### Acceptance criteria
+
+- A test-group `Продам` post becomes a draft seller listing with source link.
+- A test-group `Ищу` post becomes a draft buyer request.
+- Technical questions route to curated knowledge search and do not become listings.
+- Admin approval creates the public listing and its embedding.
+- Search returns curated knowledge and active community offers in clearly separated sections.
+- Matching respects generation, city, status, and expiry filters.
+- Author deletion removes the listing and its embedding.
+- No raw group message is publicly exposed by default.
+
+---
+
+## 🟠 Domain migration → voltflow.life — Phase 3: Mate APK
+
+Phases 0–2 **shipped 2026-07-14** (canonical domain, frontend URLs, backend infra) — see
+[CHANGELOG.md](CHANGELOG.md). This is what remains.
 
 Goal: **installing the new APK repoints an existing car at the new domain — no reconnect,
 no re-pairing.**
@@ -131,8 +166,8 @@ no re-pairing.**
 Changing `SettingsRepository.DEFAULT_CLOUD_SYNC_URL` (`SettingsRepository.kt:92`) is **not
 enough on its own**. The endpoint is persisted in Room (`settings` table, key
 `cloud_sync_url`, written at link time by `SettingsViewModel.kt:800`), and
-`getString(key, default)` returns the *stored* value — the new default would reach fresh
-installs only.
+`getString(key, default)` returns the *stored* value — a new default reaches fresh installs
+only.
 
 So add a **one-shot settings migration**, mirroring the existing v2.4.17 precedent
 (`BYDMateApp.kt:49-54`, gated on `KEY_MIGRATION_V2_4_17`):
@@ -157,14 +192,27 @@ Also update `tools/voltflow_cmd.conf.example:6` (CommandDaemon's on-device conf)
 `volt-flow-beige.vercel.app` forever, and must keep working. The redirect stays permanently;
 the migration is what moves everyone who *does* upgrade, without asking them to re-link.
 
-### Open question
+**Blocked on:** reading the car's stored `cloud_sync_url` over ADB (`192.168.43.71:5555` —
+needs the "Allow USB debugging" prompt accepted on the head unit) to confirm it is the plain
+old default before writing a migration that rewrites it.
 
-Is Attack Challenge Mode deliberate? It challenges every non-browser client, which is a
-standing hazard for the telemetry and Telegram paths and the reason for the
-`bot.mykid.life` detour. Worth a WAF bypass rule for `/api/bydmate/*` rather than living
-with it.
+### Leftovers from Phases 0–2 (optional, not blocking)
 
-Proposed 2026-07-14 — **not built, awaiting go-ahead.**
+- **Serve `/api/bydmate/*` directly on the old host.** Today every telemetry sample is a
+  `308` + a re-issued POST. Flipping `volt-flow-beige.vercel.app` to *Connect to an
+  environment → Production* and moving the redirect into `src/proxy.ts` with a path
+  exemption would halve the request count. Efficiency, not correctness.
+- **Vercel Attack Challenge Mode is intermittently ON** (`x-vercel-mitigated: challenge`),
+  which challenges every non-browser client. It is the reason Telegram traffic detours via
+  `bot.voltflow.life`. A WAF bypass for `/api/bydmate/*` would be healthier than routing
+  around it.
+- **Push subscriptions are origin-scoped.** A user who reinstalls the PWA from the new
+  origin gets a *second* subscription → possible duplicate charge notifications until the
+  old one expires. Worth a dedupe pass.
+- **No `sitemap.ts` / `robots.ts`** — the marketing + knowledge pages have no canonical host
+  declared for SEO.
+- **BotFather "Main Mini App" URL** (the *Open* button) is set in BotFather by hand, not via
+  the API — confirm it points at `https://voltflow.life/telegram`.
 
 ---
 

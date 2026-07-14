@@ -9,6 +9,57 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-07-14
+
+### Domain migration → `voltflow.life` (Phases 0–2 shipped)
+
+Moved the app and its backend infra off `volt-flow-beige.vercel.app` / `mykid.life`.
+Phase 3 (Mate APK settings migration) is still open — see [BACKLOG.md](BACKLOG.md).
+
+**Phase 0 — canonical domain.** `voltflow.life` (apex) is Production; `www` and
+`volt-flow-beige.vercel.app` both `308` → apex. Before this, apex *and* `www` were both
+attached to Production with no redirect between them — browsers treat those as different
+origins, which would have split auth cookies, PWA installs, and push subscriptions.
+
+**Phase 1 — frontend URLs.** The canonical origin now lives in **one** place,
+`src/lib/site-url.ts` (`DEFAULT_SITE_URL` + `siteUrl()`), instead of being hardcoded in
+eight. Rewired: link-code telemetry endpoint, push click-through, Telegram widget +
+webhook, inactivity email, the endpoint shown in Settings, the `.mjs`/`.py` scripts, and
+README/INSTALL. Telegram menu button + webhook repointed via
+`scripts/configure-telegram-bot.mjs`.
+
+**Phase 2 — backend infra.** nginx now **dual-serves** `supabase.voltflow.life` and
+`bot.voltflow.life` alongside the old `mykid.life` names, with one Let's Encrypt cert
+covering both (`certbot --expand`). GoTrue moved to the new `API_EXTERNAL_URL`, mailer
+templates, and `SITE_URL`; Vercel's `NEXT_PUBLIC_SUPABASE_URL` and
+`NEXT_PUBLIC_TELEGRAM_API_BASE_URL` follow. Migration `20260714130000` repointed the 12
+rows holding **absolute** Storage URLs (`accessories`, `knowledge_articles`,
+`spare_parts`) — those would have 404'd silently once the old host retired, and nothing
+in the code would have warned.
+
+**Auth-email outage found and fixed.** Removing `mykid.life` from Resend broke GoTrue,
+which still sent from `noreply@mykid.life` — every password reset and signup confirmation
+was 403'ing. Senders moved to the verified `noreply@voltflow.life`. The inactivity cron
+had the *same* latent bug (`noreply@voltflow.app` was never verified), but is fail-safe:
+it only stamps `inactivity_warning_sent_at` on success and only deletes accounts carrying
+that stamp, so **no account was ever wrongly deleted** — the emails simply never arrived.
+
+**Load-bearing invariants (do not break):**
+
+- **`volt-flow-beige.vercel.app/api/bydmate/telemetry` must keep resolving forever.**
+  Installed Mate builds persist their sync URL and cannot be force-updated. The `308` is
+  safe: OkHttp preserves the POST body on 307/308 (`maintainBody`), and the auth key
+  travels as `X-API-Key`, not `Authorization` (which OkHttp strips cross-host).
+- **The old `mykid.life` hosts must keep serving.** PWA clients bake the Supabase URL into
+  their cached JS bundle and keep calling the old host until their service worker updates.
+- `GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI` is derived from `API_EXTERNAL_URL`; the new
+  callback is registered in Google Console (both old and new are registered).
+- `knowledge_articles` has a `BEFORE UPDATE` trigger stamping `updated_at`. The migration
+  disables it for the rewrite — otherwise a hostname change would have falsely marked five
+  articles "recently updated".
+
+---
+
 ## 2026-07-13
 
 ### Backdate auto-started charging sessions to when charging really began
