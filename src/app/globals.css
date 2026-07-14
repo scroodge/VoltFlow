@@ -172,7 +172,6 @@
 
   .mobile-page {
     min-height: 100dvh;
-    height: 100dvh;
     width: 100%;
     max-width: 430px;
     margin-inline: auto;
