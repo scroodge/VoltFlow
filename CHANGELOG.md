@@ -28,6 +28,17 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 - Verification: 11 focused tests, TypeScript, ESLint, Python normalization smoke test,
   and production migration privilege checks passed.
 
+### Telegram event Qwen processor
+
+- Added migration `20260714153000_telegram_group_event_verification.sql` with restricted
+  intent, confidence, extracted fields, review, and processing state columns.
+- The Telegram edge now sends stored text events to the configured Ollama-compatible
+  Qwen model in a background task and writes the structured result back to the inbox.
+- Protected-content and media-only messages are ignored; provider failures remain
+  marked for review. No public listing is created automatically.
+- Added `LLM_*` variables to `.env.example` and verified one live seller message through
+  the Python processor against `qwen2.5:14b`.
+
 ---
 
 ## 2026-07-14

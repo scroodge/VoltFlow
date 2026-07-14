@@ -9,14 +9,15 @@ const token = process.env.TELEGRAM_BOT_TOKEN;
 // Mirrors DEFAULT_SITE_URL in src/lib/site-url.ts (a .mjs script cannot import the TS module).
 const DEFAULT_SITE_URL = "https://voltflow.life";
 const DEFAULT_TELEGRAM_EDGE_URL = "https://bot.voltflow.life";
+const TELEGRAM_EDGE_PREFIX = "/voltflow";
 const webAppUrl =
   process.env.TELEGRAM_WEB_APP_URL ??
   withPath(process.env.NEXT_PUBLIC_SITE_URL, "/telegram") ??
   `${DEFAULT_SITE_URL}/telegram`;
 const webhookUrl =
   process.env.TELEGRAM_WEBHOOK_URL ??
-  withPath(process.env.TELEGRAM_EDGE_URL, "/api/telegram/webhook") ??
-  `${DEFAULT_TELEGRAM_EDGE_URL}/api/telegram/webhook`;
+  withPath(process.env.TELEGRAM_EDGE_URL, `${TELEGRAM_EDGE_PREFIX}/api/telegram/webhook`) ??
+  `${DEFAULT_TELEGRAM_EDGE_URL}${TELEGRAM_EDGE_PREFIX}/api/telegram/webhook`;
 const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
 
 if (!token) {
