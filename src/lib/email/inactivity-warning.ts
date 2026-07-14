@@ -3,7 +3,8 @@ import { Resend } from "resend";
 
 import { siteUrl } from "@/lib/site-url";
 
-const FROM = "VoltFlow <noreply@voltflow.app>";
+// Domain must be verified in Resend (SPF + DKIM) or sends fail with 403.
+const FROM = "VoltFlow <noreply@voltflow.life>";
 
 const SUBJECT = "Your VoltFlow account will be deleted due to inactivity";
 
