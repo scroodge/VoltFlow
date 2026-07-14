@@ -1,6 +1,5 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -98,7 +97,6 @@ function SparePartCard({ item }: { item: SparePartItem }) {
           {item.compatibility ? <p><span className="font-semibold text-foreground">Совместимость:</span> {item.compatibility}</p> : null}
         </div>
       ) : null}
-      <span className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-[var(--voltflow-cyan)]">Открыть карточку <ExternalLink className="size-4" aria-hidden /></span>
     </Link>
   );
 }

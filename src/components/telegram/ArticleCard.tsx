@@ -1,4 +1,3 @@
-import { ExternalLink } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -114,10 +113,6 @@ export function AccessoryCard({
           ))}
         </div>
       ) : null}
-      <span className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-[var(--voltflow-cyan)]">
-        Открыть карточку
-        <ExternalLink className="size-4" aria-hidden />
-      </span>
     </Link>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, MapPin, ShieldCheck } from "lucide-react";
+import { MapPin, ShieldCheck } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -66,7 +66,6 @@ function ServiceCard({ provider }: { provider: ServiceProviderItem }) {
       {provider.description ? <p className="mt-3 text-sm leading-6 text-foreground/80">{provider.description}</p> : null}
       {provider.services.length ? <p className="mt-3 text-sm text-foreground/75">{provider.services.join(" · ")}</p> : null}
       {provider.price_from !== null ? <p className="mt-4 text-sm font-bold text-[var(--voltflow-green)]">Услуги от {provider.price_from} {provider.currency}</p> : null}
-      <span className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-[var(--voltflow-cyan)]">Открыть карточку <ExternalLink className="size-4" aria-hidden /></span>
     </Link>
   );
 }
