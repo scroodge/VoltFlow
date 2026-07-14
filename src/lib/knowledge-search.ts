@@ -19,6 +19,7 @@ export type KnowledgeSourceType =
   | "faq"
   | "accessory"
   | "spare_part"
+  | "service_provider"
   | "manual"
   | "seed";
 
@@ -27,6 +28,7 @@ const knowledgeSourceTypes = new Set<KnowledgeSourceType>([
   "faq",
   "accessory",
   "spare_part",
+  "service_provider",
   "manual",
   "seed",
 ]);

@@ -56,15 +56,11 @@ export function AccessoryCard({
     useful: "Полезно",
     optional: "Опционально",
   }[item.priority];
-  const links =
-    item.externalLinks?.length
-      ? item.externalLinks
-      : item.externalUrl
-        ? [{ label: "Открыть ссылку", url: item.externalUrl }]
-        : [];
-
   return (
-    <article className="voltflow-card p-4">
+    <Link
+      href={`/telegram/accessory/${item.id}`}
+      className="voltflow-card block p-4 transition hover:border-[var(--voltflow-cyan)]/60 focus-visible:ring-3 focus-visible:ring-[var(--voltflow-cyan)]/30"
+    >
       {item.imageUrl ? (
         <Image
           src={item.imageUrl}
@@ -118,22 +114,10 @@ export function AccessoryCard({
           ))}
         </div>
       ) : null}
-      {links.length ? (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {links.map((link) => (
-            <a
-              key={`${link.label}-${link.url}`}
-              href={link.url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-white/[0.04] px-4 text-sm font-semibold text-[var(--voltflow-cyan)] transition hover:bg-white/[0.07]"
-            >
-              {link.label}
-              <ExternalLink className="size-4" aria-hidden />
-            </a>
-          ))}
-        </div>
-      ) : null}
-    </article>
+      <span className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-[var(--voltflow-cyan)]">
+        Открыть карточку
+        <ExternalLink className="size-4" aria-hidden />
+      </span>
+    </Link>
   );
 }

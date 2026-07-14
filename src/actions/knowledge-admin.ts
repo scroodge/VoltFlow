@@ -416,6 +416,7 @@ function parseServiceProviderForm(formData: FormData): ServiceProviderInput | Ad
     name: stringValue(formData, "name"),
     provider_type: providerTypeValue(formData),
     city: nullableString(formData, "city"),
+    address: nullableString(formData, "address"),
     service_area: nullableString(formData, "service_area"),
     description: nullableString(formData, "description"),
     services: multilineValue(formData, "services"),
@@ -714,6 +715,7 @@ function revalidateKnowledge() {
   revalidatePath("/telegram");
   revalidatePath("/telegram/article/[slug]", "page");
   revalidatePath("/telegram/category/[slug]", "page");
+  revalidatePath("/telegram/service/[id]", "page");
 }
 
 function isFormState<T>(value: T | AdminFormState): value is AdminFormState {

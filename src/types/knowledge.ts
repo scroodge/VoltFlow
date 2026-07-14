@@ -120,6 +120,7 @@ export type ServiceProviderItem = {
   name: string;
   provider_type: "service_center" | "mobile_service" | "detailer" | "parts_and_service" | "other";
   city: string | null;
+  address: string | null;
   service_area: string | null;
   description: string | null;
   services: string[];

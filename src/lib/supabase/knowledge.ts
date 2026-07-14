@@ -360,6 +360,19 @@ export async function getPublishedServiceProviders() {
   return (data ?? []).map((item) => mapServiceProvider(item as RawServiceProvider));
 }
 
+export async function getPublishedServiceProvider(id: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("service_providers")
+    .select("*")
+    .eq("id", id)
+    .eq("status", "published")
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapServiceProvider(data as RawServiceProvider) : null;
+}
+
 export async function getAdminServiceProviders() {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -393,6 +406,7 @@ export async function createServiceProvider(input: ServiceProviderInput) {
     .single();
 
   if (error) throw error;
+  await upsertServiceProviderKnowledgeItem(data.id as string, input);
   return data.id as string;
 }
 
@@ -400,12 +414,14 @@ export async function updateServiceProvider(id: string, input: ServiceProviderIn
   const supabase = await createClient();
   const { error } = await supabase.from("service_providers").update(input).eq("id", id);
   if (error) throw error;
+  await upsertServiceProviderKnowledgeItem(id, input);
 }
 
 export async function deleteServiceProvider(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("service_providers").delete().eq("id", id);
   if (error) throw error;
+  await deleteKnowledgeItem(id);
 }
 
 export async function getAdminAccessories() {
@@ -744,6 +760,28 @@ async function upsertSparePartKnowledgeItem(id: string, input: SparePartInput) {
     category,
     source_type: "spare_part",
     tags: input.search_keywords,
+    model_generations: input.model_generations,
+    is_published: input.status === "published",
+  });
+}
+
+async function upsertServiceProviderKnowledgeItem(id: string, input: ServiceProviderInput) {
+  const location = [input.address, input.city, input.service_area].filter(Boolean).join(", ");
+  const content = [
+    input.description,
+    location ? `Адрес: ${location}` : null,
+    input.services.length ? `Услуги: ${input.services.join(", ")}` : null,
+    input.price_from !== null ? `Стоимость: от ${input.price_from} ${input.currency}` : null,
+  ].filter(Boolean).join("\n\n");
+
+  await upsertKnowledgeItem({
+    id,
+    title: input.name,
+    content,
+    category: "service",
+    source_type: "service_provider",
+    source_url: `/telegram/service/${id}`,
+    tags: input.services,
     model_generations: input.model_generations,
     is_published: input.status === "published",
   });

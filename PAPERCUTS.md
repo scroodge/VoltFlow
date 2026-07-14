@@ -44,3 +44,6 @@ the other mode. Cosmetic and dev-only, but it makes the toolbar untrustworthy wh
 checking which fixture is actually applied — cross-check the `?devSnapshot=` query
 param instead. Untouched by the status-card work; likely a stale `mode` read or a
 class-precedence issue in the pill styling.
+## 2026-07-14 11:?? — Codex
+
+While verifying service-provider semantic-search indexing against the self-hosted Supabase pooler, DNS could not resolve `supabase.mykid.life`; local code checks can continue, but live database verification is blocked until DNS/network access returns.

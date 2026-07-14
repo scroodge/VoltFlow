@@ -430,7 +430,7 @@ Booking and payment remain external links.
 |---|---|
 | `name` | Provider or service name |
 | `provider_type` | Service center, mobile service, detailer, parts and service, or other |
-| `city`, `service_area` | Location and coverage |
+| `city`, `address`, `service_area` | Location, street address, and coverage |
 | `services` jsonb | Services offered, one string per item |
 | `price_from`, `currency` | Optional starting price |
 | `external_links` jsonb | Contact, booking, website, or payment links |

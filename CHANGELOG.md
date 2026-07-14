@@ -58,9 +58,23 @@ service centers, mobile services, detailers, and parts-and-service businesses. C
 location, services, optional starting price, verification status, and external contact or
 booking links. Added admin CRUD at `/admin/knowledge/service-providers`.
 
-Migration: `20260714130000_service_providers.sql`. It is idempotent and has not yet been
-applied to production; the catalog remains empty until the migration is applied and
-providers are entered.
+Migration: `20260714130000_service_providers.sql` was applied to production on 2026-07-14;
+the catalog remains empty until providers are entered.
+
+Service cards now open `/telegram/service/[id]`; contact and booking links are available
+on the detail page, so a provider without a direct external URL is still navigable.
+
+Service discovery now includes semantic search in the Service tab. Providers are indexed
+in the existing vector search with their descriptions, locations, services, prices, and
+model generations; redundant service tag chips are no longer shown in public service
+cards or service search results.
+
+Accessory and spare-part catalog cards now open dedicated detail pages; purchase links,
+compatibility notes, checks, risks, and images are available inside the detail view.
+
+Provider detail pages now show the address in high-contrast text and offer a map link:
+Yandex Maps for CIS language/timezone signals, Google Maps otherwise. Added migration
+`20260714140000_service_provider_address.sql` for the provider address field.
 
 ### Knowledge search: admit when there is no answer (+ a relevance eval)
 

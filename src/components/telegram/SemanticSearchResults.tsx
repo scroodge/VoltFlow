@@ -109,7 +109,7 @@ export function SemanticSearchResults({
             <p className="mt-2 line-clamp-3 text-sm leading-6 text-muted-foreground">
               {result.content}
             </p>
-            {result.tags.length ? (
+            {result.source_type !== "service_provider" && result.tags.length ? (
               <div className="mt-3 flex flex-wrap gap-2">
                 {result.tags.slice(0, 4).map((tag) => (
                   <span
@@ -183,8 +183,14 @@ function getInternalResultHref(result: KnowledgeSearchResult) {
 }
 
 function getCatalogResultHref(result: KnowledgeSearchResult) {
-  if (result.source_type === "accessory" || result.source_type === "spare_part") {
-    return "/telegram?tab=buy";
+  if (result.source_type === "accessory") {
+    return `/telegram/accessory/${result.id}`;
+  }
+  if (result.source_type === "spare_part") {
+    return `/telegram/spare-part/${result.id}`;
+  }
+  if (result.source_type === "service_provider" && result.source_url?.startsWith("/")) {
+    return result.source_url;
   }
   return null;
 }
@@ -202,6 +208,7 @@ function categoryLabel(category: string) {
     maintenance: "Обслуживание",
     ownership: "Эксплуатация",
     "spare-parts": "Запчасти",
+    service: "Сервис",
     winter: "Зима",
   };
 
