@@ -1,9 +1,11 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Loader2, SearchX } from "lucide-react";
 import Link from "next/link";
 
+import { classifySearchConfidence } from "@/lib/knowledge-search-confidence";
 import type { KnowledgeSearchResult } from "@/lib/knowledge-search";
+import { cn } from "@/lib/utils";
 
 export function SemanticSearchResults({
   emptyText,
@@ -41,22 +43,66 @@ export function SemanticSearchResults({
     );
   }
 
+  // The corpus is small and will always have gaps. When nothing clearly answers the
+  // question, say so instead of presenting the least-unrelated item as an answer — a query
+  // like "как заряжать зимой" (no such article exists) used to return winter *washer fluid*
+  // at 42% dressed up exactly like a real hit.
+  const { confident } = classifySearchConfidence(results);
+
   return (
-    <section className="space-y-3" aria-label={title}>
-      <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--voltflow-cyan)]">
-        {title}
-      </p>
+    <section className="space-y-3" aria-label={confident ? title : "Похожие материалы"}>
+      {confident ? (
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--voltflow-cyan)]">
+          {title}
+        </p>
+      ) : (
+        <>
+          <div className="voltflow-card flex gap-3 p-4">
+            <SearchX
+              className="mt-0.5 size-5 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
+            <div>
+              <p className="font-heading text-sm font-bold">
+                Точного ответа не нашлось
+              </p>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                В базе знаний пока нет материала по запросу «{query}». Попробуйте
+                переформулировать или загляните в разделы.
+              </p>
+            </div>
+          </div>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">
+            Возможно, близкое
+          </p>
+        </>
+      )}
       {results.map((result) => {
         const card = (
           <>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--voltflow-green)]">
+                <p
+                  className={cn(
+                    "text-xs font-bold uppercase tracking-[0.14em]",
+                    confident
+                      ? "text-[var(--voltflow-green)]"
+                      : "text-muted-foreground",
+                  )}
+                >
                   {categoryLabel(result.category)}
                 </p>
                 <h3 className="mt-1 font-heading text-base font-bold">{result.title}</h3>
               </div>
-              <span className="shrink-0 rounded-full border border-[var(--voltflow-green)]/40 bg-[var(--voltflow-green)]/10 px-2.5 py-1 text-xs font-bold text-[var(--voltflow-green)]">
+              {/* A weak match must not wear the same confident green badge as a real hit. */}
+              <span
+                className={cn(
+                  "shrink-0 rounded-full border px-2.5 py-1 text-xs font-bold",
+                  confident
+                    ? "border-[var(--voltflow-green)]/40 bg-[var(--voltflow-green)]/10 text-[var(--voltflow-green)]"
+                    : "border-border bg-white/[0.04] text-muted-foreground",
+                )}
+              >
                 {Math.round(result.similarity * 100)}%
               </span>
             </div>

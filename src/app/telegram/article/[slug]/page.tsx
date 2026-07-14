@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { ArticleRenderer } from "@/components/telegram/ArticleRenderer";
+import { ArticleViewTracker } from "@/components/telegram/ArticleViewTracker";
 import { getTelegramKnowledgeDataWithFallback } from "@/lib/supabase/knowledge";
 import {
   allArticles,
@@ -55,10 +56,13 @@ export default async function TelegramArticlePage({ params }: PageProps) {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_-8%,rgba(0,209,255,0.24),transparent_26rem),radial-gradient(circle_at_8%_18%,rgba(0,230,118,0.14),transparent_20rem),linear-gradient(180deg,rgba(18,21,28,0)_0%,#12151C_78%)]" />
       <div className="mobile-page relative min-h-dvh px-4 pb-[calc(env(safe-area-inset-bottom)+2rem)] pt-[calc(env(safe-area-inset-top)+1rem)]">
         {article ? (
-          <ArticleRenderer
-            article={article}
-            relatedArticles={relatedArticles}
-          />
+          <>
+            <ArticleViewTracker slug={article.slug} />
+            <ArticleRenderer
+              article={article}
+              relatedArticles={relatedArticles}
+            />
+          </>
         ) : (
           <section className="voltflow-card p-5">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--voltflow-cyan)]">

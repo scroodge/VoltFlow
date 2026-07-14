@@ -42,6 +42,135 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
   fallback, and the discharged-idle guard), `npm run test` 108/108, `npx tsc --noEmit`
   clean, targeted ESLint clean, `npm run build` passes.
 
+## 2026-07-14
+
+### Knowledge search: admit when there is no answer (+ a relevance eval)
+
+- **Correction to yesterday's verdict.** I recorded that search relevance was "weak". That
+  was wrong, and it was drawn from one cherry-picked query. Measuring it properly
+  (12 realistic queries against the live corpus) shows **retrieval is good: the correct item
+  ranks #1 for 10 of 12**, scoring 0.46–0.65.
+- **The two failures are content gaps, not retrieval failures.** The corpus (19 embedded
+  items) has **no winter-charging article and no AC-vs-DC article** — «как заряжать зимой»
+  and «чем отличается AC от DC» have no right answer to return. The model matched «зимняя» →
+  winter washer fluid because that is genuinely the closest thing we have.
+- **The real defect was dishonesty.** `match_threshold` is `0.2`, so *everything* clears it
+  and washer fluid was presented at 42% dressed exactly like a real hit — a user asking
+  about winter charging was confidently handed an unrelated accessory. Search never admitted
+  it had no answer.
+- **A flat threshold cannot fix this** — the scores overlap. The *correct* hit for «коврики»
+  is **0.423**; the *wrong* hit for «зимой» is **0.417**. Raising the cutoff to 0.45 would
+  suppress the wrong answer by also dropping a right one. What separates them is the *lead*
+  over the runner-up: «коврики» wins by 0.088, «зимой» by only 0.048 — a near-tie among
+  unrelated items, i.e. the model has no real opinion.
+- **New `classifySearchConfidence`** (`src/lib/knowledge-search-confidence.ts`): a result set
+  is presented as an answer when the top hit is **≥ 0.45** *or* leads #2 by **≥ 0.06**. Both
+  constants derived from the eval, not chosen by feel. This classifies **all 12** queries
+  correctly. When it is not confident, `SemanticSearchResults` leads with "Точного ответа не
+  нашлось", demotes the hits under a muted «Возможно, близкое», and drops the confident green
+  badge — a weak match must not look like a real one.
+- **New `npm run search:eval`** (`scripts/knowledge-search-eval.mjs`): the 12 queries with
+  their expected top hit, including the two content gaps encoded as `expect: null` (they pass
+  by *correctly refusing to answer*). Relevance is now something you check, not argue about —
+  run it before and after touching embeddings, the threshold, `buildKnowledgeEmbeddingText`,
+  or the corpus. **Currently 12/12.**
+- **Explicitly not built: hybrid search** (vector + full-text). It is the textbook cure for
+  "matched one adjective, ignored the topic", and I would normally reach for it — but at 19
+  documents with a 10/12 hit rate, the measurement says retrieval is not the bottleneck.
+  Deferred until the corpus passes ~100 items or the eval regresses. The two missing articles
+  are worth more than any tuning; logged in BACKLOG.md as content work.
+- Verification: `npm run test` 128/128 (6 new, pinned to the real recorded scores),
+  `npm run search:eval` 12/12, `npx tsc --noEmit` clean, ESLint clean, `npm run build`
+  passes; both the confident and the "no answer" paths checked in the live UI at phone width.
+
+### Fix: semantic search was 500-ing on every query in production
+
+- **Symptom.** Every semantic search failed — home "Умный поиск", the Guides article
+  search, and `/knowledge/search`. `POST /api/knowledge/search` returned
+  `500 {"error":"Knowledge search failed."}` for any input.
+- **Root cause.** Reproducing the API's own call with the service-role client surfaced the
+  error the route was swallowing:
+  `42883: operator does not exist: extensions.vector <=> extensions.vector`.
+  pgvector is installed into the **`extensions`** schema, so the `<=>` distance operator
+  lives there — but `public.match_knowledge_items` had **`proconfig = null`**, i.e. no `SET
+  search_path` of its own, so it resolved operators from *the caller's* path. The API roles
+  (`anon`, `authenticated`, `service_role`) have no `search_path` role setting, so the
+  PostgREST connection never had `extensions` on the path and `<=>` could not resolve.
+- **Why it looked healthy from the DB.** An interactive `psql` session defaults to
+  `"$user", public, extensions`, so calling the function by hand worked perfectly — the
+  failure existed only on the app's connection. It is also **self-hosted-only**: on Supabase
+  Cloud `extensions` is on the default path, so the original migration was written against
+  an environment that hid the bug.
+- **Fix.** Migration `20260714090000_match_knowledge_items_search_path.sql` pins
+  `search_path = public, extensions` on the function, making it correct regardless of
+  caller. **Applied to self-hosted prod 2026-07-14**; idempotent (guarded `DO` block).
+  Verified: `proconfig` now reads `search_path=public, extensions`, the service-role RPC
+  returns rows instead of erroring, and `POST /api/knowledge/search` returns **200 with 8
+  results**. `match_knowledge_items` was the only function in `public` using `<=>`, so the
+  blast radius was contained.
+- **The route no longer hides its cause.** `src/app/api/knowledge/search/route.ts` logged
+  server-side and returned a flat `"Knowledge search failed."` — exactly why a total outage
+  presented as a mystery. It now includes the underlying `detail` outside production
+  (withheld in prod, where it would leak schema details to anonymous callers).
+- **Ruled out, so they don't get blamed later:** OpenAI embeddings are fine (200, 1536
+  dims), `OPENAI_API_KEY` is present, and the RPC signature matched the call exactly.
+  `knowledge_items` has 10 rows with no embedding, but all 10 are legacy
+  `source_type='seed'`, which the app never queries — every `article`/`faq`/`accessory`/
+  `spare_part` row is embedded (19/19).
+- **Known follow-up, not fixed here:** result *relevance* is mediocre — "как заряжать зимой"
+  ranks "Зимняя омывающая жидкость" (winter washer fluid) first, matching on «зимняя»
+  alone. That is retrieval tuning, not the outage. Logged in BACKLOG.md.
+- Verification: `npm run test` 122/122, `npx tsc --noEmit` clean, ESLint clean,
+  `npm run build` passes; searched from the live UI at phone width.
+
+---
+
+## 2026-07-13
+
+### Real article popularity for the knowledge base (view counter)
+
+Restores a truthful "Популярные" section — the label removed earlier the same day because
+no popularity signal existed. **Data ownership (confirmed with the user):** the counts are
+app-owned aggregate content metrics → **Postgres**; the "already counted this article
+today" flag is per-user → **localStorage**, never sent to the DB.
+
+- **Migration `20260713190000_knowledge_article_views.sql`, applied to self-hosted prod
+  2026-07-13** via `psql` against the Supavisor pooler (the CLI cannot connect —
+  no TLS). Idempotent, per the self-hosted rules.
+- **The counter lives in its own table, and that is the whole point.**
+  `knowledge_articles` has a `BEFORE UPDATE` trigger (`set_knowledge_articles_updated_at`,
+  migration `20260516120000`) that stamps `updated_at = now()`. A `view_count` column on
+  that table would therefore have bumped `updated_at` **on every page view**, silently
+  turning the "Недавно обновленные" list shipped hours earlier into "most recently
+  *viewed*". `knowledge_article_views` (`article_id` PK → articles, `view_count bigint`,
+  `last_viewed_at`) never writes to the content table, so the recency list stays correct by
+  construction. **Verified on prod:** two increments left `updated_at` at
+  `2026-06-25 20:48:50.942597+00`, unchanged.
+- **Anonymous readers can count without being able to write.** The KB is public (`anon` may
+  `select` published articles), and RLS cannot restrict *which column* an `UPDATE` touches
+  — so an `anon` write policy on `knowledge_articles` would have let anyone rewrite article
+  bodies. Instead the views table has **no** insert/update/delete policy, Supabase's blanket
+  default grants are explicitly **revoked** (so the design does not rest on a single policy
+  existing), and the only write path is `increment_knowledge_article_view(p_slug)`, a
+  `SECURITY DEFINER` function that can do nothing but bump a counter. Verified on prod:
+  `anon` has `select` + `execute` and **cannot** update the table. An unknown or
+  unpublished slug is a silent no-op, not an error.
+- **Counted client-side, once per article per day per device** (`ArticleViewTracker`).
+  Incrementing during the server render would have counted Next.js prefetches and non-JS
+  crawlers and could not tell a refresh from a real read — popularity would have measured
+  who reloads most, the same dishonesty as the old fake list.
+- **The label is gated on the data.** Home shows "Популярные" only once the top article has
+  **≥ 5 views** (`MIN_VIEWS_FOR_POPULAR`); below that it keeps showing "Недавно
+  обновленные". A single curious tap must not crown an article.
+- **Counts fail soft.** `getArticleViewCounts` returns an empty map on error rather than
+  throwing. It runs inside `getTelegramKnowledgeDataWithFallback`'s try/catch, so a throw
+  would have collapsed the *entire knowledge base* to static fallback content — e.g. if the
+  code were deployed before the migration was applied. Counts are decoration; the articles
+  are the product.
+- Verification: `npm run test` 122/122, `npx tsc --noEmit` clean, ESLint clean on all
+  touched files, `npm run build` passes; migration applied and re-run (idempotent) on prod,
+  with RPC behaviour, grants and the `updated_at` invariant all asserted against prod.
+
 ### Knowledge base (`/telegram`): make the catalog navigable
 
 The KB had two navigation systems that disagreed with each other, and neither reliably got

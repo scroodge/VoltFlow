@@ -26,6 +26,8 @@ export type KnowledgeArticle = {
   relatedIds?: string[];
   updatedAt?: string;
   sourceLabel?: string;
+  /** From knowledge_article_views. Absent (static fallback) or 0 = never opened. */
+  viewCount?: number;
 };
 
 export type FAQItem = {

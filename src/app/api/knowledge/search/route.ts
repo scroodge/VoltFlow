@@ -40,8 +40,18 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Knowledge search API error:", error);
 
+    // Surface the cause outside production. A total search outage (pgvector's `<=>`
+    // operator unresolvable because the RPC carried no search_path) presented as a flat
+    // "Knowledge search failed.", with the real 42883 buried in server logs — the message
+    // is what turns a mystery into a one-curl diagnosis. Withheld in production, where it
+    // would leak schema details to anonymous callers.
+    const detail = error instanceof Error ? error.message : String(error);
+
     return NextResponse.json(
-      { error: "Knowledge search failed." },
+      {
+        error: "Knowledge search failed.",
+        ...(process.env.NODE_ENV === "production" ? {} : { detail }),
+      },
       { status: 500 },
     );
   }

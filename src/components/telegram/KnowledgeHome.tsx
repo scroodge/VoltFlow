@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, Library } from "lucide-react";
+import { Clock, Flame, Library } from "lucide-react";
 
 import { useSemanticKnowledgeSearch } from "@/hooks/use-semantic-knowledge-search";
 import type { CarGeneration } from "@/lib/car-generations";
@@ -33,17 +33,31 @@ function pluralArticles(count: number) {
 }
 
 /**
- * Newest-first by `updatedAt` (an ISO date the DB mapper fills from
- * `articles.updated_at`). Replaces a "Популярные статьи" list that was really the first
- * four *charging* articles in insertion order — no popularity signal exists in the data,
- * so that label promised something it could not deliver.
+ * Below this, "Популярные" would be noise — a single curious tap would crown an article.
+ * Until the top article clears it, we show "Недавно обновленные" instead. A label must
+ * never outrun the data behind it (the old "Популярные" list was really just the first
+ * four *charging* articles in insertion order).
  */
+const MIN_VIEWS_FOR_POPULAR = 5;
+
+/** Newest-first by `updatedAt`, an ISO date the DB mapper fills from `articles.updated_at`. */
 function recentlyUpdated(
   articles: TelegramKnowledgeData["articles"] | undefined,
   limit: number,
 ) {
   return [...(articles ?? [])]
     .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""))
+    .slice(0, limit);
+}
+
+/** Most-viewed first, from knowledge_article_views. */
+function mostViewed(
+  articles: TelegramKnowledgeData["articles"] | undefined,
+  limit: number,
+) {
+  return [...(articles ?? [])]
+    .filter((article) => (article.viewCount ?? 0) > 0)
+    .sort((a, b) => (b.viewCount ?? 0) - (a.viewCount ?? 0))
     .slice(0, limit);
 }
 
@@ -59,7 +73,9 @@ export function KnowledgeHome({
     sourceTypes: ["article", "faq", "accessory", "spare_part"],
   });
 
-  const recent = recentlyUpdated(data?.articles, 4);
+  const popular = mostViewed(data?.articles, 4);
+  const showPopular = (popular[0]?.viewCount ?? 0) >= MIN_VIEWS_FOR_POPULAR;
+  const featured = showPopular ? popular : recentlyUpdated(data?.articles, 4);
 
   return (
     <section className="space-y-4" aria-labelledby="knowledge-home-title">
@@ -124,15 +140,19 @@ export function KnowledgeHome({
         </section>
       ) : null}
 
-      {recent.length ? (
-        <section className="space-y-2.5" aria-labelledby="recent-title">
+      {featured.length ? (
+        <section className="space-y-2.5" aria-labelledby="featured-title">
           <div className="flex items-center gap-2">
-            <Clock className="size-4 text-[var(--voltflow-cyan)]" aria-hidden />
-            <h2 id="recent-title" className="font-heading text-base font-bold">
-              Недавно обновленные
+            {showPopular ? (
+              <Flame className="size-4 text-[var(--voltflow-cyan)]" aria-hidden />
+            ) : (
+              <Clock className="size-4 text-[var(--voltflow-cyan)]" aria-hidden />
+            )}
+            <h2 id="featured-title" className="font-heading text-base font-bold">
+              {showPopular ? "Популярные" : "Недавно обновленные"}
             </h2>
           </div>
-          {recent.map((article, index) => (
+          {featured.map((article, index) => (
             <ArticleCard
               key={article.id}
               article={article}

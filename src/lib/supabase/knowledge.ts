@@ -134,6 +134,32 @@ export async function getPublishedArticles() {
   return getArticlesByStatus("published");
 }
 
+/**
+ * View counts live in their own table (migration 20260713190000) rather than as a column
+ * on knowledge_articles, whose BEFORE UPDATE trigger would otherwise stamp updated_at on
+ * every view and corrupt the "recently updated" list. A missing row simply means nobody
+ * has opened that article yet.
+ */
+export async function getArticleViewCounts(): Promise<Map<string, number>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("knowledge_article_views")
+    .select("article_id, view_count");
+
+  // Fail soft, deliberately. Counts are decoration; the articles are the product. This
+  // runs inside getTelegramKnowledgeDataWithFallback's try/catch, so throwing here would
+  // make the whole knowledge base silently collapse to the static fallback — e.g. if the
+  // code is deployed before migration 20260713190000 is applied.
+  if (error) return new Map();
+
+  return new Map(
+    ((data ?? []) as { article_id: string; view_count: number }[]).map((row) => [
+      String(row.article_id),
+      Number(row.view_count) || 0,
+    ]),
+  );
+}
+
 export async function getArticleBySlug(slug: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -473,13 +499,15 @@ export async function getTelegramKnowledgeDataWithFallback(
   fallback: TelegramKnowledgeData,
 ) {
   try {
-    const [categories, articles, faq, accessories, spareParts] = await Promise.all([
-      getCategories(),
-      getPublishedArticles(),
-      getPublishedFAQ(),
-      getPublishedAccessories(),
-      getPublishedSpareParts(),
-    ]);
+    const [categories, articles, faq, accessories, spareParts, viewCounts] =
+      await Promise.all([
+        getCategories(),
+        getPublishedArticles(),
+        getPublishedFAQ(),
+        getPublishedAccessories(),
+        getPublishedSpareParts(),
+        getArticleViewCounts(),
+      ]);
 
     if (!articles.length && !faq.length && !accessories.length && !spareParts.length) {
       return fallback;
@@ -493,7 +521,11 @@ export async function getTelegramKnowledgeDataWithFallback(
             description: category.description ?? "",
           }))
         : fallback.categories,
-      articles: articles.length ? articles.map(toTelegramArticle) : fallback.articles,
+      articles: articles.length
+        ? articles.map((article) =>
+            toTelegramArticle(article, viewCounts.get(article.id) ?? 0),
+          )
+        : fallback.articles,
       faq: faq.length ? faq.map(toTelegramFAQ) : fallback.faq,
       accessories: accessories.length
         ? accessories.map(toTelegramAccessory)
@@ -814,8 +846,12 @@ function parseModelGenerations(value: unknown) {
   return normalizeModelGenerations(value.filter(isCarGeneration));
 }
 
-export function toTelegramArticle(article: KnowledgeArticle): TelegramKnowledgeArticle {
+export function toTelegramArticle(
+  article: KnowledgeArticle,
+  viewCount = 0,
+): TelegramKnowledgeArticle {
   return {
+    viewCount,
     id: article.id,
     slug: article.slug,
     title: article.title,
