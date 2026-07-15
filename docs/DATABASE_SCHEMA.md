@@ -418,8 +418,8 @@ M2M self-join on `knowledge_articles`.
 | `article_id` uuid | `related_article_id` uuid |
 
 ### `knowledge_items`
-Flattened knowledge records with pgvector embeddings for semantic search.
-| `id` uuid PK | `title` | `content` | `category` | `source_type` | `source_url` | `telegram_message_id` | `source_id` uuid | `source_slug` | `model_generations` text[] | `tags` text[] | `embedding` vector(1536) | `is_published` boolean |
+Flattened published knowledge records for content discovery.
+| `id` uuid PK | `title` | `content` | `category` | `source_type` | `source_url` | `telegram_message_id` | `source_id` uuid | `source_slug` | `model_generations` text[] | `tags` text[] | `is_published` boolean |
 
 ### `service_providers`
 App-owned public directory of repair shops, mobile services, detailers, and purchasable
@@ -462,7 +462,6 @@ Simple allowlist for admin access.
 | `simplify_aged_bydmate_trip_tracks()` | Batch simplification for trips older than 48 h |
 | `purge_old_bydmate_telemetry_by_tier()` | **Current** retention purge (free 30d raw, premium+admin unlimited, hourly 3y); scheduled by pg_cron |
 | `is_user_premium(user_id)` | Effective premium check (admin OR flag OR term) |
-| `search_knowledge_items(…)` / `match_knowledge_items(…)` | pgvector cosine similarity search |
 
 > Superseded purge functions kept in history only: `purge_old_bydmate_telemetry()`
 > (legacy global 90d/3y) and `bydmate_prune_telemetry_samples()`. The pg_cron job
@@ -527,25 +526,3 @@ five buckets are restricted to admins — the policy checks
 The app uploads via the SSR client (anon key + user JWT → role `authenticated`),
 so without these policies every upload is denied and the admin create/edit
 actions 500 at the upload step (root cause found 2026-06-30).
-
-> **Self-hosted note:** storage buckets and their policies are **not** part of
-> the normal Studio setup carried over on the hosting migration — they were
-> missing on prod, which is why uploads silently broke. Keep storage policies in
-> a SQL migration (`20260630120000`) so the repo remains the source of truth.
-
----
-
-## Assessment & open items
-
-A prior version of this file embedded a full DB assessment + recommendation backlog.
-That content now lives in [../BACKLOG.md](../BACKLOG.md) (FK on `vehicle_id`, telemetry
-partitioning, tariff-column cleanup, `numeric`-vs-`real` debt) so there is one place for
-proposed work.
-
-What is well done today: RLS on every user table (`auth.uid()` scoping), pgvector + HNSW
-semantic search, pg_cron tiered retention, the JSONB-plus-typed-`diplus_*` hybrid (raw
-`diplus` blob dropped, DB 509 → 258 MB), point-in-time snapshotting of capacity/power/
-efficiency onto `charging_sessions`, and idempotent `IF NOT EXISTS` migrations for the
-self-hosted prod. The two items that separate this from "scales cleanly to large telemetry
-volume" are **FK integrity on `vehicle_id`** and **time-partitioning the samples table** —
-both in the backlog.

@@ -6,9 +6,9 @@ Sends real-time Telegram notifications when the vehicle changes state, detected 
 
 | Event | Trigger | Message |
 |---|---|---|
-| **Connected** | First-ever data, or data after ≥5 min gap | `[car_name] подключился к сети` + odometer + SOC + map pin |
-| **Parked** | Gear P + speed ≤5 km/h, wasn't parked before | `[car_name] в режиме стоянки` + odometer + SOC + map pin |
-| **Disconnected** | Gap >10 min since last data, not yet notified | `[car_name] отключен от сети` + last known odometer + SOC + map pin |
+| **Connected** | First-ever data, or data after ≥5 min gap | Vehicle connected + odometer + SOC + map pin |
+| **Parked** | Gear P + speed ≤5 km/h, wasn't parked before | Vehicle parked + odometer + SOC + map pin |
+| **Disconnected** | Gap >10 min since last data, not yet notified | Vehicle disconnected + last known odometer + SOC + map pin |
 
 Disconnected is detected **retroactively** — when data resumes after >10 min, the handler sends "disconnected" with the last stored state, then "connected" with fresh data.
 

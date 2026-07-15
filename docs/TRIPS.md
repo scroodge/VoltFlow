@@ -68,7 +68,7 @@ where (distance_km<=0.1 and max_speed_kmh<=3)
    or (dur_s>0 and distance_km>0.3 and implied > greatest(max_speed_kmh*1.5,80));
 ```
 
-(2026-06-13 cleanup removed 10 phantoms across `sed`/`way`/`cl`.)
+(A historical cleanup removed phantom records after the discard rules were introduced.)
 
 ## Client display filter (`src/lib/bydmate/trip-filter.ts`)
 

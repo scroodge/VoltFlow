@@ -47,6 +47,7 @@ package-lock.json
 
 /screenshots
 opencode.json
+/.opencode/
 
 /docs
 /docs/archive
@@ -59,6 +60,10 @@ opencode.json
 AGENTS.md
 CLAUDE.md
 SKILLS.md
+/BACKLOG.md
+/CHANGELOG.md
+/PAPERCUTS.md
+/supabase/MIGRATIONS_AUDIT.md
 .env*
 
 .claude/
