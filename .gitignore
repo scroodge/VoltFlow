@@ -60,3 +60,12 @@ AGENTS.md
 CLAUDE.md
 SKILLS.md
 .env*
+
+.claude/
+.codegraph/
+.cursor/
+.codex/
+.gemini/
+.kiro/
+.windsurfrules
+.clinerules
