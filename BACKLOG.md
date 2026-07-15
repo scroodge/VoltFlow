@@ -6,6 +6,76 @@ go-ahead.** These are researched but **not built**. Shipped work lives in
 
 ---
 
+## Math Distance: rolling ~50 km efficiency window (vehicle page)
+
+### Scope
+
+**Only the "Math Distance" estimate** (`mathRangeLabel` = `kmPerPercentSoc × SOC`,
+`src/components/vehicle/vehicle-live-view.tsx:400`). The separate **"AI Distance"**
+estimate (`useVehicleRangeEstimate`) is untouched. The change lives entirely in
+`resolveKmPerPercentSoc` (`src/lib/bydmate/hero-drive-metrics.ts:118`).
+
+### Problem
+
+Today `kmPerPercentSoc` is keyed off the **single latest trip**:
+
+1. Primary: `tripDistance / socDelta` (needs `socDelta ≥ 1%`).
+2. Fallback: `batteryCapacityKwh / consumption_kwh_100km` (nameplate capacity, single
+   trip's consumption).
+
+The latest trip is frequently a junk micro-trip (0 km / 0 % drop), which knocks the
+primary path out and drops to raw live consumption. Verified live: the most recent
+`way` trip is a 31 s, 0 km, 39→39 % trip, so Math Distance currently runs on the
+fallback.
+
+### Two variants considered
+
+- **A — user's proposal (capacity ÷ 50 km consumption):**
+  `((capacity/100) / (kWh_last50km/50)) × SOC`. Algebraically this is the *existing
+  fallback* (`capacity/consumption`) with consumption measured over a rolling ~50 km
+  instead of one trip. `capacity` = the **user-set** `cars.battery_capacity_kwh`
+  (not live BMS SOH).
+- **B — windowed-percent (recommended):** `Σdistance(last ~50 km) / ΣsocDelta(last ~50 km) × SOC`.
+  Same 50 km smoothing, but stays in percent-space, so it needs no capacity number and
+  auto-tracks battery degradation.
+
+### Data ownership
+
+No new persisted data. Both variants read existing app-owned trip rows + the user-owned
+`cars.battery_capacity_kwh` setting. No schema change, no localStorage change.
+
+### Measured on real `way` data (SOC 69 %, SOH 99 %, capacity 45.1 kWh)
+
+Last ~50 km = 9 trips: Σdist ≈ 52.4 km, Σ SOC-drop = 18 %, Σ energy ≈ 8.13 kWh,
+distance-weighted consumption ≈ 15.5 kWh/100 km.
+
+| Formula | km/% | Math Distance @ 69 % |
+|---|---|---|
+| Today (single-trip fallback, cur. cons 15.92) | 2.83 | ≈ 196 km |
+| A — capacity ÷ 50 km consumption | 2.91 | ≈ 201 km |
+| B — windowed-percent | 2.91 | ≈ 201 km |
+
+A and B are identical at 99 % SOH (`Σenergy/ΣSOC` = 0.452 ≈ `capacity/100` = 0.451).
+They diverge only as SOH falls: B self-corrects; A stays optimistic until the user edits
+the capacity setting.
+
+### Recommendation
+
+Adopt **B (windowed-percent)** as the primary, keep **A (capacity ÷ rolling consumption)**
+as the last-resort fallback when no usable `socDelta` exists in the window. Net win:
+kills the junk-micro-trip fragility and never depends on a stale capacity setting.
+
+### Open questions before build
+
+- **Window definition:** walk trips back until cumulative distance ≥ ~50 km (drop
+  charging gaps? cap age, e.g. ignore trips older than N days?).
+- **50 km energy source (variant A path):** distance-weighted `avg_consumption_kwh_100km`
+  vs. `traction_energy_kwh − regen_energy_kwh`; they can disagree — pick and document one.
+- **Small-data guard:** if the window has <X km or ΣsocDelta <1 %, fall back to today's
+  behavior rather than divide by noise.
+
+---
+
 ## Telegram community marketplace for `@Voltflowscr_bot`
 
 ### Goal

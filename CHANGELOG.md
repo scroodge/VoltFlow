@@ -9,6 +9,30 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-07-15
+
+### Math Distance: rolling ~50 km efficiency window
+
+- `resolveKmPerPercentSoc` (`src/lib/bydmate/hero-drive-metrics.ts`) no longer keys
+  Math Distance's `kmPerPercentSoc` off the single latest trip. It now walks trips
+  newest-first, summing distance and SOC-drop until ~50 km is covered
+  (`MATH_RANGE_WINDOW_KM`), and divides the sums — staying in percent-space so it
+  never depends on the user's capacity setting and self-corrects for battery
+  degradation.
+- Trips with missing/invalid distance or SOC data (e.g. 0 km / 0% junk micro-trips)
+  are skipped rather than aborting the walk, so a bad latest trip no longer knocks
+  the estimate down to the raw consumption fallback.
+- The consumption-based fallback (`batteryCapacityKwh / consumptionKwh100`) is
+  unchanged and still applies only when the window yields no usable SOC delta
+  (`< 1%` total).
+- AI Distance (`useVehicleRangeEstimate`) is untouched — this only affects Math
+  Distance.
+- Pre-build comparison against the single-trip and capacity-based
+  (SOH-in-user-settings) alternatives was measured on real `way` vehicle trips
+  before implementation (see prior BACKLOG.md entry, now removed).
+
+---
+
 ## 2026-07-14
 
 ### Telegram group event inbox and Ollama context-verification foundation

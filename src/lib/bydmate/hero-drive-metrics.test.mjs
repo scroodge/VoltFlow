@@ -96,7 +96,7 @@ test("tripDistanceKm prefers live distance for ongoing trip", () => {
 
 test("resolveKmPerPercentSoc uses SOC delta for closed trip", () => {
   const kmPerPercent = resolveKmPerPercentSoc({
-    trip: baseTrip,
+    trips: [baseTrip],
     liveSoc: null,
     liveDistanceKm: null,
     batteryCapacityKwh: 45,
@@ -108,13 +108,67 @@ test("resolveKmPerPercentSoc uses SOC delta for closed trip", () => {
 test("resolveKmPerPercentSoc falls back to consumption when SOC delta is too small", () => {
   const trip = { ...baseTrip, soc_start: 80, soc_end: 79.5, distance_km: 2 };
   const kmPerPercent = resolveKmPerPercentSoc({
-    trip,
+    trips: [trip],
     liveSoc: null,
     liveDistanceKm: null,
     batteryCapacityKwh: 45,
     consumptionKwh100: 15,
   });
   assert.ok(kmPerPercent != null && Math.abs(kmPerPercent - 3) < 0.001);
+});
+
+test("resolveKmPerPercentSoc sums a window of trips instead of just the latest", () => {
+  // Newest first, as bydmate_trips is queried (started_at desc).
+  const trips = [
+    { ...baseTrip, id: "t3", distance_km: 10, soc_start: 60, soc_end: 55 },
+    { ...baseTrip, id: "t2", distance_km: 20, soc_start: 70, soc_end: 60 },
+    { ...baseTrip, id: "t1", distance_km: 30, soc_start: 90, soc_end: 70 },
+  ];
+  // Total: 60 km / 35% = 1.714... km per %
+  const kmPerPercent = resolveKmPerPercentSoc({
+    trips,
+    liveSoc: null,
+    liveDistanceKm: null,
+    batteryCapacityKwh: 45,
+    consumptionKwh100: null,
+  });
+  assert.ok(kmPerPercent != null && Math.abs(kmPerPercent - 60 / 35) < 0.001);
+});
+
+test("resolveKmPerPercentSoc skips a junk latest trip and keeps walking older ones", () => {
+  const junk = {
+    ...baseTrip,
+    id: "junk",
+    distance_km: 0,
+    soc_start: 39,
+    soc_end: 39,
+    ended_at: "2026-06-16T10:05:00.000Z",
+  };
+  const real = { ...baseTrip, id: "real", distance_km: 22.6, soc_start: 47, soc_end: 39 };
+  const kmPerPercent = resolveKmPerPercentSoc({
+    trips: [junk, real],
+    liveSoc: null,
+    liveDistanceKm: null,
+    batteryCapacityKwh: 45,
+    consumptionKwh100: null,
+  });
+  assert.ok(kmPerPercent != null && Math.abs(kmPerPercent - 22.6 / 8) < 0.001);
+});
+
+test("resolveKmPerPercentSoc stops once the window reaches ~50 km", () => {
+  const trips = [
+    { ...baseTrip, id: "recent", distance_km: 55, soc_start: 90, soc_end: 60 },
+    // Should be ignored: window already satisfied by the first trip alone.
+    { ...baseTrip, id: "older", distance_km: 100, soc_start: 60, soc_end: 10 },
+  ];
+  const kmPerPercent = resolveKmPerPercentSoc({
+    trips,
+    liveSoc: null,
+    liveDistanceKm: null,
+    batteryCapacityKwh: 45,
+    consumptionKwh100: null,
+  });
+  assert.ok(kmPerPercent != null && Math.abs(kmPerPercent - 55 / 30) < 0.001);
 });
 
 test("dedupeTripsBySource drops energydata twins, keeps orphans", () => {

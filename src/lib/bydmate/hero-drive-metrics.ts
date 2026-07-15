@@ -107,42 +107,70 @@ export function sumDistanceSinceCharge(
   return hasAny ? sum : 0;
 }
 
+// Math Distance window: walk trips back (newest first) until this much distance is
+// covered, so one junk micro-trip (0 km / 0% drop) can't knock the estimate down to
+// the consumption fallback. See BACKLOG.md "Math Distance: rolling ~50 km efficiency
+// window" for the measured comparison against the single-trip and capacity-based
+// alternatives.
+const MATH_RANGE_WINDOW_KM = 50;
+const MATH_RANGE_MIN_SOC_DELTA_PERCENT = 1;
+
 export type ResolveKmPerPercentSocInput = {
-  trip: BydmateTripRow | null;
+  /** Deduped trips, newest first (as returned by `bydmate_trips` ordered by started_at desc). */
+  trips: BydmateTripRow[];
   liveSoc: number | null | undefined;
   liveDistanceKm: number | null | undefined;
   batteryCapacityKwh: number | null | undefined;
   consumptionKwh100: number | null | undefined;
 };
 
-export function resolveKmPerPercentSoc(input: ResolveKmPerPercentSocInput): number | null {
-  const { trip, liveSoc, liveDistanceKm, batteryCapacityKwh, consumptionKwh100 } = input;
-  if (!trip) return resolveKmPerPercentFromConsumption(batteryCapacityKwh, consumptionKwh100);
-
-  const distance = tripDistanceKm(trip, liveDistanceKm);
+function tripSocDelta(
+  trip: BydmateTripRow,
+  isCurrent: boolean,
+  liveSoc: number | null | undefined,
+): number | null {
   const socStart = finiteNumber(trip.soc_start);
-  let socDelta: number | null = null;
+  if (socStart == null) return null;
 
   if (!trip.ended_at) {
-    const currentSoc = finiteNumber(liveSoc) ?? finiteNumber(trip.soc_end);
-    if (socStart != null && currentSoc != null) {
-      socDelta = socStart - currentSoc;
-    }
-  } else {
-    const socEnd = finiteNumber(trip.soc_end);
-    if (socStart != null && socEnd != null) {
-      socDelta = socStart - socEnd;
-    }
+    const currentSoc = isCurrent ? finiteNumber(liveSoc) ?? finiteNumber(trip.soc_end) : finiteNumber(trip.soc_end);
+    return currentSoc != null ? socStart - currentSoc : null;
   }
 
-  if (distance != null && socDelta != null && socDelta >= 1) {
-    const kmPerPercent = distance / socDelta;
+  const socEnd = finiteNumber(trip.soc_end);
+  return socEnd != null ? socStart - socEnd : null;
+}
+
+export function resolveKmPerPercentSoc(input: ResolveKmPerPercentSocInput): number | null {
+  const { trips, liveSoc, liveDistanceKm, batteryCapacityKwh, consumptionKwh100 } = input;
+  const latestTrip = trips[0] ?? null;
+  if (!latestTrip) return resolveKmPerPercentFromConsumption(batteryCapacityKwh, consumptionKwh100);
+
+  let totalDistance = 0;
+  let totalSocDelta = 0;
+
+  for (let i = 0; i < trips.length && totalDistance < MATH_RANGE_WINDOW_KM; i += 1) {
+    const trip = trips[i];
+    const isCurrent = i === 0;
+    const distance = tripDistanceKm(trip, isCurrent && !trip.ended_at ? liveDistanceKm : null);
+    const socDelta = tripSocDelta(trip, isCurrent, liveSoc);
+
+    // Skip trips with missing or non-driving-adjacent data rather than aborting the
+    // walk, so a handful of junk entries don't starve the window of real distance.
+    if (distance == null || distance < 0 || socDelta == null || socDelta <= 0) continue;
+
+    totalDistance += distance;
+    totalSocDelta += socDelta;
+  }
+
+  if (totalDistance > 0 && totalSocDelta >= MATH_RANGE_MIN_SOC_DELTA_PERCENT) {
+    const kmPerPercent = totalDistance / totalSocDelta;
     if (Number.isFinite(kmPerPercent) && kmPerPercent > 0) return kmPerPercent;
   }
 
   return resolveKmPerPercentFromConsumption(
     batteryCapacityKwh,
-    consumptionKwh100 ?? trip.avg_consumption_kwh_100km,
+    consumptionKwh100 ?? latestTrip.avg_consumption_kwh_100km,
   );
 }
 
@@ -178,12 +206,11 @@ export function computeHeroDriveMetrics({
   const anchorStoppedAt = lastCharge?.stopped_at ?? lastCharge?.started_at ?? null;
   const liveDistanceKm = snapshot.telemetry.current_trip_distance_km;
   const dedupedTrips = dedupeTripsBySource(trips);
-  const latestTrip = dedupedTrips[0] ?? null;
 
   return {
     distanceSinceChargeKm: sumDistanceSinceCharge(dedupedTrips, anchorStoppedAt, liveDistanceKm),
     kmPerPercentSoc: resolveKmPerPercentSoc({
-      trip: latestTrip,
+      trips: dedupedTrips,
       liveSoc: snapshot.telemetry.soc,
       liveDistanceKm,
       batteryCapacityKwh,
