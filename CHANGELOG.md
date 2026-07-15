@@ -53,10 +53,24 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-07-14
 
-### Domain migration → `voltflow.life` (Phases 0–2 shipped)
+### Domain migration → `voltflow.life` (Phases 0–3)
 
-Moved the app and its backend infra off `volt-flow-beige.vercel.app` / `mykid.life`.
-Phase 3 (Mate APK settings migration) is still open — see [BACKLOG.md](BACKLOG.md).
+Moved the app, its backend infra, and paired cars off `volt-flow-beige.vercel.app` /
+`mykid.life`. Phases 0–2 shipped to production; Phase 3 (Mate) is built and verified on car
+`way` but its commits are **local/unpushed** pending a formal `/release-apk` cut.
+
+**Phase 3 — Mate APK settings migration** (repo `BYDMate-own`, commit `e2cd59b`). The
+telemetry endpoint is persisted in Mate's settings at link time, so changing the default
+alone would only move fresh installs. A one-shot migration (mirroring the v2.4.17 pattern,
+gated on `migration_domain_voltflow_done`) rewrites a stored `cloud_sync_url` to
+`voltflow.life` on first launch of the new build — **only** when it is blank or its host is
+the known-legacy `volt-flow-beige.vercel.app`; a user's custom endpoint is never touched
+(that guard is proven by a mutation test). Verified on `way`: after install the stored URL
+flipped to `voltflow.life`, the flag was set, and telemetry kept landing. The old Vercel
+host still 308s, so a car that never upgrades keeps working. Also fixed in the same repo
+(`7b37366`): queued telemetry batches are now sent under the `vehicle_id` in each row's own
+body, not the current setting — editing the vehicle id with a non-empty queue previously
+caused a header/body mismatch that made the server drop the whole batch.
 
 **Phase 0 — canonical domain.** `voltflow.life` (apex) is Production; `www` and
 `volt-flow-beige.vercel.app` both `308` → apex. Before this, apex *and* `www` were both

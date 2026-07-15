@@ -155,48 +155,15 @@ the public table or retain them only briefly in a restricted moderation table.
 
 ---
 
-## 🟠 Domain migration → voltflow.life — Phase 3: Mate APK
+## 🟠 Domain migration → voltflow.life — leftovers (optional, not blocking)
 
-Phases 0–2 **shipped 2026-07-14** (canonical domain, frontend URLs, backend infra) — see
-[CHANGELOG.md](CHANGELOG.md). This is what remains.
+Phases 0–3 **shipped** (canonical domain, frontend URLs, backend infra, and the Mate
+one-shot settings migration built + verified on car `way`) — see [CHANGELOG.md](CHANGELOG.md).
+The two Mate commits (`7b37366` vehicle_id fix, `e2cd59b` domain migration) are **local,
+unpushed** — a formal Mate release still follows the `/release-apk` skill (version bump +
+post-install telemetry verification).
 
-Goal: **installing the new APK repoints an existing car at the new domain — no reconnect,
-no re-pairing.**
-
-Changing `SettingsRepository.DEFAULT_CLOUD_SYNC_URL` (`SettingsRepository.kt:92`) is **not
-enough on its own**. The endpoint is persisted in Room (`settings` table, key
-`cloud_sync_url`, written at link time by `SettingsViewModel.kt:800`), and
-`getString(key, default)` returns the *stored* value — a new default reaches fresh installs
-only.
-
-So add a **one-shot settings migration**, mirroring the existing v2.4.17 precedent
-(`BYDMateApp.kt:49-54`, gated on `KEY_MIGRATION_V2_4_17`):
-
-1. `SettingsRepository`: point `DEFAULT_CLOUD_SYNC_URL` at
-   `https://voltflow.life/api/bydmate/telemetry`; add
-   `LEGACY_CLOUD_SYNC_HOSTS = setOf("volt-flow-beige.vercel.app")` and
-   `KEY_MIGRATION_DOMAIN = "migration_domain_voltflow_done"` + its
-   `isMigrationDomainDone()` / `setMigrationDomainDone()` pair.
-2. `BYDMateApp` init: if the flag is unset, read `cloud_sync_url`; if it is **blank or its
-   host is in `LEGACY_CLOUD_SYNC_HOSTS`**, rewrite it to the new default. Then set the flag.
-
-**Match on host, rewrite only the known-legacy value.** A user who pointed Mate at a
-self-hosted or custom endpoint must be left alone — a blanket overwrite would silently
-hijack their config. This is the one way this migration can do harm, so it is the one rule
-that matters.
-
-Also update `tools/voltflow_cmd.conf.example:6` (CommandDaemon's on-device conf) and the
-`volt-flow-beige` URLs in the Kotlin tests.
-
-**This does not retire the `308`.** A user who never installs the new APK keeps posting to
-`volt-flow-beige.vercel.app` forever, and must keep working. The redirect stays permanently;
-the migration is what moves everyone who *does* upgrade, without asking them to re-link.
-
-**Blocked on:** reading the car's stored `cloud_sync_url` over ADB (`192.168.43.71:5555` —
-needs the "Allow USB debugging" prompt accepted on the head unit) to confirm it is the plain
-old default before writing a migration that rewrites it.
-
-### Leftovers from Phases 0–2 (optional, not blocking)
+Remaining items are optional and none block anything:
 
 - **Serve `/api/bydmate/*` directly on the old host.** Today every telemetry sample is a
   `308` + a re-issued POST. Flipping `volt-flow-beige.vercel.app` to *Connect to an
@@ -211,8 +178,6 @@ old default before writing a migration that rewrites it.
   old one expires. Worth a dedupe pass.
 - **No `sitemap.ts` / `robots.ts`** — the marketing + knowledge pages have no canonical host
   declared for SEO.
-- **BotFather "Main Mini App" URL** (the *Open* button) is set in BotFather by hand, not via
-  the API — confirm it points at `https://voltflow.life/telegram`.
 
 ---
 
