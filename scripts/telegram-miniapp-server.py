@@ -508,6 +508,14 @@ def update_telegram_group_verification(event, values):
     query = urllib.parse.urlencode(
         {"chat_id": f"eq.{event['chat_id']}", "message_id": f"eq.{event['message_id']}"}
     )
+    supabase_request(
+        "PATCH",
+        f"/rest/v1/telegram_group_events?{query}",
+        values,
+        key=SERVICE_ROLE_KEY,
+        headers={"prefer": "return=minimal"},
+        expect_empty=True,
+    )
 
 
 def upsert_community_listing(event, result):
@@ -535,14 +543,24 @@ def upsert_community_listing(event, result):
         headers={"prefer": "resolution=merge-duplicates,return=minimal"},
         expect_empty=True,
     )
-    supabase_request(
-        "PATCH",
-        f"/rest/v1/telegram_group_events?{query}",
-        values,
+
+
+def process_pending_group_events():
+    rows = supabase_request(
+        "GET",
+        "/rest/v1/telegram_group_events?status=eq.pending&select=*",
         key=SERVICE_ROLE_KEY,
-        headers={"prefer": "return=minimal"},
-        expect_empty=True,
-    )
+    ) or []
+    for row in rows:
+        event = {
+            "protected_content": row.get("protected_content") is True,
+            "text": row.get("text") or "",
+            "chat_id": row.get("chat_id"),
+            "message_id": row.get("message_id"),
+            "telegram_user_id": row.get("telegram_user_id"),
+            "source_url": row.get("source_url"),
+        }
+        process_telegram_group_event(event)
 
 
 def verify_telegram_text(text):
@@ -665,6 +683,7 @@ def telegram_request(method, payload):
 
 def main():
     server = ThreadingHTTPServer(("127.0.0.1", PORT), TelegramApiHandler)
+    threading.Thread(target=process_pending_group_events, daemon=True).start()
     print(f"Telegram Mini App API listening on 127.0.0.1:{PORT}")
     server.serve_forever()
 

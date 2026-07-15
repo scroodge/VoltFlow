@@ -69,6 +69,9 @@ export default async function KnowledgeAdminPage() {
           <Link className="min-h-10 rounded-lg border border-border px-4 py-2 text-sm font-semibold" href="/admin/knowledge/service-providers/new">
             Новый сервис
           </Link>
+          <Link className="min-h-10 rounded-lg border border-[var(--voltflow-cyan)]/50 px-4 py-2 text-sm font-semibold text-[var(--voltflow-cyan)]" href="/admin/knowledge/marketplace">
+            Объявления Telegram
+          </Link>
         </div>
       </section>
     </AdminShell>
