@@ -39,6 +39,14 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 - Added `LLM_*` variables to `.env.example` and verified one live seller message through
   the Python processor against `qwen2.5:14b`.
 
+### Telegram draft marketplace listings
+
+- Added and applied `20260714160000_community_listings.sql` with private `draft` status,
+  admin-only management, public visibility only after explicit publication, and source
+  message deduplication.
+- Verified seller events now create draft listings; the first live test draft is the
+  Kraft AGM 40 offer from Новолуцк at 250 BYN.
+
 ---
 
 ## 2026-07-14
