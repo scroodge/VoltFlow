@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { requireAdmin } from "@/lib/supabase/knowledge";
 import {
+  deleteCommunityListing,
   updateCommunityListing,
   updateCommunityListingStatus,
   type CommunityListingItemType,
@@ -46,7 +47,12 @@ export async function updateCommunityListingStatusAction(formData: FormData) {
 
   const status = requiredString(formData, "status") as CommunityListingStatus;
   if (!statuses.has(status)) throw new Error("Некорректный статус объявления.");
-  await updateCommunityListingStatus(requiredString(formData, "id"), status);
+  const id = requiredString(formData, "id");
+  if (status === "removed") {
+    await deleteCommunityListing(id);
+  } else {
+    await updateCommunityListingStatus(id, status);
+  }
   revalidatePath(listingPath);
 }
 

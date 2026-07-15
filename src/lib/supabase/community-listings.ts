@@ -50,3 +50,9 @@ export async function updateCommunityListingStatus(id: string, status: Community
   const { error } = await supabase.from("community_listings").update({ status }).eq("id", id);
   if (error) throw new Error(`Failed to update community listing status: ${error.message}`);
 }
+
+export async function deleteCommunityListing(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("community_listings").delete().eq("id", id);
+  if (error) throw new Error(`Failed to delete community listing: ${error.message}`);
+}

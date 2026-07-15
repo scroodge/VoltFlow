@@ -46,6 +46,8 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
   message deduplication.
 - Verified seller events now create draft listings; the first live test draft is the
   Kraft AGM 40 offer from Новолуцк at 250 BYN.
+- Fixed production moderation 500s by applying `20260715100000_community_listings_admin_privileges.sql`;
+  authenticated admins now have table-level write grants, still restricted by RLS.
 
 ---
 
