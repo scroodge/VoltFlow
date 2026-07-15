@@ -389,7 +389,11 @@ function VehicleLiveContent({
     baseSnapshot: rangeBaseSnapshot,
     scopedVehicleId,
     batteryCapacityKwh,
-    recentTripsOverride: fixtureTrips ?? undefined,
+    // Same rolling ~50 km trip window Math Distance uses (heroDriveMetrics.rangeEstimateTrips),
+    // instead of a separate single-latest-trip fetch — keeps AI Distance from being anchored
+    // to whichever one trip happened to run last (see CHANGELOG "AI Distance: share the
+    // ~50 km window with Math Distance").
+    recentTripsOverride: fixtureTrips ?? heroDriveMetrics.rangeEstimateTrips,
     enabled: !fixturePoints,
   });
   const rangeLabel =
@@ -555,18 +559,20 @@ function Hero({
   const t = translate as Translator;
   const telemetry = snapshot.telemetry;
   const coreMetrics = heroCoreMetrics(snapshot, t, locale);
-  const primaryMetrics = [
+  const primaryMetrics: { key: string; icon: typeof Gauge; label: string; value: ReactNode; hint?: string }[] = [
     {
       key: "aiRange",
       icon: Route,
       label: t("vehicle.metrics.aiRange"),
       value: rangeLabel,
+      hint: t("vehicle.metrics.aiRangeHint"),
     },
     {
       key: "mathRange",
       icon: Activity,
       label: t("vehicle.metrics.mathRange"),
       value: mathRangeLabel,
+      hint: t("vehicle.metrics.mathRangeHint"),
     },
     coreMetrics[0],
     ...coreMetrics.slice(1),
@@ -628,6 +634,7 @@ function Hero({
                 icon={metric.icon}
                 label={metric.label}
                 value={metric.value}
+                hint={metric.hint}
               />
             ))}
           </div>
@@ -680,13 +687,15 @@ function HeroMetric({
   icon: Icon,
   label,
   value,
+  hint,
 }: {
   icon: typeof Gauge;
   label: string;
   value: ReactNode;
+  hint?: string;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-white/[0.03] p-2.5">
+    <div className="rounded-xl border border-border bg-white/[0.03] p-2.5" title={hint}>
       <Icon className="mb-1 size-3.5 text-primary" aria-hidden />
       <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
       <p className="mt-0.5 font-heading text-base font-semibold tabular-nums">{value}</p>
@@ -766,9 +775,9 @@ function RestMetricsCard({
 }) {
   const { locale, t: translate } = useTranslation();
   const t = translate as Translator;
-  const items = [
-    { key: "aiRange", icon: Route, label: t("vehicle.metrics.aiRange"), value: rangeLabel },
-    { key: "mathRange", icon: Activity, label: t("vehicle.metrics.mathRange"), value: mathRangeLabel },
+  const items: { key: string; icon: typeof Gauge; label: string; value: ReactNode; hint?: string }[] = [
+    { key: "aiRange", icon: Route, label: t("vehicle.metrics.aiRange"), value: rangeLabel, hint: t("vehicle.metrics.aiRangeHint") },
+    { key: "mathRange", icon: Activity, label: t("vehicle.metrics.mathRange"), value: mathRangeLabel, hint: t("vehicle.metrics.mathRangeHint") },
     ...heroCoreMetrics(snapshot, t, locale),
   ];
   const visibleItems = items.filter((item) => !isMissingMetricValue(item.value));
@@ -778,7 +787,7 @@ function RestMetricsCard({
     <section className="voltflow-card p-4">
       <div className={telemetryGridClass(visibleItems.length)}>
         {visibleItems.map((item) => (
-          <HeroMetric key={item.key} icon={item.icon} label={item.label} value={item.value} />
+          <HeroMetric key={item.key} icon={item.icon} label={item.label} value={item.value} hint={item.hint} />
         ))}
       </div>
     </section>

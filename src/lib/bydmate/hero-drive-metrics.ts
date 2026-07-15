@@ -174,6 +174,32 @@ export function resolveKmPerPercentSoc(input: ResolveKmPerPercentSocInput): numb
   );
 }
 
+/**
+ * Trips (newest first) covering the same rolling ~50 km window Math Distance uses,
+ * for callers (AI Distance) that want to blend consumption over recent driving
+ * instead of a single latest trip. Unlike `resolveKmPerPercentSoc`'s internal walk,
+ * this selects by raw distance only — a trip missing SOC data still counts toward
+ * the window, since AI Distance's own consumption filters (not SOC) decide what it uses.
+ */
+export function selectTripsWithinDistanceWindow(
+  trips: BydmateTripRow[],
+  liveDistanceKm: number | null | undefined,
+  windowKm: number = MATH_RANGE_WINDOW_KM,
+): BydmateTripRow[] {
+  const selected: BydmateTripRow[] = [];
+  let total = 0;
+
+  for (let i = 0; i < trips.length && total < windowKm; i += 1) {
+    const trip = trips[i];
+    const isCurrent = i === 0;
+    const distance = tripDistanceKm(trip, isCurrent && !trip.ended_at ? liveDistanceKm : null);
+    selected.push(trip);
+    if (distance != null && distance > 0) total += distance;
+  }
+
+  return selected;
+}
+
 function resolveKmPerPercentFromConsumption(
   batteryCapacityKwh: number | null | undefined,
   consumptionKwh100: number | null | undefined,
@@ -201,6 +227,8 @@ export function computeHeroDriveMetrics({
 }): {
   distanceSinceChargeKm: number | null;
   kmPerPercentSoc: number | null;
+  /** Same rolling ~50 km window as kmPerPercentSoc, for AI Distance to blend over instead of one trip. */
+  rangeEstimateTrips: BydmateTripRow[];
 } {
   const lastCharge = findLastFinishedChargeSession(sessions, carId);
   const anchorStoppedAt = lastCharge?.stopped_at ?? lastCharge?.started_at ?? null;
@@ -216,6 +244,7 @@ export function computeHeroDriveMetrics({
       batteryCapacityKwh,
       consumptionKwh100: snapshot.telemetry.current_trip_consumption_kwh_100km,
     }),
+    rangeEstimateTrips: selectTripsWithinDistanceWindow(dedupedTrips, liveDistanceKm),
   };
 }
 

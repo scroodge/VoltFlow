@@ -8,6 +8,7 @@ import {
   formatHeroDistanceKm,
   formatKmPerPercent,
   resolveKmPerPercentSoc,
+  selectTripsWithinDistanceWindow,
   sumDistanceSinceCharge,
   tripDistanceKm,
 } from "./hero-drive-metrics.ts";
@@ -169,6 +170,17 @@ test("resolveKmPerPercentSoc stops once the window reaches ~50 km", () => {
     consumptionKwh100: null,
   });
   assert.ok(kmPerPercent != null && Math.abs(kmPerPercent - 55 / 30) < 0.001);
+});
+
+test("selectTripsWithinDistanceWindow stops once the window is covered and includes a distance-less trip along the way", () => {
+  const trips = [
+    { ...baseTrip, id: "t3", distance_km: 20 },
+    { ...baseTrip, id: "junk", distance_km: 0, soc_start: 60, soc_end: 60 },
+    { ...baseTrip, id: "t2", distance_km: 35 },
+    { ...baseTrip, id: "t1", distance_km: 100 },
+  ];
+  const selected = selectTripsWithinDistanceWindow(trips, null, 50);
+  assert.deepEqual(selected.map((trip) => trip.id), ["t3", "junk", "t2"]);
 });
 
 test("dedupeTripsBySource drops energydata twins, keeps orphans", () => {
