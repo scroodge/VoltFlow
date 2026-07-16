@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BatteryCharging, CarFront, Route } from "lucide-react";
+import { BatteryCharging, Route } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -226,11 +226,36 @@ function drivingStatsFromLive(
 
 function DashboardStatTile({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="rounded-xl border border-border bg-white/[0.03] p-2.5">
+    <div className="grid min-h-[84px] grid-rows-[auto_1fr] rounded-xl border border-border bg-white/[0.03] p-2.5">
       <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         {label}
       </p>
-      <p className="mt-1 font-heading text-base font-bold tabular-nums">{value}</p>
+      <p className="flex items-center font-heading text-base font-bold tabular-nums">{value}</p>
+    </div>
+  );
+}
+
+function DashboardChargingProgressTile({
+  charged,
+  chargedLabel,
+  timeLeft,
+  timeLeftLabel,
+}: {
+  charged: string;
+  chargedLabel: string;
+  timeLeft: string;
+  timeLeftLabel: string;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-white/[0.03] p-2.5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        {timeLeftLabel}
+      </p>
+      <p className="mt-1 font-heading text-base font-bold tabular-nums">{timeLeft}</p>
+      <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        {chargedLabel}
+      </p>
+      <p className="mt-1 text-sm font-semibold tabular-nums text-muted-foreground">{charged}</p>
     </div>
   );
 }
@@ -839,15 +864,6 @@ export function DashboardView() {
     defaultChargerPowerKw: selectedCar?.default_charger_power_kw,
   });
 
-  const liveVehicleTitle = liveVehicleSummaryTitle(
-    latestBydmateSnapshot,
-    vehicleMode,
-    statusLabel,
-    displayChargePowerKw,
-    (key, params) => String(t(key, params)),
-    fmt,
-  );
-
   const rangeEstimate = useVehicleRangeEstimate({
     baseSnapshot: forceDevMockMode ? latestBydmateSnapshot : baseBydmateSnapshot,
     scopedVehicleId,
@@ -912,12 +928,8 @@ export function DashboardView() {
         : null;
     const costToFull =
       remainingGridEnergyKwh != null && effectivePricePerKwh > 0
-        ? formatCurrencyAmount(
-            currency,
-            costFromGridEnergy(remainingGridEnergyKwh, effectivePricePerKwh),
-            locale,
-          )
-        : "—";
+        ? costFromGridEnergy(remainingGridEnergyKwh, effectivePricePerKwh)
+        : null;
 
     return {
       charged: `${fmt(liveActive.chargedEnergyKwh, 2)} kWh`,
@@ -1299,28 +1311,40 @@ export function DashboardView() {
                     />
                   ) : activeChargingStats ? (
                     <div className="grid grid-cols-2 gap-2">
+                      <DashboardChargingProgressTile
+                        timeLeftLabel={t("dashboard.chargingTimeLeft") as string}
+                        timeLeft={activeChargingStats.timeLeft}
+                        chargedLabel={t("dashboard.chargingCharged") as string}
+                        charged={activeChargingStats.charged}
+                      />
                       <DashboardStatTile
-                        label={t("dashboard.chargingTimeAndEnergy") as string}
+                        label={t("dashboard.chargingCostToFull") as string}
                         value={
-                          <span className="flex flex-col gap-1">
-                            <span>{activeChargingStats.timeLeft}</span>
-                            <span className="text-sm text-muted-foreground">
-                              {activeChargingStats.charged}
+                          activeChargingStats.costToFull != null ? (
+                            <CurrencyAmount
+                              currency={currency}
+                              value={activeChargingStats.costToFull}
+                              locale={locale}
+                            />
+                          ) : (
+                            "—"
+                          )
+                        }
+                      />
+      <DashboardStatTile
+                        label={t("dashboard.packShort") as string}
+                        value={
+                          <span className="flex flex-col leading-tight">
+                            <span className="whitespace-nowrap">
+                              {packTileValue.replace(/\s+kWh$/, "")}
                             </span>
+                            <span className="text-sm text-muted-foreground">kWh</span>
                           </span>
                         }
                       />
                       <DashboardStatTile
-                        label={t("dashboard.chargingCostToFull") as string}
-                        value={activeChargingStats.costToFull}
-                      />
-                      <DashboardStatTile
-                        label={t("dashboard.packShort") as string}
-                        value={packTileValue}
-                      />
-                      <DashboardStatTile
                         label={t("dashboard.chargerShort") as string}
-                        value={`~ ${fmt(chargingTileKw)} kW`}
+                        value={<span className="whitespace-nowrap">~ {fmt(chargingTileKw)} kW</span>}
                       />
                     </div>
                   ) : (
@@ -1337,7 +1361,7 @@ export function DashboardView() {
                       {isChargingMode ? (
                         <DashboardStatTile
                           label={t("dashboard.chargerShort") as string}
-                          value={`~ ${fmt(chargingTileKw)} kW`}
+                          value={<span className="whitespace-nowrap">~ {fmt(chargingTileKw)} kW</span>}
                         />
                       ) : null}
                     </div>
@@ -1362,7 +1386,7 @@ export function DashboardView() {
             </div>
           </section>
 
-          <section className="grid gap-3">
+          <section className="grid grid-cols-2 gap-2">
             <DashboardSummaryCard
               href={
                 latestTrip
@@ -1422,25 +1446,6 @@ export function DashboardView() {
                       latestSession.stopped_at ?? latestSession.updated_at,
                     )}`
                   : undefined
-              }
-            />
-            <DashboardSummaryCard
-              href={appPath("/vehicle")}
-              icon={<CarFront className="size-5" aria-hidden />}
-              label={t("dashboard.liveVehicle") as string}
-              title={liveVehicleTitle}
-              body={
-                latestBydmateSnapshot
-                  ? formatClockRange(latestBydmateSnapshot.device_time, null, locale)
-                  : "—"
-              }
-              meta={
-                latestBydmateSnapshot
-                  ? `${fmt(latestBydmateSnapshot.telemetry.speed_kmh)} km/h · ${fmt(
-                      latestBydmateSnapshot.telemetry.power_kw,
-                      1,
-                    )} kW`
-                  : "0 km/h · 0.0 kW"
               }
             />
           </section>
