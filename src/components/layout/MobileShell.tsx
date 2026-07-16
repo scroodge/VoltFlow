@@ -63,10 +63,6 @@ export function MobileShell({ children }: { children: ReactNode }) {
     telegram.viewportHeight,
     telegram.viewportStableHeight,
   ]);
-  const compactTelegramLayout =
-    telegram.isTelegram &&
-    (telegram.viewportHeight ?? telegram.viewportStableHeight ?? Number.POSITIVE_INFINITY) <= 640;
-
   return (
     <DashboardDevSnapshotProvider>
       <VehicleDevSnapshotProvider>
@@ -79,7 +75,6 @@ export function MobileShell({ children }: { children: ReactNode }) {
           className={cn(
             "flex h-dvh min-h-dvh w-full flex-col overflow-hidden bg-background shadow-[0_0_80px_rgba(0,0,0,0.45)]",
             telegram.isTelegram && "telegram-webview",
-            compactTelegramLayout && "telegram-compact",
           )}
           style={telegramThemeStyle}
         >
