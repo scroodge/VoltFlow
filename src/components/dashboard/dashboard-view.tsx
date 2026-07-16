@@ -926,9 +926,19 @@ export function DashboardView() {
             activeSession.efficiency_percent,
           )
         : null;
+    // "Price to 100%" is the complete session budget: energy from the
+    // session's starting SOC through 100%, including what has already been
+    // delivered. The remaining energy above is still used for time-left.
+    const totalGridEnergyToFullKwh =
+      capacityKwh > 0 && activeSession.efficiency_percent > 0
+        ? energyFromGridKwh(
+            energyNeededKwh(capacityKwh, activeSession.start_percent, 100),
+            activeSession.efficiency_percent,
+          )
+        : null;
     const costToFull =
-      remainingGridEnergyKwh != null && effectivePricePerKwh > 0
-        ? costFromGridEnergy(remainingGridEnergyKwh, effectivePricePerKwh)
+      totalGridEnergyToFullKwh != null && effectivePricePerKwh > 0
+        ? costFromGridEnergy(totalGridEnergyToFullKwh, effectivePricePerKwh)
         : null;
     const availableKwh = availableBatteryKwh(capacityKwh, currentSoc);
     const packValue =
@@ -1103,9 +1113,9 @@ export function DashboardView() {
         : undefined;
 
   return (
-    <div className="safe-bottom flex flex-col gap-5 px-4 pb-6 pt-5">
-      <header className="flex items-center justify-between gap-4">
-        <LogoFull />
+    <div className="dashboard-page safe-bottom flex flex-col gap-5 px-4 pb-6 pt-5">
+      <header className="dashboard-page-header flex items-center justify-between gap-4">
+        <LogoFull className="dashboard-logo" />
         <BrandBadge className="hidden min-[380px]:inline-flex">
           {t("dashboard.fullControl")}
         </BrandBadge>
@@ -1156,7 +1166,7 @@ export function DashboardView() {
 
       {!isPageLoading && !carsError && cars && cars.length > 0 ? (
         <>
-          <section className="voltflow-card overflow-hidden p-4">
+          <section className="dashboard-primary-card voltflow-card overflow-hidden p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
@@ -1398,7 +1408,7 @@ export function DashboardView() {
             </div>
           </section>
 
-          <section className="grid grid-cols-2 gap-2">
+          <section className="dashboard-summary-grid grid grid-cols-2 gap-2">
             <DashboardSummaryCard
               href={
                 latestTrip

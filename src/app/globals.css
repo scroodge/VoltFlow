@@ -209,4 +209,83 @@
     stroke-linejoin: round;
     overflow: visible;
   }
+
+  .telegram-webview {
+    --telegram-viewport-height: 100dvh;
+    --telegram-safe-top: 0px;
+    --telegram-safe-bottom: 0px;
+    height: var(--telegram-viewport-height);
+    min-height: var(--telegram-viewport-height);
+  }
+
+  .telegram-webview > main {
+    padding-top: max(env(safe-area-inset-top), var(--telegram-safe-top));
+  }
+
+  .telegram-webview .app-bottom-nav {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom), var(--telegram-safe-bottom));
+  }
+
+  .telegram-webview.telegram-compact .dashboard-page {
+    gap: 0.75rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .telegram-webview.telegram-compact .dashboard-page-header {
+    gap: 0.75rem;
+  }
+
+  .telegram-webview.telegram-compact .dashboard-logo {
+    gap: 0.5rem;
+  }
+
+  .telegram-webview.telegram-compact .dashboard-logo > :first-child {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.875rem;
+  }
+
+  .telegram-webview.telegram-compact .dashboard-logo p:first-child {
+    font-size: 1.25rem;
+  }
+
+  .telegram-webview.telegram-compact .dashboard-logo p:last-child {
+    margin-top: 0.25rem;
+    font-size: 0.5625rem;
+  }
+
+  .telegram-webview.telegram-compact .dashboard-primary-card {
+    padding: 0.75rem;
+  }
+
+  .telegram-webview.telegram-compact .dashboard-summary-grid {
+    gap: 0.5rem;
+  }
+
+  .telegram-webview.telegram-compact .app-bottom-nav {
+    padding-top: 0.25rem;
+  }
+
+  .telegram-webview.telegram-compact .app-bottom-nav a {
+    min-height: 2.75rem;
+  }
+
+  @media (max-width: 375px) {
+    .app-bottom-nav {
+      padding-right: 0.5rem;
+      padding-left: 0.5rem;
+    }
+
+    .app-bottom-nav a {
+      min-height: 2.75rem;
+      font-size: 0.625rem;
+    }
+
+    .app-bottom-nav a svg {
+      width: 1.125rem;
+      height: 1.125rem;
+      margin-bottom: 0.125rem;
+    }
+  }
 }

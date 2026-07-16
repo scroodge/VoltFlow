@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useMemo } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useMemo } from "react";
 
 import { MateUpdateBanner } from "@/components/dashboard/mate-update-banner";
 import { ChargingSessionBackgroundSync } from "@/components/charging/charging-session-background-sync";
@@ -43,10 +43,29 @@ export function MobileShell({ children }: { children: ReactNode }) {
       void touchUserActivity();
     } catch {}
   }, []);
-  const telegramThemeStyle = useMemo(
-    () => (telegram.isTelegram ? getTelegramThemeStyle(telegram.themeParams) : undefined),
-    [telegram.isTelegram, telegram.themeParams],
-  );
+  const telegramThemeStyle = useMemo(() => {
+    if (!telegram.isTelegram) return undefined;
+
+    const contentInsets = telegram.contentSafeAreaInset ?? telegram.safeAreaInset;
+    const viewportHeight = telegram.viewportHeight ?? telegram.viewportStableHeight;
+
+    return {
+      ...getTelegramThemeStyle(telegram.themeParams),
+      "--telegram-viewport-height": viewportHeight ? `${viewportHeight}px` : "100dvh",
+      "--telegram-safe-top": `${contentInsets?.top ?? 0}px`,
+      "--telegram-safe-bottom": `${contentInsets?.bottom ?? 0}px`,
+    } as CSSProperties;
+  }, [
+    telegram.contentSafeAreaInset,
+    telegram.isTelegram,
+    telegram.safeAreaInset,
+    telegram.themeParams,
+    telegram.viewportHeight,
+    telegram.viewportStableHeight,
+  ]);
+  const compactTelegramLayout =
+    telegram.isTelegram &&
+    (telegram.viewportHeight ?? telegram.viewportStableHeight ?? Number.POSITIVE_INFINITY) <= 640;
 
   return (
     <DashboardDevSnapshotProvider>
@@ -60,6 +79,7 @@ export function MobileShell({ children }: { children: ReactNode }) {
           className={cn(
             "flex h-dvh min-h-dvh w-full flex-col overflow-hidden bg-background shadow-[0_0_80px_rgba(0,0,0,0.45)]",
             telegram.isTelegram && "telegram-webview",
+            compactTelegramLayout && "telegram-compact",
           )}
           style={telegramThemeStyle}
         >
