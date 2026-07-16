@@ -33,9 +33,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  // TEMPORARY diagnostic log to capture the BYD group's chat id — remove after use.
-  console.log("telegram_webhook_update", JSON.stringify(update));
-
   const chatId = update.message?.chat?.id;
   if (!chatId) return NextResponse.json({ ok: true });
 
