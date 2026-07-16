@@ -224,7 +224,7 @@ function drivingStatsFromLive(
   };
 }
 
-function DashboardStatTile({ label, value }: { label: string; value: string }) {
+function DashboardStatTile({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="rounded-xl border border-border bg-white/[0.03] p-2.5">
       <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -823,9 +823,9 @@ export function DashboardView() {
       : availableBatteryKwh(packCapacityKwh, currentPercent);
   const packTileValue =
     packCapacityKwh != null && availableKwh != null
-      ? `${fmt(availableKwh, 1)} / ${fmt(packCapacityKwh, 0)} kWh`
+      ? `${fmt(availableKwh, 1)} / ${fmt(packCapacityKwh, 1)} kWh`
       : packCapacityKwh != null
-        ? `— / ${fmt(packCapacityKwh, 0)} kWh`
+        ? `— / ${fmt(packCapacityKwh, 1)} kWh`
         : "-- kWh";
 
   const ringToggleAriaLabel =
@@ -896,28 +896,35 @@ export function DashboardView() {
     selectedCar?.default_charger_power_kw,
   ]);
 
-  const chargingProgressLine =
-    activeSession && liveActive
-      ? (() => {
-          const effectivePricePerKwh =
-            activeSession.price_per_kwh > 0
-              ? activeSession.price_per_kwh
-              : defaultPrice;
-          const cost =
-            effectivePricePerKwh > 0
-              ? formatCurrencyAmount(
-                  currency,
-                  costFromGridEnergy(liveActive.chargedEnergyKwh, effectivePricePerKwh),
-                  locale,
-                )
-              : "—";
-          return t("dashboard.chargingProgress", {
-            remaining: formatDuration(Math.round(liveActive.remainingSeconds)),
-            energy: fmt(liveActive.chargedEnergyKwh, 2),
-            cost,
-          }) as string;
-        })()
-      : null;
+  const activeChargingStats = useMemo(() => {
+    if (!activeSession || !liveActive) return null;
+
+    const effectivePricePerKwh =
+      activeSession.price_per_kwh > 0 ? activeSession.price_per_kwh : defaultPrice;
+    const capacityKwh = activeSession.battery_capacity_kwh;
+    const currentSoc = Math.min(100, Math.max(0, liveActive.currentPercent));
+    const remainingGridEnergyKwh =
+      capacityKwh > 0 && activeSession.efficiency_percent > 0
+        ? energyFromGridKwh(
+            energyNeededKwh(capacityKwh, currentSoc, 100),
+            activeSession.efficiency_percent,
+          )
+        : null;
+    const costToFull =
+      remainingGridEnergyKwh != null && effectivePricePerKwh > 0
+        ? formatCurrencyAmount(
+            currency,
+            costFromGridEnergy(remainingGridEnergyKwh, effectivePricePerKwh),
+            locale,
+          )
+        : "—";
+
+    return {
+      charged: `${fmt(liveActive.chargedEnergyKwh, 2)} kWh`,
+      timeLeft: formatDuration(Math.round(liveActive.remainingSeconds)),
+      costToFull,
+    };
+  }, [activeSession, currency, defaultPrice, liveActive, locale]);
 
   const parkEstimate = useMemo(() => {
     const capacityKwh =
@@ -1290,6 +1297,32 @@ export function DashboardView() {
                       allProviderOptions={allProviderOptions}
                       parseProviderSelectValue={parseProviderSelectValue}
                     />
+                  ) : activeChargingStats ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <DashboardStatTile
+                        label={t("dashboard.chargingTimeAndEnergy") as string}
+                        value={
+                          <span className="flex flex-col gap-1">
+                            <span>{activeChargingStats.timeLeft}</span>
+                            <span className="text-sm text-muted-foreground">
+                              {activeChargingStats.charged}
+                            </span>
+                          </span>
+                        }
+                      />
+                      <DashboardStatTile
+                        label={t("dashboard.chargingCostToFull") as string}
+                        value={activeChargingStats.costToFull}
+                      />
+                      <DashboardStatTile
+                        label={t("dashboard.packShort") as string}
+                        value={packTileValue}
+                      />
+                      <DashboardStatTile
+                        label={t("dashboard.chargerShort") as string}
+                        value={`~ ${fmt(chargingTileKw)} kW`}
+                      />
+                    </div>
                   ) : (
                     <div
                       className={cn(
@@ -1304,7 +1337,7 @@ export function DashboardView() {
                       {isChargingMode ? (
                         <DashboardStatTile
                           label={t("dashboard.chargerShort") as string}
-                          value={`${fmt(chargingTileKw, 1)} kW`}
+                          value={`~ ${fmt(chargingTileKw)} kW`}
                         />
                       ) : null}
                     </div>
@@ -1312,12 +1345,6 @@ export function DashboardView() {
                 </div>
               </div>
             </div>
-
-            {chargingProgressLine ? (
-              <p className="mt-3 text-center text-xs font-medium text-muted-foreground">
-                {chargingProgressLine}
-              </p>
-            ) : null}
 
             <div className="mt-4 grid gap-2">
               <ChargingActionButton
