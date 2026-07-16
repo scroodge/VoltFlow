@@ -1,48 +1,68 @@
-# Vehicle State Notifications (Telegram Bot)
+# Telegram live widget
 
-Sends real-time Telegram notifications when the vehicle changes state, detected during telemetry ingest.
+> **History:** an earlier version of this feature sent discrete "connected /
+> parked / disconnected" Telegram messages, tracked in
+> `bydmate_vehicle_state_notifications`. That table and its code
+> (`src/lib/push/vehicle-state-notifications.ts`) were removed in migration
+> `20260706000000` in favor of a single editable live-status message. If you
+> are looking for that old event log, it no longer exists.
 
-## States
+## What it does
 
-| Event | Trigger | Message |
-|---|---|---|
-| **Connected** | First-ever data, or data after ≥5 min gap | Vehicle connected + odometer + SOC + map pin |
-| **Parked** | Gear P + speed ≤5 km/h, wasn't parked before | Vehicle parked + odometer + SOC + map pin |
-| **Disconnected** | Gap >10 min since last data, not yet notified | Vehicle disconnected + last known odometer + SOC + map pin |
+After each accepted telemetry ingest, the user's Telegram chat gets one
+message per vehicle showing current state, SOC, charge power/time-to-full,
+odometer, speed, and an optional map link. Instead of posting a new message
+per update, the widget is created once and then edited in place via
+Telegram's `editMessageText`, so the chat doesn't fill up with spam.
 
-Disconnected is detected **retroactively** — when data resumes after >10 min, the handler sends "disconnected" with the last stored state, then "connected" with fresh data.
+- **Detection/render/send:** `src/lib/telegram/live-widget.ts` —
+  `updateTelegramLiveWidgets()`
+- **Transport:** `sendTelegramMessage` / `editTelegramMessageText` in
+  `src/lib/telegram/bot-send.ts`
+- **State tracking:** `telegram_live_messages` table, one row per
+  `(user_id, vehicle_id)`
+- **Integration:** called from `src/app/api/bydmate/telemetry/route.ts`,
+  after charge notifications and before auto charging-session processing
 
-## Architecture
+## Behavior
 
-- **Detection:** `src/lib/push/vehicle-state-notifications.ts` — `processBydmateVehicleStateNotifications()`
-- **Transport:** `sendTelegramMessage` + `sendTelegramLocation` in `src/lib/telegram/bot-send.ts`
-- **State tracking:** `bydmate_vehicle_state_notifications` table (one row per `(user_id, vehicle_id)`)
-- **Integration:** called from `src/app/api/bydmate/telemetry/route.ts` after charge notifications
+- Only runs when the profile has a `telegram_id` (linked Telegram account).
+  No chat ID → no-op.
+- Vehicle state is inferred from the latest sample per vehicle in the batch:
+  `driving` (drive telemetry) → `charging` (charging signal) → `parked` →
+  `offline` if the sample is more than 10 minutes old at receipt time.
+- **Edits throttle to at most once per 30 seconds** per `(user_id, vehicle_id)`
+  (`THROTTLE_MS`), tracked via `telegram_live_messages.updated_at`. Updates
+  inside the window are skipped, not queued.
+- If the existing message is `active` and fresh, the widget is edited in
+  place. If the vehicle just came back from `offline` (car was silent
+  >10 min), a **new** message is sent instead of editing the old one, so
+  the "car went offline" gap stays visible in the chat.
+- The inline keyboard button always deep-links to `/vehicle`.
 
-## State Table
+## State table
 
 ```sql
-bydmate_vehicle_state_notifications (
+telegram_live_messages (
   user_id, vehicle_id (PK),
-  last_device_time, last_received_at,
-  last_soc, last_odometer_km,
-  last_lat, last_lon,
-  last_is_parked,
-  last_connected_at, last_disconnected_at, last_park_notified_at
+  chat_id, message_id,
+  status,       -- 'active' (only status currently written)
+  updated_at
 )
 ```
 
 ## Limits
 
-- Park notifications have a 1-min cooldown between repeats
-- Only sends when user's `notify_channel` is `telegram` or `both`
-- Edge Function (`supabase/functions/bydmate-telemetry/`) does NOT process state notifications — only the Next.js route handler does
+- The Edge Function ingest path (`supabase/functions/bydmate-telemetry/`)
+  does **not** update the live widget — only the Next.js route handler does.
+- Widget copy (labels, emoji, map link format) is Russian-only; there is no
+  i18n pass on this surface yet.
 
-## File Map
+## File map
 
 | File | Role |
 |---|---|
-| `src/lib/push/vehicle-state-notifications.ts` | Detection + notification logic |
-| `src/lib/telegram/bot-send.ts` | `sendTelegramMessage`, `sendTelegramLocation` |
-| `src/app/api/bydmate/telemetry/route.ts` | Calls `processBydmateVehicleStateNotifications` |
-| `supabase/migrations/20260629130000_bydmate_vehicle_state_notifications.sql` | State tracking table |
+| `src/lib/telegram/live-widget.ts` | State detection, HTML rendering, send/edit + throttle |
+| `src/lib/telegram/bot-send.ts` | `sendTelegramMessage`, `editTelegramMessageText` |
+| `src/app/api/bydmate/telemetry/route.ts` | Calls `updateTelegramLiveWidgets` |
+| `supabase/migrations/20260701000000_telegram_live_messages.sql` | State tracking table |

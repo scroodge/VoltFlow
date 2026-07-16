@@ -13,7 +13,7 @@ maintenance records. It is built with Next.js, React, and Supabase.
 - [Telemetry storage](supabase/TELEMETRY.md)
 - [Android telemetry API](supabase/BYDMATE_APK_API.md)
 - [Premium and retention](docs/PREMIUM_ADMIN.md)
-- [Vehicle notifications](docs/VEHICLE_STATE_NOTIFICATIONS.md)
+- [Telegram live widget](docs/VEHICLE_STATE_NOTIFICATIONS.md)
 - [Installation guide (Russian)](INSTALL.md)
 
 ## Features

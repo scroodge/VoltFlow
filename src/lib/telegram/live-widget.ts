@@ -54,10 +54,15 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-function chatListSummary(soc: number | null, odometer: number | null): string {
+function chatListSummary(
+  soc: number | null,
+  odometer: number | null,
+  state: VehicleState,
+): string {
   const battery = soc != null ? `🔋 ${soc}%` : "🔋 —";
-  const mileage = odometer != null ? `P ${odometer.toLocaleString("ru-RU")} км` : "P —";
-  return `${battery} · ${mileage}`;
+  const stateMark = state === "driving" ? "D" : state === "parked" ? "P" : state === "charging" ? "⚡" : "—";
+  const mileage = odometer != null ? `${odometer.toLocaleString("ru-RU")} км` : "—";
+  return `${battery} · ${stateMark} · ${mileage}`;
 }
 
 type LiveWidgetRow = {
@@ -78,6 +83,7 @@ type CarInfo = {
 function widgetHtml(data: {
   carName: string;
   emoji: string;
+  state: VehicleState;
   stateLabel: string;
   soc: number | null;
   chargePowerKw: number | null;
@@ -92,7 +98,7 @@ function widgetHtml(data: {
 
   // Telegram's chat list previews the beginning of the latest message. Keep
   // this concise, live line first while preserving the detailed card below.
-  lines.push(chatListSummary(data.soc, data.odometer));
+  lines.push(chatListSummary(data.soc, data.odometer, data.state));
   lines.push(`<b>${data.emoji} ${name}</b> · ${data.stateLabel}`);
 
   if (data.soc != null) {
@@ -332,6 +338,7 @@ export async function updateTelegramLiveWidgets({
     const html = widgetHtml({
       carName: carInfo?.name ?? "Автомобиль",
       emoji: stateEmoji(state),
+      state,
       stateLabel: stateLabel(state),
       soc,
       chargePowerKw,

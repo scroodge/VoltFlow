@@ -152,7 +152,8 @@ Telegram Mini App (`/telegram`) сейчас является публичной
 | **Сессии зарядки** | Start/stop, ~1 Hz progress, авто-сессии, reconcile, тарифы | [CHARGING_SESSIONS.md](CHARGING_SESSIONS.md) | `src/lib/charging-*`, `src/lib/bydmate/charging-auto-session*` |
 | **Поездки** | Серверный вывод поездок, фильтр мусора, дельты дистанции, GPS-треки | [TRIPS.md](TRIPS.md) | `bydmate_ingest_telemetry` (SQL), `src/lib/bydmate/trip-*` |
 | **Аналитика и графики** | History→Analytics, графики поездок, карты маршрутов, route insights | [TRIPS.md](TRIPS.md) | `src/components/vehicle/*`, `src/lib/bydmate/telemetry-*` |
-| **Уведомления** | Web push (пороги заряда) + Telegram-события состояния автомобиля | [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | `src/lib/push/*`, `src/lib/telegram/*` |
+| **Уведомления** | Web push (пороги заряда) + Telegram-виджет живого статуса (одно сообщение, редактируется на месте) | [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | `src/lib/push/*`, `src/lib/telegram/*` |
+| **Telegram-бот** | Вход/линковка Mini App (Next.js) + захват групповых сообщений, LLM-классификация и создание черновиков маркетплейса (**отдельный Python edge-сервер**, не этот Next.js-app) | DATABASE_SCHEMA.md §Community marketplace | `src/app/api/telegram/{auth,link}/route.ts`; реальный зарегистрированный webhook держит `scripts/telegram-miniapp-server.py` — `src/app/api/telegram/webhook/route.ts` только отправляет deep-link на PWA и не является живым путём групповых событий |
 | **Удалённые команды** | Абстрактные команды PWA → Mate poller или shell daemon при выключенном авто (lock, SOC limit, …) | [supabase/BYDMATE_APK_API.md](../supabase/BYDMATE_APK_API.md) | `src/app/api/bydmate/commands/*`, `vehicle_commands` |
 | **Premium и retention** | Entitlements, retention телеметрии по тарифу, admin-инструменты | [PREMIUM_ADMIN.md](PREMIUM_ADMIN.md) | `is_user_premium()`, `purge_old_bydmate_telemetry_by_tier()` |
 | **База знаний** | CMS контента, поиск и каталог сервисов | README §Features | `src/app/telegram/*` |
@@ -173,7 +174,7 @@ Telegram Mini App (`/telegram`) сейчас является публичной
 | [../INSTALL.md](../INSTALL.md) | Пользовательское руководство по установке PWA (RU) |
 | [CHARGING_SESSIONS.md](CHARGING_SESSIONS.md) | Синхронизация зарядки, авто-сессии, reconcile, тарифы, энергия/стоимость |
 | [TRIPS.md](TRIPS.md) | Жизненный цикл поездки, фильтр мусора, дельты расстояния |
-| [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | Telegram-события подключения/парковки/отключения |
+| [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | Telegram-виджет живого статуса (одно сообщение, редактируется на месте) |
 | [PREMIUM_ADMIN.md](PREMIUM_ADMIN.md) | Entitlements, тарифы retention, admin runbook |
 | [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Полная схема, RLS, RPC, enum, storage |
 | [../supabase/TELEMETRY.md](../supabase/TELEMETRY.md) | Модель хранения телеметрии, retention, поля Di+, API аналитики |

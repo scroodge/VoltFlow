@@ -21,17 +21,21 @@ auth.users (Supabase Auth)
   │       └─── vehicle_service_reminders  (1:N)
   │
   ├─── charging_tariff_locations  (1:N, per user)
+  ├─── user_providers             (1:N, per user)
   │
   ├─── bydmate_live_snapshots     (1:1 per user+vehicle_id)
   ├─── bydmate_telemetry_samples  (1:N per user+vehicle_id)
   ├─── bydmate_telemetry_hourly   (1:N per user+vehicle_id, hourly rollup)
   ├─── bydmate_telemetry_points   (1:N, DEPRECATED v1)
-  ├─── bydmate_vehicle_state_notifications  (1:1 per user+vehicle_id)
+  ├─── bydmate_battery_snapshots  (1:N per user+vehicle_id)
+  ├─── bydmate_idle_drains        (1:N per user+vehicle_id)
+  ├─── telegram_live_messages     (1:1 per user+vehicle_id)
   │
   ├─── bydmate_trips              (1:N per user+vehicle_id)
   │       └─── bydmate_trip_track_points  (1:N per trip)
   │
   ├─── vehicle_commands           (1:N per user+vehicle_id)
+  ├─── vehicle_command_schedules  (1:N per user+vehicle_id)
   ├─── user_service_categories    (1:N)
   │
   └─── (admin) admin_users
@@ -39,11 +43,16 @@ auth.users (Supabase Auth)
 mate_app_releases               (global, no user_id)
 knowledge_categories            (global CMS)
 knowledge_articles              (global CMS)
+knowledge_article_views         (global, view counters)
 faq_items                       (global CMS)
 accessories                     (global CMS)
 spare_parts                     (global CMS)
 article_relations               (global CMS)
 knowledge_items                 (global, vector search)
+service_providers               (global, public catalog)
+
+telegram_group_events           (service-role only, Telegram inbox)
+community_listings              (moderated drafts from telegram_group_events)
 ```
 
 ---
@@ -70,6 +79,8 @@ Mirror of `auth.users`. Created automatically on signup via trigger.
 | `notify_channel` | text | `web_push`, `telegram`, or `both`, default `web_push` |
 | `is_premium` | boolean | Manual premium override (`20260615140000`) |
 | `premium_until` | timestamptz | Time-limited premium expiry (`20260617133000`) |
+| `last_active_at` | timestamptz | Last telemetry or login (`20260706120000`) |
+| `inactivity_warning_sent_at` | timestamptz | Set when the 30-day inactivity warning email is sent; account is eligible for deletion once `last_active_at` is >60 days old **and** this is set |
 | `created_at` | timestamptz | |
 
 Effective premium = `is_admin OR is_premium OR premium_until > now()`, computed by
@@ -87,7 +98,8 @@ User's registered vehicles.
 | `name` | text | Display name |
 | `battery_capacity_kwh` | numeric | |
 | `default_charger_power_kw` | numeric | Default 4.4 |
-| `default_efficiency_percent` | numeric | Default 90, 0–100 |
+| `default_efficiency_percent` | numeric | AC (home/commercial) grid-to-battery efficiency, default 90, 0–100 |
+| `fast_dc_efficiency_percent` | numeric | Fast-DC grid-to-battery efficiency, measured separately (`20260713100000`) — DC dispensers meter upstream of cooling/heat losses AC doesn't have |
 | `model_generation` | text | `gen1_2024` or `gen2_2025` |
 | `created_at` | timestamptz | |
 
@@ -114,8 +126,10 @@ One row per charge event, live-updated during charging.
 | `estimated_cost` | numeric | |
 | `status` | text | `idle / charging / completed / stopped` |
 | `tariff_type` | text | `home / commercial_ac / fast_dc` |
-| `provider_type` | text | `home / malanka / evika / forevo / zaryadka / batterfly / custom` |
+| `provider_type` | text | `home / malanka / evika / forevo / zaryadka / batterfly / custom / user_provider` — `user_provider` means look up `user_provider_id` |
+| `user_provider_id` | uuid FK → user_providers | Set only when `provider_type = 'user_provider'` (`20260706180000`) |
 | `tariff_manual` | boolean | User manually overrode tariff |
+| `tariff_selected_at` | timestamptz | When the user last manually picked a tariff/provider on this session; delays auto-saving a GPS tariff location until the pick "sticks" (`20260706020000`) |
 | `energy_overridden` | boolean | True when energy/cost were set from a non-SOC source |
 | `started_at` | timestamptz | |
 | `stopped_at` | timestamptz | |
@@ -139,9 +153,34 @@ Named GPS-tagged locations for automatic tariff detection.
 | `lng` | double precision | |
 | `radius_m` | numeric | Default 150, max 5000 |
 | `tariff_type` | enum | `home / commercial_ac / fast_dc` |
-| `provider_type` | enum | `home / malanka / evika / forevo / zaryadka / batterfly / custom` |
+| `provider_type` | enum | `home / malanka / evika / forevo / zaryadka / batterfly / custom / user_provider` |
+| `user_provider_id` | uuid FK → user_providers | Set only when `provider_type = 'user_provider'` |
 | `price_per_kwh_override` | numeric | Overrides profile tariff if set |
 | `created_at` | timestamptz | |
+
+---
+
+### `user_providers`
+User-owned charging providers — labels and per-tariff prices the user can edit or
+delete. Migration `20260706180000` created the table; `20260706200000` folded the
+previously hardcoded built-in providers (Home, Malanka, Evika!, forEVo, Zaryadka,
+BatteryFly) into it as ordinary seeded rows every user can reprice or delete, except
+Home (`is_default = true`, permanent). The old app-owned `provider_tariffs` override
+table was dropped in the same migration — this is the sole editable provider store now.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `user_id` | uuid FK | |
+| `label` | text | Display name, e.g. "Home", "Malanka" |
+| `home_price_per_kwh` | numeric | |
+| `commercial_ac_price_per_kwh` | numeric | |
+| `fast_dc_price_per_kwh` | numeric | |
+| `is_default` | boolean | True only for the permanent seeded "Home" row |
+| `created_at` / `updated_at` | timestamptz | |
+
+Unique on `(user_id, label)`. Seed prices must match `PROVIDER_TARIFF_PRESETS` in
+`src/lib/charging-tariffs.ts`.
 
 ---
 
@@ -228,22 +267,53 @@ Unique on `(user_id, vehicle_id, hour_start)`.
 
 ---
 
-### `bydmate_vehicle_state_notifications`
-Tracks last-known vehicle state for park/unpark/charge push notifications.
+### `bydmate_battery_snapshots`
+BMS health snapshots recorded at charge session ends where SOC delta ≥5%. Tracks
+battery degradation over time (`20260708140000`).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `user_id` | uuid FK | |
+| `vehicle_id` | text | |
+| `recorded_at` | timestamptz | |
+| `odometer_km` | numeric | |
+| `soc_start` / `soc_end` | numeric | |
+| `kwh_charged` | numeric | |
+| `calculated_capacity_kwh` | numeric | |
+| `soh_percent` | numeric | |
+| `cell_delta_v` | numeric | |
+| `bat_temp_avg_c` | numeric | |
+| `charge_id` | uuid | |
+| `created_at` | timestamptz | |
+
+### `bydmate_idle_drains`
+Zero-km trips from BYD `energydata` indicating parked energy consumption
+(`20260708140000`).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `user_id` | uuid FK | |
+| `vehicle_id` | text | |
+| `start_ts` / `end_ts` | timestamptz | |
+| `kwh_consumed` | numeric | |
+| `created_at` | timestamptz | |
+
+### `telegram_live_messages`
+Tracks the single editable Telegram live-status message per vehicle. Replaced the
+discrete connect/park/disconnect notifications (`bydmate_vehicle_state_notifications`,
+dropped `20260706000000`) — see
+[VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md).
 
 | Column | Type | Notes |
 |---|---|---|
 | `user_id` | uuid PK part | |
 | `vehicle_id` | text PK part | |
-| `last_device_time` | timestamptz | |
-| `last_received_at` | timestamptz | |
-| `last_soc` | numeric | |
-| `last_odometer_km` | numeric | |
-| `last_lat / last_lon` | double precision | |
-| `last_is_parked` | boolean | |
-| `last_connected_at` | timestamptz | |
-| `last_disconnected_at` | timestamptz | |
-| `last_park_notified_at` | timestamptz | |
+| `chat_id` | bigint | |
+| `message_id` | integer | |
+| `status` | text | `active` (only value currently written) |
+| `updated_at` | timestamptz | |
 
 ---
 
@@ -269,6 +339,8 @@ One row per drive trip detected server-side.
 | `avg_speed_kmh` | numeric | |
 | `avg_consumption_kwh_100km` | numeric | |
 | `track_simplified_at` | timestamptz | Set after Ramer-Douglas-Peucker simplification |
+| `source` | text | `telemetry` (default, from `bydmate_telemetry_samples`) or `byd_energydata` (imported from the car's own trip log, no ADB required, no SOC/track data) — `20260706190000` |
+| `fuel_kwh` | numeric | PHEV (DM-i) fuel consumption from BYD `energydata`. **Unit is ambiguous** — column is named `_kwh` but the migration comment says "liters equivalent"; NULL for pure EVs, >0 for PHEV (`20260708120000`) |
 
 ---
 
@@ -417,6 +489,15 @@ Full articles with blocks.
 M2M self-join on `knowledge_articles`.
 | `article_id` uuid | `related_article_id` uuid |
 
+### `knowledge_article_views`
+Article view counters, kept in their own table rather than a column on
+`knowledge_articles` (`20260713190000`) — that table's `BEFORE UPDATE` trigger stamps
+`updated_at = now()`, so a `view_count` column there would turn "recently updated" into
+"recently viewed". `anon`/`authenticated` have select-only grants; the only write path
+is the `SECURITY DEFINER` RPC `increment_knowledge_article_view(slug)`.
+
+| `article_id` uuid PK → knowledge_articles | `view_count` bigint | `last_viewed_at` timestamptz |
+
 ### `knowledge_items`
 Flattened published knowledge records for content discovery.
 | `id` uuid PK | `title` | `content` | `category` | `source_type` | `source_url` | `telegram_message_id` | `source_id` uuid | `source_slug` | `model_generations` text[] | `tags` text[] | `is_published` boolean |
@@ -440,6 +521,60 @@ Booking and payment remain external links.
 
 ---
 
+## Community marketplace (Telegram bot)
+
+Raw Telegram group messages become moderated marketplace drafts, never public content
+directly. The live pipeline runs outside the Next.js app, in the Python edge server
+`scripts/telegram-miniapp-server.py`: `handle_webhook()` receives the real registered
+Telegram webhook, `process_telegram_group_event()` writes the raw event, classifies it
+with `verify_telegram_text()`, and `upsert_community_listing()` inserts the
+`community_listings` draft — all inline on the same request, with
+`process_pending_group_events()` as a batch retry path. A TypeScript equivalent
+(`verifyTelegramContext` in `src/lib/llm-context-verifier.ts`) exists but is not wired
+to any ingest path; `src/app/api/telegram/webhook/route.ts` only sends the PWA deep-link
+reply and never touches `telegram_group_events` or `community_listings`. The Next.js app
+reads `community_listings` only through the admin moderation UI
+(`src/lib/supabase/community-listings.ts`, `src/app/admin/knowledge/marketplace/`).
+
+### `telegram_group_events`
+Short-lived, service-role-only inbox for Telegram group updates (`20260714150000`,
+verification columns added `20260714153000`). `anon`/`authenticated` have no grants at
+all — service role only. Rows expire after 7 days (`expires_at`).
+
+| Column | Purpose |
+|---|---|
+| `update_id`, `chat_id`, `message_id` | Telegram identifiers |
+| `event_type` | `new` or `edited` |
+| `text`, `raw_update` jsonb | Message content |
+| `status` | `pending / processing / processed / failed / ignored` |
+| `intent` | Qwen classification: `sell / wanted / service / question / irrelevant / ambiguous` |
+| `confidence` | 0–1 |
+| `title`, `item_type`, `city`, `generation`, `price`, `currency`, `contact` | Extracted listing fields |
+| `actionable` | Whether this event should become a `community_listings` draft |
+| `needs_review` | Default `true` — admin must confirm before publish |
+| `expires_at` | Default `received_at + 7 days` |
+
+### `community_listings`
+Moderated marketplace drafts derived from `telegram_group_events` (`20260714160000`,
+admin write grants `20260715100000`). Drafts are never public until an admin
+explicitly publishes them (`status = 'published'`). Managed via
+`src/lib/supabase/community-listings.ts` and `src/app/admin/knowledge/marketplace/`.
+
+| Column | Purpose |
+|---|---|
+| `owner_user_id` | Nullable — set if the poster is a linked VoltFlow user |
+| `telegram_user_id` | Poster's Telegram ID |
+| `listing_type` | `sell / wanted / service` |
+| `title`, `description`, `item_type`, `city`, `generation`, `price`, `currency`, `contact_link` | Listing content |
+| `source_chat_id`, `source_message_id` | Origin message; unique together |
+| `status` | `draft / published / sold / expired / removed` |
+| `expires_at` | Default `created_at + 30 days` |
+
+Public read policy allows anonymous `select` only for `status = 'published' AND
+expires_at > now()`; all other access requires `is_admin()`.
+
+---
+
 ## Admin
 
 ### `admin_users`
@@ -458,6 +593,8 @@ Simple allowlist for admin access.
 | `bydmate_ingest_telemetry_batch(…)` | Batch variant accepting `jsonb[]` |
 | `bydmate_discard_trip_if_junk(…)` | Server-side junk trip discard (Rule A/B/C) — see [TRIPS.md](TRIPS.md) |
 | `bydmate_finalize_trip_energy(…)` | Compute trip regen/traction energy at close |
+| `bydmate_ingest_trip_summaries(…)` | Batch upsert for BYD-side `energydata` trip-log imports (no ADB, no telemetry samples) — `source = 'byd_energydata'` |
+| `increment_knowledge_article_view(p_slug)` | `SECURITY DEFINER` view-count increment for `knowledge_article_views` |
 | `bydmate_simplify_trip_track(p_trip_id)` | Ramer-Douglas-Peucker GPS simplification |
 | `simplify_aged_bydmate_trip_tracks()` | Batch simplification for trips older than 48 h |
 | `purge_old_bydmate_telemetry_by_tier()` | **Current** retention purge (free 30d raw, premium+admin unlimited, hourly 3y); scheduled by pg_cron |
@@ -483,7 +620,7 @@ the database:
 |---|---|
 | `vehicle_command_status` | `pending, sent, executed, failed` |
 | `charging_tariff_type` | `home, commercial_ac, fast_dc` |
-| `charging_provider_type` | `home, malanka, evika, forevo, zaryadka, batterfly, custom` |
+| `charging_provider_type` | `home, malanka, evika, forevo, zaryadka, batterfly, custom, user_provider` |
 
 ---
 

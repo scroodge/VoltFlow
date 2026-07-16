@@ -151,7 +151,8 @@ restores. Breaking one of them causes the classic bugs (frozen percent, false
 | **Charging sessions** | Start/stop, ~1 Hz progress, auto sessions, reconcile, tariffs | [CHARGING_SESSIONS.md](CHARGING_SESSIONS.md) | `src/lib/charging-*`, `src/lib/bydmate/charging-auto-session*` |
 | **Trips** | Server-side trip inference, junk filtering, distance deltas, GPS tracks | [TRIPS.md](TRIPS.md) | `bydmate_ingest_telemetry` (SQL), `src/lib/bydmate/trip-*` |
 | **Analytics & charts** | History→Analytics, trip charts, route maps, route insights | [TRIPS.md](TRIPS.md) | `src/components/vehicle/*`, `src/lib/bydmate/telemetry-*` |
-| **Notifications** | Web push (charge thresholds) + Telegram vehicle-state events | [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | `src/lib/push/*`, `src/lib/telegram/*` |
+| **Notifications** | Web push (charge thresholds) + Telegram live-status widget (edited in place) | [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | `src/lib/push/*`, `src/lib/telegram/*` |
+| **Telegram bot** | Mini App login/link (Next.js) + group-message capture, LLM classification, and marketplace draft creation (**separate Python edge server**, not this Next.js app) | DATABASE_SCHEMA.md §Community marketplace | `src/app/api/telegram/{auth,link}/route.ts`; `scripts/telegram-miniapp-server.py` owns the real registered webhook — `src/app/api/telegram/webhook/route.ts` only sends the PWA deep-link reply and is not the live group-event path |
 | **Remote commands** | Abstract commands PWA → Mate poller or car-off shell daemon (lock, set SOC limit, …) | [supabase/BYDMATE_APK_API.md](../supabase/BYDMATE_APK_API.md) | `src/app/api/bydmate/commands/*`, `vehicle_commands` |
 | **Premium & retention** | Entitlements, tiered telemetry retention, admin tools | [PREMIUM_ADMIN.md](PREMIUM_ADMIN.md) | `is_user_premium()`, `purge_old_bydmate_telemetry_by_tier()` |
 | **Knowledge base** | Content CMS, search, and service catalog | README §Features | `src/app/telegram/*` |
@@ -172,7 +173,7 @@ restores. Breaking one of them causes the classic bugs (frozen percent, false
 | [../INSTALL.md](../INSTALL.md) | User-facing PWA install guide (RU) |
 | [CHARGING_SESSIONS.md](CHARGING_SESSIONS.md) | Charging sync, auto sessions, reconcile, tariffs, energy/cost |
 | [TRIPS.md](TRIPS.md) | Trip lifecycle, junk filtering, distance deltas |
-| [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | Telegram connect/park/disconnect events |
+| [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | Telegram live-status widget (single message, edited in place) |
 | [PREMIUM_ADMIN.md](PREMIUM_ADMIN.md) | Entitlements, retention tiers, admin runbook |
 | [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Full schema, RLS, RPCs, enums, storage |
 | [../supabase/TELEMETRY.md](../supabase/TELEMETRY.md) | Telemetry storage model, retention, Di+ fields, analytics APIs |
