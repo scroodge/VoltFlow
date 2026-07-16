@@ -732,28 +732,29 @@ function ChargingModeCard({
     };
   }, [session, telemetry.soc, currency, locale]);
   const items = [
-    { key: "chargePower", icon: Zap, label: tx("vehicle.telemetry.chargePower"), value: `${fmt(telemetry.charge_power_kw, 1)} kW` },
-    { key: "chargeType", icon: Activity, label: tx("vehicle.telemetry.chargeType"), value: telemetry.charge_type ?? "—" },
-    { key: "batteryTemp", icon: Thermometer, label: tx("vehicle.telemetry.batteryTemp"), value: fmtTemp(telemetry.battery_temp_c) },
-    { key: "outsideTemp", icon: Thermometer, label: tx("vehicle.telemetry.outsideTemp"), value: fmtTemp(telemetry.outside_temp_c) },
     { key: "chargeTimeLeft", icon: Clock3, label: tx("charging.remaining"), value: chargeSummary?.timeLeftLabel ?? "—" },
     { key: "chargeDelivered", icon: BatteryCharging, label: tx("charging.energyDelivered"), value: chargeSummary?.deliveredLabel ?? "—" },
     { key: "chargeFullCost", icon: Activity, label: tx("charging.fullCost"), value: chargeSummary?.fullCostLabel ?? "—" },
+    {
+      key: "chargePower",
+      icon: Zap,
+      label: tx("vehicle.telemetry.chargePower"),
+      value: `${telemetry.charge_type ? `${telemetry.charge_type} · ` : ""}${fmt(telemetry.charge_power_kw, 1)} kW`,
+    },
+    { key: "batteryTemp", icon: Thermometer, label: tx("vehicle.telemetry.batteryTemp"), value: fmtTemp(telemetry.battery_temp_c) },
+    { key: "outsideTemp", icon: Thermometer, label: tx("vehicle.telemetry.outsideTemp"), value: fmtTemp(telemetry.outside_temp_c) },
   ];
   const visibleItems = items.filter((item) => !isMissingMetricValue(item.value));
 
   return (
     <Card className="border-cyan-300/20 bg-cyan-300/[0.06]">
-      <CardHeader className="p-4 pb-2">
+      <CardHeader className="p-3 pb-2">
         <CardTitle className="flex items-center gap-2 font-heading text-base">
           <BatteryCharging className="size-5 text-cyan-100" aria-hidden />
           {tx("vehicle.chargingMode.title")}
         </CardTitle>
-        <p className="pt-2 text-sm text-muted-foreground">
-          {tx("vehicle.chargingMode.body")}
-        </p>
       </CardHeader>
-      <CardContent className={`p-4 pt-0 ${telemetryGridClass(Math.max(visibleItems.length, 1))}`}>
+      <CardContent className="grid grid-cols-2 gap-2 p-3 pt-0">
         {visibleItems.map((item) => (
           <HeroMetric key={item.key} icon={item.icon} label={item.label} value={item.value} />
         ))}

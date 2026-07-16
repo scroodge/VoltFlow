@@ -364,7 +364,7 @@ function DeltaPlot({
         </span>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-border/70 pt-3 text-xs sm:grid-cols-4">
         <DeltaStat label="SOC" value={`${minSoc.toFixed(0)}-${maxSoc.toFixed(0)}%`} />
         <DeltaStat label="Delta" value={`${minDelta.toFixed(3)}-${maxDelta.toFixed(3)} V`} />
         <DeltaStat label="Latest" value={latest ? `${latest.soc.toFixed(0)}% / ${latest.delta.toFixed(3)} V` : "—"} />
@@ -391,9 +391,11 @@ function DeltaPlot({
 
 function DeltaStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-border bg-background/30 p-3">
-      <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
-      <p className="mt-1 font-mono text-xs text-foreground">{value}</p>
+    <div className="min-w-0">
+      <p className="truncate text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-0.5 font-mono text-[11px] leading-4 text-foreground">{value}</p>
     </div>
   );
 }
