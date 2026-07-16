@@ -930,13 +930,25 @@ export function DashboardView() {
       remainingGridEnergyKwh != null && effectivePricePerKwh > 0
         ? costFromGridEnergy(remainingGridEnergyKwh, effectivePricePerKwh)
         : null;
+    const availableKwh = availableBatteryKwh(capacityKwh, currentSoc);
+    const packValue =
+      capacityKwh > 0 && availableKwh != null
+        ? `${fmt(availableKwh, 1)} / ${fmt(capacityKwh, 1)} kWh`
+        : capacityKwh > 0
+          ? `— / ${fmt(capacityKwh, 1)} kWh`
+          : "-- kWh";
+    const timeLeftSeconds =
+      remainingGridEnergyKwh != null && displayChargePowerKw != null && displayChargePowerKw > 0
+        ? (remainingGridEnergyKwh / displayChargePowerKw) * 3600
+        : liveActive.remainingSeconds;
 
     return {
       charged: `${fmt(liveActive.chargedEnergyKwh, 2)} kWh`,
-      timeLeft: formatDuration(Math.round(liveActive.remainingSeconds)),
+      timeLeft: formatDuration(Math.round(timeLeftSeconds)),
       costToFull,
+      packValue,
     };
-  }, [activeSession, currency, defaultPrice, liveActive, locale]);
+  }, [activeSession, currency, defaultPrice, displayChargePowerKw, liveActive, locale]);
 
   const parkEstimate = useMemo(() => {
     const capacityKwh =
@@ -1331,12 +1343,12 @@ export function DashboardView() {
                           )
                         }
                       />
-      <DashboardStatTile
+                      <DashboardStatTile
                         label={t("dashboard.packShort") as string}
                         value={
                           <span className="flex flex-col leading-tight">
                             <span className="whitespace-nowrap">
-                              {packTileValue.replace(/\s+kWh$/, "")}
+                              {activeChargingStats.packValue.replace(/\s+kWh$/, "")}
                             </span>
                             <span className="text-sm text-muted-foreground">kWh</span>
                           </span>
