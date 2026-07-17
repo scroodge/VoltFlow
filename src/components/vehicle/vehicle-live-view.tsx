@@ -406,6 +406,12 @@ function VehicleLiveContent({
       ? heroDriveMetrics.kmPerPercentSoc * soc
       : null;
   const mathRangeLabel = mathRangeKm != null ? `≈ ${fmt(mathRangeKm, 0)} km` : "—";
+  const parkedAvgConsumptionKwh100 = useMemo(
+    () => averageTripConsumption(heroDriveMetrics.rangeEstimateTrips),
+    [heroDriveMetrics.rangeEstimateTrips],
+  );
+  const parkedRecentEnergyKwh =
+    parkedAvgConsumptionKwh100 != null ? parkedAvgConsumptionKwh100 / 2 : null;
   const [selectedTripId, setSelectedTripId] = useState<string | null | undefined>(
     initialTripId ?? undefined,
   );
@@ -429,6 +435,7 @@ function VehicleLiveContent({
         hasMounted={hasMounted}
         distanceSinceChargeKm={heroDriveMetrics.distanceSinceChargeKm}
         kmPerPercentSoc={heroDriveMetrics.kmPerPercentSoc}
+        parkedRecentEnergyKwh={parkedRecentEnergyKwh}
       />
       {isCharging ? (
         <>
@@ -542,6 +549,7 @@ function Hero({
   hasMounted,
   distanceSinceChargeKm,
   kmPerPercentSoc,
+  parkedRecentEnergyKwh,
 }: {
   snapshot: BydmateLiveSnapshotRow;
   nowMs: number;
@@ -554,6 +562,7 @@ function Hero({
   hasMounted: boolean;
   distanceSinceChargeKm: number | null;
   kmPerPercentSoc: number | null;
+  parkedRecentEnergyKwh: number | null;
 }) {
   const { locale, t: translate } = useTranslation();
   const t = translate as Translator;
@@ -649,6 +658,16 @@ function Hero({
 
             if (isStale) {
               modeMetrics.push(...driveMetrics);
+            } else if (vehicleMode === "parked") {
+              modeMetrics.push(
+                ...driveMetrics,
+                {
+                  key: "recentEnergy",
+                  icon: Gauge,
+                  label: t("vehicle.metrics.recentEnergy"),
+                  value: `~${fmt(parkedRecentEnergyKwh, 1)} kWh/50km`,
+                },
+              );
             } else {
               modeMetrics.push(
                 ...driveMetrics,
