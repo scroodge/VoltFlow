@@ -922,8 +922,13 @@ function TelemetryGrid({
       },
     ];
 
+    if (vehicleMode === "parked") {
+      return all.filter(
+        (item) => item.key === "batteryTemp" || item.key === "outsideTemp",
+      );
+    }
+
     return all.filter((item) => {
-      if (item.key === "kwhCharged" && vehicleMode === "parked") return false;
       if (item.when === "charging") {
         if (!isCharging) return false;
       } else if (item.when === "driving") {
