@@ -126,6 +126,10 @@ export const payloadSchema = z
     vehicle_id: z.string().min(1).max(160),
     device_time: z.string().min(1).max(80),
     source: z.literal("BYDMate"),
+    // Parked heartbeat that only needs to refresh live state. The ingest RPC
+    // takes a fast path for these: live snapshot only, no history/hourly/trip
+    // writes. Absent (older APK versions) means a normal full sample.
+    live_only: booleanSchema,
     telemetry: telemetrySchema,
     diplus: optionalDiplusSchema,
     location: locationSchema,

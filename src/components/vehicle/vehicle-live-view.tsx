@@ -1564,12 +1564,11 @@ function TripListItem({
       <div className="mt-4 grid grid-cols-2 gap-3 min-[430px]:grid-cols-[repeat(auto-fit,minmax(6.5rem,1fr))]">
         <MiniStat label={tx("vehicle.trips.distance")} value={`${fmt(trip.distance_km, 1)} km`} />
         <MiniStat label={tx("vehicle.trips.regen")} value={`${fmt(trip.regen_energy_kwh, 2)} kWh`} />
-        <MiniStat label={tx("vehicle.trips.traction")} value={`${fmt(trip.traction_energy_kwh, 2)} kWh`} />
-        <MiniStat label="SOC" value={`${fmt(trip.soc_start)}% -> ${fmt(trip.soc_end)}%`} />
         <MiniStat
-          label={tx("vehicle.trips.consumption")}
-          value={`${fmt(trip.avg_consumption_kwh_100km, 1)} kWh/100`}
+          label={tx("vehicle.telemetry.tripConsumption")}
+          value={`${fmt(trip.traction_energy_kwh, 2)} kWh`}
         />
+        <MiniStat label="SOC" value={`${fmt(trip.soc_start)}% -> ${fmt(trip.soc_end)}%`} />
         <MiniStat label={tx("vehicle.trips.maxSpeed")} value={`${fmt(trip.max_speed_kmh)} km/h`} />
         <MiniStat label={tx("vehicle.trips.avgSpeed")} value={`${fmt(trip.avg_speed_kmh)} km/h`} />
         {costStr != null ? (
@@ -4451,9 +4450,11 @@ function LastTripDetail({
         <div className="mt-3 grid grid-cols-2 gap-2 min-[380px]:grid-cols-[repeat(auto-fit,minmax(5.5rem,1fr))]">
           <MiniStat label={tx("vehicle.trips.distance")} value={`${fmt(trip.distance_km, 1)} km`} />
           <MiniStat label={tx("vehicle.trips.regen")} value={`${fmt(trip.regen_energy_kwh, 2)} kWh`} />
-          <MiniStat label={tx("vehicle.trips.traction")} value={`${fmt(trip.traction_energy_kwh, 2)} kWh`} />
+          <MiniStat
+            label={tx("vehicle.telemetry.tripConsumption")}
+            value={`${fmt(trip.traction_energy_kwh, 2)} kWh`}
+          />
           <MiniStat label="SOC" value={`${fmt(trip.soc_start)}% → ${fmt(trip.soc_end)}%`} />
-          <MiniStat label={tx("vehicle.trips.consumption")} value={`${fmt(trip.avg_consumption_kwh_100km, 1)} kWh/100`} />
           <MiniStat label={tx("vehicle.trips.maxSpeed")} value={`${fmt(trip.max_speed_kmh)} km/h`} />
           <MiniStat label={tx("vehicle.trips.avgSpeed")} value={`${fmt(trip.avg_speed_kmh)} km/h`} />
         </div>

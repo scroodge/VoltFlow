@@ -63,6 +63,20 @@ export function weightedAvgConsumptionKwh100(trips: TripWithEnergy[]): number | 
   return weightedDistance > 0 ? weightedSum / weightedDistance : null;
 }
 
+/** Returns a trustworthy day total only when every displayed trip has measured energy. */
+export function totalMeasuredTripEnergyKwh(trips: TripWithEnergy[]): number | null {
+  if (trips.length === 0) return null;
+
+  let total = 0;
+  for (const trip of trips) {
+    const traction = validNumber(trip.traction_energy_kwh);
+    if (traction == null) return null;
+    total += traction;
+  }
+
+  return total;
+}
+
 function median(values: number[]): number | null {
   if (values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);

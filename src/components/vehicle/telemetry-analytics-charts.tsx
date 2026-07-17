@@ -47,9 +47,11 @@ type SummaryStat = {
 export function AnalyticsSummaryStats({
   summary,
   chargedKwh,
+  tripEnergyKwh,
 }: {
   summary: AnalyticsSummary;
   chargedKwh?: number | null;
+  tripEnergyKwh?: number | null;
 }) {
   const { t } = useTranslation();
   const tx = t as Translator;
@@ -76,6 +78,15 @@ export function AnalyticsSummaryStats({
           labelKey: "vehicle.analytics.charged",
           value: fmt(chargedKwh, 1),
           unit: "kWh",
+        }
+      : null,
+    tripEnergyKwh != null
+      ? {
+          id: "tripEnergy",
+          labelKey: "vehicle.analytics.summary.tripEnergy",
+          value: fmt(tripEnergyKwh, 2),
+          unit: "kWh",
+          accent: true,
         }
       : null,
     summary.avgConsumptionKwh100 != null

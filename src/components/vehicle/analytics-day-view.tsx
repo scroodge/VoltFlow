@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "@/hooks/use-translation";
 import {
   buildDayInsights,
+  totalMeasuredTripEnergyKwh,
   weightedAvgConsumptionKwh100,
   type ConsumptionBaseline,
   type DayInsight,
@@ -123,6 +124,7 @@ function AnalyticsDayTripRow({
   tx: Translator;
 }) {
   const consumption = trip.avg_consumption_kwh_100km;
+  const tripEnergy = Number.isFinite(trip.traction_energy_kwh) ? trip.traction_energy_kwh : null;
   let normBadge: string | null = null;
   if (baselineKwh100 != null && consumption != null && consumption > 0) {
     const delta = ((consumption - baselineKwh100) / baselineKwh100) * 100;
@@ -161,10 +163,21 @@ function AnalyticsDayTripRow({
               {normBadge}
             </span>
           ) : null}
-          <span className="shrink-0 font-heading text-sm font-semibold tabular-nums text-emerald-300">
-            {fmt(consumption, 1)}
-            <span className="text-xs font-normal text-muted-foreground"> kWh/100</span>
-          </span>
+          <div className="shrink-0 text-right tabular-nums" aria-label={tx("vehicle.trips.traction")}>
+            <p className="font-heading text-sm font-semibold text-emerald-300">
+              {tripEnergy != null ? (
+                <>
+                  {fmt(tripEnergy, 2)}
+                  <span className="text-xs font-normal text-muted-foreground"> kWh</span>
+                </>
+              ) : (
+                "—"
+              )}
+            </p>
+            <p className="mt-0.5 text-[11px] font-medium text-muted-foreground">
+              {fmt(consumption, 1)} kWh/100
+            </p>
+          </div>
         </button>
 
         {expanded ? (
@@ -226,6 +239,7 @@ export function AnalyticsDayView({
   }, [trips]);
 
   const dayKwh100 = useMemo(() => weightedAvgConsumptionKwh100(trips), [trips]);
+  const dayTripEnergyKwh = useMemo(() => totalMeasuredTripEnergyKwh(trips), [trips]);
 
   return (
     <>
@@ -236,7 +250,7 @@ export function AnalyticsDayView({
       ) : hasSummaryError ? (
         <p className="mt-4 text-sm text-muted-foreground">{tx("vehicle.errors.history")}</p>
       ) : (
-        <AnalyticsSummaryStats summary={summary} />
+        <AnalyticsSummaryStats summary={summary} tripEnergyKwh={dayTripEnergyKwh} />
       )}
 
       {!isLoading && !hasSummaryError ? <DayInsightCards insights={insights} tx={tx} /> : null}
