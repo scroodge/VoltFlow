@@ -1,6 +1,6 @@
 import { processBydmateAutoChargingSessions } from "@/lib/bydmate/charging-auto-session";
 import { reconcileChargingSessionsForUser } from "@/lib/charging-session-reconcile";
-import { normalizePayloads } from "@/lib/bydmate/ingest-payload";
+import { normalizePayloads, type HourlyBlock } from "@/lib/bydmate/ingest-payload";
 import { parseIngestStats } from "@/lib/bydmate/ingest-stats";
 import { processBydmateChargeNotifications } from "@/lib/push/charge-notifications";
 import { updateTelegramLiveWidgets } from "@/lib/telegram/live-widget";
@@ -156,6 +156,10 @@ export async function POST(request: Request) {
   const payloads = normalized.payloads.map((p) =>
     p.vehicle_id !== headerVehicleId ? { ...p, vehicle_id: headerVehicleId } : p,
   );
+  // Hourly blocks have no vehicle_id of their own (HourlyRollupAccumulator.toJson() omits
+  // it) — they belong to whichever single vehicle this batch's samples were just normalized
+  // to above, so headerVehicleId is the correct id to apply them under.
+  const hourlyBlocks: HourlyBlock[] = normalized.hourly;
 
   const receivedAt = new Date().toISOString();
   const parsedSamples = payloads.map((payload) => ({
@@ -327,11 +331,37 @@ export async function POST(request: Request) {
       return { started: 0, stopped: 0, sessionIds: [] as string[], error: message };
     });
 
-    const [chargeNotifications, telegramWidgets, autoChargingSessions] = await Promise.all([
-      chargeNotificationsPromise,
-      telegramWidgetsPromise,
-      autoChargingSessionsPromise,
-    ]);
+    // Phase 3 of the cloud-offload plan: apply the client's cumulative per-hour rollup(s), if
+    // any were attached to this flush. Best-effort and separate from ingest — a failure here
+    // must not fail the request or affect ack accounting (sentCount stays samples-only), since
+    // the per-sample path (or the daemon/an old APK) already wrote an equivalent row for any
+    // hour this fails to update.
+    const hourlyRollupPromise = hourlyBlocks.length
+      ? Promise.all(
+          hourlyBlocks.map((block) =>
+            supabase.rpc("bydmate_apply_client_hourly", {
+              p_user_id: profile.id,
+              p_vehicle_id: headerVehicleId,
+              p_hour_start: block.hour_start,
+              p_block: block,
+            }),
+          ),
+        )
+          .then(() => hourlyBlocks.length)
+          .catch((hourlyError: unknown) => {
+            const message = hourlyError instanceof Error ? hourlyError.message : "Hourly rollup failed";
+            console.error("bydmate hourly rollup:", message);
+            return 0;
+          })
+      : Promise.resolve(0);
+
+    const [chargeNotifications, telegramWidgets, autoChargingSessions, hourlyRollupApplied] =
+      await Promise.all([
+        chargeNotificationsPromise,
+        telegramWidgetsPromise,
+        autoChargingSessionsPromise,
+        hourlyRollupPromise,
+      ]);
 
     // Only reconcile when auto-session processing actually opened/closed a row.
     // Reconcile reads sessions + samples back from Supabase, so running it on
@@ -361,6 +391,7 @@ export async function POST(request: Request) {
       ...parseIngestStats(ingestResult, samples.length),
       dropped_location_count: droppedLocations,
       dropped_telemetry_field_count: droppedTelemetryFields,
+      hourly_rollup_applied: hourlyRollupApplied,
       charge_notifications: chargeNotifications,
       telegram_live_widgets: telegramWidgets,
       auto_charging_sessions: autoChargingSessions,

@@ -130,6 +130,12 @@ export const payloadSchema = z
     // takes a fast path for these: live snapshot only, no history/hourly/trip
     // writes. Absent (older APK versions) means a normal full sample.
     live_only: booleanSchema,
+    // Sample is already folded into an on-device hourly rollup (see `hourlyBlockSchema`
+    // below), shipped once per flush in the batch envelope's "hourly" array. The ingest
+    // RPC skips its own per-sample hourly upsert for these so the hour isn't double-counted.
+    // Absent (older APK versions, or the daemon which has no Room access) means the server
+    // keeps doing the per-sample upsert as it does today.
+    client_hourly: booleanSchema,
     telemetry: telemetrySchema,
     diplus: optionalDiplusSchema,
     location: locationSchema,
@@ -150,11 +156,37 @@ export const payloadSchema = z
   })
   .passthrough();
 
+// One cumulative per-hour aggregate from HourlyRollupAccumulator.toJson(), shipped once per
+// flush in the batch envelope's "hourly" array (never per-sample — a block spans the whole
+// hour, a payload is built per sample). Averages/extrema are absent rather than 0 when no
+// contributing sample had that field (e.g. a parked hour never sees battery_temp_c).
+export const hourlyBlockSchema = z
+  .object({
+    hour_start: z.string().min(1).max(80),
+    sample_count: z.number().int().min(0),
+    soc_min: numericSchema,
+    soc_max: numericSchema,
+    soc_last: numericSchema,
+    speed_max: numericSchema,
+    power_avg: numericSchema,
+    battery_temp_avg: numericSchema,
+    cabin_temp_avg: numericSchema,
+    outside_temp_avg: numericSchema,
+    power_sample_count: z.number().int().min(0).optional(),
+    battery_temp_sample_count: z.number().int().min(0).optional(),
+    cabin_temp_sample_count: z.number().int().min(0).optional(),
+    outside_temp_sample_count: z.number().int().min(0).optional(),
+    regen_kwh_sum: numericSchema,
+    traction_kwh_sum: numericSchema,
+  })
+  .passthrough();
+
 const batchPayloadSchema = z.union([
   z.array(payloadSchema).min(1).max(300),
   z
     .object({
       samples: z.array(payloadSchema).min(1).max(300),
+      hourly: z.array(hourlyBlockSchema).max(24).optional(),
     })
     .passthrough(),
 ]);
@@ -163,6 +195,7 @@ export type TelemetryPayload = z.infer<typeof payloadSchema>;
 export type LocationPayload = z.infer<typeof locationSchema>;
 export type TelemetryPayloadData = z.infer<typeof telemetrySchema>;
 export type DiplusPayloadData = z.infer<typeof diplusSchema>;
+export type HourlyBlock = z.infer<typeof hourlyBlockSchema>;
 
 export function normalizePayloads(json: unknown) {
   const batchParsed = batchPayloadSchema.safeParse(json);
@@ -170,6 +203,7 @@ export function normalizePayloads(json: unknown) {
     return {
       success: true as const,
       payloads: Array.isArray(batchParsed.data) ? batchParsed.data : batchParsed.data.samples,
+      hourly: Array.isArray(batchParsed.data) ? [] : (batchParsed.data.hourly ?? []),
     };
   }
 
@@ -184,5 +218,6 @@ export function normalizePayloads(json: unknown) {
   return {
     success: true as const,
     payloads: [parsed.data],
+    hourly: [] as HourlyBlock[],
   };
 }
