@@ -476,7 +476,7 @@ function VehicleLiveContent({
             </>
           ) : (
             <>
-              <TelemetryGrid snapshot={snapshot} />
+              <TelemetryGrid snapshot={snapshot} vehicleMode={vehicleMode} />
               <TripBrowser
                 showDateFilter={Boolean(fixturePoints)}
                 selectedDate={selectedDate}
@@ -654,6 +654,8 @@ function Hero({
               icon: typeof Gauge;
               label: string;
               value: string;
+              supportingText?: string;
+              valueCentered?: boolean;
             }[] = [];
 
             if (isStale) {
@@ -665,7 +667,9 @@ function Hero({
                   key: "recentEnergy",
                   icon: Gauge,
                   label: t("vehicle.metrics.recentEnergy"),
-                  value: `~${fmt(parkedRecentEnergyKwh, 1)} kWh/50km`,
+                  value: `~${fmt(parkedRecentEnergyKwh, 1)} kWh`,
+                  supportingText: t("vehicle.metrics.recentEnergyContext"),
+                  valueCentered: true,
                 },
               );
             } else {
@@ -691,6 +695,8 @@ function Hero({
                     icon={metric.icon}
                     label={metric.label}
                     value={metric.value}
+                    supportingText={metric.supportingText}
+                    valueCentered={metric.valueCentered}
                   />
                 ))}
               </div>
@@ -706,18 +712,40 @@ function HeroMetric({
   icon: Icon,
   label,
   value,
+  supportingText,
   hint,
+  valueCentered = false,
 }: {
   icon: typeof Gauge;
   label: string;
   value: ReactNode;
+  supportingText?: string;
   hint?: string;
+  valueCentered?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-white/[0.03] p-2.5" title={hint}>
+    <div
+      className={`rounded-xl border border-border bg-white/[0.03] p-2.5 ${
+        valueCentered ? "relative min-h-[5.25rem]" : ""
+      }`}
+      title={hint}
+    >
       <Icon className="mb-1 size-3.5 text-primary" aria-hidden />
       <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
-      <p className="mt-0.5 font-heading text-base font-semibold tabular-nums">{value}</p>
+      <p
+        className={
+          valueCentered
+            ? "absolute inset-x-2.5 top-1/2 -translate-y-[5px] font-heading text-base font-semibold tabular-nums"
+            : "mt-0.5 font-heading text-base font-semibold tabular-nums"
+        }
+      >
+        {value}
+      </p>
+      {valueCentered && supportingText ? (
+        <p className="absolute inset-x-2.5 bottom-2.5 text-[10px] font-medium text-muted-foreground">
+          {supportingText}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -832,7 +860,13 @@ function StaleTelemetryNotice() {
   );
 }
 
-function TelemetryGrid({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
+function TelemetryGrid({
+  snapshot,
+  vehicleMode,
+}: {
+  snapshot: BydmateLiveSnapshotRow;
+  vehicleMode: DashboardVehicleMode;
+}) {
   const { t } = useTranslation();
   const tx = t as Translator;
   const telemetry = snapshot.telemetry;
@@ -889,6 +923,7 @@ function TelemetryGrid({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
     ];
 
     return all.filter((item) => {
+      if (item.key === "kwhCharged" && vehicleMode === "parked") return false;
       if (item.when === "charging") {
         if (!isCharging) return false;
       } else if (item.when === "driving") {
@@ -896,12 +931,12 @@ function TelemetryGrid({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
       }
       return !isMissingMetricValue(item.value);
     });
-  }, [isCharging, telemetry, tx]);
+  }, [isCharging, telemetry, tx, vehicleMode]);
 
   if (items.length === 0) return null;
 
   return (
-    <div className={telemetryGridClass(items.length)}>
+    <div className={items.length === 2 ? "grid grid-cols-2 gap-2" : telemetryGridClass(items.length)}>
       {items.map((item) => (
         <HeroMetric key={item.key} icon={item.icon} label={item.label} value={item.value} />
       ))}
