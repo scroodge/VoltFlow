@@ -26,7 +26,7 @@ import { useChargeDeltaHistoryQuery } from "@/hooks/use-charge-delta-history-que
 import { useBydmateTelemetryHistoryQuery } from "@/hooks/use-bydmate-telemetry-history-query";
 import type { TelemetryHistoryPoint } from "@/lib/bydmate/telemetry-history";
 import { useTranslation } from "@/hooks/use-translation";
-import { buildChargeDeltaTrend } from "@/lib/bydmate/charge-delta-trend";
+import { buildChargeDeltaTrend, type ChargeDeltaSession } from "@/lib/bydmate/charge-delta-trend";
 import { buildAnalyticsSummary, consumptionByOutsideTemp } from "@/lib/bydmate/telemetry-buckets";
 import { computeHistoryPeriodSummary } from "@/lib/history-day-summary";
 import {
@@ -58,6 +58,7 @@ type PeriodTripRow = BydmateTripRow & { outside_temp_avg?: number | null };
 
 const EMPTY_PERIOD_TRIPS: PeriodTripRow[] = [];
 const EMPTY_PERIOD_SESSIONS: ChargingSessionRow[] = [];
+const EMPTY_DELTA_SESSIONS: ChargeDeltaSession[] = [];
 const EMPTY_HISTORY_POINTS: TelemetryHistoryPoint[] = [];
 
 function fmt(value: number | null | undefined, digits = 1) {
@@ -482,7 +483,7 @@ export function VehicleAnalyticsPanels({
   // every charge (partial charges push delta up, full charges bring it back down).
   const deltaHistoryQuery = useChargeDeltaHistoryQuery();
   const chargeDeltaTrend = useMemo(
-    () => buildChargeDeltaTrend(deltaHistoryQuery.data ?? EMPTY_PERIOD_SESSIONS, sohQuery.data ?? []),
+    () => buildChargeDeltaTrend(deltaHistoryQuery.data ?? EMPTY_DELTA_SESSIONS, sohQuery.data ?? []),
     [deltaHistoryQuery.data, sohQuery.data],
   );
 
@@ -645,14 +646,16 @@ export function VehicleAnalyticsPanels({
               {t("vehicle.analytics.cellDeltaSubtitle")}
             </p>
           </div>
-          {chargeDeltaTrend.length > 0 ? (
+          {chargeDeltaTrend.fullCharges.length > 0 ? (
             <div className="text-right">
               <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                 {t("vehicle.analytics.cellDeltaLatest")}
               </p>
               <p className="font-heading text-4xl font-bold tabular-nums tracking-tight text-[var(--voltflow-cyan)]">
-                {chargeDeltaTrend[chargeDeltaTrend.length - 1].deltaV.toFixed(3)}
-                <span className="ml-0.5 text-xl font-semibold text-muted-foreground">V</span>
+                {(
+                  chargeDeltaTrend.fullCharges[chargeDeltaTrend.fullCharges.length - 1].deltaV * 1000
+                ).toFixed(0)}
+                <span className="ml-0.5 text-xl font-semibold text-muted-foreground">mV</span>
               </p>
             </div>
           ) : null}
@@ -660,12 +663,12 @@ export function VehicleAnalyticsPanels({
         <div className="mt-4">
           {deltaHistoryQuery.isLoading ? (
             <Skeleton className="h-40 rounded-2xl" />
-          ) : deltaHistoryQuery.error || chargeDeltaTrend.length === 0 ? (
+          ) : deltaHistoryQuery.error || chargeDeltaTrend.fullCharges.length === 0 ? (
             <p className="rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
               {t("vehicle.analytics.cellDeltaNoData")}
             </p>
           ) : (
-            <ChargeDeltaTrendChart points={chargeDeltaTrend} locale={locale} tx={tx} />
+            <ChargeDeltaTrendChart trend={chargeDeltaTrend} locale={locale} tx={tx} />
           )}
         </div>
       </section>

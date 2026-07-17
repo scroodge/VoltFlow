@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { devFetch, isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { queryKeys } from "@/lib/query-keys";
-import { mapChargingSession } from "@/lib/db-map";
+import type { ChargeDeltaSession } from "@/lib/bydmate/charge-delta-trend";
 import type { ChargingSessionRow } from "@/types/database";
 
 /**
@@ -15,11 +15,29 @@ import type { ChargingSessionRow } from "@/types/database";
  * observer — few columns, no polling.
  */
 const DELTA_COLUMNS =
-  "id,user_id,car_id,current_percent,end_max_cell_delta_v,end_delta_soc,started_at,stopped_at,status,created_at,updated_at" as const;
+  "id,status,end_max_cell_delta_v,end_delta_soc,started_at,stopped_at" as const;
 
 const MAX_SESSIONS = 300;
 
-async function fetchChargeDeltaHistory(): Promise<ChargingSessionRow[]> {
+function toNumberOrNull(value: unknown): number | null {
+  if (value == null) return null;
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Postgres `numeric` arrives as a string over PostgREST; the trend needs numbers. */
+function toChargeDeltaSession(raw: Record<string, unknown>): ChargeDeltaSession {
+  return {
+    id: String(raw.id),
+    status: raw.status as ChargingSessionRow["status"],
+    end_max_cell_delta_v: toNumberOrNull(raw.end_max_cell_delta_v),
+    end_delta_soc: toNumberOrNull(raw.end_delta_soc),
+    started_at: raw.started_at ? String(raw.started_at) : null,
+    stopped_at: raw.stopped_at ? String(raw.stopped_at) : null,
+  };
+}
+
+async function fetchChargeDeltaHistory(): Promise<ChargeDeltaSession[]> {
   if (isDevAppRoute()) {
     const response = await devFetch("/api/vehicle/sessions");
     if (!response.ok) return [];
@@ -42,7 +60,7 @@ async function fetchChargeDeltaHistory(): Promise<ChargingSessionRow[]> {
 
   if (error) throw error;
 
-  return (data ?? []).map((row) => mapChargingSession(row as Record<string, unknown>));
+  return (data ?? []).map((row) => toChargeDeltaSession(row as Record<string, unknown>));
 }
 
 export function useChargeDeltaHistoryQuery() {

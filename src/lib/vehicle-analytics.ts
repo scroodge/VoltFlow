@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { enrichTripsWithEnergy } from "@/lib/bydmate/attach-trip-energy";
+import {
+  calculatePhantomDrainDays,
+  type PhantomDrainDay,
+  type PhantomDrainSample,
+} from "@/lib/bydmate/phantom-drain";
 import { chargingSessionAnalyticsScope } from "@/lib/charging-session-analytics-scope";
 import { collectPagedRows } from "@/lib/bydmate/paged-query";
 import { pickWalkBackSessionPrice } from "@/lib/history-day-summary";
@@ -23,13 +28,7 @@ export type MonthlyStats = {
   avgConsumptionKwh100: number | null;
 };
 
-export type PhantomDrainDay = {
-  date: string;
-  socStart: number;
-  socEnd: number;
-  drainPercent: number;
-  idleHours: number;
-};
+export type { PhantomDrainDay } from "@/lib/bydmate/phantom-drain";
 
 export type CostPerKmSummary = {
   from: string;
@@ -355,46 +354,19 @@ async function fetchPhantomDrainFallback({
     if (page.length < pageSize) break;
   }
 
-  const byDay = new Map<string, { first: number | null; last: number | null; idleMs: number }>();
-
-  for (let index = 0; index < samples.length; index += 1) {
-    const sample = samples[index]!;
-    const soc = sample.telemetry.soc;
-    if (typeof soc !== "number") continue;
-
-    const dayKey = sample.device_time.slice(0, 10);
-    const bucket = byDay.get(dayKey) ?? { first: null, last: null, idleMs: 0 };
-    bucket.first ??= soc;
-    bucket.last = soc;
-
-    const speed = sample.telemetry.speed_kmh ?? 0;
-    const power = sample.telemetry.power_kw ?? 0;
-    const charging =
-      (sample.telemetry.charge_power_kw ?? 0) > 0 ||
-      (sample.diplus_charge_gun_state !== "1" && sample.telemetry.is_charging === true);
-    const moving = speed > 0.5 || Math.abs(power) > 0.1;
-
-    if (!moving && !charging && index > 0) {
-      const previous = samples[index - 1]!;
-      const elapsedMs = Date.parse(sample.device_time) - Date.parse(previous.device_time);
-      if (elapsedMs > 0 && elapsedMs < 6 * 60 * 60 * 1000) {
-        bucket.idleMs += elapsedMs;
-      }
-    }
-
-    byDay.set(dayKey, bucket);
-  }
-
-  return [...byDay.entries()]
-    .map(([date, bucket]) => ({
-      date,
-      socStart: bucket.first ?? 0,
-      socEnd: bucket.last ?? 0,
-      drainPercent: bucket.first != null && bucket.last != null ? bucket.first - bucket.last : 0,
-      idleHours: bucket.idleMs / (60 * 60 * 1000),
-    }))
-    .filter((row) => row.idleHours >= 4 && row.drainPercent > 0)
-    .sort((a, b) => b.date.localeCompare(a.date));
+  return calculatePhantomDrainDays(
+    samples.map(
+      (sample): PhantomDrainSample => ({
+        deviceTime: sample.device_time,
+        soc: sample.telemetry.soc,
+        speedKmh: sample.telemetry.speed_kmh,
+        powerKw: sample.telemetry.power_kw,
+        chargePowerKw: sample.telemetry.charge_power_kw,
+        isCharging: sample.telemetry.is_charging,
+        chargeGunState: sample.diplus_charge_gun_state,
+      }),
+    ),
+  );
 }
 
 export async function fetchCostPerKm({
