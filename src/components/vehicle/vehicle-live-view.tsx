@@ -1352,6 +1352,52 @@ function formatTripCostStr(
   ) : null;
 }
 
+function formatTripEnergyPerKm(trip: BydmateTripRow) {
+  const energyKwh = trip.traction_energy_kwh;
+  const distanceKm = trip.distance_km;
+  if (
+    typeof energyKwh !== "number" ||
+    !Number.isFinite(energyKwh) ||
+    typeof distanceKm !== "number" ||
+    !Number.isFinite(distanceKm) ||
+    distanceKm <= 0
+  ) {
+    return "—";
+  }
+
+  return `${fmt(energyKwh / distanceKm, 2)} kWh/km`;
+}
+
+function formatTripNetConsumptionKwh100(trip: BydmateTripRow) {
+  const energyKwh = trip.traction_energy_kwh;
+  const recoveredKwh = trip.regen_energy_kwh;
+  const distanceKm = trip.distance_km;
+  if (
+    typeof energyKwh !== "number" ||
+    !Number.isFinite(energyKwh) ||
+    typeof recoveredKwh !== "number" ||
+    !Number.isFinite(recoveredKwh) ||
+    typeof distanceKm !== "number" ||
+    !Number.isFinite(distanceKm) ||
+    distanceKm <= 0
+  ) {
+    return "—";
+  }
+
+  return `${fmt(((energyKwh - recoveredKwh) / distanceKm) * 100, 1)} kWh/100 km`;
+}
+
+function TripNetConsumptionMetric({ trip, label }: { trip: BydmateTripRow; label: string }) {
+  return (
+    <div className="mt-3 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.06] px-3 py-2.5">
+      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
+      <p className="mt-1 font-heading text-lg font-semibold tabular-nums text-emerald-100">
+        {formatTripNetConsumptionKwh100(trip)}
+      </p>
+    </div>
+  );
+}
+
 function ExpandedTripPanel({
   tripId,
   trip,
@@ -1627,6 +1673,7 @@ function TripListItem({
           label={tx("vehicle.telemetry.tripConsumption")}
           value={`${fmt(trip.traction_energy_kwh, 2)} kWh`}
         />
+        <MiniStat label={tx("vehicle.trips.energyPerKm")} value={formatTripEnergyPerKm(trip)} />
         <MiniStat label="SOC" value={`${fmt(trip.soc_start)}% -> ${fmt(trip.soc_end)}%`} />
         <MiniStat label={tx("vehicle.trips.maxSpeed")} value={`${fmt(trip.max_speed_kmh)} km/h`} />
         <MiniStat label={tx("vehicle.trips.avgSpeed")} value={`${fmt(trip.avg_speed_kmh)} km/h`} />
@@ -1634,6 +1681,7 @@ function TripListItem({
           <MiniStat label={tx("vehicle.trips.cost")} value={costStr} />
         ) : null}
       </div>
+      <TripNetConsumptionMetric trip={trip} label={tx("vehicle.trips.netConsumption")} />
     </button>
   );
 }
@@ -4513,10 +4561,12 @@ function LastTripDetail({
             label={tx("vehicle.telemetry.tripConsumption")}
             value={`${fmt(trip.traction_energy_kwh, 2)} kWh`}
           />
+          <MiniStat label={tx("vehicle.trips.energyPerKm")} value={formatTripEnergyPerKm(trip)} />
           <MiniStat label="SOC" value={`${fmt(trip.soc_start)}% → ${fmt(trip.soc_end)}%`} />
           <MiniStat label={tx("vehicle.trips.maxSpeed")} value={`${fmt(trip.max_speed_kmh)} km/h`} />
           <MiniStat label={tx("vehicle.trips.avgSpeed")} value={`${fmt(trip.avg_speed_kmh)} km/h`} />
         </div>
+        <TripNetConsumptionMetric trip={trip} label={tx("vehicle.trips.netConsumption")} />
       </div>
       <ExpandedTripPanel tripId={trip.id} trip={trip} />
     </div>
