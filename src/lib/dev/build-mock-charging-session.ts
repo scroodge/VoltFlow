@@ -34,6 +34,9 @@ export function buildMockChargingSession(nowMs = Date.now()): ChargingSessionRow
     status: "charging",
     started_at: startedAt,
     stopped_at: null,
+    // Captured only at session close; an active session has no value yet.
+    end_max_cell_delta_v: null,
+    end_delta_soc: null,
     created_at: createdAt,
     updated_at: createdAt,
   };

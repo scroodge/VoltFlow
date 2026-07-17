@@ -4,6 +4,7 @@ import { deriveSessionProgressFromSoc } from "@/lib/charging-math";
 import { efficiencyPercentForTariff } from "@/lib/charging-efficiency";
 import { mapChargingTariffLocation, mapUserProvider } from "@/lib/db-map";
 import { resolveSessionTariff, userProvidersFromRows } from "@/lib/charging-tariffs";
+import { captureSessionEndDelta } from "@/lib/bydmate/charge-end-delta";
 import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
 import {
   nextAutoChargingSessionStep,
@@ -118,11 +119,16 @@ async function resolveTariffForTelemetry(
 }
 
 async function closeOpenChargingSessions(supabase: SupabaseClient, userId: string, stoppedAt: string) {
-  await supabase
+  const { data } = await supabase
     .from("charging_sessions")
     .update({ status: "stopped", stopped_at: stoppedAt })
     .eq("user_id", userId)
-    .eq("status", "charging");
+    .eq("status", "charging")
+    .select("id");
+
+  for (const row of (data ?? []) as { id: string }[]) {
+    await captureSessionEndDelta(supabase, row.id);
+  }
 }
 
 async function startSessionFromTelemetry({
@@ -238,6 +244,8 @@ async function stopSessionFromTelemetry({
     .eq("id", session.id);
 
   if (error) throw new Error(error.message);
+
+  await captureSessionEndDelta(supabase, session.id);
 }
 
 export async function processBydmateAutoChargingSessions({

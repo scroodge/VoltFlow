@@ -9,6 +9,7 @@ import {
   summarizeSessionTelemetry,
   type TelemetrySampleRow,
 } from "@/lib/charging-session-reconcile-logic";
+import { captureSessionEndDelta } from "@/lib/bydmate/charge-end-delta";
 import { isFreshLiveSnapshot, snapshotSoc } from "@/lib/charging-live";
 import type { BydmateLiveSnapshotRow, Car, ChargingSessionRow } from "@/types/database";
 
@@ -123,6 +124,13 @@ async function reconcileOneSession({
     .eq("user_id", userId);
 
   if (error) throw new Error(error.message);
+
+  // Only the silence-close path is a real session close. The value-repair path
+  // re-runs over already-closed sessions, and must not re-trigger the capture.
+  if (isOpen) {
+    await captureSessionEndDelta(supabase, session.id);
+  }
+
   return session.id;
 }
 

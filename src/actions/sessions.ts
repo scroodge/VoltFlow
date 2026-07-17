@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
+import { captureSessionEndDelta } from "@/lib/bydmate/charge-end-delta";
 import { costFromGridEnergy, deriveChargingState } from "@/lib/charging-math";
 import { efficiencyPercentForTariff } from "@/lib/charging-efficiency";
 import { mapChargingTariffLocation, mapUserProvider } from "@/lib/db-map";
@@ -67,14 +68,19 @@ export async function startChargingSession(input: z.infer<typeof startSchema>) {
   const chargerPowerKw =
     parsed.data.chargerPowerKw ?? Number(car.default_charger_power_kw);
 
-  await supabase
+  const { data: supersededSessions } = await supabase
     .from("charging_sessions")
     .update({
       status: "stopped",
       stopped_at: new Date().toISOString(),
     })
     .eq("user_id", user.id)
-    .eq("status", "charging");
+    .eq("status", "charging")
+    .select("id");
+
+  for (const superseded of (supersededSessions ?? []) as { id: string }[]) {
+    await captureSessionEndDelta(supabase, superseded.id);
+  }
 
   const [{ data: liveRows }, { data: profile }, { data: rawPresets }, { data: rawUserProviders }] =
     await Promise.all([
@@ -203,6 +209,8 @@ export async function stopChargingSession(sessionId: string) {
   if (updateError) {
     return { ok: false as const, error: updateError.message };
   }
+
+  await captureSessionEndDelta(supabase, sessionId);
 
   revalidatePath("/dashboard");
   revalidatePath("/history");

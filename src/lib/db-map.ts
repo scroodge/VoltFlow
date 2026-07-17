@@ -18,6 +18,13 @@ function num(v: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+/** For columns where "not measured" must stay distinct from 0. */
+function nullableNum(v: unknown): number | null {
+  if (v == null) return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 function enumValue<T extends string>(
   value: unknown,
   allowed: readonly T[],
@@ -104,6 +111,8 @@ export function mapChargingSession(
     status: raw.status as ChargingSessionRow["status"],
     started_at: raw.started_at ? String(raw.started_at) : null,
     stopped_at: raw.stopped_at ? String(raw.stopped_at) : null,
+    end_max_cell_delta_v: nullableNum(raw.end_max_cell_delta_v),
+    end_delta_soc: nullableNum(raw.end_delta_soc),
     created_at: String(raw.created_at ?? ""),
     updated_at: String(raw.updated_at ?? ""),
   };

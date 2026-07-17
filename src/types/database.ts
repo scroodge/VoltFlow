@@ -69,6 +69,9 @@ export type ChargingSessionRow = {
   status: SessionStatus;
   started_at: string | null;
   stopped_at: string | null;
+  /** Max cell delta while charging near the session's end SOC; captured at close. */
+  end_max_cell_delta_v: number | null;
+  end_delta_soc: number | null;
   created_at: string;
   updated_at: string;
 };

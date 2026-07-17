@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { AnalyticsDayView } from "@/components/vehicle/analytics-day-view";
+import { ChargeDeltaTrendChart } from "@/components/vehicle/charge-delta-trend-chart";
 import { HistoryDaySummaryCard } from "@/components/history/history-day-summary-card";
 import {
   AnalyticsSummaryStats,
@@ -21,9 +22,11 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useBydmateSohHistoryQuery } from "@/hooks/use-bydmate-soh-history-query";
+import { useChargeDeltaHistoryQuery } from "@/hooks/use-charge-delta-history-query";
 import { useBydmateTelemetryHistoryQuery } from "@/hooks/use-bydmate-telemetry-history-query";
 import type { TelemetryHistoryPoint } from "@/lib/bydmate/telemetry-history";
 import { useTranslation } from "@/hooks/use-translation";
+import { buildChargeDeltaTrend } from "@/lib/bydmate/charge-delta-trend";
 import { buildAnalyticsSummary, consumptionByOutsideTemp } from "@/lib/bydmate/telemetry-buckets";
 import { computeHistoryPeriodSummary } from "@/lib/history-day-summary";
 import {
@@ -475,6 +478,14 @@ export function VehicleAnalyticsPanels({
     [periodTrips],
   );
 
+  // The trend is deliberately not period-scoped: its whole point is the arc across
+  // every charge (partial charges push delta up, full charges bring it back down).
+  const deltaHistoryQuery = useChargeDeltaHistoryQuery();
+  const chargeDeltaTrend = useMemo(
+    () => buildChargeDeltaTrend(deltaHistoryQuery.data ?? EMPTY_PERIOD_SESSIONS, sohQuery.data ?? []),
+    [deltaHistoryQuery.data, sohQuery.data],
+  );
+
   const latestSohPercent = useMemo(() => {
     const points = (sohQuery.data ?? []).filter(
       (point) => typeof point.telemetry.soh_percent === "number",
@@ -620,6 +631,41 @@ export function VehicleAnalyticsPanels({
             </p>
           ) : (
             <SohTrendChart points={sohQuery.data ?? []} locale={locale} />
+          )}
+        </div>
+      </section>
+
+      <section className="voltflow-card p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-heading text-2xl font-semibold tracking-tight">
+              {t("vehicle.analytics.cellDeltaTitle")}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t("vehicle.analytics.cellDeltaSubtitle")}
+            </p>
+          </div>
+          {chargeDeltaTrend.length > 0 ? (
+            <div className="text-right">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                {t("vehicle.analytics.cellDeltaLatest")}
+              </p>
+              <p className="font-heading text-4xl font-bold tabular-nums tracking-tight text-[var(--voltflow-cyan)]">
+                {chargeDeltaTrend[chargeDeltaTrend.length - 1].deltaV.toFixed(3)}
+                <span className="ml-0.5 text-xl font-semibold text-muted-foreground">V</span>
+              </p>
+            </div>
+          ) : null}
+        </div>
+        <div className="mt-4">
+          {deltaHistoryQuery.isLoading ? (
+            <Skeleton className="h-40 rounded-2xl" />
+          ) : deltaHistoryQuery.error || chargeDeltaTrend.length === 0 ? (
+            <p className="rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
+              {t("vehicle.analytics.cellDeltaNoData")}
+            </p>
+          ) : (
+            <ChargeDeltaTrendChart points={chargeDeltaTrend} locale={locale} tx={tx} />
           )}
         </div>
       </section>
