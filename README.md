@@ -20,9 +20,12 @@ maintenance records. It is built with Next.js, React, and Supabase.
 
 - Charging sessions with SOC, energy, tariff-aware estimates, and history.
 - Live vehicle telemetry, trip history, route tracks, and analytics.
+- Vehicle energy analytics with trip efficiency, parked-vehicle consumption context, and
+  cell-balance trends.
 - Offline-capable PWA with responsive mobile navigation.
 - Per-user access control through Supabase Auth and Row Level Security.
 - Optional VoltFlow Mate integration for vehicle telemetry and remote commands.
+- Administration dashboard with user lifecycle metrics and an account attention queue.
 - Knowledge-base content, maintenance records, and notifications.
 
 ## Development

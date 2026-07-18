@@ -13,12 +13,18 @@
 ### Vehicle
 
 - Optional VoltFlow Mate integration for live status, trips, route tracks, and analytics.
+- State-aware live telemetry focuses the parked view on relevant temperatures and can show a
+  recent driving-based energy estimate.
+- Trip details show traction and recovered energy, energy per kilometre, and net consumption
+  after regeneration.
 - Remote commands are available only where the connected vehicle integration supports them.
 - Vehicle data is isolated per account through Row Level Security.
 
 ### History and maintenance
 
 - Trip history, route maps, energy summaries, and export.
+- Date-range analytics show per-trip and summary traction energy, plus a cell-balance trend
+  based on completed full charges with partial charges shown as context.
 - Maintenance records and reminders per vehicle.
 - Content guides, parts, accessories, and service information.
 
@@ -27,6 +33,15 @@
 - Installable PWA for iOS and Android.
 - English, Belarusian, and Russian application localization.
 - Authenticated multi-user accounts, notifications, and data retention controls.
+- Compatible VoltFlow Mate clients can submit cumulative hourly telemetry rollups alongside
+  sample batches; sample-only clients remain supported.
+
+### Administration
+
+- The users dashboard reports current registered users, daily connections, daily
+  registrations and removals (Minsk time), and all-time recorded trips.
+- An attention queue highlights stale telemetry, inactive or outdated Mate clients, and
+  premium access nearing expiry.
 
 ## Public roadmap principles
 
