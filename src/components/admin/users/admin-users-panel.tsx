@@ -7,6 +7,11 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { AdminAttentionItem } from "@/lib/admin-users-attention";
+import {
+  EMPTY_ADMIN_USERS_STATS,
+  type AdminUsersStats,
+} from "@/lib/admin-users-stats";
 
 type ActivityCounts = {
   telemetry_7d: number;
@@ -36,10 +41,8 @@ type UsersResponse = {
   page: number;
   pageSize: number;
   total: number;
-  stats?: {
-    connectionsToday: number;
-    registeredUsersTotal: number;
-  };
+  stats?: AdminUsersStats;
+  attention?: AdminAttentionItem[];
   users: AdminUser[];
 };
 
@@ -55,10 +58,8 @@ export function AdminUsersPanel() {
   const [lastSeenFilter, setLastSeenFilter] = useState<"any" | "24h" | "7d" | "30d" | "never">("any");
   const [registeredSince, setRegisteredSince] = useState("");
   const [registeredBefore, setRegisteredBefore] = useState("");
-  const [stats, setStats] = useState<{ connectionsToday: number; registeredUsersTotal: number }>({
-    connectionsToday: 0,
-    registeredUsersTotal: 0,
-  });
+  const [stats, setStats] = useState<AdminUsersStats>(EMPTY_ADMIN_USERS_STATS);
+  const [attention, setAttention] = useState<AdminAttentionItem[] | null>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   const resetFilters = () => {
@@ -88,7 +89,8 @@ export function AdminUsersPanel() {
         }
         setUsers((prev) => (page === 1 ? payload.users : [...prev, ...payload.users]));
         setHasMore(page * payload.pageSize < payload.total);
-        setStats(payload.stats ?? { connectionsToday: 0, registeredUsersTotal: 0 });
+        setStats(payload.stats ?? EMPTY_ADMIN_USERS_STATS);
+        setAttention(payload.attention ?? []);
       })
       .catch((error: unknown) => {
         toast.error(error instanceof Error ? error.message : "Failed to load users");
@@ -113,10 +115,40 @@ export function AdminUsersPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <MetricTile label="Connections today" value={stats.connectionsToday} />
-        <MetricTile label="Registered users" value={stats.registeredUsersTotal} />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricTile
+          label="Connected today"
+          value={compactNumber(stats.connectionsToday)}
+          helper="Minsk time"
+        />
+        <MetricTile
+          label="Registered users"
+          value={compactNumber(stats.registeredUsersTotal)}
+          helper="Current total"
+        />
+        <MetricTile
+          label="Registered / removed"
+          value={`+${compactNumber(stats.registeredToday)} / −${compactNumber(stats.removedToday)}`}
+          helper={
+            stats.removalsTrackedSince
+              ? `Minsk time · tracked since ${formatMetricDate(stats.removalsTrackedSince)}`
+              : "Minsk time · tracking starts with this release"
+          }
+        />
+        <MetricTile
+          label="Trips recorded"
+          value={compactNumber(stats.tripsRecordedTotal)}
+          helper="All time, including open"
+        />
       </div>
+
+      <AttentionQueue
+        items={attention}
+        onOpenUser={(userId) => {
+          resetFilters();
+          setSearch(userId);
+        }}
+      />
 
       <div className="space-y-3">
         <Input
@@ -392,13 +424,129 @@ function ActivityGrid({ activity }: { activity: ActivityCounts }) {
   );
 }
 
-function MetricTile({ label, value }: { label: string; value: number }) {
+function MetricTile({
+  label,
+  value,
+  helper,
+}: {
+  label: string;
+  value: React.ReactNode;
+  helper: React.ReactNode;
+}) {
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2">
       <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">{label}</p>
-      <p className="mt-1 text-sm font-semibold">{value}</p>
+      <p className="mt-1 text-sm font-semibold tabular-nums">{value}</p>
+      <p className="mt-1 text-[10px] leading-4 text-muted-foreground">{helper}</p>
     </div>
   );
+}
+
+function AttentionQueue({
+  items,
+  onOpenUser,
+}: {
+  items: AdminAttentionItem[] | null;
+  onOpenUser: (userId: string) => void;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const visibleItems = items?.slice(0, showAll ? items.length : 10) ?? [];
+
+  return (
+    <section className="rounded-xl border border-white/10 bg-card">
+      <div className="flex items-baseline justify-between gap-3 px-3 py-3">
+        <div>
+          <h2 className="text-sm font-semibold">Needs attention</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {items === null
+              ? "Checking account health..."
+              : items.length === 0
+                ? "No current follow-up items."
+                : `${items.length} actionable account${items.length === 1 ? "" : "s"}`}
+          </p>
+        </div>
+      </div>
+
+      {items === null ? (
+        <div className="border-t border-white/10 px-3 py-4">
+          <div className="h-4 w-2/5 animate-pulse rounded bg-white/[0.07]" />
+        </div>
+      ) : visibleItems.length === 0 ? null : (
+        <div className="border-t border-white/10">
+          {visibleItems.map((item) => (
+            <button
+              key={`${item.kind}:${item.userId}`}
+              type="button"
+              onClick={() => onOpenUser(item.userId)}
+              className="flex w-full items-center justify-between gap-3 border-b border-white/10 px-3 py-3 text-left last:border-b-0 transition hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--voltflow-cyan)] focus-visible:ring-inset"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{item.email ?? "No email"}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{attentionDetail(item)}</p>
+              </div>
+              <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${attentionTone(item.kind)}`}>
+                {attentionLabel(item.kind)}
+              </span>
+            </button>
+          ))}
+          {items.length > 10 && (
+            <div className="px-3 py-2">
+              <button
+                type="button"
+                onClick={() => setShowAll((current) => !current)}
+                className="text-xs font-semibold text-[var(--voltflow-cyan)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--voltflow-cyan)]"
+              >
+                {showAll ? "Show fewer" : `Show all ${items.length}`}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function attentionLabel(kind: AdminAttentionItem["kind"]) {
+  switch (kind) {
+    case "stale_30d":
+      return "No telemetry 30d";
+    case "stale_7d":
+      return "No telemetry 7d";
+    case "mate_update":
+      return "Mate update";
+    case "mate_not_activated":
+      return "Mate inactive";
+    case "premium_expiring":
+      return "Premium ending";
+  }
+}
+
+function attentionDetail(item: AdminAttentionItem) {
+  switch (item.kind) {
+    case "stale_30d":
+    case "stale_7d":
+      return `Last seen ${relativeTime(item.lastSeenAt)}`;
+    case "mate_update":
+      return `Mate ${item.mateVersion ?? "unknown"}, latest ${item.latestMateVersion ?? "unknown"}`;
+    case "mate_not_activated":
+      return `Registered ${item.createdAt ? formatDate(item.createdAt) : "recently"}, no live data yet`;
+    case "premium_expiring":
+      return `Term ends ${item.premiumUntil ? formatDate(item.premiumUntil) : "soon"}`;
+  }
+}
+
+function attentionTone(kind: AdminAttentionItem["kind"]) {
+  switch (kind) {
+    case "stale_30d":
+      return "border border-red-500/30 bg-red-500/10 text-red-300";
+    case "stale_7d":
+    case "premium_expiring":
+      return "border border-amber-400/30 bg-amber-400/10 text-amber-200";
+    case "mate_update":
+      return "border border-[var(--voltflow-cyan)]/30 bg-[var(--voltflow-cyan)]/10 text-[var(--voltflow-cyan)]";
+    case "mate_not_activated":
+      return "border border-white/10 bg-white/[0.05] text-muted-foreground";
+  }
 }
 
 function PremiumEditor({ user, onUpdated }: { user: AdminUser; onUpdated: () => void }) {
@@ -599,4 +747,13 @@ function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Unknown";
   return date.toLocaleDateString();
+}
+
+function formatMetricDate(value: string) {
+  const date = new Date(`${value}T12:00:00Z`);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeZone: "Europe/Minsk",
+  }).format(date);
 }

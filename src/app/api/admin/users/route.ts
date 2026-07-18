@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { mapAdminUsersAttention } from "@/lib/admin-users-attention";
+import { mapAdminUsersStats } from "@/lib/admin-users-stats";
 import { isPremiumFromUntil, resolveEffectivePremium } from "@/lib/premium-entitlement";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/supabase/knowledge";
@@ -29,6 +31,8 @@ export async function GET(request: NextRequest) {
   if (!guard.ok) {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   }
+
+  const overviewPromise = loadAdminOverview();
 
   const params = request.nextUrl.searchParams;
   const page = Math.max(1, Number.parseInt(params.get("page") ?? "1", 10) || 1);
@@ -69,7 +73,7 @@ export async function GET(request: NextRequest) {
         page,
         pageSize,
         total: 0,
-        stats: await loadAdminStats(),
+        ...(await overviewPromise),
         users: [],
       });
     }
@@ -124,7 +128,7 @@ export async function GET(request: NextRequest) {
         page,
         pageSize,
         total: 0,
-        stats: await loadAdminStats(),
+        ...(await overviewPromise),
         users: [],
       });
     }
@@ -139,7 +143,7 @@ export async function GET(request: NextRequest) {
       page,
       pageSize,
       total: 0,
-      stats: await loadAdminStats(),
+      ...(await overviewPromise),
       users: [],
     });
   }
@@ -183,12 +187,12 @@ export async function GET(request: NextRequest) {
   const userIds = users.map((row) => row.id);
   const now = Date.now();
 
-  const [adminSet, versionMap, activityMap] = await Promise.all([
+  const [adminSet, versionMap, activityMap, overview] = await Promise.all([
     loadAdminSet(userIds),
     loadLatestVersions(userIds),
     loadActivity(userIds),
+    overviewPromise,
   ]);
-  const stats = await loadAdminStats();
 
   const enriched = users.map((row) => {
     const isAdmin = adminSet.has(row.id);
@@ -220,7 +224,7 @@ export async function GET(request: NextRequest) {
     page,
     pageSize,
     total: count ?? 0,
-    stats,
+    ...overview,
     users: enriched,
   });
 }
@@ -436,29 +440,22 @@ async function countRows(
 }
 
 async function loadAdminStats() {
-  const [profilesCount, liveToday] = await Promise.all([
-    supabaseAdmin.from("profiles").select("id", { count: "exact", head: true }),
-    // "Connections today" is defined as users seen in today's live snapshots.
-    supabaseAdmin
-      .from("bydmate_live_snapshots")
-      .select("user_id")
-      .gte("received_at", startOfUtcDayIso())
-      .limit(5000),
-  ]);
-
-  const connectedToday = new Set(
-    (liveToday.data ?? []).map((row) => String(row.user_id)).filter(Boolean),
-  );
-
-  return {
-    registeredUsersTotal: profilesCount.count ?? 0,
-    connectionsToday: connectedToday.size,
-  };
+  const { data, error } = await supabaseAdmin.rpc("admin_users_dashboard_stats");
+  if (error) {
+    throw new Error(`Could not load admin dashboard stats: ${error.message}`);
+  }
+  return mapAdminUsersStats(data);
 }
 
-function startOfUtcDayIso() {
-  const now = new Date();
-  return new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0),
-  ).toISOString();
+async function loadAdminOverview() {
+  const [stats, attention] = await Promise.all([loadAdminStats(), loadAdminAttention()]);
+  return { stats, attention };
+}
+
+async function loadAdminAttention() {
+  const { data, error } = await supabaseAdmin.rpc("admin_users_attention_queue");
+  if (error) {
+    throw new Error(`Could not load admin attention queue: ${error.message}`);
+  }
+  return mapAdminUsersAttention(data);
 }

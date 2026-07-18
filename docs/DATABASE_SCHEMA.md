@@ -581,6 +581,20 @@ expires_at > now()`; all other access requires `is_admin()`.
 Simple allowlist for admin access.
 | `user_id` uuid PK → auth.users | `email` | `created_at` |
 
+### `admin_user_lifecycle_daily`
+App-owned aggregate counters used by the admin users dashboard. It stores no deleted-user
+identifiers and is inaccessible to browser roles.
+| `metric_date` date PK | `registered_count` integer | `removed_count` integer |
+
+The `admin_users_dashboard_stats()` service-role-only function returns exact connected-
+today, registration/removal-today, current-user, and all-time recorded-trip counts. The
+`profiles` insert/delete triggers maintain the daily lifecycle counters in Europe/Minsk
+time.
+
+The service-role-only `admin_users_attention_queue()` function derives an admin-only
+follow-up queue from profile, snapshot, release, entitlement, and admin-role facts. It
+persists no additional user data.
+
 ---
 
 ## Key Functions / RPCs
