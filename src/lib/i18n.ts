@@ -833,9 +833,9 @@ export const dictionaries = {
         sohNoData: "No SOH history available yet.",
         cellDeltaTitle: "Cell balance trend",
         cellDeltaSubtitle:
-          "Peak cell delta at the top of each charge to 100% — the only point where cells are comparable. Partial charges let imbalance build; charging to 100% lets the BMS work it back down.",
+          "Peak cell delta at the top of each charge to 100% in this period — the only point where cells are comparable. Partial charges let imbalance build; charging to 100% lets the BMS work it back down.",
         cellDeltaNoData:
-          "No charge to 100% has been measured yet. This trend fills in after your next full charge.",
+          "No charge to 100% in this period. Widen the range or wait for your next full charge.",
         cellDeltaLatest: "Latest",
         cellDeltaFullCharge: "Charge to 100%",
         cellDeltaPartialCharge: "Partial charges",
@@ -2062,9 +2062,9 @@ export const dictionaries = {
         sohNoData: "Гісторыя SOH пакуль недаступна.",
         cellDeltaTitle: "Тренд балансу ячэек",
         cellDeltaSubtitle:
-          "Пікавая дэльта ячэек на версе кожнай зарадкі да 100% — адзіны пункт, дзе ячэйкі параўнальныя. Няпоўныя зарадкі назапашваюць разбаланс, зарадка да 100% дае BMS яго прыбраць.",
+          "Пікавая дэльта ячэек на версе кожнай зарадкі да 100% за гэты перыяд — адзіны пункт, дзе ячэйкі параўнальныя. Няпоўныя зарадкі назапашваюць разбаланс, зарадка да 100% дае BMS яго прыбраць.",
         cellDeltaNoData:
-          "Ніводнай зарадкі да 100% яшчэ не вымерана. Тренд з'явіцца пасля наступнай поўнай зарадкі.",
+          "Няма зарадкі да 100% за гэты перыяд. Пашырце дыяпазон або дачакайцеся наступнай поўнай зарадкі.",
         cellDeltaLatest: "Апошняя",
         cellDeltaFullCharge: "Зарадка да 100%",
         cellDeltaPartialCharge: "Няпоўныя зарадкі",
@@ -3291,9 +3291,9 @@ export const dictionaries = {
         sohNoData: "История SOH пока недоступна.",
         cellDeltaTitle: "Тренд баланса ячеек",
         cellDeltaSubtitle:
-          "Пиковая дельта ячеек на верху каждой зарядки до 100% — единственная точка, где ячейки сравнимы. Недозаряды копят разбаланс, зарядка до 100% даёт BMS его убрать.",
+          "Пиковая дельта ячеек на верху каждой зарядки до 100% за этот период — единственная точка, где ячейки сравнимы. Недозаряды копят разбаланс, зарядка до 100% даёт BMS его убрать.",
         cellDeltaNoData:
-          "Ни одной зарядки до 100% пока не измерено. Тренд появится после следующей полной зарядки.",
+          "Нет зарядки до 100% за этот период. Расширьте диапазон или дождитесь следующей полной зарядки.",
         cellDeltaLatest: "Последняя",
         cellDeltaFullCharge: "Зарядка до 100%",
         cellDeltaPartialCharge: "Недозаряды",

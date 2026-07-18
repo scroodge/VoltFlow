@@ -22,11 +22,10 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useBydmateSohHistoryQuery } from "@/hooks/use-bydmate-soh-history-query";
-import { useChargeDeltaHistoryQuery } from "@/hooks/use-charge-delta-history-query";
 import { useBydmateTelemetryHistoryQuery } from "@/hooks/use-bydmate-telemetry-history-query";
 import type { TelemetryHistoryPoint } from "@/lib/bydmate/telemetry-history";
 import { useTranslation } from "@/hooks/use-translation";
-import { buildChargeDeltaTrend, type ChargeDeltaSession } from "@/lib/bydmate/charge-delta-trend";
+import { buildChargeDeltaTrend } from "@/lib/bydmate/charge-delta-trend";
 import { buildAnalyticsSummary, consumptionByOutsideTemp } from "@/lib/bydmate/telemetry-buckets";
 import { computeHistoryPeriodSummary } from "@/lib/history-day-summary";
 import {
@@ -58,7 +57,6 @@ type PeriodTripRow = BydmateTripRow & { outside_temp_avg?: number | null };
 
 const EMPTY_PERIOD_TRIPS: PeriodTripRow[] = [];
 const EMPTY_PERIOD_SESSIONS: ChargingSessionRow[] = [];
-const EMPTY_DELTA_SESSIONS: ChargeDeltaSession[] = [];
 const EMPTY_HISTORY_POINTS: TelemetryHistoryPoint[] = [];
 
 function fmt(value: number | null | undefined, digits = 1) {
@@ -479,12 +477,11 @@ export function VehicleAnalyticsPanels({
     [periodTrips],
   );
 
-  // The trend is deliberately not period-scoped: its whole point is the arc across
-  // every charge (partial charges push delta up, full charges bring it back down).
-  const deltaHistoryQuery = useChargeDeltaHistoryQuery();
+  // Scoped to the selected range like every other analytics card: it reads the same
+  // period-filtered session list, so day/week/month/quarter/year all narrow it too.
   const chargeDeltaTrend = useMemo(
-    () => buildChargeDeltaTrend(deltaHistoryQuery.data ?? EMPTY_DELTA_SESSIONS, sohQuery.data ?? []),
-    [deltaHistoryQuery.data, sohQuery.data],
+    () => buildChargeDeltaTrend(periodSessions, sohQuery.data ?? []),
+    [periodSessions, sohQuery.data],
   );
 
   const latestSohPercent = useMemo(() => {
@@ -661,9 +658,9 @@ export function VehicleAnalyticsPanels({
           ) : null}
         </div>
         <div className="mt-4">
-          {deltaHistoryQuery.isLoading ? (
+          {periodOverviewQuery.isLoading ? (
             <Skeleton className="h-40 rounded-2xl" />
-          ) : deltaHistoryQuery.error || chargeDeltaTrend.fullCharges.length === 0 ? (
+          ) : periodOverviewQuery.error || chargeDeltaTrend.fullCharges.length === 0 ? (
             <p className="rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
               {t("vehicle.analytics.cellDeltaNoData")}
             </p>
