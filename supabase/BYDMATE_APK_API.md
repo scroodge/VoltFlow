@@ -64,6 +64,42 @@ A batch wraps samples in an object:
 }
 ```
 
+### Client-side hourly rollups
+
+Current Mate clients may attach up to 24 cumulative hourly aggregate blocks to an object
+batch. A sample that has already been included in one of these blocks sets
+`client_hourly: true`; the server still ingests the sample but skips its normal per-sample
+hourly aggregation to avoid double counting. Older clients can omit both fields and retain
+the existing server-side aggregation behavior.
+
+Each block belongs to the vehicle in `X-Vehicle-Id` (it does not contain its own
+`vehicle_id`) and has this shape:
+
+```json
+{
+  "hour_start": "2026-01-01T12:00:00Z",
+  "sample_count": 60,
+  "soc_min": 50,
+  "soc_max": 52,
+  "soc_last": 52,
+  "speed_max": 80,
+  "power_avg": 12.4,
+  "battery_temp_avg": 25.1,
+  "cabin_temp_avg": 21.5,
+  "outside_temp_avg": 4.2,
+  "power_sample_count": 60,
+  "battery_temp_sample_count": 60,
+  "cabin_temp_sample_count": 60,
+  "outside_temp_sample_count": 60,
+  "regen_kwh_sum": 0.3,
+  "traction_kwh_sum": 2.1
+}
+```
+
+`hour_start` and `sample_count` are required. The remaining aggregate values are optional
+and may be `null` when no contributing sample has that measurement. `hourly` is optional;
+when present it is an array of these blocks alongside `samples`.
+
 ### Required fields
 
 | Field | Type | Notes |
@@ -82,6 +118,7 @@ A batch wraps samples in an object:
 | `diplus` | object or null | Extended vehicle data when available. |
 | `autoservice` | object | Optional vehicle metadata when available. |
 | `mate_version` | string | Client version metadata. |
+| `client_hourly` | boolean | Marks a sample as represented by a companion hourly block in the same object batch. |
 
 Unknown forward-compatible fields are ignored. Numeric values may be represented as JSON
 numbers or numeric strings. Batches are limited to 300 samples.
@@ -96,13 +133,17 @@ receive an application response equivalent to:
   "ok": true,
   "inserted_count": 1,
   "duplicate_count": 0,
-  "skipped_stale_count": 0
+  "skipped_stale_count": 0,
+  "hourly_rollup_applied": 0
 }
 ```
 
 The acknowledged inserted and duplicate count must cover every submitted sample, and
 `skipped_stale_count` must be zero. Network failures and server errors remain retryable;
 the client preserves the original `vehicle_id` for every queued sample.
+
+`hourly_rollup_applied` is informational and is not part of sample acknowledgement
+accounting.
 
 ## Completed-trip summaries
 

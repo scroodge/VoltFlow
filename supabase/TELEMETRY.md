@@ -25,6 +25,13 @@ The server validates the authenticated vehicle identity, normalizes accepted val
 sanitizes location data, and processes retries idempotently. A client retains queued data
 until it receives a complete application-level acknowledgement.
 
+Compatible Mate clients may include cumulative hourly rollup blocks in an object batch. A
+sample already represented in one of those blocks is marked `client_hourly: true`, so the
+server does not aggregate that sample into the hour a second time. The companion hourly
+blocks belong to the vehicle identified by the request header and are applied separately
+from sample ingest; a rollup-processing problem does not change the sample acknowledgement.
+See [BYDMATE_APK_API.md](BYDMATE_APK_API.md) for the batch fields and block shape.
+
 ## Delivery behavior
 
 The current Mate client adapts collection to vehicle state:
@@ -56,7 +63,10 @@ and trip details. Retention follows the account entitlement.
 
 ### `bydmate_telemetry_hourly`
 
-Compact hourly aggregates for longer-range analytics.
+Compact hourly aggregates for longer-range analytics. They are derived from individual
+samples for standard clients, or from cumulative client-provided hourly blocks for
+compatible Mate clients. The latter replaces an hour only with an equal-or-larger cumulative
+sample count, so delayed retries cannot replace a more complete aggregate with an older one.
 
 ### Trips and tracks
 
