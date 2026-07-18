@@ -25,6 +25,11 @@ import { useLatestBydmateTripsQuery, useBydmateTripsQuery, useTripMonthDatesQuer
 import { useTranslation } from "@/hooks/use-translation";
 import { HistoryDaySummaryCard } from "@/components/history/history-day-summary-card";
 import { computeHistoryDaySummary } from "@/lib/history-day-summary";
+import {
+  tripEnergyPerKm,
+  tripNetConsumptionKwh100,
+  tripTractionEnergyKwh,
+} from "@/lib/bydmate/trip-metrics";
 import { type Currency, type Locale, type TranslationKey } from "@/lib/i18n";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import type { BydmateTripRow, ChargingSessionRow } from "@/types/database";
@@ -115,27 +120,22 @@ function tripDuration(trip: BydmateTripRow) {
 }
 
 function tripTractionKwh(trip: BydmateTripRow) {
-  const traction = trip.traction_energy_kwh;
-  if (typeof traction === "number" && Number.isFinite(traction)) return traction;
-
-  const distance = trip.distance_km;
-  const consumption = trip.avg_consumption_kwh_100km;
-  if (
-    typeof distance === "number" &&
-    Number.isFinite(distance) &&
-    distance > 0 &&
-    typeof consumption === "number" &&
-    Number.isFinite(consumption)
-  ) {
-    return (distance * consumption) / 100;
-  }
-
-  return null;
+  return tripTractionEnergyKwh(trip);
 }
 
 function formatTripTractionKwh(trip: BydmateTripRow, digits = 2) {
   const kwh = tripTractionKwh(trip);
   return kwh != null ? `${fmt(kwh, digits)} kWh` : "—";
+}
+
+function formatTripEnergyPerKm(trip: BydmateTripRow) {
+  const energyPerKm = tripEnergyPerKm(trip);
+  return energyPerKm != null ? `${fmt(energyPerKm, 2)} kWh/km` : "—";
+}
+
+function formatTripNetConsumptionKwh100(trip: BydmateTripRow) {
+  const consumptionKwh100 = tripNetConsumptionKwh100(trip);
+  return consumptionKwh100 != null ? `${fmt(consumptionKwh100, 1)} kWh/100 km` : "—";
 }
 
 // ─── Tab selector ─────────────────────────────────────────────────────────────
@@ -669,14 +669,15 @@ function TripStatsGrid({ trip, tx }: { trip: BydmateTripRow; tx: HistoryTranslat
       <MiniStat label={tx("vehicle.trips.maxSpeed")} value={`${fmt(trip.max_speed_kmh)} km/h`} />
       <MiniStat label={tx("vehicle.trips.avgSpeed")} value={`${fmt(trip.avg_speed_kmh, 1)} km/h`} />
       <MiniStat
-        label={tx("vehicle.trips.consumption")}
-        value={`${fmt(trip.avg_consumption_kwh_100km, 1)} kWh/100`}
+        label={tx("vehicle.trips.netConsumption")}
+        value={formatTripNetConsumptionKwh100(trip)}
       />
       {hasFuel ? (
         <MiniStat label={tx("vehicle.trips.fuel")} value={`${fmt(trip.fuel_kwh, 2)} kWh`} />
       ) : null}
       <MiniStat label={tx("vehicle.trips.regen")} value={`${fmt(trip.regen_energy_kwh, 2)} kWh`} />
       <MiniStat label={tx("vehicle.trips.traction")} value={formatTripTractionKwh(trip)} />
+      <MiniStat label={tx("vehicle.trips.energyPerKm")} value={formatTripEnergyPerKm(trip)} />
       <MiniStat
         label={tx("vehicle.analytics.summary.telemetry")}
         value={String(trip.sample_count)}
