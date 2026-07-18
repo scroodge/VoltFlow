@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Share, SquarePlus } from "lucide-react";
+import { ArrowRight, MoreVertical, Share, SquarePlus } from "lucide-react";
 import Link from "next/link";
 import { useState, useSyncExternalStore } from "react";
 
@@ -60,10 +60,17 @@ export function StartTrackingButton({ className }: { className?: string }) {
 
           <ol className="space-y-2 text-sm leading-6">
             <li className="flex items-center gap-2">
-              <Share
-                className="size-4 shrink-0 text-[var(--voltflow-cyan)]"
-                aria-hidden
-              />
+              {ios ? (
+                <Share
+                  className="size-4 shrink-0 text-[var(--voltflow-cyan)]"
+                  aria-hidden
+                />
+              ) : (
+                <MoreVertical
+                  className="size-4 shrink-0 text-[var(--voltflow-cyan)]"
+                  aria-hidden
+                />
+              )}
               <span>
                 {ios ? t("landing.installIosStep1") : t("landing.installGenericStep1")}
               </span>

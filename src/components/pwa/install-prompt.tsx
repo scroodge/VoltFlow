@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Share, SquarePlus } from "lucide-react";
+import { Download, MoreVertical, Share, SquarePlus } from "lucide-react";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -90,7 +90,11 @@ export function InstallPrompt() {
       </div>
       <ol className="mt-3 space-y-2 text-sm leading-6">
         <li className="flex items-center gap-2">
-          <Share className="size-4 shrink-0 text-[var(--voltflow-cyan)]" aria-hidden />
+          {ios ? (
+            <Share className="size-4 shrink-0 text-[var(--voltflow-cyan)]" aria-hidden />
+          ) : (
+            <MoreVertical className="size-4 shrink-0 text-[var(--voltflow-cyan)]" aria-hidden />
+          )}
           <span>{ios ? t("landing.installIosStep1") : t("landing.installGenericStep1")}</span>
         </li>
         <li className="flex items-center gap-2">
