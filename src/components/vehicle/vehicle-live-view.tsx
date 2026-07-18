@@ -70,6 +70,11 @@ import {
   formatKmPerPercent,
 } from "@/lib/bydmate/hero-drive-metrics";
 import { calculateRegenRecoverySegments, calculateTripEnergy, prepareRegenRecoveryBars } from "@/lib/bydmate/trip-energy";
+import {
+  tripEnergyPerKm,
+  tripNetConsumptionKwh100,
+  tripTractionEnergyKwh,
+} from "@/lib/bydmate/trip-metrics";
 import { isRouteTrackDisplayable } from "@/lib/bydmate/route-insights";
 import {
   odometerDeltaFromSamples,
@@ -1331,13 +1336,7 @@ function formatTripCostStr(
   pricePerKwh: number,
   locale: Locale,
 ): ReactNode | null {
-  const distanceKm = trip.distance_km;
-  const energyKwh =
-    typeof trip.traction_energy_kwh === "number" && Number.isFinite(trip.traction_energy_kwh)
-      ? trip.traction_energy_kwh
-      : distanceKm != null && trip.avg_consumption_kwh_100km != null
-        ? (distanceKm * trip.avg_consumption_kwh_100km) / 100
-        : null;
+  const energyKwh = tripTractionEnergyKwh(trip);
   const costValue =
     energyKwh != null && pricePerKwh > 0 ? energyKwh * pricePerKwh : null;
 
@@ -1353,38 +1352,18 @@ function formatTripCostStr(
 }
 
 function formatTripEnergyPerKm(trip: BydmateTripRow) {
-  const energyKwh = trip.traction_energy_kwh;
-  const distanceKm = trip.distance_km;
-  if (
-    typeof energyKwh !== "number" ||
-    !Number.isFinite(energyKwh) ||
-    typeof distanceKm !== "number" ||
-    !Number.isFinite(distanceKm) ||
-    distanceKm <= 0
-  ) {
-    return "—";
-  }
+  const energyPerKm = tripEnergyPerKm(trip);
+  return energyPerKm != null ? `${fmt(energyPerKm, 2)} kWh/km` : "—";
+}
 
-  return `${fmt(energyKwh / distanceKm, 2)} kWh/km`;
+function formatTripTractionEnergyKwh(trip: BydmateTripRow) {
+  const tractionKwh = tripTractionEnergyKwh(trip);
+  return tractionKwh != null ? `${fmt(tractionKwh, 2)} kWh` : "—";
 }
 
 function formatTripNetConsumptionKwh100(trip: BydmateTripRow) {
-  const energyKwh = trip.traction_energy_kwh;
-  const recoveredKwh = trip.regen_energy_kwh;
-  const distanceKm = trip.distance_km;
-  if (
-    typeof energyKwh !== "number" ||
-    !Number.isFinite(energyKwh) ||
-    typeof recoveredKwh !== "number" ||
-    !Number.isFinite(recoveredKwh) ||
-    typeof distanceKm !== "number" ||
-    !Number.isFinite(distanceKm) ||
-    distanceKm <= 0
-  ) {
-    return "—";
-  }
-
-  return `${fmt(((energyKwh - recoveredKwh) / distanceKm) * 100, 1)} kWh/100 km`;
+  const consumptionKwh100 = tripNetConsumptionKwh100(trip);
+  return consumptionKwh100 != null ? `${fmt(consumptionKwh100, 1)} kWh/100 km` : "—";
 }
 
 function TripNetConsumptionMetric({ trip, label }: { trip: BydmateTripRow; label: string }) {
@@ -1670,8 +1649,8 @@ function TripListItem({
         <MiniStat label={tx("vehicle.trips.distance")} value={`${fmt(trip.distance_km, 1)} km`} />
         <MiniStat label={tx("vehicle.trips.regen")} value={`${fmt(trip.regen_energy_kwh, 2)} kWh`} />
         <MiniStat
-          label={tx("vehicle.telemetry.tripConsumption")}
-          value={`${fmt(trip.traction_energy_kwh, 2)} kWh`}
+          label={tx("vehicle.trips.traction")}
+          value={formatTripTractionEnergyKwh(trip)}
         />
         <MiniStat label={tx("vehicle.trips.energyPerKm")} value={formatTripEnergyPerKm(trip)} />
         <MiniStat label="SOC" value={`${fmt(trip.soc_start)}% -> ${fmt(trip.soc_end)}%`} />
@@ -4558,8 +4537,8 @@ function LastTripDetail({
           <MiniStat label={tx("vehicle.trips.distance")} value={`${fmt(trip.distance_km, 1)} km`} />
           <MiniStat label={tx("vehicle.trips.regen")} value={`${fmt(trip.regen_energy_kwh, 2)} kWh`} />
           <MiniStat
-            label={tx("vehicle.telemetry.tripConsumption")}
-            value={`${fmt(trip.traction_energy_kwh, 2)} kWh`}
+            label={tx("vehicle.trips.traction")}
+            value={formatTripTractionEnergyKwh(trip)}
           />
           <MiniStat label={tx("vehicle.trips.energyPerKm")} value={formatTripEnergyPerKm(trip)} />
           <MiniStat label="SOC" value={`${fmt(trip.soc_start)}% → ${fmt(trip.soc_end)}%`} />
