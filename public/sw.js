@@ -115,13 +115,33 @@ self.addEventListener("push", (event) => {
   const body = payload && payload.body ? payload.body : "Battery reached target level.";
   const tag = payload && payload.tag ? payload.tag : "charge-complete";
   const url = payload && payload.url ? payload.url : "/dashboard";
+  // Live-status updates replace in place without buzzing (renotify:false, silent:true);
+  // absent fields keep the original one-shot behavior for milestone payloads.
+  const renotify = payload && payload.renotify === false ? false : true;
+  const silent = payload && payload.silent === true;
+
+  // kind:"clear" removes the live-status card (drive-away). Chrome's userVisibleOnly
+  // contract wants a notification per push, so show a silent one under the same tag,
+  // then close everything carrying it.
+  if (payload && payload.kind === "clear") {
+    event.waitUntil(
+      self.registration
+        .showNotification(title, { body, tag, data: { url }, silent: true })
+        .then(() => self.registration.getNotifications({ tag }))
+        .then((notifications) => {
+          for (const notification of notifications) notification.close();
+        }),
+    );
+    return;
+  }
 
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
       tag,
       data: { url },
-      renotify: true,
+      renotify,
+      silent,
     }),
   );
 });

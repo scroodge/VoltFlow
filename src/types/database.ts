@@ -23,6 +23,8 @@ export type Profile = {
   telegram_id?: number | null;
   telegram_username?: string | null;
   notify_channel?: "web_push" | "telegram" | "both";
+  /** Android live lock-screen status pushes (tag-replaced); iOS endpoints are skipped. */
+  live_status_mode?: "off" | "charging" | "charging_parked";
   is_premium: boolean;
   premium_until?: string | null;
   created_at: string;

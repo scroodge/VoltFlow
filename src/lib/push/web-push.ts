@@ -14,7 +14,26 @@ type PushPayload = {
   body: string;
   url: string;
   tag: string;
+  /** Buzz/alert again when replacing an existing notification with the same tag. SW defaults to true. */
+  renotify?: boolean;
+  /** Suppress sound/vibration entirely (live-status updates). SW defaults to false. */
+  silent?: boolean;
+  /** "clear" closes the notification with this tag instead of showing one. */
+  kind?: "clear";
 };
+
+/**
+ * iOS PWA push endpoints. Live-status updates must skip these: iOS shows every push
+ * audibly and does not silently replace by tag, so a per-minute stream would spam the
+ * phone. Milestone notifications still go to all endpoints.
+ */
+export function isAppleWebPushEndpoint(endpoint: string) {
+  try {
+    return new URL(endpoint).hostname.endsWith("push.apple.com");
+  } catch {
+    return false;
+  }
+}
 
 export function getVapidConfig() {
   const publicKey = getVapidPublicKey();
@@ -86,6 +105,7 @@ export async function sendPushToUser(
   supabase: SupabaseClient,
   userId: string,
   payload: PushPayload,
+  options?: { endpointFilter?: (endpoint: string) => boolean },
 ) {
   const vapid = getVapidConfig();
   if (!vapid) return { ok: false as const, error: "Missing VAPID configuration", sent: 0 };
@@ -96,12 +116,16 @@ export async function sendPushToUser(
     .eq("user_id", userId);
 
   if (error) return { ok: false as const, error: error.message, sent: 0 };
-  if (!rows?.length) return { ok: true as const, sent: 0 };
+
+  const targetRows = options?.endpointFilter
+    ? (rows ?? []).filter((row) => options.endpointFilter!((row as PushRow).endpoint))
+    : rows ?? [];
+  if (!targetRows.length) return { ok: true as const, sent: 0 };
 
   webpush.setVapidDetails(vapid.subject, vapid.publicKey, vapid.privateKey);
 
   let sent = 0;
-  for (const row of rows as PushRow[]) {
+  for (const row of targetRows as PushRow[]) {
     try {
       await webpush.sendNotification(toWebPushSubscription(row), JSON.stringify(payload));
       sent += 1;

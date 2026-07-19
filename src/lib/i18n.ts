@@ -1194,6 +1194,17 @@ export const dictionaries = {
           both: "Web push and Telegram",
         },
       },
+      liveStatus: {
+        label: "Live status on lock screen (Android)",
+        help:
+          "A silently updating notification with charging progress or parked battery status. Android only — iPhone keeps the milestone notifications.",
+        saved: "Live status setting saved.",
+        modes: {
+          off: "Off",
+          charging: "While charging",
+          charging_parked: "Charging and parked",
+        },
+      },
       economics: "Economics defaults",
       currency: "Currency",
       currencyHelp: "Used for tariff labels and cost estimates across the app.",
@@ -2424,6 +2435,17 @@ export const dictionaries = {
           both: "Web push і Telegram",
         },
       },
+      liveStatus: {
+        label: "Жывы статус на экране блакіроўкі (Android)",
+        help:
+          "Ціха абнаўляльнае апавяшчэнне з прагрэсам зарадкі або станам батарэі на стаянцы. Толькі Android — на iPhone застаюцца апавяшчэнні пра ўзроўні зараду.",
+        saved: "Налада жывога статусу захавана.",
+        modes: {
+          off: "Выключана",
+          charging: "Падчас зарадкі",
+          charging_parked: "Зарадка і стаянка",
+        },
+      },
       economics: "Эканамічныя налады",
       currency: "Валюта",
       currencyHelp: "Выкарыстоўваецца ў подпісах тарыфу і ацэнцы кошту.",
@@ -3651,6 +3673,17 @@ export const dictionaries = {
           web_push: "Web push",
           telegram: "Telegram",
           both: "Web push и Telegram",
+        },
+      },
+      liveStatus: {
+        label: "Живой статус на экране блокировки (Android)",
+        help:
+          "Тихо обновляющееся уведомление с прогрессом зарядки или статусом батареи на стоянке. Только Android — на iPhone остаются уведомления об уровнях заряда.",
+        saved: "Настройка живого статуса сохранена.",
+        modes: {
+          off: "Выключено",
+          charging: "Во время зарядки",
+          charging_parked: "Зарядка и стоянка",
         },
       },
       economics: "Экономические настройки",

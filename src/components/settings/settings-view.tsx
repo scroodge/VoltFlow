@@ -98,6 +98,14 @@ function isNotifyChannel(value: unknown): value is NotifyChannel {
   return typeof value === "string" && notifyChannels.includes(value as NotifyChannel);
 }
 
+type LiveStatusMode = "off" | "charging" | "charging_parked";
+
+const liveStatusModes = ["off", "charging", "charging_parked"] as const;
+
+function isLiveStatusMode(value: unknown): value is LiveStatusMode {
+  return typeof value === "string" && liveStatusModes.includes(value as LiveStatusMode);
+}
+
 function TariffLocationMapPreview({ lat, lng }: { lat: number; lng: number }) {
   const { t } = useTranslation();
   const latDelta = 0.006;
@@ -148,6 +156,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   const [telegramId, setTelegramId] = useState<number | null>(null);
   const [telegramUsername, setTelegramUsername] = useState<string | null>(null);
   const [notifyChannel, setNotifyChannel] = useState<NotifyChannel>("web_push");
+  const [liveStatusMode, setLiveStatusMode] = useState<LiveStatusMode>("charging");
   const [telegramInstructionsOpen, setTelegramInstructionsOpen] = useState(false);
   const [securityBusy, setSecurityBusy] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
@@ -261,6 +270,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             telegram_id?: number | null;
             telegram_username?: string | null;
             notify_channel?: string | null;
+            live_status_mode?: string | null;
           } | null;
           tariffLocations?: Record<string, unknown>[];
         };
@@ -277,6 +287,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         );
         if (isNotifyChannel(payload.profile?.notify_channel)) {
           setNotifyChannel(payload.profile.notify_channel);
+        }
+        if (isLiveStatusMode(payload.profile?.live_status_mode)) {
+          setLiveStatusMode(payload.profile.live_status_mode);
         }
 
         const preferredCurrency = payload.profile?.preferred_currency;
@@ -339,7 +352,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       const [{ data: profile, error }, { data: locationRows }] = await Promise.all([
         supabase
         .from("profiles")
-        .select("preferred_currency, default_price_per_kwh, home_price_per_kwh, commercial_ac_price_per_kwh, fast_dc_price_per_kwh, bydmate_cloud_api_key, telegram_id, telegram_username, notify_channel")
+        .select("preferred_currency, default_price_per_kwh, home_price_per_kwh, commercial_ac_price_per_kwh, fast_dc_price_per_kwh, bydmate_cloud_api_key, telegram_id, telegram_username, notify_channel, live_status_mode")
         .eq("id", user.id)
         .single(),
         supabase.from("charging_tariff_locations").select("*").eq("user_id", user.id),
@@ -353,6 +366,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       );
       if (isNotifyChannel(profile?.notify_channel)) {
         setNotifyChannel(profile.notify_channel);
+      }
+      if (isLiveStatusMode(profile?.live_status_mode)) {
+        setLiveStatusMode(profile.live_status_mode);
       }
 
       const preferredCurrency = profile?.preferred_currency;
@@ -865,6 +881,31 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       });
   };
 
+  const handleLiveStatusModeChange = (value: string | null) => {
+    if (!isLiveStatusMode(value)) return;
+
+    const previous = liveStatusMode;
+    setLiveStatusMode(value);
+
+    if (!profileUserId) {
+      toast.success(t("settings.liveStatus.saved") as string);
+      return;
+    }
+
+    void createClient()
+      .from("profiles")
+      .update({ live_status_mode: value })
+      .eq("id", profileUserId)
+      .then(({ error }) => {
+        if (error) {
+          setLiveStatusMode(previous);
+          toast.error(error.message);
+          return;
+        }
+        toast.success(t("settings.liveStatus.saved") as string);
+      });
+  };
+
   const handleGenerateBydmateKey = () => {
     if (!profileUserId) {
       toast.error(t("settings.toasts.signInForKey") as string);
@@ -1168,6 +1209,30 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             <p className="text-muted-foreground text-sm">
               {t("settings.telegramConnect.channelHelp")}
             </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="live-status-mode">{t("settings.liveStatus.label")}</Label>
+            <Select
+              value={liveStatusMode}
+              onValueChange={handleLiveStatusModeChange}
+              items={liveStatusModes.map((mode) => ({
+                value: mode,
+                label: t(`settings.liveStatus.modes.${mode}` as TranslationKey) as string,
+              }))}
+            >
+              <SelectTrigger id="live-status-mode" className="h-11 w-full rounded-2xl text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {liveStatusModes.map((mode) => (
+                  <SelectItem key={mode} value={mode}>
+                    {t(`settings.liveStatus.modes.${mode}` as TranslationKey)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-muted-foreground text-sm">{t("settings.liveStatus.help")}</p>
           </div>
         </CardContent>
       </Card>

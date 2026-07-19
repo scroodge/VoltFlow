@@ -3,6 +3,7 @@ import { reconcileChargingSessionsForUser } from "@/lib/charging-session-reconci
 import { normalizePayloads, type HourlyBlock } from "@/lib/bydmate/ingest-payload";
 import { parseIngestStats } from "@/lib/bydmate/ingest-stats";
 import { processBydmateChargeNotifications } from "@/lib/push/charge-notifications";
+import { processBydmateLiveStatusNotifications } from "@/lib/push/live-status-notifications";
 import { updateTelegramLiveWidgets } from "@/lib/telegram/live-widget";
 import {
   acceptedLocationFromSnapshot,
@@ -313,6 +314,12 @@ export async function POST(request: Request) {
       previousTelemetry: previousTelemetryBeforeSanitize,
     }).catch(() => ({ sent: 0, thresholds: [] as number[] }));
 
+    const liveStatusNotificationsPromise = processBydmateLiveStatusNotifications({
+      supabase,
+      userId: profile.id,
+      samples,
+    }).catch(() => ({ sent: 0 }));
+
     const telegramWidgetsPromise = updateTelegramLiveWidgets({
       supabase,
       userId: profile.id,
@@ -355,13 +362,19 @@ export async function POST(request: Request) {
           })
       : Promise.resolve(0);
 
-    const [chargeNotifications, telegramWidgets, autoChargingSessions, hourlyRollupApplied] =
-      await Promise.all([
-        chargeNotificationsPromise,
-        telegramWidgetsPromise,
-        autoChargingSessionsPromise,
-        hourlyRollupPromise,
-      ]);
+    const [
+      chargeNotifications,
+      liveStatusNotifications,
+      telegramWidgets,
+      autoChargingSessions,
+      hourlyRollupApplied,
+    ] = await Promise.all([
+      chargeNotificationsPromise,
+      liveStatusNotificationsPromise,
+      telegramWidgetsPromise,
+      autoChargingSessionsPromise,
+      hourlyRollupPromise,
+    ]);
 
     // Only reconcile when auto-session processing actually opened/closed a row.
     // Reconcile reads sessions + samples back from Supabase, so running it on
@@ -393,6 +406,7 @@ export async function POST(request: Request) {
       dropped_telemetry_field_count: droppedTelemetryFields,
       hourly_rollup_applied: hourlyRollupApplied,
       charge_notifications: chargeNotifications,
+      live_status_notifications: liveStatusNotifications,
       telegram_live_widgets: telegramWidgets,
       auto_charging_sessions: autoChargingSessions,
       charging_session_reconcile: chargingSessionReconcile,
