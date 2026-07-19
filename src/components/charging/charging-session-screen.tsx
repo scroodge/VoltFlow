@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { BatteryRing } from "@/components/charging/BatteryRing";
 import { ChargingDeltaCard } from "@/components/charging/charging-delta-card";
+import { EnergyCorrectionCard } from "@/components/charging/energy-correction-card";
 import {
   ChargingStatsGrid,
   type ChargingStat,
@@ -712,6 +713,8 @@ export function ChargingSessionScreen({
           {savingTariff ? (t("common.saving") as string) : (t("charging.tariff.save") as string)}
         </Button>
       </section>
+
+      {historyMode ? <EnergyCorrectionCard session={session} sessionId={sessionId} /> : null}
 
       <ChargingDeltaCard session={session} vehicleId={sessionVehicleId ?? undefined} />
 

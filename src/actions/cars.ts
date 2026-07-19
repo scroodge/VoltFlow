@@ -116,6 +116,48 @@ export async function updateCar(carId: string, formData: FormData) {
   return { ok: true as const };
 }
 
+const applySuggestedEfficiencySchema = z.object({
+  carId: z.string().uuid(),
+  group: z.enum(["ac", "fast_dc"]),
+  percent: z.coerce.number().min(50).max(100),
+});
+
+/**
+ * Smart Charge "Loose Mode": applies a learned-efficiency suggestion (see
+ * charging-efficiency-learning.ts suggestEfficiency) to the car's configured efficiency
+ * field. User-confirmed only — never called automatically.
+ */
+export async function applySuggestedEfficiency(
+  input: z.infer<typeof applySuggestedEfficiencySchema>,
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { ok: false as const, error: "Unauthorized" };
+
+  const parsed = applySuggestedEfficiencySchema.safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: "Invalid input" };
+
+  const column =
+    parsed.data.group === "fast_dc" ? "fast_dc_efficiency_percent" : "default_efficiency_percent";
+
+  const { error } = await supabase
+    .from("cars")
+    .update({ [column]: parsed.data.percent })
+    .eq("id", parsed.data.carId)
+    .eq("user_id", user.id);
+
+  if (error) return { ok: false as const, error: error.message };
+
+  revalidatePath("/dashboard");
+  revalidatePath("/settings");
+  revalidatePath(`/cars/${parsed.data.carId}/edit`);
+
+  return { ok: true as const };
+}
+
 export async function deleteCar(carId: string) {
   const supabase = await createClient();
   const {

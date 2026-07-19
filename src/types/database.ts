@@ -66,6 +66,9 @@ export type ChargingSessionRow = {
   tariff_selected_at: string | null;
   price_per_kwh: number;
   energy_overridden: boolean;
+  /** Set when charged_energy_kwh/estimated_cost/price_per_kwh were replaced with a
+   *  provider-billed correction (see correctChargingSessionEnergy); null otherwise. */
+  energy_corrected_at: string | null;
   charged_energy_kwh: number;
   estimated_cost: number;
   status: SessionStatus;
@@ -103,6 +106,27 @@ export type UserProviderRow = {
   is_default: boolean;
   created_at: string;
   updated_at: string;
+};
+
+/** One row per provider-corrected session: the measured efficiency (SOC-delta battery kWh
+ *  ÷ provider-billed kWh) plus a snapshot of that session's telemetry context. Aggregated
+ *  per car+tariff_type to suggest an updated Car efficiency field. */
+export type ChargingEfficiencyObservationRow = {
+  id: string;
+  user_id: string;
+  car_id: string;
+  session_id: string;
+  tariff_type: ChargingTariffType;
+  measured_efficiency_percent: number;
+  soc_delta_percent: number;
+  battery_capacity_kwh: number;
+  billed_energy_kwh: number;
+  billed_total_cost: number;
+  avg_battery_temp_c: number | null;
+  avg_outside_temp_c: number | null;
+  avg_charge_power_kw: number | null;
+  telemetry_sample_count: number;
+  computed_at: string;
 };
 
 export type ChargingSessionComputed = ChargingSessionRow & {

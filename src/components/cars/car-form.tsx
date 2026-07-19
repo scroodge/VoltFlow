@@ -23,6 +23,10 @@ import {
   carGenerations,
   type CarGeneration,
 } from "@/lib/car-generations";
+import {
+  useApplySuggestedEfficiencyMutation,
+  useCarEfficiencySuggestions,
+} from "@/hooks/use-charging-efficiency-suggestions";
 import { useTranslation } from "@/hooks/use-translation";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import type { Car } from "@/types/database";
@@ -34,6 +38,36 @@ type CarFormProps = {
   isPending: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 };
+
+function EfficiencySuggestionHint({
+  suggestion,
+  onApply,
+  applying,
+}: {
+  suggestion: { suggestedPercent: number; sampleCount: number; spread: number } | null | undefined;
+  onApply: () => void;
+  applying: boolean;
+}) {
+  const { t } = useTranslation();
+  if (!suggestion) return null;
+  return (
+    <p className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
+      {t("cars.efficiencySuggestion", {
+        percent: suggestion.suggestedPercent.toFixed(1),
+        count: suggestion.sampleCount,
+        spread: suggestion.spread.toFixed(1),
+      })}
+      <button
+        type="button"
+        disabled={applying}
+        onClick={onApply}
+        className="font-semibold text-[var(--voltflow-cyan)] underline-offset-2 hover:underline disabled:opacity-50"
+      >
+        {t("cars.efficiencySuggestionApply") as string}
+      </button>
+    </p>
+  );
+}
 
 export function CarForm({
   mode,
@@ -72,6 +106,9 @@ export function CarForm({
   const [dcEfficiency, setDcEfficiency] = useState(
     String(car?.fast_dc_efficiency_percent ?? DEFAULT_FAST_DC_EFFICIENCY_PERCENT),
   );
+
+  const { data: efficiencySuggestions } = useCarEfficiencySuggestions(car);
+  const applySuggestion = useApplySuggestedEfficiencyMutation(car?.id ?? "");
 
   const generationItems = carGenerations.map((value) => ({
     value,
@@ -259,6 +296,16 @@ export function CarForm({
                 className="min-h-[52px] rounded-2xl text-lg"
               />
               <p className="text-muted-foreground text-xs">{t("cars.efficiencyHelp")}</p>
+              <EfficiencySuggestionHint
+                suggestion={efficiencySuggestions?.ac}
+                applying={applySuggestion.isPending}
+                onApply={() => {
+                  const suggestion = efficiencySuggestions?.ac;
+                  if (!suggestion) return;
+                  setEfficiency(String(suggestion.suggestedPercent));
+                  applySuggestion.mutate({ group: "ac", percent: suggestion.suggestedPercent });
+                }}
+              />
 
               <Label htmlFor="fast_dc_efficiency_percent" className="pt-2">
                 {t("cars.dcEfficiency")}
@@ -276,6 +323,16 @@ export function CarForm({
                 className="min-h-[52px] rounded-2xl text-lg"
               />
               <p className="text-muted-foreground text-xs">{t("cars.dcEfficiencyHelp")}</p>
+              <EfficiencySuggestionHint
+                suggestion={efficiencySuggestions?.fastDc}
+                applying={applySuggestion.isPending}
+                onApply={() => {
+                  const suggestion = efficiencySuggestions?.fastDc;
+                  if (!suggestion) return;
+                  setDcEfficiency(String(suggestion.suggestedPercent));
+                  applySuggestion.mutate({ group: "fast_dc", percent: suggestion.suggestedPercent });
+                }}
+              />
             </div>
           </details>
         </CardContent>

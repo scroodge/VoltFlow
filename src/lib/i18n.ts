@@ -520,6 +520,20 @@ export const dictionaries = {
           custom: "Custom",
         },
       },
+      correction: {
+        title: "Provider correction",
+        hint: "Enter what the provider actually billed to replace the estimate — this also teaches the app your real efficiency.",
+        billedKwh: "Billed kWh",
+        totalPaid: "Total paid",
+        derivedPrice: "≈ {price} per kWh",
+        save: "Save correction",
+        saved: "Correction saved",
+        savedImplausible:
+          "Correction saved, but the measured efficiency looks unusual — double check the numbers",
+        alreadyCorrected: "This session has been corrected with provider data",
+        invalidInput: "Enter a valid kWh and amount paid",
+        measuredEfficiency: "Measured efficiency: {percent}% (configured: {configured}%)",
+      },
     },
     cars: {
       title: "New vehicle profile",
@@ -550,6 +564,9 @@ export const dictionaries = {
       dcEfficiency: "Fast DC efficiency",
       dcEfficiencyHelp:
         "Fast DC loses more than AC — the charger meters before its own cable and cooling. Default 90%.",
+      efficiencySuggestion: "Measured {percent}% from {count} corrected sessions (spread {spread} pts)",
+      efficiencySuggestionApply: "Apply",
+      efficiencyApplied: "Efficiency updated",
       advanced: "Advanced",
       save: "Save vehicle",
       update: "Save changes",
@@ -1760,6 +1777,20 @@ export const dictionaries = {
           custom: "Уласны",
         },
       },
+      correction: {
+        title: "Карэкцыя ад правайдара",
+        hint: "Увядзіце, колькі рэальна выставіў правайдар, каб замяніць ацэнку — гэта таксама вучыць праграму вашай сапраўднай эфектыўнасці.",
+        billedKwh: "Аплачана кВт·г",
+        totalPaid: "Заплачана ўсяго",
+        derivedPrice: "≈ {price} за кВт·г",
+        save: "Захаваць карэкцыю",
+        saved: "Карэкцыя захавана",
+        savedImplausible:
+          "Карэкцыя захавана, але вымераная эфектыўнасць выглядае незвычайна — праверце лічбы",
+        alreadyCorrected: "Гэтая сесія скарэктавана паводле даных правайдара",
+        invalidInput: "Увядзіце карэктныя кВт·г і суму аплаты",
+        measuredEfficiency: "Вымераная эфектыўнасць: {percent}% (наладжана: {configured}%)",
+      },
     },
     cars: {
       title: "Новы профіль аўто",
@@ -1790,6 +1821,9 @@ export const dictionaries = {
       dcEfficiency: "Эфектыўнасць хуткай DC",
       dcEfficiencyHelp:
         "На хуткай DC страт больш, чым на AC — зарадка лічыць да свайго кабеля і ахаладжэння. Па змаўчанні 90%.",
+      efficiencySuggestion: "Вымерана {percent}% з {count} скарэктаваных сесій (разброс {spread} пт)",
+      efficiencySuggestionApply: "Ужыць",
+      efficiencyApplied: "Эфектыўнасць абноўлена",
       advanced: "Дадаткова",
       save: "Захаваць аўто",
       update: "Захаваць змены",
@@ -3000,6 +3034,20 @@ export const dictionaries = {
           custom: "Свой",
         },
       },
+      correction: {
+        title: "Коррекция от провайдера",
+        hint: "Введите, сколько реально выставил провайдер, чтобы заменить оценку — это также учит приложение вашей реальной эффективности.",
+        billedKwh: "Оплачено кВт·ч",
+        totalPaid: "Заплачено всего",
+        derivedPrice: "≈ {price} за кВт·ч",
+        save: "Сохранить коррекцию",
+        saved: "Коррекция сохранена",
+        savedImplausible:
+          "Коррекция сохранена, но измеренная эффективность выглядит необычно — проверьте цифры",
+        alreadyCorrected: "Эта сессия скорректирована по данным провайдера",
+        invalidInput: "Введите корректные кВт·ч и сумму оплаты",
+        measuredEfficiency: "Измеренная эффективность: {percent}% (настроено: {configured}%)",
+      },
     },
     cars: {
       title: "Новый профиль авто",
@@ -3030,6 +3078,9 @@ export const dictionaries = {
       dcEfficiency: "Эффективность быстрой DC",
       dcEfficiencyHelp:
         "На быстрой DC потерь больше, чем на AC — зарядка считает до своего кабеля и охлаждения. По умолчанию 90%.",
+      efficiencySuggestion: "Измерено {percent}% из {count} скорректированных сессий (разброс {spread} пт)",
+      efficiencySuggestionApply: "Применить",
+      efficiencyApplied: "Эффективность обновлена",
       advanced: "Дополнительно",
       save: "Сохранить авто",
       update: "Сохранить изменения",
