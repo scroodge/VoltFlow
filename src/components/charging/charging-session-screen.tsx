@@ -13,7 +13,7 @@ import {
   ChargingStatsGrid,
   type ChargingStat,
 } from "@/components/charging/ChargingStatsGrid";
-import { CurrencyAmount } from "@/components/currency-amount";
+import { CurrencyAmount, currencyTextWithIcon } from "@/components/currency-amount";
 import {
   useChargingDevLiveOverride,
   useChargingDevSource,
@@ -39,7 +39,7 @@ import {
   type ChargingParams,
   type DerivedChargingState,
 } from "@/lib/charging-math";
-import { formatCurrencyAmount, type TranslationKey } from "@/lib/i18n";
+import { currencySymbols, formatCurrencyAmount, type TranslationKey } from "@/lib/i18n";
 import { resolveProviderTariff, resolveTariffTypeByPower } from "@/lib/charging-tariffs";
 import { resolveTariffLocationMatch } from "@/lib/charging-gps-location";
 import { isDevAppRoute } from "@/lib/dev/dev-fetch";
@@ -693,7 +693,12 @@ export function ChargingSessionScreen({
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="session-tariff-price">{t("charging.tariff.pricePerKwh") as string}</Label>
+            <Label htmlFor="session-tariff-price">
+              {currencyTextWithIcon(
+                t("charging.tariff.pricePerKwh", { currency: currencySymbols[currency] }) as string,
+                currency,
+              )}
+            </Label>
             <Input
               id="session-tariff-price"
               inputMode="decimal"

@@ -5,11 +5,14 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { correctChargingSessionEnergy } from "@/actions/session-corrections";
+import { currencyTextWithIcon } from "@/components/currency-amount";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { currencySymbols } from "@/lib/i18n";
 import { queryKeys } from "@/lib/query-keys";
 import { useTranslation } from "@/hooks/use-translation";
+import { useAppPreferences } from "@/stores/use-app-preferences";
 import type { ChargingSessionRow } from "@/types/database";
 
 /**
@@ -26,6 +29,8 @@ export function EnergyCorrectionCard({
 }) {
   const qc = useQueryClient();
   const { t } = useTranslation();
+  const currency = useAppPreferences((s) => s.currency);
+  const currencySymbol = currencySymbols[currency];
   const [kwhDraft, setKwhDraft] = useState(
     session.charged_energy_kwh > 0 ? String(session.charged_energy_kwh) : "",
   );
@@ -91,7 +96,12 @@ export function EnergyCorrectionCard({
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="correction-cost">{t("charging.correction.totalPaid") as string}</Label>
+          <Label htmlFor="correction-cost">
+            {currencyTextWithIcon(
+              t("charging.correction.totalPaid", { currency: currencySymbol }) as string,
+              currency,
+            )}
+          </Label>
           <Input
             id="correction-cost"
             inputMode="decimal"
@@ -103,7 +113,13 @@ export function EnergyCorrectionCard({
       </div>
       {derivedPricePerKwh != null ? (
         <p className="text-muted-foreground text-xs tabular-nums">
-          {t("charging.correction.derivedPrice", { price: derivedPricePerKwh.toFixed(3) })}
+          {currencyTextWithIcon(
+            t("charging.correction.derivedPrice", {
+              currency: currencySymbol,
+              price: derivedPricePerKwh.toFixed(3),
+            }) as string,
+            currency,
+          )}
         </p>
       ) : null}
       {lastMeasuredEfficiency != null ? (
