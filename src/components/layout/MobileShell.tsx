@@ -2,6 +2,7 @@
 
 import { type CSSProperties, type ReactNode, useEffect, useMemo } from "react";
 
+import { requestLiveFastStatus } from "@/actions/live-status";
 import { MateUpdateBanner } from "@/components/dashboard/mate-update-banner";
 import { ChargingSessionBackgroundSync } from "@/components/charging/charging-session-background-sync";
 import { DefaultProvidersSeed } from "@/components/settings/default-providers-seed";
@@ -15,14 +16,36 @@ import {
 } from "@/components/onboarding/onboarding-gate";
 import { touchUserActivity } from "@/actions/activity";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
+import { usePageVisible } from "@/hooks/use-page-visible";
+import { isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { getTelegramThemeStyle } from "@/lib/telegram/theme";
 import { useTelegramWebApp } from "@/lib/telegram/useTelegramWebApp";
 import { cn } from "@/lib/utils";
 
-function MateUpdateBannerHost() {
+const LIVE_FAST_HEARTBEAT_MS = 8_000;
+
+function LiveStatusHost() {
   const { data: bydmateLive = [] } = useBydmateLiveQuery();
+  const pageVisible = usePageVisible();
+  const devRoute = isDevAppRoute();
   const installedVersion =
     bydmateLive.find((snapshot) => snapshot.mate_version)?.mate_version ?? null;
+  // This permanent shell is the single viewer-presence owner. Individual screens may read
+  // the shared live query freely without creating duplicate profile writes.
+  const watchedVehicleId = bydmateLive[0]?.vehicle_id ?? null;
+
+  useEffect(() => {
+    if (devRoute || !pageVisible || !watchedVehicleId) return;
+
+    const beat = () => {
+      // Best-effort: a missed beat costs latency until the next one, never correctness.
+      void requestLiveFastStatus(watchedVehicleId).catch(() => {});
+    };
+
+    beat();
+    const timer = setInterval(beat, LIVE_FAST_HEARTBEAT_MS);
+    return () => clearInterval(timer);
+  }, [devRoute, pageVisible, watchedVehicleId]);
 
   return (
     <div className="px-6 pt-4">
@@ -80,7 +103,7 @@ export function MobileShell({ children }: { children: ReactNode }) {
         >
           <main className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain pt-[env(safe-area-inset-top)]">
             <ConnectCarBanner />
-            <MateUpdateBannerHost />
+            <LiveStatusHost />
             {children}
           </main>
           <BottomNavigation />

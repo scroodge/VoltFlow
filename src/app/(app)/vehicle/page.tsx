@@ -8,12 +8,16 @@ export const metadata: Metadata = {
   title: "Авто",
 };
 
-export default async function VehiclePage() {
+async function VehiclePageContent() {
   const isAdmin = await isCurrentUserAdmin();
 
+  return <VehicleHub isAdmin={isAdmin} />;
+}
+
+export default function VehiclePage() {
   return (
-    <Suspense fallback={null}>
-      <VehicleHub isAdmin={isAdmin} />
+    <Suspense fallback={<VehicleHub isAdmin={false} />}>
+      <VehiclePageContent />
     </Suspense>
   );
 }
