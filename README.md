@@ -11,7 +11,7 @@ maintenance records. It is built with Next.js, React, and Supabase.
 - [Trips](docs/TRIPS.md)
 - [Database schema](docs/DATABASE_SCHEMA.md)
 - [Telemetry storage](supabase/TELEMETRY.md)
-- [Android telemetry API](supabase/BYDMATE_APK_API.md)
+- [VoltFlow Mate API](supabase/VOLTFLOW_MATE_API.md)
 - [Premium and retention](docs/PREMIUM_ADMIN.md)
 - [Telegram live widget](docs/VEHICLE_STATE_NOTIFICATIONS.md)
 - [Installation guide (Russian)](INSTALL.md)

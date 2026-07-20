@@ -34,7 +34,7 @@ protected by Row Level Security keyed on `auth.uid()`.
 
 ```
      Di+ / autoservice / GPS on the DiLink head unit
-                              │  local 1 s poll
+                              │  local state-aware collection
                               ▼
 ┌───────────────────────────────────────────────────────────────────────────────────┐
 │ VoltFlow Mate APK                                                                  │
@@ -64,7 +64,9 @@ Realtime source)              compact read model)                          │
 
 Separate car-off path: shell-uid CommandDaemon polls/acks commands and sends a reduced
 Di+ heartbeat every 60 s only when the app-alive beacon is stale. It never sends GPS and
-does not run in parallel with the app's telemetry sender.
+does not run in parallel with the app's telemetry sender. When a visible VoltFlow view grants
+the short-lived fast-status window, both command clients can instead send a `live_only` status
+snapshot at the fast cadence; this changes live freshness only, never GPS or durable history.
 
 Separate no-ADB path: cars exposing `energydata` can upload completed trip summaries to
 `/api/bydmate/trip-summaries`. They provide trip/consumption history only, not live state,
@@ -87,6 +89,20 @@ The Telegram Mini App (`/telegram`) is currently the public knowledge base. It d
 read the DiLink head unit or render private live telemetry. The separate Telegram live
 widget is generated server-side after an accepted telemetry sample, so it remains useful
 when the PWA is closed.
+
+### Visible-view fast status
+
+Normal delivery is deliberately batched to control backend work. While a user has a live
+VoltFlow view visible, the PWA renews an expiring, per-vehicle **app-owned** fast-status window
+in Postgres. Mate learns the remaining window from its existing command poll and sends a
+`live_only` snapshot about every three seconds while it remains positive. Those snapshots update
+only `bydmate_live_snapshots`, so they do not create history, hourly-rollup, or trip rows.
+
+The window is extend-only and expires automatically; there is no explicit off switch. A closed
+tab, lost connection, or crashed client therefore returns the vehicle to normal delivery on its
+next command poll. It is not a user preference and is safe to lose. The existing Realtime
+subscriber coalesces snapshot changes for one second, so the normal visible-view target is
+roughly 2–5 seconds after the command client has observed the grant.
 
 ---
 
@@ -147,13 +163,13 @@ restores. Breaking one of them causes the classic bugs (frozen percent, false
 
 | Subsystem | What it does | Canonical doc | Key code |
 | --- | --- | --- | --- |
-| **Telemetry ingest** | Validate + persist car data; trigger sessions, widgets and notifications; accept retries/offline batches | [supabase/TELEMETRY.md](../supabase/TELEMETRY.md), [supabase/BYDMATE_APK_API.md](../supabase/BYDMATE_APK_API.md) | `src/app/api/bydmate/telemetry/route.ts`, `src/lib/bydmate/*` |
+| **Telemetry ingest** | Validate + persist car data; trigger sessions, widgets and notifications; accept retries/offline batches | [supabase/TELEMETRY.md](../supabase/TELEMETRY.md), [VoltFlow Mate API](../supabase/VOLTFLOW_MATE_API.md) | `src/app/api/bydmate/telemetry/route.ts`, `src/lib/bydmate/*` |
 | **Charging sessions** | Start/stop, ~1 Hz progress, auto sessions, reconcile, tariffs | [CHARGING_SESSIONS.md](CHARGING_SESSIONS.md) | `src/lib/charging-*`, `src/lib/bydmate/charging-auto-session*` |
 | **Trips** | Server-side trip inference, junk filtering, distance deltas, GPS tracks | [TRIPS.md](TRIPS.md) | `bydmate_ingest_telemetry` (SQL), `src/lib/bydmate/trip-*` |
 | **Analytics & charts** | History→Analytics, trip charts, route maps, route insights | [TRIPS.md](TRIPS.md) | `src/components/vehicle/*`, `src/lib/bydmate/telemetry-*` |
-| **Notifications** | Web push (charge thresholds) + Telegram live-status widget (edited in place) | [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | `src/lib/push/*`, `src/lib/telegram/*` |
+| **Notifications** | Charge-threshold web push, Android live-status web push, and Telegram live-status widget | [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | `src/lib/push/*`, `src/lib/telegram/*` |
 | **Telegram bot** | Mini App login/link (Next.js) + group-message capture, LLM classification, and marketplace draft creation (**separate Python edge server**, not this Next.js app) | DATABASE_SCHEMA.md §Community marketplace | `src/app/api/telegram/{auth,link}/route.ts`; `scripts/telegram-miniapp-server.py` owns the real registered webhook — `src/app/api/telegram/webhook/route.ts` only sends the PWA deep-link reply and is not the live group-event path |
-| **Remote commands** | Abstract commands PWA → Mate poller or car-off shell daemon (lock, set SOC limit, …) | [supabase/BYDMATE_APK_API.md](../supabase/BYDMATE_APK_API.md) | `src/app/api/bydmate/commands/*`, `vehicle_commands` |
+| **Remote commands** | Abstract commands PWA → Mate poller or car-off shell daemon (lock, set SOC limit, …) | [VoltFlow Mate API](../supabase/VOLTFLOW_MATE_API.md) | `src/app/api/bydmate/commands/*`, `vehicle_commands` |
 | **Premium & retention** | Entitlements, tiered telemetry retention, admin tools | [PREMIUM_ADMIN.md](PREMIUM_ADMIN.md) | `is_user_premium()`, `purge_old_bydmate_telemetry_by_tier()` |
 | **Knowledge base** | Content CMS, search, and service catalog | README §Features | `src/app/telegram/*` |
 | **Database** | Tables, RLS, RPCs, enums, storage buckets | [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | `supabase/migrations/` |
@@ -177,7 +193,7 @@ restores. Breaking one of them causes the classic bugs (frozen percent, false
 | [PREMIUM_ADMIN.md](PREMIUM_ADMIN.md) | Entitlements, retention tiers, admin runbook |
 | [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Full schema, RLS, RPCs, enums, storage |
 | [../supabase/TELEMETRY.md](../supabase/TELEMETRY.md) | Telemetry storage model, retention, Di+ fields, analytics APIs |
-| [../supabase/BYDMATE_APK_API.md](../supabase/BYDMATE_APK_API.md) | APK ingest + command contract (handoff to the Mate repo) |
+| [VoltFlow Mate API](../supabase/VOLTFLOW_MATE_API.md) | Mate ingest + command contract |
 
 ### Process / status
 

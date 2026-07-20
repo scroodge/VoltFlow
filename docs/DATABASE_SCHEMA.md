@@ -26,6 +26,7 @@ auth.users (Supabase Auth)
   ├─── bydmate_live_snapshots     (1:1 per user+vehicle_id)
   ├─── bydmate_telemetry_samples  (1:N per user+vehicle_id)
   ├─── bydmate_telemetry_hourly   (1:N per user+vehicle_id, hourly rollup)
+  ├─── bydmate_live_status_state  (1:1 per user+vehicle_id, app notification state)
   ├─── bydmate_telemetry_points   (1:N, DEPRECATED v1)
   ├─── bydmate_battery_snapshots  (1:N per user+vehicle_id)
   ├─── bydmate_idle_drains        (1:N per user+vehicle_id)
@@ -73,10 +74,13 @@ Mirror of `auth.users`. Created automatically on signup via trigger.
 | `commercial_ac_price_per_kwh` | numeric | Tiered tariff — AC public |
 | `fast_dc_price_per_kwh` | numeric | Tiered tariff — DC fast |
 | `bydmate_cloud_api_key` | text unique | API key for telemetry ingest |
-| `vehicle_connected_at` | timestamptz | Last time vehicle came online |
+| `vehicle_connected_at` | timestamptz | First accepted telemetry time; used to mark Mate onboarding complete |
 | `telegram_id` | bigint | Telegram user ID (nullable) |
 | `telegram_username` | text | Telegram username |
 | `notify_channel` | text | `web_push`, `telegram`, or `both`, default `web_push` |
+| `live_status_mode` | text | User-owned Android live-status preference: `off`, `charging`, or `charging_parked`; default `charging` |
+| `live_fast_until` | timestamptz | App-owned, expiring visible-view status grant; safe to lose |
+| `live_fast_vehicle_id` | text | Vehicle alias the expiring fast-status grant applies to |
 | `is_premium` | boolean | Manual premium override (`20260615140000`) |
 | `premium_until` | timestamptz | Time-limited premium expiry (`20260617133000`) |
 | `last_active_at` | timestamptz | Last telemetry or login (`20260706120000`) |
@@ -131,6 +135,9 @@ One row per charge event, live-updated during charging.
 | `tariff_manual` | boolean | User manually overrode tariff |
 | `tariff_selected_at` | timestamptz | When the user last manually picked a tariff/provider on this session; delays auto-saving a GPS tariff location until the pick "sticks" (`20260706020000`) |
 | `energy_overridden` | boolean | True when energy/cost were set from a non-SOC source |
+| `energy_corrected_at` | timestamptz | When a provider-billed energy/cost correction was applied |
+| `end_max_cell_delta_v` | numeric | Maximum cell-voltage delta measured near the session's peak charging SOC |
+| `end_delta_soc` | numeric | SOC at which `end_max_cell_delta_v` was measured |
 | `started_at` | timestamptz | |
 | `stopped_at` | timestamptz | |
 | `created_at` | timestamptz | |
@@ -138,6 +145,23 @@ One row per charge event, live-updated during charging.
 
 Constraint: `start_percent < target_percent`.
 Realtime replication enabled.
+
+### `charging_efficiency_observations`
+App-owned measurements created when a user corrects a completed session with provider-billed
+energy and cost. They preserve the evidence required to suggest, but never automatically apply,
+per-car charging efficiency values after raw telemetry retention expires.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `user_id` / `car_id` / `session_id` | uuid FK | Owning account, car, and corrected session |
+| `tariff_type` | text | `home`, `commercial_ac`, or `fast_dc` |
+| `measured_efficiency_percent` | numeric | Battery-side SOC energy divided by provider-billed grid energy |
+| `soc_delta_percent` / `battery_capacity_kwh` | numeric | Inputs used for the measurement |
+| `billed_energy_kwh` / `billed_total_cost` | numeric | User-entered provider-billed values |
+| `avg_battery_temp_c` / `avg_outside_temp_c` / `avg_charge_power_kw` | numeric | Telemetry context snapshot; nullable |
+| `telemetry_sample_count` | integer | Samples contributing to that context |
+| `computed_at` | timestamptz | Correction time |
 
 ---
 
@@ -219,6 +243,19 @@ Latest telemetry snapshot per vehicle — **one row per user+vehicle_id** (upser
 | `updated_at` | timestamptz | |
 
 Unique constraint: `(user_id, vehicle_id)`.
+
+### `bydmate_live_status_state`
+App-owned per-vehicle state used by the server to throttle and deduplicate Android live-status
+web pushes. It is distinct from `profiles.live_status_mode`, which is the user's preference.
+
+| Column | Type | Notes |
+|---|---|---|
+| `user_id` / `vehicle_id` | uuid / text PK | Account and vehicle stream |
+| `last_state` | text | Most recently processed `charging`, `parked`, or `driving` phase |
+| `last_sent_at` | timestamptz | Last live-status push action |
+| `last_soc` | numeric | SOC associated with the last action |
+| `charge_started_at` / `charge_start_soc` | timestamptz / numeric | State for the charging delta and ETA |
+| `updated_at` | timestamptz | Trigger-maintained |
 
 ---
 
@@ -374,7 +411,7 @@ Remote commands dispatched from the PWA to the vehicle via Mate.
 | `vehicle_id` | text | |
 | `type` | text | Command type |
 | `params` | jsonb | Command parameters |
-| `status` | enum | `pending / sent / executed / failed` |
+| `status` | enum | `pending / sent / done / failed / rejected` |
 | `result` | jsonb | Response from vehicle |
 | `created_at` | timestamptz | |
 | `executed_at` | timestamptz | |

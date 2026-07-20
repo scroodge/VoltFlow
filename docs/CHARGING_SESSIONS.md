@@ -30,20 +30,22 @@ vehicle data or complete a session while fresh live SOC is available.
 
 Automatic charging detection requires all of the following:
 
-- a positive charging signal such as `charge_power_kw`;
-- the vehicle is parked or moving slowly;
-- four consecutive charging samples within the permitted time window;
+- `charge_power_kw > 0.1 kW`, or the compatible `is_charging` fallback when Di+ does not
+  explicitly report an unplugged gun;
+- the vehicle is parked (`speed_kmh ≤ 5`);
+- four consecutive charging samples in the recent three-minute ingest window;
 - a vehicle alias matching the authenticated telemetry stream.
 
 Traction `power_kw` is not a charging signal. An explicit unplug state overrides a stale
-charging flag.
+charging flag, and the 100% balance tail does not start a new session.
 
-The server backdates an automatic start from the last suitable non-charging reading or
-the first charging sample. It never takes the confirming sample as the real start when
-earlier evidence exists.
+The server backdates an automatic start to the first charging sample. It uses the last suitable
+idle SOC when that reading is at most 30 minutes old and no greater than the first charging SOC;
+otherwise it uses the first charging sample's SOC. It never takes the confirming fourth sample as
+the real start when earlier evidence exists.
 
-An open session stops after consecutive non-charging samples or immediately after a
-confirmed drive-away. A stop timestamp can never precede its start timestamp.
+An open session stops after two consecutive non-charging samples or immediately after a
+drive-away above 5 km/h. A stop timestamp can never precede its start timestamp.
 
 ## Energy and cost
 
@@ -104,4 +106,8 @@ session reconciliation:
 
 ```bash
 npm run test
+node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/bydmate/charging-auto-session.test.mjs
 ```
+
+`charging-auto-session.test.mjs` is intentionally outside the `npm run test` glob, so both
+commands are required when verifying automatic-session behavior.

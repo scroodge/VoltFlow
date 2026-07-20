@@ -13,6 +13,8 @@
 ### Vehicle
 
 - Optional VoltFlow Mate integration for live status, trips, route tracks, and analytics.
+- While a vehicle view is visible, compatible Mate clients can provide an expiring fast live
+  status path; normal background delivery remains batched to limit backend work.
 - State-aware live telemetry focuses the parked view on relevant temperatures and can show a
   recent driving-based energy estimate.
 - Trip details show traction and recovered energy, energy per kilometre, and net consumption
@@ -32,7 +34,8 @@
 
 - Installable PWA for iOS and Android.
 - English, Belarusian, and Russian application localization.
-- Authenticated multi-user accounts, notifications, and data retention controls.
+- Authenticated multi-user accounts, charge alerts, Android live-status notifications, Telegram
+  live-status widgets, and data retention controls.
 - Compatible VoltFlow Mate clients can submit cumulative hourly telemetry rollups alongside
   sample batches; sample-only clients remain supported.
 

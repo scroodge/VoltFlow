@@ -2,7 +2,7 @@
 
 This document describes the public data model for telemetry received from a compatible
 VoltFlow Mate installation. The wire contract is in
-[BYDMATE_APK_API.md](BYDMATE_APK_API.md).
+[VoltFlow Mate API](VOLTFLOW_MATE_API.md).
 
 ## Data sources
 
@@ -25,12 +25,17 @@ The server validates the authenticated vehicle identity, normalizes accepted val
 sanitizes location data, and processes retries idempotently. A client retains queued data
 until it receives a complete application-level acknowledgement.
 
+`X-Vehicle-Id` is the canonical vehicle identity for a request. The server scopes the request
+to the account authenticated by its paired key and normalizes queued samples to that header;
+clients should still send their configured vehicle alias consistently. See
+[VoltFlow Mate API](VOLTFLOW_MATE_API.md) for the precise wire contract.
+
 Compatible Mate clients may include cumulative hourly rollup blocks in an object batch. A
 sample already represented in one of those blocks is marked `client_hourly: true`, so the
 server does not aggregate that sample into the hour a second time. The companion hourly
 blocks belong to the vehicle identified by the request header and are applied separately
 from sample ingest; a rollup-processing problem does not change the sample acknowledgement.
-See [BYDMATE_APK_API.md](BYDMATE_APK_API.md) for the batch fields and block shape.
+See [VoltFlow Mate API](VOLTFLOW_MATE_API.md) for the batch fields and block shape.
 
 ## Delivery behavior
 
@@ -38,13 +43,20 @@ The current Mate client adapts collection to vehicle state:
 
 | State | Collection cadence | Typical delivery |
 | --- | --- | --- |
-| Driving | 1 second | small batches at short intervals |
-| Charging below 98% | 10 seconds | bulk batches |
-| Charging tail at or above 98% | 1 second | small batches at short intervals |
-| Parked | 30 seconds | periodic status updates |
+| Driving | 1 second | small batches about every 15 seconds |
+| Charging below 98% | 10 seconds | bulk batches about every 60 seconds |
+| Charging tail at or above 98% | 1 second | small batches about every 15 seconds |
+| Parked | 30 seconds | status updates about every 60 seconds |
 
 The client supports offline delivery, optional GPS omission, and state-specific payload
-tiers. Exact device configuration is intentionally not part of this public document.
+tiers.
+
+When someone is actively watching a vehicle in VoltFlow, the command-poll response may grant a
+short `live_fast_seconds` window. During that window, compatible app and car-off daemon senders
+can submit `live_only: true` status snapshots about every three seconds. A `live_only` sample
+updates the latest snapshot but intentionally skips durable sample, hourly-rollup, and trip
+writes. The grant expires without a client-side “off” request, so normal batched delivery resumes
+automatically when the view is no longer active.
 
 ## Storage model
 

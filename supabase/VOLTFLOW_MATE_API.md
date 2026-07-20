@@ -1,4 +1,4 @@
-# VoltFlow Mate API contract
+# VoltFlow Mate integration contract
 
 This public contract describes the VoltFlow endpoints used by a paired VoltFlow Mate
 client. Use placeholders in examples; do not publish a real endpoint, credential, or
@@ -13,8 +13,10 @@ X-API-Key: <paired-client-key>
 X-Vehicle-Id: <vehicle-id>
 ```
 
-`X-Vehicle-Id` must match `vehicle_id` in every submitted sample. The server validates the
-paired key and authorizes the vehicle for the associated account.
+`X-Vehicle-Id` selects the vehicle stream for the authenticated paired key. It is canonical for
+the request: the server normalizes queued samples to this value so an item queued before a user
+changes the client setting remains retryable. Clients should nevertheless send the configured
+vehicle alias in both places and preserve it when retrying.
 
 ## Pairing
 
@@ -119,6 +121,7 @@ when present it is an array of these blocks alongside `samples`.
 | `autoservice` | object | Optional vehicle metadata when available. |
 | `mate_version` | string | Client version metadata. |
 | `client_hourly` | boolean | Marks a sample as represented by a companion hourly block in the same object batch. |
+| `live_only` | boolean | Status-only snapshot. When true, the server updates the latest live snapshot but skips durable telemetry, hourly-rollup, and trip writes. |
 
 Unknown forward-compatible fields are ignored. Numeric values may be represented as JSON
 numbers or numeric strings. Batches are limited to 300 samples.
@@ -145,6 +148,52 @@ the client preserves the original `vehicle_id` for every queued sample.
 `hourly_rollup_applied` is informational and is not part of sample acknowledgement
 accounting.
 
+## Command poll and acknowledgement
+
+Compatible Mate clients may poll for abstract commands and acknowledge their outcome with the
+same paired identity. The client must still enforce vehicle-safety constraints locally.
+
+```http
+GET https://<host>/api/bydmate/commands
+X-API-Key: <paired-client-key>
+X-Vehicle-Id: <vehicle-id>
+```
+
+The response contains `commands` (at most 10 pending commands) and always includes
+`live_fast_seconds`. A positive value grants that vehicle a short, expiring fast-status window;
+the client may send `live_only: true` snapshots at its compatible fast cadence while it lasts.
+`0` means normal delivery cadence. This signal is not a command and must never be persisted as a
+user preference by the client.
+
+```json
+{
+  "ok": true,
+  "commands": [
+    { "id": "command-id", "type": "lock", "params": {}, "created_at": "2026-01-01T12:00:00Z" }
+  ],
+  "live_fast_seconds": 20
+}
+```
+
+```http
+POST https://<host>/api/bydmate/commands/ack
+Content-Type: application/json
+X-API-Key: <paired-client-key>
+X-Vehicle-Id: <vehicle-id>
+```
+
+```json
+{
+  "acks": [
+    { "id": "command-id", "status": "done", "result": {} }
+  ]
+}
+```
+
+An acknowledgement status is one of `done`, `failed`, or `rejected`. The command lifecycle is
+`pending` → `sent` → one of those terminal states; unacknowledged pending commands can expire as
+`failed`.
+
 ## Completed-trip summaries
 
 When supported by the paired vehicle, a client may submit completed-trip summaries:
@@ -157,12 +206,6 @@ X-Vehicle-Id: <vehicle-id>
 
 This optional path provides completed trip history only. It must not be used alongside an
 equivalent live telemetry source for the same drive.
-
-## Remote commands
-
-Paired clients may poll and acknowledge abstract vehicle commands only when the connected
-vehicle integration supports them. Commands are authenticated with the same paired-client
-identity and must enforce vehicle-safety constraints on the client.
 
 ## Privacy and compatibility
 
