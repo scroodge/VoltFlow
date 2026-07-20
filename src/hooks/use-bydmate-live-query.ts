@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { requestLiveFastStatus } from "@/actions/live-status";
 import { usePageVisible } from "@/hooks/use-page-visible";
 import { backfillLiveSnapshotsWithSoh } from "@/lib/bydmate/live-soh-backfill";
 import { devFetch, isDevAppRoute } from "@/lib/dev/dev-fetch";
@@ -10,8 +11,21 @@ import { createClient } from "@/lib/supabase/client";
 import { queryKeys } from "@/lib/query-keys";
 import type { BydmateLiveSnapshotRow } from "@/types/database";
 
-/** Coalesce a burst of ~1Hz ingest Realtime events into one heavy refetch. */
-const BYDMATE_LIVE_REFETCH_DEBOUNCE_MS = 5_000;
+/**
+ * Coalesce a burst of ~1Hz ingest Realtime events into one heavy refetch.
+ *
+ * This is also the floor on how fast a status change can surface, so it has to stay well
+ * under the 2-5s target the live view promises. A driving car still bursts at 1Hz, so the
+ * debounce continues to earn its keep — it just no longer dominates the latency budget.
+ */
+const BYDMATE_LIVE_REFETCH_DEBOUNCE_MS = 1_000;
+
+/**
+ * How often to tell the car someone is watching. Comfortably inside the server's window
+ * (`LIVE_FAST_WINDOW_SECONDS`) so an occasional dropped beat never interrupts fast mode,
+ * while a closed tab lets it lapse within seconds.
+ */
+const LIVE_FAST_HEARTBEAT_MS = 8_000;
 
 async function fetchBydmateLiveDev(): Promise<BydmateLiveSnapshotRow[]> {
   const response = await devFetch("/api/vehicle/live");
@@ -95,10 +109,34 @@ export function useBydmateLiveQuery() {
     };
   }, [queryClient, supabase, devRoute]);
 
-  return useQuery({
+  const query = useQuery({
     queryKey: queryKeys.bydmateLive,
     queryFn: fetchBydmateLive,
     staleTime: 15_000,
     refetchInterval: pageVisible ? (devRoute ? 30_000 : 60_000) : false,
   });
+
+  // Snapshots come back newest-received first, so the head is the car actually being
+  // watched — the one worth speeding up on a multi-car account.
+  const watchedVehicleId = query.data?.[0]?.vehicle_id ?? null;
+
+  useEffect(() => {
+    if (devRoute || !pageVisible) return;
+
+    let cancelled = false;
+    const beat = () => {
+      if (cancelled) return;
+      // Best-effort: a missed beat costs latency until the next one, never correctness.
+      void requestLiveFastStatus(watchedVehicleId).catch(() => {});
+    };
+
+    beat();
+    const timer = setInterval(beat, LIVE_FAST_HEARTBEAT_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [devRoute, pageVisible, watchedVehicleId]);
+
+  return query;
 }

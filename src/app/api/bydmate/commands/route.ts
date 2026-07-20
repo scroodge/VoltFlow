@@ -29,6 +29,29 @@ async function expireStalePending(
     .eq("status", "pending");
 }
 
+// Seconds of fast live-status cadence to grant the car per poll. Deliberately a little
+// longer than the ~6s poll interval so a single dropped poll does not drop the car out of
+// fast mode mid-view, and short enough that closing the app stops the traffic promptly.
+const LIVE_FAST_GRANT_SECONDS = 20;
+
+/**
+ * How much longer (if at all) this vehicle should keep pushing `live_only` status at the
+ * fast cadence. Derived from the profile row the caller already fetched, so this adds no
+ * query to a path that runs every ~6s per car.
+ */
+function liveFastSecondsFor(
+  profile: { liveFastUntil: string | null; liveFastVehicleId: string | null },
+  vehicleId: string,
+): number {
+  if (!profile.liveFastUntil) return 0;
+  // A multi-car account watching car A must not speed up car B. A null vehicle id means
+  // the window was set before we knew which car, so honour it rather than dropping it.
+  if (profile.liveFastVehicleId && profile.liveFastVehicleId !== vehicleId) return 0;
+  const remainingMs = new Date(profile.liveFastUntil).getTime() - Date.now();
+  if (!Number.isFinite(remainingMs) || remainingMs <= 0) return 0;
+  return Math.min(LIVE_FAST_GRANT_SECONDS, Math.ceil(remainingMs / 1000));
+}
+
 export async function GET(request: Request) {
   const apiKey = request.headers.get("x-api-key") ?? "";
   const vehicleId = request.headers.get("x-vehicle-id")?.trim();
@@ -66,9 +89,11 @@ export async function GET(request: Request) {
 
     // Empty queue (the overwhelming majority of polls) costs one indexed read and zero
     // writes. Only touch the table when there is something stale to expire or fresh to send.
+    const liveFastSeconds = liveFastSecondsFor(profile, vehicleId);
+
     const pending = (rows ?? []) as PendingCommand[];
     if (pending.length === 0) {
-      return Response.json({ ok: true, commands: [] });
+      return Response.json({ ok: true, commands: [], live_fast_seconds: liveFastSeconds });
     }
 
     const cutoff = Date.now() - COMMAND_TIMEOUT_MS;
@@ -93,7 +118,7 @@ export async function GET(request: Request) {
         .eq("status", "pending");
     }
 
-    return Response.json({ ok: true, commands });
+    return Response.json({ ok: true, commands, live_fast_seconds: liveFastSeconds });
   } catch {
     return Response.json({ ok: false, error: "Command poll failed" }, { status: 500 });
   }
