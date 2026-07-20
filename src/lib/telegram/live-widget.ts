@@ -217,7 +217,7 @@ function determineState(lastSample: TelemetryPayload, nowMs: number, receivedAt:
   const snapshot = {
     telemetry: lastSample.telemetry,
     diplus: lastSample.diplus,
-    diplus_gear: lastSample.diplus_gear as string | number | null | undefined,
+    diplus_gear: lastSample.diplus?.gear,
   };
 
   if (isDriveTelemetry(snapshot)) return "driving";
