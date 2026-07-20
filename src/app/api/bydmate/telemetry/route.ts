@@ -261,7 +261,7 @@ export async function POST(request: Request) {
     // First-ever telemetry for this user → mark the car connected so the
     // post-login onboarding gate clears. The null guard keeps this a one-time
     // write; once set the column is non-null and we skip on every later ingest.
-    if (!profile.vehicle_connected_at) {
+    if (!profile.vehicleConnectedAt) {
       activityUpdates.push(
         supabase
           .from("profiles")
