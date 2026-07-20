@@ -2,11 +2,30 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 type JsonRecord = Record<string, unknown>;
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key, x-vehicle-id",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const telemetryFields = [
+  "soc", "speed_kmh", "power_kw", "battery_temp_c", "cabin_temp_c", "outside_temp_c",
+  "battery_voltage_v", "aux_voltage_v", "cell_voltage_min_v", "cell_voltage_max_v",
+  "cell_delta_v", "diplus_min_cell_voltage_v", "diplus_max_cell_voltage_v",
+  "diplus_cell_delta_v", "odometer_km", "soh_percent", "is_charging", "charge_power_kw",
+  "charge_type", "kwh_charged", "range_est_km", "current_trip_distance_km",
+  "current_trip_consumption_kwh_100km",
+] as const;
+const diplusFields = [
+  "soc", "speed_kmh", "mileage_km", "power_kw", "charge_gun_state", "charging_status",
+  "battery_capacity_kwh", "total_elec_consumption_kwh", "voltage_12v", "max_cell_voltage_v",
+  "min_cell_voltage_v", "cell_delta_v", "avg_battery_temp_c", "exterior_temp_c", "gear",
+  "power_state", "inside_temp_c", "ac_status", "ac_temp_c", "fan_level", "door_fl",
+  "door_fr", "door_rl", "door_rr", "window_fl_percent", "window_fr_percent",
+  "window_rl_percent", "window_rr_percent", "sunroof_percent", "trunk", "hood",
+  "tire_press_fl_kpa", "tire_press_fr_kpa", "tire_press_rl_kpa", "tire_press_rr_kpa",
+  "drive_mode", "work_mode", "auto_park", "rain", "light_low", "drl", "sunshade_percent",
+  "sentry_state", "remote_lock_state", "stall_sentry_mode", "sentry_provider", "sentry_active",
+] as const;
+const autoserviceFields = [
+  "soc_percent", "power_kw", "gun_state", "bms_state", "charge_capacity_kwh",
+  "charge_battery_volt", "battery_type", "lifetime_mileage_km", "lifetime_kwh",
+] as const;
+const locationFields = ["lat", "lon", "accuracy_m", "bearing_deg"] as const;
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -15,7 +34,6 @@ function jsonResponse(body: JsonRecord, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
-      ...corsHeaders,
       "Content-Type": "application/json",
     },
   });
@@ -25,8 +43,42 @@ function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function pickFields(record: JsonRecord, fields: readonly string[]): JsonRecord {
+  return Object.fromEntries(
+    fields.flatMap((field) => (field in record ? [[field, record[field]]] : [])),
+  );
+}
+
 function asString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function bydmateApiKeyPepper() {
+  const pepper = Deno.env.get("BYDMATE_API_KEY_PEPPER")?.trim();
+  if (pepper) return pepper;
+  return (
+    Deno.env.get("BYDMATE_LINK_CODE_PEPPER")?.trim() ||
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim() ||
+    ""
+  );
+}
+
+async function hashBydmateApiKey(apiKey: string) {
+  const pepper = bydmateApiKeyPepper();
+  if (!pepper) throw new Error("Missing BYDMATE_API_KEY_PEPPER");
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(pepper),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(`bydmate-api-key:${apiKey}`),
+  );
+  return Array.from(new Uint8Array(signature), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function normalizeSamples(payload: unknown) {
@@ -37,6 +89,9 @@ function normalizeSamples(payload: unknown) {
 
 function validateSample(sample: unknown, index: number) {
   if (!isRecord(sample)) return `samples[${index}] must be an object`;
+  if (asString(sample.source) !== "BYDMate") return `samples[${index}].source is invalid`;
+  if (Number(sample.schema_version) !== 1) return `samples[${index}].schema_version is invalid`;
+  if (asString(sample.vehicle_id).length > 160) return `samples[${index}].vehicle_id is invalid`;
   if (asString(sample.device_time) === "") return `samples[${index}].device_time is required`;
   if (!isRecord(sample.telemetry)) return `samples[${index}].telemetry must be an object`;
   if ("location" in sample && sample.location !== null && !isRecord(sample.location)) {
@@ -49,6 +104,32 @@ function validateSample(sample: unknown, index: number) {
     return `samples[${index}].device_time is invalid`;
   }
   return null;
+}
+
+function sanitizeSample(record: JsonRecord, vehicleId: string) {
+  const telemetry = isRecord(record.telemetry) ? pickFields(record.telemetry, telemetryFields) : {};
+  const diplus = isRecord(record.diplus) ? pickFields(record.diplus, diplusFields) : null;
+  const location = isRecord(record.location) ? pickFields(record.location, locationFields) : {};
+  const autoservice = isRecord(record.autoservice)
+    ? pickFields(record.autoservice, autoserviceFields)
+    : undefined;
+
+  return {
+    original_vehicle_id: asString(record.vehicle_id) || vehicleId,
+    vehicle_id: vehicleId,
+    source: asString(record.source) || "BYDMate",
+    schema_version: Number(record.schema_version) || 1,
+    device_time: new Date(asString(record.device_time)).toISOString(),
+    mate_version: asString(record.mate_version) || undefined,
+    live_only: record.live_only === true,
+    client_hourly: record.client_hourly === true,
+    client_trip: record.client_trip === true,
+    trip_id: asString(record.trip_id) || undefined,
+    telemetry,
+    diplus,
+    location,
+    ...(autoservice ? { autoservice } : {}),
+  };
 }
 
 async function resolveVehicleId(
@@ -105,18 +186,42 @@ async function resolveUserId(supabase: ReturnType<typeof createClient>, request:
   const apiKey = request.headers.get("X-API-Key")?.trim() ?? "";
   if (!apiKey) return null;
 
-  const { data, error } = await supabase
+  const { data: hashedProfile, error: hashError } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("bydmate_cloud_api_key_hash", await hashBydmateApiKey(apiKey))
+    .maybeSingle();
+
+  if (hashError) return null;
+  if (hashedProfile?.id) return hashedProfile.id as string;
+
+  // Temporary compatibility with cars paired before hashed credentials shipped.
+  const { data: legacyProfile, error: legacyError } = await supabase
     .from("profiles")
     .select("id")
     .eq("bydmate_cloud_api_key", apiKey)
     .maybeSingle();
+  if (legacyError || !legacyProfile?.id) return null;
 
-  if (error || !data?.id) return null;
-  return data.id as string;
+  // Retire a legacy plaintext credential after its first proven use. The extra
+  // equality condition prevents overwriting a concurrently rotated key.
+  const apiKeyHash = await hashBydmateApiKey(apiKey);
+  await supabase
+    .from("profiles")
+    .update({
+      bydmate_cloud_api_key: null,
+      bydmate_cloud_api_key_hash: apiKeyHash,
+      bydmate_cloud_api_key_fingerprint: apiKeyHash.slice(-12),
+    })
+    .eq("id", legacyProfile.id)
+    .eq("bydmate_cloud_api_key", apiKey);
+  return legacyProfile.id as string;
 }
 
 Deno.serve(async (request) => {
-  if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  // This endpoint is for paired native clients. Do not allow arbitrary browser origins
+  // to preflight credentialed API-key requests.
+  if (request.method === "OPTIONS") return new Response(null, { status: 204 });
   if (request.method !== "POST") return jsonResponse({ ok: false, error: "Method not allowed" }, 405);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -131,6 +236,11 @@ Deno.serve(async (request) => {
 
   const userId = await resolveUserId(supabase, request);
   if (!userId) return jsonResponse({ ok: false, error: "Unauthorized" }, 401);
+
+  const contentLength = Number(request.headers.get("content-length") ?? "0");
+  if (Number.isFinite(contentLength) && contentLength > 2_000_000) {
+    return jsonResponse({ ok: false, error: "Payload too large" }, 413);
+  }
 
   let payload: unknown;
   try {
@@ -181,20 +291,9 @@ Deno.serve(async (request) => {
   }
 
   const receivedAt = new Date().toISOString();
-  const resolvedSamples = samples.map((sample) => {
-    const record = sample as JsonRecord;
-    return {
-      ...record,
-      original_vehicle_id: asString(record.vehicle_id) || incomingVehicleId,
-      vehicle_id: resolvedVehicle.id,
-      source: asString(record.source) || "BYDMate",
-      schema_version: Number(record.schema_version) || 1,
-      device_time: new Date(asString(record.device_time)).toISOString(),
-      telemetry: isRecord(record.telemetry) ? record.telemetry : {},
-      diplus: isRecord(record.diplus) ? record.diplus : null,
-      location: isRecord(record.location) ? record.location : {},
-    };
-  });
+  const resolvedSamples = samples.map((sample) =>
+    sanitizeSample(sample as JsonRecord, resolvedVehicle.id),
+  );
 
   const { error: ingestError } =
     resolvedSamples.length === 1

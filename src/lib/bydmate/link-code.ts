@@ -1,5 +1,6 @@
-import { createHash, randomBytes, randomInt } from "node:crypto";
+import { createHash, createHmac, randomInt, randomUUID } from "node:crypto";
 
+import { bydmateApiKeyFingerprint, hashBydmateApiKey } from "@/lib/bydmate/api-auth";
 import { siteUrl } from "@/lib/site-url";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -43,9 +44,10 @@ export function generateSixDigitLinkCode(): string {
   return String(randomInt(0, 1_000_000)).padStart(6, "0");
 }
 
-export function generateBydmateCloudApiKey(): string {
-  const bytes = randomBytes(32);
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+function deriveBydmateCloudApiKey(linkCodeId: string): string {
+  return createHmac("sha256", linkCodePepper())
+    .update(`bydmate-pairing-key:${linkCodeId}`)
+    .digest("hex");
 }
 
 export function bydmateTelemetryEndpointUrl(): string {
@@ -76,43 +78,10 @@ export function clientIpFromRequest(request: Request): string {
   return "unknown";
 }
 
-export async function ensureBydmateCloudApiKey(userId: string): Promise<string> {
-  const supabase = createServiceClient();
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("bydmate_cloud_api_key")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const existing =
-    typeof profile?.bydmate_cloud_api_key === "string"
-      ? profile.bydmate_cloud_api_key.trim()
-      : "";
-  if (existing) return existing;
-
-  const key = generateBydmateCloudApiKey();
-  const { error: updateError } = await supabase
-    .from("profiles")
-    .update({ bydmate_cloud_api_key: key })
-    .eq("id", userId);
-
-  if (updateError) {
-    throw new Error(updateError.message);
-  }
-
-  return key;
-}
-
 export async function createBydmateLinkCode(userId: string): Promise<{
   code: string;
   expiresAt: string;
 }> {
-  await ensureBydmateCloudApiKey(userId);
-
   const supabase = createServiceClient();
   const now = Date.now();
   const expiresAt = new Date(now + BYDMATE_LINK_CODE_TTL_MS).toISOString();
@@ -128,9 +97,14 @@ export async function createBydmateLinkCode(userId: string): Promise<{
   }
 
   const code = generateSixDigitLinkCode();
+  const id = randomUUID();
+  const apiKey = deriveBydmateCloudApiKey(id);
   const { error: insertError } = await supabase.from("bydmate_link_codes").insert({
+    id,
     user_id: userId,
     code_hash: hashLinkCode(code),
+    api_key_hash: hashBydmateApiKey(apiKey),
+    api_key_fingerprint: bydmateApiKeyFingerprint(apiKey),
     expires_at: expiresAt,
   });
 
@@ -195,7 +169,7 @@ export async function redeemBydmateLinkCode(
 
   const { data: row, error } = await supabase
     .from("bydmate_link_codes")
-    .select("id, user_id, expires_at, redeemed_at")
+    .select("id, user_id, expires_at, redeemed_at, api_key_hash")
     .eq("code_hash", codeHash)
     .is("redeemed_at", null)
     .gt("expires_at", nowIso)
@@ -212,17 +186,43 @@ export async function redeemBydmateLinkCode(
     return { ok: false, error: "Invalid or expired code" };
   }
 
-  const { error: redeemError } = await supabase
+  const apiKey = deriveBydmateCloudApiKey(row.id as string);
+  if (row.api_key_hash !== hashBydmateApiKey(apiKey)) {
+    await recordFailedRedeemAttempt(ipHash);
+    return { ok: false, error: "Invalid or expired code" };
+  }
+
+  // Promote the pending credential before consuming the code. If the database
+  // update fails, the owner can retry the same short-lived code instead of being
+  // left with a redeemed code and no usable vehicle credential.
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({
+      bydmate_cloud_api_key: null,
+      bydmate_cloud_api_key_hash: hashBydmateApiKey(apiKey),
+      bydmate_cloud_api_key_fingerprint: bydmateApiKeyFingerprint(apiKey),
+    })
+    .eq("id", row.user_id as string);
+
+  if (profileError) {
+    throw new Error(profileError.message);
+  }
+
+  const { data: redeemed, error: redeemError } = await supabase
     .from("bydmate_link_codes")
     .update({ redeemed_at: nowIso })
     .eq("id", row.id)
-    .is("redeemed_at", null);
+    .is("redeemed_at", null)
+    .select("id")
+    .maybeSingle();
 
   if (redeemError) {
     throw new Error(redeemError.message);
   }
-
-  const apiKey = await ensureBydmateCloudApiKey(row.user_id as string);
+  if (!redeemed) {
+    await recordFailedRedeemAttempt(ipHash);
+    return { ok: false, error: "Invalid or expired code" };
+  }
 
   return {
     ok: true,

@@ -1,17 +1,36 @@
 import { parseTripSummaryBatch } from "@/lib/bydmate/trip-summary-payload";
+import { resolveBydmateApiKeyProfile } from "@/lib/bydmate/api-auth";
 import { createServiceClient } from "@/lib/supabase/service";
 
 export const runtime = "nodejs";
+const MAX_TRIP_SUMMARIES_BODY_BYTES = 1_000_000;
 
 // Per-trip aggregates from a BYD model's own energydata trip log (no ADB,
 // no telemetry samples, no GPS track). See supabase/TELEMETRY.md and
 // BACKLOG "energydata trip-summary cloud sync". Auth mirrors
-// /api/bydmate/telemetry: X-Api-Key -> profiles.bydmate_cloud_api_key.
+// Uses the same hashed API-key lookup as /api/bydmate/telemetry.
 export async function POST(request: Request) {
   const apiKey = request.headers.get("x-api-key") ?? "";
   const vehicleId = request.headers.get("x-vehicle-id")?.trim();
   if (!vehicleId) {
     return Response.json({ ok: false, error: "Missing X-Vehicle-Id" }, { status: 400 });
+  }
+
+  let supabase: ReturnType<typeof createServiceClient>;
+  let profile: Awaited<ReturnType<typeof resolveBydmateApiKeyProfile>>;
+  try {
+    supabase = createServiceClient();
+    profile = await resolveBydmateApiKeyProfile(supabase, apiKey);
+  } catch {
+    return Response.json({ ok: false, error: "Key lookup failed" }, { status: 500 });
+  }
+  if (!profile) {
+    return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  const contentLength = Number(request.headers.get("content-length") ?? "0");
+  if (Number.isFinite(contentLength) && contentLength > MAX_TRIP_SUMMARIES_BODY_BYTES) {
+    return Response.json({ ok: false, error: "Payload too large" }, { status: 413 });
   }
 
   let json: unknown;
@@ -30,20 +49,6 @@ export async function POST(request: Request) {
   }
 
   try {
-    const supabase = createServiceClient();
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("bydmate_cloud_api_key", apiKey)
-      .maybeSingle();
-
-    if (profileError) {
-      return Response.json({ ok: false, error: "Key lookup failed" }, { status: 500 });
-    }
-    if (!profile?.id) {
-      return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-    }
-
     const { data: result, error: ingestError } = await supabase.rpc(
       "bydmate_ingest_trip_summaries",
       {

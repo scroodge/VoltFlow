@@ -66,12 +66,15 @@ One latest row per authenticated user and vehicle. This is the source for live d
 cards and authenticated realtime updates.
 
 Important fields include normalized telemetry, latest location when available, selected
-vehicle metadata, and timestamps for device and receipt time.
+vehicle metadata, and timestamps for device and receipt time. When no newer sample arrives for
+24 hours, exact GPS is removed from the snapshot and its diagnostic payload; live state remains.
 
 ### `bydmate_telemetry_samples`
 
 Append-only normalized telemetry history. It supports vehicle charts, charging history,
-and trip details. Retention follows the account entitlement.
+and trip details. Free accounts retain raw samples and tracks for 30 days; Premium/Admin data,
+including original route points and hourly aggregates, remains indefinitely while the account is
+active.
 
 ### `bydmate_telemetry_hourly`
 
@@ -98,5 +101,6 @@ session detection and reconciliation are documented in
 - GPS can be omitted by the user; invalid or low-quality locations are rejected.
 - Credentials are used only by trusted server or paired-client paths and must never be
   published in source control.
-- The latest snapshot is intended for realtime display; historical views use bounded and
-  entitlement-aware data.
+- The latest snapshot is intended for realtime display; stale exact GPS is cleared after 24 h.
+- Free historical views are bounded; Premium/Admin historical telemetry and exact tracks are
+  retained indefinitely while the account is active.

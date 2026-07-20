@@ -1,7 +1,7 @@
 import type { Locale } from "@/lib/i18n";
 import type { LegalDocument, LegalOperatorDetails } from "@/content/legal/types";
 
-const UPDATED = "2026-07-06";
+const UPDATED = "2026-07-20";
 
 const en = (op: LegalOperatorDetails): LegalDocument => ({
   title: "Privacy Policy (International)",
@@ -52,8 +52,8 @@ const en = (op: LegalOperatorDetails): LegalDocument => ({
     {
       title: "Retention",
       paragraphs: [
-        "We keep account and session data while your account is active. Raw telemetry retention policy is tiered: Free plan keeps 30 days of raw telemetry/tracks, Premium keeps 365 days. Hourly aggregated telemetry can be kept longer for analytics.",
-        "When raw telemetry retention is exceeded, records are deleted during scheduled cleanup and cannot be restored.",
+        "We keep account and session data while your account is active. Raw telemetry retention policy is tiered: Free plan keeps 30 days of raw telemetry/tracks; Premium retains them indefinitely while the account remains active. Hourly aggregated telemetry can be kept longer for analytics.",
+        "For the Free plan, when raw telemetry retention is exceeded, records are deleted during scheduled cleanup and cannot be restored.",
         "Inactive accounts: if you do not log in or send telemetry for 30 days, we will send a warning email. If no activity occurs within 60 days, your account and all associated data will be permanently deleted. Premium users are exempt while their Premium status is active.",
         "You may request deletion of your account and associated data by contacting us.",
       ],
@@ -137,8 +137,8 @@ const be = (op: LegalOperatorDetails): LegalDocument => ({
     {
       title: "Захоўванне",
       paragraphs: [
-        "Даныя акаўнта захоўваюцца, пакуль акаўнт актыўны. Палітыка сырых даных ступенчатая: free-план — 30 дзён сырай тэлеметрыі/трэкаў, Premium — 365 дзён. Пагадзінныя агрэгацыі могуць захоўвацца даўжэй для аналітыкі.",
-        "Пасля дасягнення тэрміну захоўвання сырыя запісы выдаляюцца падчас планавых ачыстак і не могуць быць адноўлены.",
+        "Даныя акаўнта захоўваюцца, пакуль акаўнт актыўны. Палітыка сырых даных ступенчатая: free-план — 30 дзён сырай тэлеметрыі/трэкаў; Premium захоўвае іх бестэрмінова, пакуль акаўнт актыўны. Пагадзінныя агрэгацыі могуць захоўвацца даўжэй для аналітыкі.",
+        "Для free-плана пасля дасягнення тэрміну захоўвання сырыя запісы выдаляюцца падчас планавых ачыстак і не могуць быць адноўлены.",
         "Неактыўныя акаўнты: калі вы не ўваходзіце ў сістэму або не дасылаеце тэлеметрыю на працягу 30 дзён, мы дашлем папярэджанне на email. Калі актыўнасць не аднавіцца на працягу 60 дзён, ваш акаўнт і ўсе звязаныя даныя будуць выдалены назаўжды. Прэміум-карыстальнікі вызваляюцца, пакуль іх прэміум-статус актыўны.",
         "Вы можаце запытаць выдаленне акаўнта, звязаўшыся з намі.",
       ],
@@ -220,8 +220,8 @@ const ru = (op: LegalOperatorDetails): LegalDocument => ({
     {
       title: "Хранение",
       paragraphs: [
-        "Данные аккаунта хранятся, пока аккаунт активен. Политика по сырым данным ступенчатая: free-план — 30 дней сырой телеметрии/треков, Premium — 365 дней. Почасовые агрегаты могут храниться дольше для аналитики.",
-        "После истечения срока хранения сырые записи удаляются в плановых очистках и восстановлению не подлежат.",
+        "Данные аккаунта хранятся, пока аккаунт активен. Политика по сырым данным ступенчатая: free-план — 30 дней сырой телеметрии/треков; Premium хранит их бессрочно, пока аккаунт активен. Почасовые агрегаты могут храниться дольше для аналитики.",
+        "Для free-плана после истечения срока хранения сырые записи удаляются в плановых очистках и восстановлению не подлежат.",
         "Неактивные аккаунты: если вы не входите в систему или не отправляете телеметрию в течение 30 дней, мы отправим предупреждение по email. Если активность не возобновится в течение 60 дней, ваш аккаунт и все связанные данные будут безвозвратно удалены. Премиум-пользователи освобождаются, пока их премиум-статус активен.",
         "Вы можете запросить удаление аккаунта, связавшись с нами.",
       ],

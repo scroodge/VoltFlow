@@ -239,7 +239,7 @@ Latest telemetry snapshot per vehicle — **one row per user+vehicle_id** (upser
 | `received_at` | timestamptz | Server ingest time |
 | `telemetry` | jsonb | Parsed fields (soc, speed, power, …) |
 | `location` | jsonb | `{lat, lon, accuracy_m, …}` |
-| `raw_payload` | jsonb | Original payload (size-reduced 2026-06) |
+| `raw_payload` | jsonb | Original validated payload (size-reduced 2026-06); GPS is removed with `location` after 24 h of inactivity |
 | `updated_at` | timestamptz | |
 
 Unique constraint: `(user_id, vehicle_id)`.
@@ -648,7 +648,7 @@ persists no additional user data.
 | `increment_knowledge_article_view(p_slug)` | `SECURITY DEFINER` view-count increment for `knowledge_article_views` |
 | `bydmate_simplify_trip_track(p_trip_id)` | Ramer-Douglas-Peucker GPS simplification |
 | `simplify_aged_bydmate_trip_tracks()` | Batch simplification for trips older than 48 h |
-| `purge_old_bydmate_telemetry_by_tier()` | **Current** retention purge (free 30d raw, premium+admin unlimited, hourly 3y); scheduled by pg_cron |
+| `purge_old_bydmate_telemetry_by_tier()` | **Current** retention purge (free: 30d raw / 3y hourly; Premium+Admin: retained forever; stale live GPS cleared after 24h); scheduled by pg_cron |
 | `is_user_premium(user_id)` | Effective premium check (admin OR flag OR term) |
 
 > Superseded purge functions kept in history only: `purge_old_bydmate_telemetry()`
@@ -685,11 +685,13 @@ Scheduled daily by the pg_cron job `purge-bydmate-telemetry` →
 |---|---|---|
 | `bydmate_telemetry_samples` (raw) | 30 days | **Unlimited** (kept forever) |
 | `bydmate_trip_track_points` | 30 days | **Unlimited** |
-| `bydmate_telemetry_hourly` | 3 years | 3 years |
+| `bydmate_telemetry_hourly` | 3 years | **Unlimited** (kept forever) |
 
 - `is_user_premium()` already returns true for admins, so premium + admin are fully exempt.
-- `bydmate_trip_track_points` are also simplified (RDP) after 48 h (non-simplified points
-  deleted), independent of the retention purge.
+- Free-account `bydmate_trip_track_points` are simplified (RDP) after 48 h before their
+  30-day expiry. Premium/Admin raw route points are retained unchanged forever.
+- A stale `bydmate_live_snapshots` row keeps non-location status but has exact GPS removed
+  from both `location` and `raw_payload` after 24 hours without a new received sample.
 - `bydmate_telemetry_points` (v1): orphaned, not pruned automatically.
 
 ---

@@ -14,22 +14,6 @@ import { queryKeys } from "@/lib/query-keys";
 import type { BydmateLiveSnapshotRow, ChargingSessionRow } from "@/types/database";
 
 const GPS_TARIFF_SYNC_MIN_INTERVAL_MS = 15_000;
-const LAST_GPS_STORAGE_KEY = "voltflow:last_gps";
-
-function readCachedBrowserLocation(): GpsCoordinates | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const stored = window.localStorage.getItem(LAST_GPS_STORAGE_KEY);
-    if (!stored) return null;
-    const parsed = JSON.parse(stored) as { lat?: unknown; lon?: unknown };
-    return typeof parsed.lat === "number" && Number.isFinite(parsed.lat) &&
-        typeof parsed.lon === "number" && Number.isFinite(parsed.lon)
-      ? { lat: parsed.lat, lon: parsed.lon }
-      : null;
-  } catch {
-    return null;
-  }
-}
 
 export function useChargingSessionAutoTariff({
   session,
@@ -49,9 +33,10 @@ export function useChargingSessionAutoTariff({
   const syncingRef = useRef(false);
   const lastSyncAtRef = useRef(0);
   const lastLocationKeyRef = useRef<string | null>(null);
-  const [browserLocation, setBrowserLocation] = useState<GpsCoordinates | null>(
-    readCachedBrowserLocation,
-  );
+  // Browser GPS is used only for this mounted charging session. Do not persist
+  // exact coordinates locally; a saved tariff location is the explicit user
+  // choice to keep a place in Postgres under RLS.
+  const [browserLocation, setBrowserLocation] = useState<GpsCoordinates | null>(null);
 
   const mateLocation = coordinatesFromLiveSnapshots(liveSnapshots, vehicleId);
   const needsBrowserGps =
@@ -75,11 +60,6 @@ export function useChargingSessionAutoTariff({
           lon: position.coords.longitude,
         };
         setBrowserLocation(nextLocation);
-        try {
-          window.localStorage.setItem(LAST_GPS_STORAGE_KEY, JSON.stringify(nextLocation));
-        } catch {
-          // GPS matching still works for this mount if storage is unavailable.
-        }
       },
       () => {},
       { enableHighAccuracy: true, maximumAge: 60_000, timeout: 12_000 },

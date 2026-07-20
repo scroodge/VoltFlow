@@ -6,9 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowUpCircle,
   CheckCircle2,
-  ChevronDown,
   Code2,
-  Copy,
   ExternalLink,
   KeyRound,
   Loader2,
@@ -32,7 +30,6 @@ import { currencyTextWithIcon } from "@/components/currency-amount";
 import { FreeRetentionNotice } from "@/components/premium/free-retention-notice";
 import { ClusterBackgroundsSettings } from "@/components/settings/cluster-backgrounds-settings";
 import { SettingsGroup, SettingsGroupDivider, SettingsPageHeader } from "@/components/settings/settings-section";
-import { siteUrl } from "@/lib/site-url";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -83,6 +80,7 @@ import {
   showLocalTestNotification,
 } from "@/lib/push/client";
 import { useAppPreferences } from "@/stores/use-app-preferences";
+import { clearPrivateBrowserData } from "@/lib/privacy/client";
 import type {
   Car,
   ChargingProviderType,
@@ -163,12 +161,10 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   const [deleteAccountText, setDeleteAccountText] = useState("");
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [telegramBusy, setTelegramBusy] = useState(false);
-  const [bydmateCloudApiKey, setBydmateCloudApiKey] = useState("");
   const [linkCode, setLinkCode] = useState<string | null>(null);
   const [linkExpiresAt, setLinkExpiresAt] = useState<number | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [linkCreating, setLinkCreating] = useState(false);
-  const [cloudAdvancedOpen, setCloudAdvancedOpen] = useState(false);
   const newLocationNameInputRef = useRef<HTMLInputElement>(null);
   const homePricePerKwh = useAppPreferences((s) => s.homePricePerKwh);
   const commercialAcPricePerKwh = useAppPreferences((s) => s.commercialAcPricePerKwh);
@@ -234,24 +230,6 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   }, []);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("voltflow:last_gps");
-      if (!stored) return;
-      const parsed = JSON.parse(stored) as unknown;
-      if (
-        parsed !== null &&
-        typeof parsed === "object" &&
-        "lat" in parsed &&
-        "lon" in parsed &&
-        typeof (parsed as Record<string, unknown>).lat === "number" &&
-        typeof (parsed as Record<string, unknown>).lon === "number"
-      ) {
-        setNewLocationLat(String((parsed as { lat: number; lon: number }).lat));
-        setNewLocationLng(String((parsed as { lat: number; lon: number }).lon));
-      }
-    } catch {}
-  }, []);
-  useEffect(() => {
     let mounted = true;
 
     if (isDevAppRoute()) {
@@ -266,7 +244,6 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             home_price_per_kwh?: number;
             commercial_ac_price_per_kwh?: number;
             fast_dc_price_per_kwh?: number;
-            bydmate_cloud_api_key?: string | null;
             telegram_id?: number | null;
             telegram_username?: string | null;
             notify_channel?: string | null;
@@ -327,11 +304,6 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         );
 
 
-        setBydmateCloudApiKey(
-          typeof payload.profile?.bydmate_cloud_api_key === "string"
-            ? payload.profile.bydmate_cloud_api_key
-            : "",
-        );
       });
 
       return () => {
@@ -352,7 +324,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       const [{ data: profile, error }, { data: locationRows }] = await Promise.all([
         supabase
         .from("profiles")
-        .select("preferred_currency, default_price_per_kwh, home_price_per_kwh, commercial_ac_price_per_kwh, fast_dc_price_per_kwh, bydmate_cloud_api_key, telegram_id, telegram_username, notify_channel, live_status_mode")
+        .select("preferred_currency, default_price_per_kwh, home_price_per_kwh, commercial_ac_price_per_kwh, fast_dc_price_per_kwh, telegram_id, telegram_username, notify_channel, live_status_mode")
         .eq("id", user.id)
         .single(),
         supabase.from("charging_tariff_locations").select("*").eq("user_id", user.id),
@@ -396,11 +368,6 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         });
       }
 
-      setBydmateCloudApiKey(
-        typeof profile?.bydmate_cloud_api_key === "string"
-          ? profile.bydmate_cloud_api_key
-          : "",
-      );
       setTariffLocations(
         (locationRows ?? []).map((row) =>
           mapChargingTariffLocation(row as Record<string, unknown>),
@@ -640,7 +607,6 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         const lon = position.coords.longitude;
         setNewLocationLat(String(lat));
         setNewLocationLng(String(lon));
-        try { localStorage.setItem("voltflow:last_gps", JSON.stringify({ lat, lon })); } catch {}
       },
       (error) => toast.error(error.message),
       { enableHighAccuracy: true, timeout: 12_000, maximumAge: 30_000 },
@@ -785,6 +751,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
     }
     const returnPath = isTelegramWebView() ? "/telegram" : "/login";
     const supabase = createClient();
+    await clearPrivateBrowserData();
     await supabase.auth.signOut();
     toast.success(t("settings.signedOut") as string);
     router.replace(returnPath);
@@ -906,38 +873,6 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       });
   };
 
-  const handleGenerateBydmateKey = () => {
-    if (!profileUserId) {
-      toast.error(t("settings.toasts.signInForKey") as string);
-      return;
-    }
-
-    const bytes = new Uint8Array(32);
-    crypto.getRandomValues(bytes);
-    const key = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-
-    void createClient()
-      .from("profiles")
-      .update({ bydmate_cloud_api_key: key })
-      .eq("id", profileUserId)
-      .then(({ error }) => {
-        if (error) {
-          toast.error(error.message);
-          return;
-        }
-        setBydmateCloudApiKey(key);
-        toast.success(t("settings.toasts.keyGenerated") as string);
-      });
-  };
-
-  const handleCopyBydmateKey = () => {
-    if (!bydmateCloudApiKey) return;
-    void navigator.clipboard
-      .writeText(bydmateCloudApiKey)
-      .then(() => toast.success(t("settings.toasts.keyCopied") as string))
-      .catch(() => toast.error(t("settings.toasts.copyKeyError") as string));
-  };
-
   useEffect(() => {
     if (!linkExpiresAt) return;
     const id = window.setInterval(() => setNowMs(Date.now()), 1000);
@@ -1032,6 +967,18 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
           >
             {t("settings.signOut")}
           </Button>
+
+          <div className="border-t border-white/[0.08] pt-3">
+            <p className="text-muted-foreground mb-2 text-sm">
+              {t("settings.exportRecentBody")}
+            </p>
+            <Button asChild variant="secondary" className="h-10 w-full rounded-full text-sm">
+              <a href={appPath("/api/vehicle/export?format=json")}>
+                <ExternalLink className="mr-2 size-4" aria-hidden />
+                {t("settings.exportRecent")}
+              </a>
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -1063,6 +1010,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                   const result = await deleteAccount();
                   setDeletingAccount(false);
                   if (result.ok) {
+                    await clearPrivateBrowserData();
                     toast.success(t("settings.deleteAccountDone") as string);
                     router.replace("/login");
                     router.refresh();
@@ -1396,60 +1344,6 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             </Button>
           )}
 
-          <button
-            type="button"
-            className="flex w-full items-center justify-between gap-2 py-1 text-left text-sm font-medium"
-            aria-expanded={cloudAdvancedOpen}
-            onClick={() => setCloudAdvancedOpen((open) => !open)}
-          >
-            {t("settings.cloud.advanced")}
-            <ChevronDown
-              className={`size-4 shrink-0 transition-transform ${cloudAdvancedOpen ? "rotate-180" : ""}`}
-              aria-hidden
-            />
-          </button>
-
-          {cloudAdvancedOpen ? (
-            <div className="space-y-4 border-t border-white/[0.08] pt-4">
-              <div className="space-y-2">
-                <Label htmlFor="bydmate-api-key">{t("settings.cloud.apiKey")}</Label>
-                <Input
-                  id="bydmate-api-key"
-                  value={bydmateCloudApiKey || (t("settings.noKeyYet") as string)}
-                  readOnly
-                  className="h-11 rounded-2xl font-mono text-sm"
-                />
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="lg"
-                  className="h-11 rounded-full text-sm"
-                  onClick={handleGenerateBydmateKey}
-                >
-                  <RefreshCw className="mr-2 size-4" aria-hidden />
-                  {t("settings.cloud.generateKey")}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  className="h-11 rounded-full text-sm"
-                  disabled={!bydmateCloudApiKey}
-                  onClick={handleCopyBydmateKey}
-                >
-                  <Copy className="mr-2 size-4" aria-hidden />
-                  {t("settings.cloud.copyKey")}
-                </Button>
-              </div>
-              <p className="text-muted-foreground text-sm">
-                {t("settings.cloud.endpointURL")}{" "}
-                <span className="font-mono">{siteUrl("/api/bydmate/telemetry")}</span>
-              </p>
-            </div>
-          ) : null}
-
           <ClusterBackgroundsSettings />
         </CardContent>
       </Card>
@@ -1771,7 +1665,6 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                           const lon = position.coords.longitude;
                           setNewLocationLat(String(lat));
                           setNewLocationLng(String(lon));
-                          try { localStorage.setItem("voltflow:last_gps", JSON.stringify({ lat, lon })); } catch {}
                         },
                         () => {},
                         { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },

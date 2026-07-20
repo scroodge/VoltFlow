@@ -43,7 +43,7 @@ export function VehicleControlDevClient({
 
   async function pollAsAgent(dryRun: boolean) {
     if (!apiKey) {
-      log("No bydmate_cloud_api_key on dev profile");
+      log("The dev page intentionally does not expose a paired Mate credential");
       return;
     }
 
@@ -170,8 +170,8 @@ export function VehicleControlDevClient({
         <CardContent className="space-y-3">
           {!apiKey ? (
             <p className="text-sm text-amber-600">
-              Profile has no <code>bydmate_cloud_api_key</code> — generate one in Settings or link
-              VoltFlow Mate first.
+              The dev page intentionally does not expose a paired Mate credential. Use a physical
+              Mate paired through the short-lived Settings code to test authenticated polling.
             </p>
           ) : null}
           <div className="flex flex-wrap gap-2">

@@ -52,7 +52,7 @@ export const telemetrySchema = z
     current_trip_distance_km: numericSchema,
     current_trip_consumption_kwh_100km: numericSchema,
   })
-  .passthrough();
+  .strip();
 
 export const diplusSchema = z
   .object({
@@ -104,7 +104,7 @@ export const diplusSchema = z
     sentry_provider: z.string().nullable().optional(),
     sentry_active: z.boolean().nullable().optional(),
   })
-  .passthrough();
+  .strip();
 
 const optionalDiplusSchema = z.preprocess(
   (value) => (value === null ? undefined : value),
@@ -118,7 +118,7 @@ export const locationSchema = z
     accuracy_m: numericSchema,
     bearing_deg: numericSchema,
   })
-  .passthrough();
+  .strip();
 
 export const payloadSchema = z
   .object({
@@ -126,6 +126,7 @@ export const payloadSchema = z
     vehicle_id: z.string().min(1).max(160),
     device_time: z.string().min(1).max(80),
     source: z.literal("BYDMate"),
+    mate_version: z.string().min(1).max(80).nullable().optional(),
     // Parked heartbeat that only needs to refresh live state. The ingest RPC
     // takes a fast path for these: live snapshot only, no history/hourly/trip
     // writes. Absent (older APK versions) means a normal full sample.
@@ -158,10 +159,10 @@ export const payloadSchema = z
         lifetime_mileage_km: numericSchema,
         lifetime_kwh: numericSchema,
       })
-      .passthrough()
+      .strip()
       .optional(),
   })
-  .passthrough();
+  .strip();
 
 // One cumulative per-hour aggregate from HourlyRollupAccumulator.toJson(), shipped once per
 // flush in the batch envelope's "hourly" array (never per-sample — a block spans the whole
@@ -186,7 +187,7 @@ export const hourlyBlockSchema = z
     regen_kwh_sum: numericSchema,
     traction_kwh_sum: numericSchema,
   })
-  .passthrough();
+  .strip();
 
 // One cumulative per-trip aggregate from TripRollupAccumulator.toJson(), shipped once per
 // flush in the batch envelope's "trips" array. Mirrors the real bydmate_trips columns.
@@ -210,7 +211,7 @@ export const tripBlockSchema = z
     regen_energy_kwh: numericSchema,
     traction_energy_kwh: numericSchema,
   })
-  .passthrough();
+  .strip();
 
 const batchPayloadSchema = z.union([
   z.array(payloadSchema).min(1).max(300),
@@ -222,7 +223,7 @@ const batchPayloadSchema = z.union([
       // this stays small — the cap only bounds a malformed or hostile body.
       trips: z.array(tripBlockSchema).max(24).optional(),
     })
-    .passthrough(),
+    .strip(),
 ]);
 
 export type TelemetryPayload = z.infer<typeof payloadSchema>;

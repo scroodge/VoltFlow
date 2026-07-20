@@ -26,11 +26,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: result.error }, { status });
     }
 
-    return NextResponse.json({
-      ok: true,
-      api_key: result.apiKey,
-      endpoint_url: result.endpointUrl,
-    });
+    return NextResponse.json(
+      {
+        ok: true,
+        api_key: result.apiKey,
+        endpoint_url: result.endpointUrl,
+      },
+      { headers: { "Cache-Control": "no-store, max-age=0" } },
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Redeem failed";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });

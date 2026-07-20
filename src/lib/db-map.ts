@@ -71,8 +71,6 @@ export function mapProfile(raw: Record<string, unknown>): Profile {
     home_price_per_kwh: num(raw.home_price_per_kwh, defaultPricePerKwh),
     commercial_ac_price_per_kwh: num(raw.commercial_ac_price_per_kwh, defaultPricePerKwh),
     fast_dc_price_per_kwh: num(raw.fast_dc_price_per_kwh, defaultPricePerKwh),
-    bydmate_cloud_api_key:
-      raw.bydmate_cloud_api_key != null ? String(raw.bydmate_cloud_api_key) : null,
     is_premium: raw.is_premium === true,
     created_at: String(raw.created_at ?? ""),
   };

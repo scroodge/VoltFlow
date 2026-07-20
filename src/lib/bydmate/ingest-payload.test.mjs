@@ -29,6 +29,20 @@ test("accepts legacy BYDMate payload without diplus", () => {
   assert.equal(result.payloads[0].telemetry.soc, 72);
 });
 
+test("strips undeclared payload fields before persistence", () => {
+  const result = normalizePayloads({
+    ...basePayload,
+    unexpected_top_level: "do-not-store",
+    telemetry: { ...basePayload.telemetry, unexpected_telemetry: "do-not-store" },
+    location: { ...basePayload.location, street_address: "do-not-store" },
+  });
+
+  assert.equal(result.success, true);
+  assert.equal("unexpected_top_level" in result.payloads[0], false);
+  assert.equal("unexpected_telemetry" in result.payloads[0].telemetry, false);
+  assert.equal("street_address" in result.payloads[0].location, false);
+});
+
 test("accepts BYDMate batch sample with null diplus", () => {
   const result = normalizePayloads({
     samples: [

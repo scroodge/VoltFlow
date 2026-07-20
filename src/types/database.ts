@@ -19,7 +19,6 @@ export type Profile = {
   home_price_per_kwh: number;
   commercial_ac_price_per_kwh: number;
   fast_dc_price_per_kwh: number;
-  bydmate_cloud_api_key: string | null;
   telegram_id?: number | null;
   telegram_username?: string | null;
   notify_channel?: "web_push" | "telegram" | "both";

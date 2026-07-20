@@ -14,9 +14,11 @@ import {
   type AcceptedTelemetry,
 } from "@/lib/bydmate/telemetry-sanitizer";
 import { createServiceClient } from "@/lib/supabase/service";
+import { resolveBydmateApiKeyProfile } from "@/lib/bydmate/api-auth";
 import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
 
 export const runtime = "nodejs";
+const MAX_INGEST_BODY_BYTES = 2_000_000;
 
 type PersistedTelemetryRow = {
   vehicle_id: string;
@@ -134,6 +136,24 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, error: "Missing X-Vehicle-Id" }, { status: 400 });
   }
 
+  let supabase: ReturnType<typeof createServiceClient>;
+  let profile: Awaited<ReturnType<typeof resolveBydmateApiKeyProfile>>;
+  try {
+    supabase = createServiceClient();
+    profile = await resolveBydmateApiKeyProfile(supabase, apiKey);
+  } catch {
+    return Response.json({ ok: false, error: "Key lookup failed" }, { status: 500 });
+  }
+
+  if (!profile) {
+    return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  const contentLength = Number(request.headers.get("content-length") ?? "0");
+  if (Number.isFinite(contentLength) && contentLength > MAX_INGEST_BODY_BYTES) {
+    return Response.json({ ok: false, error: "Payload too large" }, { status: 413 });
+  }
+
   let json: unknown;
   try {
     json = await request.json();
@@ -180,21 +200,6 @@ export async function POST(request: Request) {
   }));
 
   try {
-    const supabase = createServiceClient();
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("id, vehicle_connected_at")
-      .eq("bydmate_cloud_api_key", apiKey)
-      .maybeSingle();
-
-    if (profileError) {
-      return Response.json({ ok: false, error: "Key lookup failed" }, { status: 500 });
-    }
-
-    if (!profile?.id) {
-      return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-    }
-
     const vehicleIds = Array.from(new Set(normalizedSamples.map((sample) => sample.vehicle_id)));
     const { data: previousRows, error: previousError } = await supabase
       .from("bydmate_live_snapshots")
