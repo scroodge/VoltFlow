@@ -136,6 +136,13 @@ export const payloadSchema = z
     // Absent (older APK versions, or the daemon which has no Room access) means the server
     // keeps doing the per-sample upsert as it does today.
     client_hourly: booleanSchema,
+    // Sample belongs to a trip the APK owns end to end (see `tripBlockSchema` below),
+    // shipped cumulatively in the batch envelope's "trips" array. The ingest RPC skips its
+    // own trip create/extend for these and only stubs the row + writes the track point.
+    // Both absent (older APK versions, the daemon, or any sample outside a trip) means the
+    // server derives the trip itself exactly as it does today.
+    client_trip: booleanSchema,
+    trip_id: z.string().uuid().nullable().optional(),
     telemetry: telemetrySchema,
     diplus: optionalDiplusSchema,
     location: locationSchema,
@@ -181,12 +188,39 @@ export const hourlyBlockSchema = z
   })
   .passthrough();
 
+// One cumulative per-trip aggregate from TripRollupAccumulator.toJson(), shipped once per
+// flush in the batch envelope's "trips" array. Mirrors the real bydmate_trips columns.
+// `ended_at` is present only once the trip is closed; the optional numerics are absent
+// rather than 0 when there was no basis to compute them (e.g. distance_km before the
+// odometer baseline has moved), so bydmate_apply_client_trip coalesces them against the
+// stored row instead of nulling it.
+export const tripBlockSchema = z
+  .object({
+    trip_id: z.string().uuid(),
+    started_at: z.string().min(1).max(80),
+    last_device_time: z.string().min(1).max(80),
+    ended_at: z.string().min(1).max(80).nullable().optional(),
+    sample_count: z.number().int().min(0),
+    distance_km: numericSchema,
+    soc_start: numericSchema,
+    soc_end: numericSchema,
+    max_speed_kmh: numericSchema,
+    avg_speed_kmh: numericSchema,
+    avg_consumption_kwh_100km: numericSchema,
+    regen_energy_kwh: numericSchema,
+    traction_energy_kwh: numericSchema,
+  })
+  .passthrough();
+
 const batchPayloadSchema = z.union([
   z.array(payloadSchema).min(1).max(300),
   z
     .object({
       samples: z.array(payloadSchema).min(1).max(300),
       hourly: z.array(hourlyBlockSchema).max(24).optional(),
+      // At most one open trip per vehicle, plus any just-closed trip still settling, so
+      // this stays small — the cap only bounds a malformed or hostile body.
+      trips: z.array(tripBlockSchema).max(24).optional(),
     })
     .passthrough(),
 ]);
@@ -196,6 +230,7 @@ export type LocationPayload = z.infer<typeof locationSchema>;
 export type TelemetryPayloadData = z.infer<typeof telemetrySchema>;
 export type DiplusPayloadData = z.infer<typeof diplusSchema>;
 export type HourlyBlock = z.infer<typeof hourlyBlockSchema>;
+export type TripBlock = z.infer<typeof tripBlockSchema>;
 
 export function normalizePayloads(json: unknown) {
   const batchParsed = batchPayloadSchema.safeParse(json);
@@ -204,6 +239,7 @@ export function normalizePayloads(json: unknown) {
       success: true as const,
       payloads: Array.isArray(batchParsed.data) ? batchParsed.data : batchParsed.data.samples,
       hourly: Array.isArray(batchParsed.data) ? [] : (batchParsed.data.hourly ?? []),
+      trips: Array.isArray(batchParsed.data) ? [] : (batchParsed.data.trips ?? []),
     };
   }
 
@@ -219,5 +255,6 @@ export function normalizePayloads(json: unknown) {
     success: true as const,
     payloads: [parsed.data],
     hourly: [] as HourlyBlock[],
+    trips: [] as TripBlock[],
   };
 }

@@ -1,6 +1,6 @@
 import { processBydmateAutoChargingSessions } from "@/lib/bydmate/charging-auto-session";
 import { reconcileChargingSessionsForUser } from "@/lib/charging-session-reconcile";
-import { normalizePayloads, type HourlyBlock } from "@/lib/bydmate/ingest-payload";
+import { normalizePayloads, type HourlyBlock, type TripBlock } from "@/lib/bydmate/ingest-payload";
 import { parseIngestStats } from "@/lib/bydmate/ingest-stats";
 import { processBydmateChargeNotifications } from "@/lib/push/charge-notifications";
 import { processBydmateLiveStatusNotifications } from "@/lib/push/live-status-notifications";
@@ -161,6 +161,8 @@ export async function POST(request: Request) {
   // it) — they belong to whichever single vehicle this batch's samples were just normalized
   // to above, so headerVehicleId is the correct id to apply them under.
   const hourlyBlocks: HourlyBlock[] = normalized.hourly;
+  // Same for trip blocks: TripRollupAccumulator.toJson() carries trip_id but no vehicle_id.
+  const tripBlocks: TripBlock[] = normalized.trips;
 
   const receivedAt = new Date().toISOString();
   const parsedSamples = payloads.map((payload) => ({
@@ -362,18 +364,43 @@ export async function POST(request: Request) {
           })
       : Promise.resolve(0);
 
+    // Best-effort like the hourly blocks, and for a stronger reason: bydmate_apply_client_trip
+    // is UPDATE-only, so a block that fails here changes nothing at all. The row itself was
+    // already stubbed by the ingest call above (which is why blocks must stay ordered after
+    // the samples), and the client keeps re-sending the full cumulative trip until it acks.
+    const tripRollupPromise = tripBlocks.length
+      ? Promise.all(
+          tripBlocks.map((block) =>
+            supabase.rpc("bydmate_apply_client_trip", {
+              p_user_id: profile.id,
+              p_vehicle_id: headerVehicleId,
+              p_trip_id: block.trip_id,
+              p_block: block,
+            }),
+          ),
+        )
+          .then(() => tripBlocks.length)
+          .catch((tripError: unknown) => {
+            const message = tripError instanceof Error ? tripError.message : "Trip rollup failed";
+            console.error("bydmate trip rollup:", message);
+            return 0;
+          })
+      : Promise.resolve(0);
+
     const [
       chargeNotifications,
       liveStatusNotifications,
       telegramWidgets,
       autoChargingSessions,
       hourlyRollupApplied,
+      tripRollupApplied,
     ] = await Promise.all([
       chargeNotificationsPromise,
       liveStatusNotificationsPromise,
       telegramWidgetsPromise,
       autoChargingSessionsPromise,
       hourlyRollupPromise,
+      tripRollupPromise,
     ]);
 
     // Only reconcile when auto-session processing actually opened/closed a row.
@@ -405,6 +432,7 @@ export async function POST(request: Request) {
       dropped_location_count: droppedLocations,
       dropped_telemetry_field_count: droppedTelemetryFields,
       hourly_rollup_applied: hourlyRollupApplied,
+      trip_rollup_applied: tripRollupApplied,
       charge_notifications: chargeNotifications,
       live_status_notifications: liveStatusNotifications,
       telegram_live_widgets: telegramWidgets,
