@@ -54,6 +54,20 @@ test("explicit Di+ unplug overrides a stale is_charging flag for auto sessions",
   );
 });
 
+test("explicit Di+ unplug overrides a stale nonzero charge_power_kw (car way, 2026-07-22 15:18:58 UTC)", () => {
+  // Real production glitch: car was parked and unplugged (gun_state 1), but
+  // is_charging and charge_power_kw kept reporting stale leftover values from the
+  // charge that had already ended ~1h10m earlier, falsely reopening a session.
+  assert.equal(
+    isMateAutoSessionCharging(
+      { is_charging: true, charge_power_kw: 1, soc: 66 },
+      0,
+      { diplus: { charge_gun_state: 1 } },
+    ),
+    false,
+  );
+});
+
 test("is_charging while driving is not charging", () => {
   assert.equal(
     isMateAutoSessionCharging({ is_charging: true, charge_power_kw: 0, soc: 84 }, 20),

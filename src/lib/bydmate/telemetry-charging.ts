@@ -80,14 +80,17 @@ export function isMateAutoSessionCharging(
 ) {
   if (!isVehicleParkedForCharging(speedKmh)) return false;
 
+  // `is_charging` and `charge_power_kw` can both remain stuck at stale nonzero/true
+  // values after unplug. A known Di+ gun state of 1 is authoritative for that
+  // stale-reading case, so it must be checked before charge_power_kw — otherwise a
+  // leftover nonzero charge_power_kw reading (e.g. from a charge that already ended)
+  // bypasses this override and creates/keeps a false auto session.
+  if (finiteTelemetryNumber(readChargeGunState(context)) === 1) return false;
+
   const chargePowerKw = finiteTelemetryNumber(telemetry.charge_power_kw);
   if (chargePowerKw != null && chargePowerKw > TELEMETRY_CHARGE_POWER_THRESHOLD_KW) {
     return true;
   }
-
-  // `is_charging` can remain true after unplug. A known Di+ gun state of 1 is
-  // authoritative for that stale-flag case; do not create/keep an auto session.
-  if (finiteTelemetryNumber(readChargeGunState(context)) === 1) return false;
 
   if (telemetry.is_charging !== true) return false;
   const soc = finiteTelemetryNumber(telemetry.soc);
