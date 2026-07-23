@@ -50,6 +50,11 @@ export function isTelemetryCharging(
   telemetry: Pick<BydmateTelemetry, "is_charging" | "charge_power_kw">,
   context?: TelemetryChargingDiplusContext | null,
 ) {
+  // Di+ gun state 1 is the authoritative idle/unplugged signal for the live
+  // status path. Check it before charge power because Mate can retain a small
+  // stale `charge_power_kw` value after the cable is removed.
+  if (finiteTelemetryNumber(readChargeGunState(context)) === 1) return false;
+
   const chargePowerKw = finiteTelemetryNumber(telemetry.charge_power_kw);
   if (chargePowerKw != null && chargePowerKw > TELEMETRY_CHARGE_POWER_THRESHOLD_KW) {
     return true;

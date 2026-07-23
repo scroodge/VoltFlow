@@ -85,6 +85,16 @@ test("is_charging with gun unplugged (1) is not charging", () => {
   );
 });
 
+test("gun unplugged overrides stale low charge power in live status", () => {
+  assert.equal(
+    isTelemetryCharging(
+      { is_charging: true, charge_power_kw: 1 },
+      { diplus: { charge_gun_state: 1 } },
+    ),
+    false,
+  );
+});
+
 test("gun connected (AC) is charging even without power yet", () => {
   assert.equal(
     isTelemetryCharging(
