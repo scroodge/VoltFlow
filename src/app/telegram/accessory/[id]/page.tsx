@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 import { staticTelegramKnowledgeData } from "@/lib/telegram/knowledge";
 import { getTelegramKnowledgeDataWithFallback } from "@/lib/supabase/knowledge";
-import { ShareLinkButton } from "@/components/telegram/ShareLinkButton";
+import { ExternalLinksShare } from "@/components/telegram/ExternalLinksShare";
 
 type PageProps = { params: Promise<{ id: string }> };
 
@@ -43,7 +43,7 @@ export default async function AccessoryPage({ params }: PageProps) {
           <h2 className="mt-6 font-heading text-xl font-bold">Проверить перед покупкой</h2>
           <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-foreground/80">{item.whatToCheckBeforeBuying.map((check) => <li key={check}>{check}</li>)}</ul>
           {item.riskNotes?.length ? <div className="mt-5 space-y-2">{item.riskNotes.map((note) => <p key={note} className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-sm leading-6 text-amber-100">{note}</p>)}</div> : null}
-          {links.length ? <div className="mt-6 flex flex-wrap items-center gap-2">{links.map((link) => <a key={`${link.label}-${link.url}`} href={link.url} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--voltflow-cyan)]/40 bg-[var(--voltflow-cyan)]/10 px-4 text-sm font-bold text-[var(--voltflow-cyan)] transition hover:bg-[var(--voltflow-cyan)]/15">{link.label}<ExternalLink className="size-4" aria-hidden /></a>)}<span className="ml-auto"><ShareLinkButton title={item.title} /></span></div> : <div className="mt-6 flex justify-end"><ShareLinkButton title={item.title} /></div>}
+          <ExternalLinksShare links={links} title={item.title} />
         </article>
       </div>
     </main>

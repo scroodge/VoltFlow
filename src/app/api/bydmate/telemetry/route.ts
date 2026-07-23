@@ -15,6 +15,10 @@ import {
 } from "@/lib/bydmate/telemetry-sanitizer";
 import { createServiceClient } from "@/lib/supabase/service";
 import { resolveBydmateApiKeyProfile } from "@/lib/bydmate/api-auth";
+import {
+  readBodyWithLimit,
+  RequestBodyTooLargeError,
+} from "@/lib/api/read-body";
 import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
 
 export const runtime = "nodejs";
@@ -149,15 +153,14 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  const contentLength = Number(request.headers.get("content-length") ?? "0");
-  if (Number.isFinite(contentLength) && contentLength > MAX_INGEST_BODY_BYTES) {
-    return Response.json({ ok: false, error: "Payload too large" }, { status: 413 });
-  }
-
   let json: unknown;
   try {
-    json = await request.json();
-  } catch {
+    const body = await readBodyWithLimit(request, MAX_INGEST_BODY_BYTES);
+    json = JSON.parse(new TextDecoder().decode(body));
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return Response.json({ ok: false, error: "Payload too large" }, { status: 413 });
+    }
     return Response.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
   }
 

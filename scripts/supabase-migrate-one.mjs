@@ -75,7 +75,7 @@ function readLocalMigrations() {
     throw new Error(`Missing migrations directory: ${migrationsDir}`);
   }
 
-  return readdirSync(migrationsDir)
+  const migrations = readdirSync(migrationsDir)
     .filter((file) => migrationNamePattern.test(file))
     .sort()
     .map((file) => ({
@@ -83,6 +83,22 @@ function readLocalMigrations() {
       version: file.match(migrationNamePattern)[1],
       path: join(migrationsDir, file),
     }));
+
+  const byVersion = new Map();
+  for (const migration of migrations) {
+    const siblings = byVersion.get(migration.version) ?? [];
+    siblings.push(migration.file);
+    byVersion.set(migration.version, siblings);
+  }
+  const duplicates = [...byVersion.entries()].filter(([, files]) => files.length > 1);
+  if (duplicates.length > 0) {
+    const detail = duplicates
+      .map(([version, files]) => `${version}: ${files.join(", ")}`)
+      .join("; ");
+    throw new Error(`Duplicate migration versions: ${detail}`);
+  }
+
+  return migrations;
 }
 
 function targetArgs() {

@@ -34,7 +34,6 @@ const SUPABASE_PAGE_SIZE = 1000;
 // prefer the flat columns; the live snapshot table keeps its own diplus blob.
 const TELEMETRY_SAMPLE_SELECT =
   "device_time, telemetry, diplus_charge_gun_state, diplus_min_cell_voltage_v, diplus_max_cell_voltage_v, diplus_cell_delta_v";
-  "device_time, telemetry, diplus_charge_gun_state, diplus_min_cell_voltage_v, diplus_max_cell_voltage_v, diplus_cell_delta_v";
 /** Cap raw day fetches before client downsample (heavy charging days). */
 export const MAX_DAY_RAW_SAMPLES = 5000;
 /** Safety cap for trip detail fetches (~5.5 h at 1 Hz). */

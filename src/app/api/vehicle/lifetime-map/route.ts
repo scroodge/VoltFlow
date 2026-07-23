@@ -10,6 +10,9 @@ export async function GET(request: NextRequest) {
   }
 
   const vehicleId = request.nextUrl.searchParams.get("vehicle_id")?.trim() || devVehicleId(request);
+  if (!vehicleId) {
+    return NextResponse.json({ error: "vehicle_id is required" }, { status: 400 });
+  }
 
   try {
     const points = await fetchLifetimeTrackPoints({

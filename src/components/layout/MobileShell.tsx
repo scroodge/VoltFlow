@@ -1,6 +1,7 @@
 "use client";
 
 import { type CSSProperties, type ReactNode, useEffect, useMemo } from "react";
+import { usePathname } from "next/navigation";
 
 import { requestLiveFastStatus } from "@/actions/live-status";
 import { MateUpdateBanner } from "@/components/dashboard/mate-update-banner";
@@ -27,7 +28,15 @@ const LIVE_FAST_HEARTBEAT_MS = 8_000;
 function LiveStatusHost() {
   const { data: bydmateLive = [] } = useBydmateLiveQuery();
   const pageVisible = usePageVisible();
+  const pathname = usePathname();
   const devRoute = isDevAppRoute();
+  const isLiveView =
+    pathname === "/dashboard" ||
+    pathname.startsWith("/dashboard/") ||
+    pathname === "/vehicle" ||
+    pathname.startsWith("/vehicle/") ||
+    pathname === "/charging" ||
+    pathname.startsWith("/charging/");
   const installedVersion =
     bydmateLive.find((snapshot) => snapshot.mate_version)?.mate_version ?? null;
   // This permanent shell is the single viewer-presence owner. Individual screens may read
@@ -35,7 +44,7 @@ function LiveStatusHost() {
   const watchedVehicleId = bydmateLive[0]?.vehicle_id ?? null;
 
   useEffect(() => {
-    if (devRoute || !pageVisible || !watchedVehicleId) return;
+    if (devRoute || !isLiveView || !pageVisible || !watchedVehicleId) return;
 
     const beat = () => {
       // Best-effort: a missed beat costs latency until the next one, never correctness.
@@ -45,7 +54,7 @@ function LiveStatusHost() {
     beat();
     const timer = setInterval(beat, LIVE_FAST_HEARTBEAT_MS);
     return () => clearInterval(timer);
-  }, [devRoute, pageVisible, watchedVehicleId]);
+  }, [devRoute, isLiveView, pageVisible, watchedVehicleId]);
 
   return (
     <div className="px-6 pt-4">

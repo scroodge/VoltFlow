@@ -35,6 +35,8 @@ export async function resolveVehicleApiAccess(
   return { userId: userData.user.id, supabase, devMode: false };
 }
 
-export function devVehicleId(request: NextRequest): string {
-  return request.nextUrl.searchParams.get("vehicle_id")?.trim() || DEV_WAY_VEHICLE_ID;
+export function devVehicleId(request: NextRequest): string | null {
+  const requested = request.nextUrl.searchParams.get("vehicle_id")?.trim();
+  if (requested) return requested;
+  return isDevApiRequest(request) ? DEV_WAY_VEHICLE_ID : null;
 }

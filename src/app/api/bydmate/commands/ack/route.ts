@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { resolveBydmateApiKeyProfile } from "@/lib/bydmate/api-auth";
+import { readBodyWithLimit, RequestBodyTooLargeError } from "@/lib/api/read-body";
 
 export const runtime = "nodejs";
 
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
     try {
       bodyBytes = await readBodyWithLimit(request, MAX_ACK_BODY_BYTES);
     } catch (error) {
-      if (error instanceof Error && error.message === "PAYLOAD_TOO_LARGE") {
+      if (error instanceof RequestBodyTooLargeError) {
         return Response.json({ ok: false, error: "Payload too large" }, { status: 413 });
       }
       throw error;
@@ -86,34 +87,4 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ ok: false, error: "Ack failed" }, { status: 500 });
   }
-}
-
-async function readBodyWithLimit(request: Request, limit: number): Promise<Uint8Array> {
-  if (!request.body) return new Uint8Array();
-
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > limit) {
-        await reader.cancel();
-        throw new Error("PAYLOAD_TOO_LARGE");
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  const body = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return body;
 }

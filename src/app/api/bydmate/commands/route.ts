@@ -63,15 +63,16 @@ export async function GET(request: Request) {
     return Response.json({ ok: false, error: "Missing X-Vehicle-Id" }, { status: 400 });
   }
 
-  if (REMOTE_COMMANDS_DISABLED) {
-    return Response.json({ ok: true, commands: [], live_fast_seconds: 0 });
-  }
-
   try {
     const supabase = createServiceClient();
     const profile = await resolveBydmateApiKeyProfile(supabase, apiKey);
     if (!profile) {
       return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    const liveFastSeconds = liveFastSecondsFor(profile, vehicleId);
+    if (REMOTE_COMMANDS_DISABLED) {
+      return Response.json({ ok: true, commands: [], live_fast_seconds: liveFastSeconds });
     }
 
     const { error: scheduleError } = await supabase.rpc("enqueue_due_vehicle_command_schedules", {
@@ -97,8 +98,6 @@ export async function GET(request: Request) {
 
     // Empty queue (the overwhelming majority of polls) costs one indexed read and zero
     // writes. Only touch the table when there is something stale to expire or fresh to send.
-    const liveFastSeconds = liveFastSecondsFor(profile, vehicleId);
-
     const pending = (rows ?? []) as PendingCommand[];
     if (pending.length === 0) {
       return Response.json({ ok: true, commands: [], live_fast_seconds: liveFastSeconds });

@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, MapPin, ShieldCheck } from "lucide-react";
+import { ArrowLeft, MapPin, ShieldCheck } from "lucide-react";
 
 import { getPublishedServiceProvider } from "@/lib/supabase/knowledge";
 import { ServiceMapLink } from "@/components/telegram/ServiceMapLink";
-import { ShareLinkButton } from "@/components/telegram/ShareLinkButton";
+import { ExternalLinksShare } from "@/components/telegram/ExternalLinksShare";
 
 type PageProps = { params: Promise<{ id: string }> };
 
@@ -43,7 +43,7 @@ export default async function ServiceProviderPage({ params }: PageProps) {
           {provider.description ? <p className="mt-5 text-base leading-7 text-foreground/80">{provider.description}</p> : null}
           {provider.services.length ? <p className="mt-6 text-sm font-semibold text-foreground/80">Услуги: {provider.services.join(", ")}</p> : null}
           {provider.price_from !== null ? <p className="mt-5 text-base font-bold text-[var(--voltflow-green)]">Услуги от {provider.price_from} {provider.currency}</p> : null}
-          {provider.external_links.length ? <div className="mt-6 flex flex-wrap items-center gap-2">{provider.external_links.map((link) => <a key={`${link.label}-${link.url}`} href={link.url} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--voltflow-cyan)]/40 bg-[var(--voltflow-cyan)]/10 px-4 text-sm font-bold text-[var(--voltflow-cyan)] transition hover:bg-[var(--voltflow-cyan)]/15">{link.label}<ExternalLink className="size-4" aria-hidden /></a>)}<span className="ml-auto"><ShareLinkButton title={provider.name} /></span></div> : <div className="mt-6 flex justify-end"><ShareLinkButton title={provider.name} /></div>}
+          <ExternalLinksShare links={provider.external_links} title={provider.name} />
         </article>
       </div>
     </main>

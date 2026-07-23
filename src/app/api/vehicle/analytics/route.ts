@@ -24,6 +24,9 @@ export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const type = params.get("type") ?? "monthly";
   const vehicleId = params.get("vehicle_id")?.trim() || devVehicleId(request);
+  if (!vehicleId) {
+    return NextResponse.json({ error: "vehicle_id is required" }, { status: 400 });
+  }
 
   try {
     if (type === "monthly") {
@@ -38,6 +41,9 @@ export async function GET(request: NextRequest) {
     }
 
     if (type === "phantom") {
+      if (!vehicleId) {
+        return NextResponse.json({ error: "vehicle_id is required" }, { status: 400 });
+      }
       const days = Number(params.get("days") ?? "14");
       const rows = await fetchPhantomDrain({
         supabase: access.supabase,

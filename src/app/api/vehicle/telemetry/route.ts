@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { fetchTelemetryHistory } from "@/lib/bydmate/telemetry-history";
 import { parseTelemetryRange } from "@/lib/bydmate/telemetry-ranges";
-import { devVehicleId, resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
+import { resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
 
 export async function GET(request: NextRequest) {
   const access = await resolveVehicleApiAccess(request);

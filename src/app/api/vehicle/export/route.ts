@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { devVehicleId, resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
 
+const MAX_EXPORT_RANGE_MS = 366 * 24 * 60 * 60 * 1000;
+const MAX_EXPORT_ROWS = 10_000;
+
 function csvEscape(value: unknown) {
   const text = value == null ? "" : String(value);
   if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
@@ -18,6 +21,14 @@ export async function GET(request: NextRequest) {
   const format = params.get("format") === "json" ? "json" : "csv";
   const from = params.get("from") ?? new Date(Date.now() - 30 * 86400000).toISOString();
   const to = params.get("to") ?? new Date().toISOString();
+  const fromMs = Date.parse(from);
+  const toMs = Date.parse(to);
+  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs < fromMs) {
+    return NextResponse.json({ error: "Invalid export date range" }, { status: 400 });
+  }
+  if (toMs - fromMs > MAX_EXPORT_RANGE_MS) {
+    return NextResponse.json({ error: "Export range is limited to 366 days" }, { status: 413 });
+  }
   const vehicleId = params.get("vehicle_id")?.trim() || devVehicleId(request);
   const vehicleFilter = vehicleId ? { vehicle_id: vehicleId } : {};
 
@@ -27,14 +38,16 @@ export async function GET(request: NextRequest) {
       .select("*")
       .eq("user_id", access.userId)
       .gte("started_at", from)
-      .lte("started_at", to),
+      .lte("started_at", to)
+      .limit(MAX_EXPORT_ROWS),
     access.supabase
       .from("bydmate_trips")
       .select("*")
       .eq("user_id", access.userId)
       .match(vehicleFilter)
       .gte("started_at", from)
-      .lte("started_at", to),
+      .lte("started_at", to)
+      .limit(MAX_EXPORT_ROWS),
     access.supabase
       .from("bydmate_telemetry_samples")
       .select("device_time, vehicle_id, telemetry, location")
@@ -43,9 +56,12 @@ export async function GET(request: NextRequest) {
       .gte("device_time", from)
       .lte("device_time", to)
       .order("device_time", { ascending: true })
-      .limit(10_000),
+      .limit(MAX_EXPORT_ROWS),
   ]);
 
+  const truncated = (sessions?.length ?? 0) >= MAX_EXPORT_ROWS ||
+    (trips?.length ?? 0) >= MAX_EXPORT_ROWS ||
+    (samples?.length ?? 0) >= MAX_EXPORT_ROWS;
   const payload = {
     exported_at: new Date().toISOString(),
     from,
@@ -54,6 +70,7 @@ export async function GET(request: NextRequest) {
     charging_sessions: sessions ?? [],
     trips: trips ?? [],
     telemetry_samples: samples ?? [],
+    truncated,
   };
 
   if (format === "json") {
@@ -105,6 +122,7 @@ export async function GET(request: NextRequest) {
       ].join(","),
     );
   }
+  if (truncated) lines.push("meta,,,,,truncated,true");
 
   return new NextResponse(lines.join("\n"), {
     headers: {

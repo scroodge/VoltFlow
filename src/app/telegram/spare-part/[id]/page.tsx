@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 import { staticTelegramKnowledgeData } from "@/lib/telegram/knowledge";
 import { getTelegramKnowledgeDataWithFallback } from "@/lib/supabase/knowledge";
-import { ShareLinkButton } from "@/components/telegram/ShareLinkButton";
+import { ExternalLinksShare } from "@/components/telegram/ExternalLinksShare";
 
 type PageProps = { params: Promise<{ id: string }> };
 
@@ -34,7 +34,7 @@ export default async function SparePartPage({ params }: PageProps) {
           {item.images.length ? <div className="mt-5 grid gap-3 sm:grid-cols-2">{item.images.map((image) => <Image key={image.url} src={image.url} alt={image.alt || item.title} width={800} height={600} unoptimized className="w-full rounded-lg border border-border object-cover" />)}</div> : null}
           {item.description ? <p className="mt-5 text-base leading-7 text-foreground/80">{item.description}</p> : null}
           {item.part_number || item.compatibility ? <div className="mt-5 space-y-2 rounded-lg border border-border bg-white/[0.03] p-3 text-sm leading-6"><p>{item.part_number ? <><span className="font-semibold">Номер:</span> {item.part_number}</> : null}</p><p>{item.compatibility ? <><span className="font-semibold">Совместимость:</span> {item.compatibility}</> : null}</p></div> : null}
-          {item.external_links.length ? <div className="mt-6 flex flex-wrap items-center gap-2">{item.external_links.map((link) => <a key={`${link.label}-${link.url}`} href={link.url} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--voltflow-cyan)]/40 bg-[var(--voltflow-cyan)]/10 px-4 text-sm font-bold text-[var(--voltflow-cyan)] transition hover:bg-[var(--voltflow-cyan)]/15">{link.label}<ExternalLink className="size-4" aria-hidden /></a>)}<span className="ml-auto"><ShareLinkButton title={item.title} /></span></div> : <div className="mt-6 flex justify-end"><ShareLinkButton title={item.title} /></div>}
+          <ExternalLinksShare links={item.external_links} title={item.title} />
         </article>
       </div>
     </main>

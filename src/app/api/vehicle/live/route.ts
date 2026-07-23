@@ -11,6 +11,9 @@ export async function GET(request: NextRequest) {
   }
 
   const vehicleId = devVehicleId(request);
+  if (!vehicleId) {
+    return NextResponse.json({ error: "vehicle_id is required" }, { status: 400 });
+  }
   let query = access.supabase
     .from("bydmate_live_snapshots")
     .select("*")

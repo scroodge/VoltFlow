@@ -19,7 +19,7 @@
 --
 -- Only the first sample of a trip (and a sample arriving after the trip was closed) takes the
 -- full path now. Idempotent: safe to re-run.
--- Redefinition of the 9-arg bydmate_ingest_telemetry from 20260717120000. Diff against that
+-- Redefinition of the 9-arg bydmate_ingest_telemetry from 20260717120100. Diff against that
 -- file before touching this again: the only intended changes are (a) the v_client_trip,
 -- v_client_trip_id and v_stray_trip declares, (b) the client-owned-trip branch after the
 -- gear-P early return, and (c) the three `not v_trip.client_trip` guards around
