@@ -53,7 +53,7 @@ protected by Row Level Security keyed on `auth.uid()`.
        ┌───────────────────────────────┼────────────────────────────────┐
        ▼                               ▼                                ▼
 bydmate_live_snapshots       telemetry samples + hourly rollups    trips + GPS tracks
-(one latest row/vehicle,      (bounded raw detail, long-range       (server inference)
+(one latest row/vehicle,      (tiered raw retention, long-range     (server inference)
 Realtime source)              compact read model)                          │
        │                               │                                │
        └──────────────┬────────────────┴───────────────┬────────────────┘
@@ -95,14 +95,16 @@ when the PWA is closed.
 Normal delivery is deliberately batched to control backend work. While a user has a live
 VoltFlow view visible, the PWA renews an expiring, per-vehicle **app-owned** fast-status window
 in Postgres. Mate learns the remaining window from its existing command poll and sends a
-`live_only` snapshot about every three seconds while it remains positive. Those snapshots update
-only `bydmate_live_snapshots`, so they do not create history, hourly-rollup, or trip rows.
+`live_only` snapshot on its configured roughly three-second cadence after it observes that
+window. Those snapshots update only `bydmate_live_snapshots`, so they do not create history,
+hourly-rollup, or trip rows. The configured delivery behavior is detailed in
+[Telemetry](../supabase/TELEMETRY.md); it is not an end-to-end latency guarantee.
 
 The window is extend-only and expires automatically; there is no explicit off switch. A closed
 tab, lost connection, or crashed client therefore returns the vehicle to normal delivery on its
 next command poll. It is not a user preference and is safe to lose. The existing Realtime
-subscriber coalesces snapshot changes for one second, so the normal visible-view target is
-roughly 2–5 seconds after the command client has observed the grant.
+subscriber coalesces snapshot changes for one second; observed browser freshness also depends on
+when the command client learns the grant and on network delivery.
 
 ---
 

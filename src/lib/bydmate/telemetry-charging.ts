@@ -68,6 +68,25 @@ export function isTelemetryCharging(
   return false;
 }
 
+/**
+ * Charging-session history only. Keeps the historical `is_charging` signal for
+ * samples captured within an already-open session, but never treats traction
+ * `power_kw` as charging and still rejects an explicit Di+ unplug state.
+ */
+export function isTelemetryHistoryCharging(
+  telemetry: Pick<BydmateTelemetry, "is_charging" | "charge_power_kw">,
+  context?: TelemetryChargingDiplusContext | null,
+) {
+  if (finiteTelemetryNumber(readChargeGunState(context)) === 1) return false;
+
+  const chargePowerKw = finiteTelemetryNumber(telemetry.charge_power_kw);
+  if (chargePowerKw != null && chargePowerKw > TELEMETRY_CHARGE_POWER_THRESHOLD_KW) {
+    return true;
+  }
+
+  return telemetry.is_charging === true;
+}
+
 /** Parked or unknown speed — not driving away. */
 export function isVehicleParkedForCharging(speedKmh: number | null | undefined) {
   return speedKmh == null || speedKmh <= AUTO_CHARGING_DRIVE_STOP_SPEED_KMH;

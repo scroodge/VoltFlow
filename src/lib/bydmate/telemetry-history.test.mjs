@@ -2,7 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { resolveChargingSessionSampleWindow } from "./telemetry-session-window.ts";
-import { enumerateCalendarDays, parseSohPercent } from "./telemetry-history.ts";
+import {
+  enumerateCalendarDays,
+  fetchChargingSessionSamples,
+  parseSohPercent,
+} from "./telemetry-history.ts";
 import { medianSampleGapSeconds } from "./telemetry-ranges.ts";
 
 test("extends completed charging sample window to include delayed target samples", () => {
@@ -57,4 +61,71 @@ test("medianSampleGapSeconds computes median gap in seconds", () => {
   ]);
 
   assert.equal(gap, 2);
+});
+
+test("charging-session history excludes traction power and stale unplugged samples", async () => {
+  const session = {
+    id: "session-1",
+    user_id: "user-1",
+    status: "stopped",
+    started_at: "2026-07-23T10:00:00.000Z",
+    stopped_at: "2026-07-23T10:10:00.000Z",
+    updated_at: "2026-07-23T10:10:00.000Z",
+    created_at: "2026-07-23T10:00:00.000Z",
+    current_percent: 60,
+    target_percent: 80,
+  };
+  const samples = [
+    {
+      device_time: "2026-07-23T10:01:00.000Z",
+      telemetry: { power_kw: 32, charge_power_kw: null, is_charging: false },
+      diplus_charge_gun_state: null,
+    },
+    {
+      device_time: "2026-07-23T10:02:00.000Z",
+      telemetry: { power_kw: 0, charge_power_kw: 4.2, is_charging: true },
+      diplus_charge_gun_state: 2,
+    },
+    {
+      device_time: "2026-07-23T10:03:00.000Z",
+      telemetry: { power_kw: 0, charge_power_kw: 1, is_charging: true },
+      diplus_charge_gun_state: 1,
+    },
+  ];
+  const supabase = {
+    from(table) {
+      const query = {
+        select() {
+          return query;
+        },
+        eq() {
+          return query;
+        },
+        match() {
+          return query;
+        },
+        gte() {
+          return query;
+        },
+        lte() {
+          return query;
+        },
+        order() {
+          return query;
+        },
+        maybeSingle: async () => ({ data: table === "charging_sessions" ? session : null, error: null }),
+        range: async () => ({ data: table === "bydmate_telemetry_samples" ? samples : [], error: null }),
+      };
+      return query;
+    },
+  };
+
+  const points = await fetchChargingSessionSamples({
+    supabase,
+    userId: "user-1",
+    sessionId: "session-1",
+    vehicleId: "car-1",
+  });
+
+  assert.deepEqual(points.map((point) => point.device_time), ["2026-07-23T10:02:00.000Z"]);
 });

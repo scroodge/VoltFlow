@@ -6,10 +6,11 @@ import {
   resolveLocalCalendarDayWindow,
   resolveTelemetryWindow,
   type TelemetryHistoryRange,
-} from "@/lib/bydmate/telemetry-ranges";
-import { resolveChargingSessionSampleWindow } from "@/lib/bydmate/telemetry-session-window";
-import { mapSohDailyRows, normalizeSohPercent } from "@/lib/bydmate/soh-history-mapping";
-import type { BydmateDiplus, BydmateTelemetry, BydmateTelemetrySampleRow } from "@/types/database";
+} from "./telemetry-ranges.ts";
+import { isTelemetryHistoryCharging } from "./telemetry-charging.ts";
+import { resolveChargingSessionSampleWindow } from "./telemetry-session-window.ts";
+import { mapSohDailyRows, normalizeSohPercent } from "./soh-history-mapping.ts";
+import type { BydmateDiplus, BydmateTelemetry, BydmateTelemetrySampleRow } from "../../types/database.ts";
 
 type HourlyRow = {
   hour_start: string;
@@ -31,7 +32,7 @@ const SUPABASE_PAGE_SIZE = 1000;
 // (it duplicated the flat diplus_* columns). Cell-voltage/SOC readers already
 // prefer the flat columns; the live snapshot table keeps its own diplus blob.
 const TELEMETRY_SAMPLE_SELECT =
-  "device_time, telemetry, diplus_min_cell_voltage_v, diplus_max_cell_voltage_v, diplus_cell_delta_v";
+  "device_time, telemetry, diplus_charge_gun_state, diplus_min_cell_voltage_v, diplus_max_cell_voltage_v, diplus_cell_delta_v";
 /** Cap raw day fetches before client downsample (heavy charging days). */
 export const MAX_DAY_RAW_SAMPLES = 5000;
 /** Safety cap for trip detail fetches (~5.5 h at 1 Hz). */
@@ -41,6 +42,7 @@ export type TelemetryHistoryPoint = {
   device_time: string;
   telemetry: BydmateTelemetry;
   diplus?: BydmateDiplus;
+  diplus_charge_gun_state?: string | number | null;
   diplus_min_cell_voltage_v?: number | null;
   diplus_max_cell_voltage_v?: number | null;
   diplus_cell_delta_v?: number | null;
@@ -234,12 +236,6 @@ async function fetchTelemetrySamplePages({
   return maxRows != null ? rows.slice(0, maxRows) : rows;
 }
 
-function isChargingSample(point: TelemetryHistoryPoint) {
-  const telemetry = point.telemetry;
-  const chargePower = telemetry.charge_power_kw ?? telemetry.power_kw;
-  return telemetry.is_charging === true || (typeof chargePower === "number" && chargePower > 0);
-}
-
 async function fetchChargingTelemetrySamplePages({
   supabase,
   userId,
@@ -300,7 +296,9 @@ export async function fetchChargingSessionSamples({
     to: window.to,
   });
 
-  const chargingPoints = data.filter(isChargingSample);
+  const chargingPoints = data.filter((point) =>
+    isTelemetryHistoryCharging(point.telemetry, point),
+  );
   return downsampleByIndex(chargingPoints, MAX_TELEMETRY_CHART_POINTS);
 }
 
