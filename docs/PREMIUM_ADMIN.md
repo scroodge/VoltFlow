@@ -7,9 +7,9 @@ retention. The active entitlement is evaluated server-side for every authenticat
 
 | Data | Standard access | Extended access |
 | --- | --- | --- |
-| Detailed telemetry | Limited retention | Longer retention where available |
-| Route-track points | Limited retention | Longer retention where available |
-| Hourly aggregates | Long-term retention | Long-term retention |
+| Detailed telemetry | 30 days | Retained while the account is active |
+| Route-track points | 30 days | Retained while the account is active |
+| Hourly aggregates | 3 years | Retained while the account is active |
 
 Retention is applied by scheduled server-side jobs. Users can export available data from
 the application before it expires.

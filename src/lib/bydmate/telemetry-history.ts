@@ -6,10 +6,11 @@ import {
   resolveLocalCalendarDayWindow,
   resolveTelemetryWindow,
   type TelemetryHistoryRange,
-} from "@/lib/bydmate/telemetry-ranges";
-import { resolveChargingSessionSampleWindow } from "@/lib/bydmate/telemetry-session-window";
-import { mapSohDailyRows, normalizeSohPercent } from "@/lib/bydmate/soh-history-mapping";
-import type { BydmateDiplus, BydmateTelemetry, BydmateTelemetrySampleRow } from "@/types/database";
+} from "./telemetry-ranges.ts";
+import { isTelemetryHistoryCharging } from "./telemetry-charging.ts";
+import { resolveChargingSessionSampleWindow } from "./telemetry-session-window.ts";
+import { mapSohDailyRows, normalizeSohPercent } from "./soh-history-mapping.ts";
+import type { BydmateDiplus, BydmateTelemetry, BydmateTelemetrySampleRow } from "../../types/database.ts";
 
 type HourlyRow = {
   hour_start: string;
@@ -31,7 +32,7 @@ const SUPABASE_PAGE_SIZE = 1000;
 // (it duplicated the flat diplus_* columns). Cell-voltage/SOC readers already
 // prefer the flat columns; the live snapshot table keeps its own diplus blob.
 const TELEMETRY_SAMPLE_SELECT =
-  "device_time, telemetry, diplus_min_cell_voltage_v, diplus_max_cell_voltage_v, diplus_cell_delta_v";
+  "device_time, telemetry, diplus_charge_gun_state, diplus_min_cell_voltage_v, diplus_max_cell_voltage_v, diplus_cell_delta_v";
 /** Cap raw day fetches before client downsample (heavy charging days). */
 export const MAX_DAY_RAW_SAMPLES = 5000;
 /** Safety cap for trip detail fetches (~5.5 h at 1 Hz). */
@@ -50,6 +51,10 @@ export type TelemetryHistoryPoint = {
     soc_min: number | null;
     soc_max: number | null;
   };
+};
+
+type TelemetryHistorySamplePoint = TelemetryHistoryPoint & {
+  diplus_charge_gun_state?: string | number | null;
 };
 
 function hourlyToSample(row: HourlyRow): TelemetryHistoryPoint {
@@ -89,7 +94,7 @@ export async function fetchTelemetryHistory({
   const vehicleFilter = vehicleId ? { vehicle_id: vehicleId } : {};
 
   if (range === "day") {
-    const rows: TelemetryHistoryPoint[] = [];
+    const rows: TelemetryHistorySamplePoint[] = [];
 
     for (let fromIndex = 0; fromIndex < MAX_DAY_RAW_SAMPLES; fromIndex += SUPABASE_PAGE_SIZE) {
       const toIndex = Math.min(fromIndex + SUPABASE_PAGE_SIZE - 1, MAX_DAY_RAW_SAMPLES - 1);
@@ -105,7 +110,7 @@ export async function fetchTelemetryHistory({
 
       if (error) throw error;
 
-      const page = (data ?? []) as TelemetryHistoryPoint[];
+      const page = (data ?? []) as TelemetryHistorySamplePoint[];
       rows.push(...page);
 
       if (page.length < SUPABASE_PAGE_SIZE || rows.length >= MAX_DAY_RAW_SAMPLES) {
@@ -113,7 +118,7 @@ export async function fetchTelemetryHistory({
       }
     }
 
-    return downsampleByIndex(rows, MAX_TELEMETRY_CHART_POINTS);
+    return downsampleByIndex(rows, MAX_TELEMETRY_CHART_POINTS).map(stripChargingContext);
   }
 
   const rawFrom =
@@ -141,13 +146,15 @@ export async function fetchTelemetryHistory({
     return downsampleByIndex(hourlyPoints, MAX_TELEMETRY_CHART_POINTS);
   }
 
-  const rawPoints = await fetchTelemetrySamplePages({
-    supabase,
-    userId,
-    vehicleId,
-    from: rawFrom,
-    to: window.to,
-  });
+  const rawPoints = (
+    await fetchTelemetrySamplePages({
+      supabase,
+      userId,
+      vehicleId,
+      from: rawFrom,
+      to: window.to,
+    })
+  ).map(stripChargingContext);
 
   const merged = [...hourlyPoints, ...rawPoints].sort(
     (a, b) => Date.parse(a.device_time) - Date.parse(b.device_time),
@@ -177,7 +184,7 @@ export async function fetchTripSamples({
 
   const endAt = trip.ended_at ?? trip.last_device_time;
 
-  return fetchTelemetrySamplePages({
+  const points = await fetchTelemetrySamplePages({
     supabase,
     userId,
     vehicleId: trip.vehicle_id,
@@ -185,6 +192,7 @@ export async function fetchTripSamples({
     to: endAt,
     maxRows: MAX_TRIP_RAW_SAMPLES,
   });
+  return points.map(stripChargingContext);
 }
 
 async function fetchTelemetrySamplePages({
@@ -201,8 +209,8 @@ async function fetchTelemetrySamplePages({
   from: string;
   to: string;
   maxRows?: number;
-}): Promise<TelemetryHistoryPoint[]> {
-  const rows: TelemetryHistoryPoint[] = [];
+}): Promise<TelemetryHistorySamplePoint[]> {
+  const rows: TelemetryHistorySamplePoint[] = [];
   const vehicleFilter = vehicleId ? { vehicle_id: vehicleId } : {};
 
   for (let fromIndex = 0; ; fromIndex += SUPABASE_PAGE_SIZE) {
@@ -219,7 +227,7 @@ async function fetchTelemetrySamplePages({
 
     if (error) throw error;
 
-    const page = (data ?? []) as TelemetryHistoryPoint[];
+    const page = (data ?? []) as TelemetryHistorySamplePoint[];
     rows.push(...page);
 
     if (page.length < SUPABASE_PAGE_SIZE) {
@@ -234,10 +242,11 @@ async function fetchTelemetrySamplePages({
   return maxRows != null ? rows.slice(0, maxRows) : rows;
 }
 
-function isChargingSample(point: TelemetryHistoryPoint) {
-  const telemetry = point.telemetry;
-  const chargePower = telemetry.charge_power_kw ?? telemetry.power_kw;
-  return telemetry.is_charging === true || (typeof chargePower === "number" && chargePower > 0);
+function stripChargingContext({
+  diplus_charge_gun_state: _diplusChargeGunState,
+  ...point
+}: TelemetryHistorySamplePoint): TelemetryHistoryPoint {
+  return point;
 }
 
 async function fetchChargingTelemetrySamplePages({
@@ -300,8 +309,10 @@ export async function fetchChargingSessionSamples({
     to: window.to,
   });
 
-  const chargingPoints = data.filter(isChargingSample);
-  return downsampleByIndex(chargingPoints, MAX_TELEMETRY_CHART_POINTS);
+  const chargingPoints = data.filter((point) =>
+    isTelemetryHistoryCharging(point.telemetry, point),
+  );
+  return downsampleByIndex(chargingPoints, MAX_TELEMETRY_CHART_POINTS).map(stripChargingContext);
 }
 
 const SOH_DAILY_PROBE_LIMIT = 20;

@@ -272,8 +272,8 @@ web pushes. It is distinct from `profiles.live_status_mode`, which is the user's
 | `telemetry` | jsonb | `{soc, speed_kmh, power_kw, charge_power_kw, battery_temp_c, cabin_temp_c, outside_temp_c, soh_percent, odometer_km, gear, …}` |
 
 Unique on `(user_id, vehicle_id, device_time)`.
-Retention: free users **30 days**, premium + admin **unlimited** (kept indefinitely,
-migration `20260626130000`). Managed by `purge_old_bydmate_telemetry_by_tier()` (see
+Retention: free users **30 days**; Premium/Admin data is retained indefinitely while the account
+is active (migration `20260626130000`). Managed by `purge_old_bydmate_telemetry_by_tier()` (see
 [Retention & Housekeeping](#retention--housekeeping)).
 
 ---
@@ -648,7 +648,7 @@ persists no additional user data.
 | `increment_knowledge_article_view(p_slug)` | `SECURITY DEFINER` view-count increment for `knowledge_article_views` |
 | `bydmate_simplify_trip_track(p_trip_id)` | Ramer-Douglas-Peucker GPS simplification |
 | `simplify_aged_bydmate_trip_tracks()` | Batch simplification for trips older than 48 h |
-| `purge_old_bydmate_telemetry_by_tier()` | **Current** retention purge (free: 30d raw / 3y hourly; Premium+Admin: retained forever; stale live GPS cleared after 24h); scheduled by pg_cron |
+| `purge_old_bydmate_telemetry_by_tier()` | **Current** retention purge (free: 30d raw / 3y hourly; Premium+Admin: retained while the account is active; stale live GPS cleared after 24h); scheduled by pg_cron |
 | `is_user_premium(user_id)` | Effective premium check (admin OR flag OR term) |
 
 > Superseded purge functions kept in history only: `purge_old_bydmate_telemetry()`
@@ -683,13 +683,13 @@ Scheduled daily by the pg_cron job `purge-bydmate-telemetry` →
 
 | Data | Free | Premium + Admin |
 |---|---|---|
-| `bydmate_telemetry_samples` (raw) | 30 days | **Unlimited** (kept forever) |
-| `bydmate_trip_track_points` | 30 days | **Unlimited** |
-| `bydmate_telemetry_hourly` | 3 years | **Unlimited** (kept forever) |
+| `bydmate_telemetry_samples` (raw) | 30 days | Retained while the account is active |
+| `bydmate_trip_track_points` | 30 days | Retained while the account is active |
+| `bydmate_telemetry_hourly` | 3 years | Retained while the account is active |
 
 - `is_user_premium()` already returns true for admins, so premium + admin are fully exempt.
 - Free-account `bydmate_trip_track_points` are simplified (RDP) after 48 h before their
-  30-day expiry. Premium/Admin raw route points are retained unchanged forever.
+  30-day expiry. Premium/Admin raw route points are retained unchanged while the account is active.
 - A stale `bydmate_live_snapshots` row keeps non-location status but has exact GPS removed
   from both `location` and `raw_payload` after 24 hours without a new received sample.
 - `bydmate_telemetry_points` (v1): orphaned, not pruned automatically.

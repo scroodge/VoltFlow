@@ -316,6 +316,7 @@ export type BydmateTelemetrySampleRow = {
   received_at: string;
   telemetry: BydmateTelemetry;
   diplus?: BydmateDiplus;
+  diplus_charge_gun_state?: string | number | null;
   diplus_min_cell_voltage_v?: number | null;
   diplus_max_cell_voltage_v?: number | null;
   diplus_cell_delta_v?: number | null;

@@ -13,8 +13,10 @@
 ### Vehicle
 
 - Optional VoltFlow Mate integration for live status, trips, route tracks, and analytics.
-- While a vehicle view is visible, compatible Mate clients can provide an expiring fast live
-  status path; normal background delivery remains batched to limit backend work.
+- While a vehicle view is visible, compatible Mate clients can use an expiring fast-status path:
+  after observing its grant, they send `live_only` snapshots on a configured roughly three-second
+  cadence. Normal background delivery remains batched to limit backend work; this is not an
+  end-to-end latency guarantee.
 - State-aware live telemetry focuses the parked view on relevant temperatures and can show a
   recent driving-based energy estimate.
 - Trip details show traction and recovered energy, energy per kilometre, and net consumption

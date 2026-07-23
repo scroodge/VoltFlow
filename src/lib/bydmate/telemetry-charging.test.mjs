@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   isMateAutoSessionCharging,
+  isTelemetryHistoryCharging,
   isTelemetryCharging,
   sanitizeChargerPowerKw,
 } from "./telemetry-charging.ts";
@@ -107,6 +108,20 @@ test("gun connected (AC) is charging even without power yet", () => {
 
 test("charge_power_kw above threshold is charging", () => {
   assert.equal(isTelemetryCharging({ is_charging: false, charge_power_kw: 7.2 }), true);
+});
+
+test("history charging ignores traction power and honors explicit unplug", () => {
+  assert.equal(
+    isTelemetryHistoryCharging({ is_charging: false, charge_power_kw: null, power_kw: 32 }),
+    false,
+  );
+  assert.equal(
+    isTelemetryHistoryCharging(
+      { is_charging: true, charge_power_kw: 1 },
+      { diplus_charge_gun_state: 1 },
+    ),
+    false,
+  );
 });
 
 test("sanitizeChargerPowerKw keeps a plausible AC reading", () => {
