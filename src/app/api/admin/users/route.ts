@@ -51,22 +51,11 @@ export async function GET(request: NextRequest) {
 
   let telemetryUserIds: string[] | undefined;
   if (telemetry === "7d" || telemetry === "30d") {
-    const days = telemetry === "7d" ? 7 : 30;
-    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-    const { data: allProfiles } = await supabaseAdmin
-      .from("profiles")
-      .select("id");
-    const results = await Promise.all(
-      (allProfiles ?? []).map(async (p) => {
-        const { count } = await supabaseAdmin
-          .from("bydmate_telemetry_samples")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", p.id)
-          .gte("device_time", since);
-        return count && count > 0 ? p.id : null;
-      }),
-    );
-    telemetryUserIds = results.filter(Boolean) as string[];
+    const { data, error } = await supabaseAdmin.rpc("admin_users_activity_filter_ids", {
+      p_filter: telemetry,
+    });
+    if (error) return NextResponse.json({ error: "Activity filter failed" }, { status: 500 });
+    telemetryUserIds = ((data ?? []) as { user_id: string }[]).map((row) => row.user_id);
     if (telemetryUserIds.length === 0) {
       return NextResponse.json({
         ok: true,
@@ -80,40 +69,21 @@ export async function GET(request: NextRequest) {
   }
 
   let lastSeenUserIds: string[] | undefined;
-  let negateLastSeen = false;
+  const negateLastSeen = false;
   if (lastSeen !== "any") {
-    const { data: profiles } = await supabaseAdmin
-      .from("profiles")
-      .select("id");
-    const allProfileIds = (profiles ?? []).map((p) => p.id);
-
-    if (lastSeen === "never") {
-      const results = await Promise.all(
-        allProfileIds.map(async (userId) => {
-          const { count } = await supabaseAdmin
-            .from("bydmate_live_snapshots")
-            .select("id", { count: "exact", head: true })
-            .eq("user_id", userId);
-          return count && count > 0 ? null : userId;
-        }),
-      );
-      lastSeenUserIds = results.filter(Boolean) as string[];
-      negateLastSeen = false;
-    } else {
-      const hours = lastSeen === "24h" ? 24 : lastSeen === "7d" ? 168 : 720;
-      const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
-      const results = await Promise.all(
-        allProfileIds.map(async (userId) => {
-          const { count } = await supabaseAdmin
-            .from("bydmate_live_snapshots")
-            .select("id", { count: "exact", head: true })
-            .eq("user_id", userId)
-            .gte("device_time", since);
-          return count && count > 0 ? userId : null;
-        }),
-      );
-      lastSeenUserIds = results.filter(Boolean) as string[];
-    }
+    const filter =
+      lastSeen === "7d"
+        ? "7d_seen"
+        : lastSeen === "30d"
+          ? "30d_seen"
+          : lastSeen === "24h" || lastSeen === "never"
+            ? lastSeen
+            : "30d_seen";
+    const { data, error } = await supabaseAdmin.rpc("admin_users_activity_filter_ids", {
+      p_filter: filter,
+    });
+    if (error) return NextResponse.json({ error: "Last-seen filter failed" }, { status: 500 });
+    lastSeenUserIds = ((data ?? []) as { user_id: string }[]).map((row) => row.user_id);
   }
 
   let filterUserIds: string[] | undefined;
@@ -187,10 +157,9 @@ export async function GET(request: NextRequest) {
   const userIds = users.map((row) => row.id);
   const now = Date.now();
 
-  const [adminSet, versionMap, activityMap, overview] = await Promise.all([
+  const [adminSet, metricsMap, overview] = await Promise.all([
     loadAdminSet(userIds),
-    loadLatestVersions(userIds),
-    loadActivity(userIds),
+    loadUserMetrics(userIds),
     overviewPromise,
   ]);
 
@@ -213,9 +182,9 @@ export async function GET(request: NextRequest) {
         premiumUntil: row.premium_until,
         nowMs: now,
       }),
-      latest_mate_version: versionMap.get(row.id) ?? null,
-      last_seen_at: versionMap.get(`${row.id}:seen`) ?? null,
-      activity: activityMap.get(row.id) ?? emptyActivity(),
+      latest_mate_version: metricsMap.get(row.id)?.latest_mate_version ?? null,
+      last_seen_at: metricsMap.get(row.id)?.last_seen_at ?? null,
+      activity: metricsMap.get(row.id)?.activity ?? emptyActivity(),
     };
   });
 
@@ -328,88 +297,36 @@ async function loadAdminSet(userIds: string[]) {
   return new Set((data ?? []).map((row) => String(row.user_id)));
 }
 
-async function loadLatestVersions(userIds: string[]) {
-  const versionMap = new Map<string, string>();
-  if (userIds.length === 0) return versionMap;
+type AdminUserMetrics = {
+  latest_mate_version: string | null;
+  last_seen_at: string | null;
+  activity: ActivityCounts;
+};
 
-  await Promise.all(
-    userIds.map(async (userId) => {
-      const { data } = await supabaseAdmin
-        .from("bydmate_live_snapshots")
-        .select("mate_version,device_time")
-        .eq("user_id", userId)
-        .order("device_time", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (data?.mate_version) {
-        versionMap.set(userId, String(data.mate_version));
-      }
-      if (data?.device_time) {
-        versionMap.set(`${userId}:seen`, String(data.device_time));
-      }
-    }),
-  );
-
-  return versionMap;
-}
-
-async function loadActivity(userIds: string[]) {
-  const map = new Map<string, ActivityCounts>();
+async function loadUserMetrics(userIds: string[]) {
+  const map = new Map<string, AdminUserMetrics>();
   if (userIds.length === 0) return map;
 
-  await Promise.all(
-    userIds.map(async (userId) => {
-      const [telemetry7, telemetry30, trips7, trips30, sessions7, sessions30] =
-        await Promise.all([
-          countRows(
-            "bydmate_telemetry_samples",
-            userId,
-            "device_time",
-            new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-          ),
-          countRows(
-            "bydmate_telemetry_samples",
-            userId,
-            "device_time",
-            new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-          ),
-          countRows(
-            "bydmate_trips",
-            userId,
-            "started_at",
-            new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-          ),
-          countRows(
-            "bydmate_trips",
-            userId,
-            "started_at",
-            new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-          ),
-          countRows(
-            "charging_sessions",
-            userId,
-            "created_at",
-            new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-          ),
-          countRows(
-            "charging_sessions",
-            userId,
-            "created_at",
-            new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-          ),
-        ]);
+  const { data, error } = await supabaseAdmin.rpc("admin_users_user_metrics", {
+    p_user_ids: userIds,
+  });
+  if (error) throw new Error(`Could not load user metrics: ${error.message}`);
 
-      map.set(userId, {
-        telemetry_7d: telemetry7,
-        telemetry_30d: telemetry30,
-        trips_7d: trips7,
-        trips_30d: trips30,
-        sessions_7d: sessions7,
-        sessions_30d: sessions30,
-      });
-    }),
-  );
-
+  for (const row of (data ?? []) as Array<Record<string, unknown>>) {
+    const userId = String(row.user_id);
+    map.set(userId, {
+      latest_mate_version: row.latest_mate_version ? String(row.latest_mate_version) : null,
+      last_seen_at: row.last_seen_at ? String(row.last_seen_at) : null,
+      activity: {
+        telemetry_7d: Number(row.telemetry_7d) || 0,
+        telemetry_30d: Number(row.telemetry_30d) || 0,
+        trips_7d: Number(row.trips_7d) || 0,
+        trips_30d: Number(row.trips_30d) || 0,
+        sessions_7d: Number(row.sessions_7d) || 0,
+        sessions_30d: Number(row.sessions_30d) || 0,
+      },
+    });
+  }
   return map;
 }
 
@@ -422,21 +339,6 @@ function emptyActivity(): ActivityCounts {
     sessions_7d: 0,
     sessions_30d: 0,
   };
-}
-
-async function countRows(
-  table: "bydmate_telemetry_samples" | "bydmate_trips" | "charging_sessions",
-  userId: string,
-  timeColumn: "device_time" | "started_at" | "created_at",
-  sinceIso: string,
-) {
-  const { count } = await supabaseAdmin
-    .from(table)
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .gte(timeColumn, sinceIso);
-
-  return count ?? 0;
 }
 
 async function loadAdminStats() {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { buildKnowledgeEmbeddingText, createEmbedding } from "@/lib/embeddings";
+import { mapWithConcurrency } from "@/lib/async/map-with-concurrency";
 import { invalidateKnowledgeSearchCache } from "@/lib/knowledge-search";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/supabase/knowledge";
@@ -57,7 +58,9 @@ export async function POST(request: NextRequest) {
     }
 
     const items = (data ?? []) as KnowledgeItemForReindex[];
-    const results = await mapWithConcurrency(items, concurrency, reindexKnowledgeItem);
+    const results = await mapWithConcurrency(items, concurrency, (item) =>
+      reindexKnowledgeItem(item),
+    );
     const failures = results.flatMap((result) => result.ok ? [] : [result.failure]);
     const count = results.length - failures.length;
     if (count > 0) {
@@ -113,29 +116,6 @@ async function reindexKnowledgeItem(item: KnowledgeItemForReindex): Promise<Rein
       },
     };
   }
-}
-
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  concurrency: number,
-  task: (item: T) => Promise<R>,
-) {
-  const results = new Array<R>(items.length);
-  let nextIndex = 0;
-
-  async function worker() {
-    while (nextIndex < items.length) {
-      const currentIndex = nextIndex;
-      nextIndex += 1;
-      results[currentIndex] = await task(items[currentIndex]);
-    }
-  }
-
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, items.length) }, () => worker()),
-  );
-
-  return results;
 }
 
 function clampConcurrency(value: unknown) {

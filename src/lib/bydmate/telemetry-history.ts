@@ -10,6 +10,7 @@ import {
 import { isTelemetryHistoryCharging } from "./telemetry-charging.ts";
 import { resolveChargingSessionSampleWindow } from "./telemetry-session-window.ts";
 import { mapSohDailyRows, normalizeSohPercent } from "./soh-history-mapping.ts";
+import { mapWithConcurrency } from "../async/map-with-concurrency.ts";
 import type { BydmateDiplus, BydmateTelemetry, BydmateTelemetrySampleRow } from "../../types/database.ts";
 
 type HourlyRow = {
@@ -337,28 +338,6 @@ export function enumerateCalendarDays(fromIso: string, toIso: string): string[] 
   return days;
 }
 
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  concurrency: number,
-  mapper: (item: T, index: number) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let nextIndex = 0;
-
-  async function worker() {
-    while (nextIndex < items.length) {
-      const index = nextIndex;
-      nextIndex += 1;
-      results[index] = await mapper(items[index]!, index);
-    }
-  }
-
-  const workerCount = Math.min(concurrency, items.length);
-  await Promise.all(Array.from({ length: workerCount }, () => worker()));
-
-  return results;
-}
-
 async function fetchSohSampleForDay({
   supabase,
   userId,
@@ -441,11 +420,22 @@ export async function fetchSohTelemetryHistory({
 
   // The direct fallback keeps a web deployment usable until its matching migration
   // is applied. It is intentionally temporary: the RPC removes the 366-query fan-out.
-  if (error) {
+  // Do not turn transient database/network failures into a 366-query amplification.
+  if (error && isMissingSohRpc(error)) {
     return fetchSohTelemetryHistoryFallback({ supabase, userId, vehicleId, anchorDate });
   }
+  if (error) throw error;
 
   return mapSohDailyRows(
     (data ?? []) as { device_time: string; soh_percent: number | string | null }[],
+  );
+}
+
+function isMissingSohRpc(error: { code?: string; message?: string }) {
+  const message = error.message?.toLowerCase() ?? "";
+  return (
+    error.code === "PGRST202" ||
+    error.code === "42883" ||
+    (message.includes("bydmate_soh_daily") && message.includes("does not exist"))
   );
 }

@@ -6,6 +6,10 @@ export const runtime = "nodejs";
 const COMMAND_TIMEOUT_MS = 60 * 1000;
 const MAX_BATCH = 10;
 
+// Temporary operational kill switch. Keep the response protocol-compatible so older Mate
+// clients stop receiving commands and fast-status grants without entering an error/retry loop.
+const REMOTE_COMMANDS_DISABLED = true;
+
 type PendingCommand = {
   id: string;
   type: string;
@@ -57,6 +61,10 @@ export async function GET(request: Request) {
   const vehicleId = request.headers.get("x-vehicle-id")?.trim();
   if (!vehicleId) {
     return Response.json({ ok: false, error: "Missing X-Vehicle-Id" }, { status: 400 });
+  }
+
+  if (REMOTE_COMMANDS_DISABLED) {
+    return Response.json({ ok: true, commands: [], live_fast_seconds: 0 });
   }
 
   try {

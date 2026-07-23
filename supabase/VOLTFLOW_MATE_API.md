@@ -126,6 +126,13 @@ when present it is an array of these blocks alongside `samples`.
 Unknown forward-compatible fields are ignored. Numeric values may be represented as JSON
 numbers or numeric strings. Batches are limited to 300 samples.
 
+The legacy Supabase Edge Function URL is a compatibility proxy to the canonical
+Next.js endpoint above. It must not implement a second ingest path: sanitization,
+idempotency verification, notifications, Telegram widgets, automatic charging
+sessions, rollups, and reconciliation all belong to `/api/bydmate/telemetry`.
+Deployments may override the proxy target with `VOLTFLOW_CANONICAL_TELEMETRY_URL`;
+otherwise it uses `NEXT_PUBLIC_SITE_URL` (defaulting to `https://voltflow.life`).
+
 ## Acknowledgement and retries
 
 An HTTP success alone does not permit a client to discard queued samples. The client must

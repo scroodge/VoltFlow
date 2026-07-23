@@ -1,12 +1,12 @@
 "use server";
 
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/server";
 
 export async function deleteAccount(): Promise<
   { ok: true } | { ok: false; error: string }
 > {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return { ok: false, error: "Not authenticated" };
