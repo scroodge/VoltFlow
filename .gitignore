@@ -60,8 +60,6 @@ opencode.json
 AGENTS.md
 CLAUDE.md
 SKILLS.md
-/BACKLOG.md
-/CHANGELOG.md
 /PAPERCUTS.md
 /supabase/MIGRATIONS_AUDIT.md
 .env*
