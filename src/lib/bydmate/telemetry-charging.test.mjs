@@ -55,17 +55,20 @@ test("explicit Di+ unplug overrides a stale is_charging flag for auto sessions",
   );
 });
 
-test("explicit Di+ unplug overrides a stale nonzero charge_power_kw (car way, 2026-07-22 15:18:58 UTC)", () => {
-  // Real production glitch: car was parked and unplugged (gun_state 1), but
-  // is_charging and charge_power_kw kept reporting stale leftover values from the
-  // charge that had already ended ~1h10m earlier, falsely reopening a session.
+test("real charge_power_kw wins over gun_state = 1 (car way's gun state is unreliable)", () => {
+  // Car `way`'s Di+ gun state reads 1 ("unplugged") for the majority (71%) of its
+  // genuine charging samples — confirmed against real sessions on 2026-07-23 and again
+  // 2026-07-27. A real, above-threshold charge_power_kw reading must not be discarded
+  // just because gun_state says unplugged. (This test previously asserted the opposite,
+  // on the mistaken premise that the source timestamp was ~1h10m after a real unplug —
+  // it in fact fell inside a still-open, active charging session.)
   assert.equal(
     isMateAutoSessionCharging(
       { is_charging: true, charge_power_kw: 1, soc: 66 },
       0,
       { diplus: { charge_gun_state: 1 } },
     ),
-    false,
+    true,
   );
 });
 
@@ -86,10 +89,20 @@ test("is_charging with gun unplugged (1) is not charging", () => {
   );
 });
 
-test("gun unplugged overrides stale low charge power in live status", () => {
+test("real charge_power_kw wins over gun_state = 1 in live status", () => {
   assert.equal(
     isTelemetryCharging(
       { is_charging: true, charge_power_kw: 1 },
+      { diplus: { charge_gun_state: 1 } },
+    ),
+    true,
+  );
+});
+
+test("gun unplugged with no real power falls back to not-charging in live status", () => {
+  assert.equal(
+    isTelemetryCharging(
+      { is_charging: true, charge_power_kw: 0 },
       { diplus: { charge_gun_state: 1 } },
     ),
     false,
@@ -110,7 +123,7 @@ test("charge_power_kw above threshold is charging", () => {
   assert.equal(isTelemetryCharging({ is_charging: false, charge_power_kw: 7.2 }), true);
 });
 
-test("history charging ignores traction power and honors explicit unplug", () => {
+test("history charging ignores traction power, real charge power wins over explicit unplug", () => {
   assert.equal(
     isTelemetryHistoryCharging({ is_charging: false, charge_power_kw: null, power_kw: 32 }),
     false,
@@ -118,6 +131,16 @@ test("history charging ignores traction power and honors explicit unplug", () =>
   assert.equal(
     isTelemetryHistoryCharging(
       { is_charging: true, charge_power_kw: 1 },
+      { diplus_charge_gun_state: 1 },
+    ),
+    true,
+  );
+});
+
+test("history charging: gun unplugged with no real power falls back to not-charging", () => {
+  assert.equal(
+    isTelemetryHistoryCharging(
+      { is_charging: true, charge_power_kw: 0 },
       { diplus_charge_gun_state: 1 },
     ),
     false,

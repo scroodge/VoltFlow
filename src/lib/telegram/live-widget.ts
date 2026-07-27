@@ -3,9 +3,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
 import { isDriveTelemetry, isParkStateTelemetry } from "@/lib/bydmate/gear";
 import { latestSampleByVehicle } from "@/lib/bydmate/latest-sample";
-import { finiteTelemetryNumber, isTelemetryCharging } from "@/lib/bydmate/telemetry-charging";
+import { finiteTelemetryNumber } from "@/lib/bydmate/telemetry-charging";
 import { siteUrl as canonicalSiteUrl } from "@/lib/site-url";
 import { editTelegramMessageText, sendTelegramMessage } from "@/lib/telegram/bot-send";
+import { isChargingTelemetry } from "@/lib/vehicle-live-mode";
 
 const THROTTLE_MS = 30_000;
 const SOC_BAR_LENGTH = 12;
@@ -220,8 +221,10 @@ function determineState(lastSample: TelemetryPayload, nowMs: number, receivedAt:
     diplus_gear: lastSample.diplus?.gear,
   };
 
+  // Charging must be checked before gear: some cars' DiPlus gear signal doesn't reset
+  // to "P" while parked and charging, so a raw gear-first check misreports "driving".
+  if (isChargingTelemetry(snapshot)) return "charging";
   if (isDriveTelemetry(snapshot)) return "driving";
-  if (isTelemetryCharging(lastSample.telemetry, lastSample)) return "charging";
   if (isParkStateTelemetry(snapshot)) return "parked";
   return "offline";
 }

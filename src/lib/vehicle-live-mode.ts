@@ -33,9 +33,28 @@ export function isRawDrivingTelemetry(snapshot: BydmateLiveSnapshotRow | null | 
   return isDriveTelemetry(snapshot);
 }
 
-export function isChargingTelemetry(snapshot: BydmateLiveSnapshotRow | null | undefined) {
-  if (!snapshot || isDriveTelemetry(snapshot)) return false;
-  if (!isParkStateTelemetry(snapshot)) return false;
+function chargingCheckSpeedKmh(
+  snapshot: Pick<BydmateLiveSnapshotRow, "telemetry" | "diplus">,
+): number | null {
+  const fromTelemetry = finiteNumber(snapshot.telemetry.speed_kmh);
+  if (fromTelemetry != null) return fromTelemetry;
+  return finiteNumber(snapshot.diplus?.speed_kmh);
+}
+
+/**
+ * Gear is not a reliable "parked" gate here: some cars' DiPlus gear signal does not
+ * reset to "P" while parked and charging (observed on car `way` — gear reads "D" for
+ * the whole charge). Use speed instead, matching the auto-session engine's
+ * `isVehicleParkedForCharging`, so a real charge signal at ~0 km/h isn't discarded just
+ * because gear still reads D/R/N. Actual movement (speed above threshold) still wins —
+ * a stray charge_power_kw reading must not turn a moving car into "charging".
+ */
+export function isChargingTelemetry(
+  snapshot: Pick<BydmateLiveSnapshotRow, "telemetry" | "diplus"> | null | undefined,
+) {
+  if (!snapshot) return false;
+  const speedKmh = chargingCheckSpeedKmh(snapshot);
+  if (speedKmh != null && speedKmh > DRIVING_SPEED_THRESHOLD_KMH) return false;
   return isTelemetryCharging(snapshot.telemetry, snapshot);
 }
 
@@ -65,7 +84,7 @@ export function deriveDashboardVehicleMode({
   if (!snapshot) return hasActiveSession ? "app_charging" : "stale";
 
   const fresh = isFreshLiveSnapshot(snapshot, nowMs, staleMs);
-  if (fresh && isDriveTelemetry(snapshot)) return "driving";
+  if (fresh && isDrivingTelemetry(snapshot)) return "driving";
   if (hasActiveSession) return "app_charging";
   if (!fresh) return "stale";
   if (isChargingTelemetry(snapshot)) return "live_charging";

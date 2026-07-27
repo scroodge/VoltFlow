@@ -127,7 +127,13 @@ test("charging-session history excludes traction power and stale unplugged sampl
     vehicleId: "car-1",
   });
 
-  assert.deepEqual(points.map((point) => point.device_time), ["2026-07-23T10:02:00.000Z"]);
+  // The 10:03 sample has real charge_power_kw (1 kW, above the 0.1 kW threshold), so it
+  // now counts as charging even though gun_state reads 1 ("unplugged") — car `way`'s gun
+  // state is not a reliable unplug signal during genuine charging (see BACKLOG history).
+  assert.deepEqual(points.map((point) => point.device_time), [
+    "2026-07-23T10:02:00.000Z",
+    "2026-07-23T10:03:00.000Z",
+  ]);
   assert.equal(Object.hasOwn(points[0], "diplus_charge_gun_state"), false);
 });
 
@@ -195,5 +201,8 @@ test("charging-session history excludes traction power and stale unplugged sampl
     vehicleId: "car-1",
   });
 
-  assert.deepEqual(points.map((point) => point.device_time), ["2026-07-23T10:02:00.000Z"]);
+  assert.deepEqual(points.map((point) => point.device_time), [
+    "2026-07-23T10:02:00.000Z",
+    "2026-07-23T10:03:00.000Z",
+  ]);
 });

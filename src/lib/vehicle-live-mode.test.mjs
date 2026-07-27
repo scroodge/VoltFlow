@@ -211,6 +211,22 @@ test("gear P gun unplugged with stale is_charging flag → parked", () => {
   );
 });
 
+test("gear D at zero speed while genuinely charging → live_charging, not driving", () => {
+  // Car `way`: DiPlus gear signal doesn't reliably reset to "P" while parked and
+  // charging (stays "D" for the whole charge). A real charge_power_kw/is_charging
+  // signal at ~0 km/h must win over the stale gear reading.
+  const snap = snapshot({
+    diplus: { gear: 4, speed_kmh: 0 },
+    telemetry: { soc: 53, speed_kmh: 0, is_charging: true, charge_power_kw: 4 },
+  });
+  assert.equal(isChargingTelemetry(snap), true);
+  assert.equal(isDrivingTelemetry(snap), false);
+  assert.equal(
+    deriveDashboardVehicleMode({ snapshot: snap, nowMs: NOW, hasActiveSession: false }),
+    "live_charging",
+  );
+});
+
 test("parked AC charging blocks driving mode", () => {
   assert.equal(
     isDrivingTelemetry(

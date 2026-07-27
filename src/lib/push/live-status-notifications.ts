@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
-import { DRIVING_SPEED_THRESHOLD_KMH, gearIsDrive, gearIsPark } from "../bydmate/gear.ts";
+import { DRIVING_SPEED_THRESHOLD_KMH, gearIsDrive } from "../bydmate/gear.ts";
 import {
   finiteTelemetryNumber,
   isTelemetryCharging,
@@ -58,15 +58,19 @@ function elapsedMs(fromIso: string | null, toIso: string) {
   return Number.isFinite(from) && Number.isFinite(to) ? to - from : null;
 }
 
-/** Mirrors vehicle-live-mode ordering: driving wins over charging wins over parked. */
+/**
+ * Charging (speed-gated) wins over a stale gear reading, then real driving speed, else
+ * parked. Some cars' DiPlus gear signal doesn't reset to "P" while parked and charging
+ * (car `way` stays "D" for the whole charge), so gear alone must not override a real
+ * charge signal at ~0 km/h. Actual movement still wins over a stray charge reading.
+ */
 export function liveStatusPhaseForSample(sample: TelemetryPayload): LiveStatusPhase {
+  const speedKmh =
+    telemetrySpeedKmh(sample.telemetry) ?? finiteTelemetryNumber(sample.diplus?.speed_kmh);
+  if (speedKmh != null && speedKmh > DRIVING_SPEED_THRESHOLD_KMH) return "driving";
+  if (isTelemetryCharging(sample.telemetry, sample)) return "charging";
   const gear = sample.diplus?.gear ?? null;
   if (gearIsDrive(gear)) return "driving";
-  if (gear == null || !gearIsPark(gear)) {
-    const speedKmh = telemetrySpeedKmh(sample.telemetry);
-    if (speedKmh != null && speedKmh > DRIVING_SPEED_THRESHOLD_KMH) return "driving";
-  }
-  if (isTelemetryCharging(sample.telemetry, sample)) return "charging";
   return "parked";
 }
 

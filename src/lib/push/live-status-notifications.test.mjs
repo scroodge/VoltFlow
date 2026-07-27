@@ -204,16 +204,18 @@ test("charging payload includes power, delta since start, and rate-based ETA", (
   assert.equal(payload.body, "6.6 kW · +15% this charge · ~1 h 10 m to 100%");
 });
 
-test("phase detection: drive gear wins, then speed, then charging, else parked", () => {
+test("phase detection: charging (speed-gated) wins over stale gear, then speed, else parked", () => {
   const base = { vehicle_id: "way", device_time: T0, source: "BYDMate", schema_version: 1 };
 
+  // Car `way`: DiPlus gear stays "D" for the whole charge (doesn't reset to "P" while
+  // parked and charging). A real charge signal at 0 km/h must win over that stale gear.
   assert.equal(
     liveStatusPhaseForSample({
       ...base,
       telemetry: { speed_kmh: 0, charge_power_kw: 6 },
       diplus: { gear: "D" },
     }),
-    "driving",
+    "charging",
   );
   assert.equal(
     liveStatusPhaseForSample({ ...base, telemetry: { speed_kmh: 30 } }),

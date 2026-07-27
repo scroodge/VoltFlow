@@ -43,22 +43,25 @@ export function telemetryChargingContext(
 }
 
 /**
- * Active charging or gun plugged in. Ignores Mate `is_charging` when gun is explicitly unplugged (1).
- * Aligns with BYD Mate TelemetrySnapshot gun-state logic.
+ * Active charging or gun plugged in. Ignores Mate `is_charging` when gun is explicitly
+ * unplugged (1) and there's no real charge power. Aligns with BYD Mate TelemetrySnapshot
+ * gun-state logic.
  */
 export function isTelemetryCharging(
   telemetry: Pick<BydmateTelemetry, "is_charging" | "charge_power_kw">,
   context?: TelemetryChargingDiplusContext | null,
 ) {
-  // Di+ gun state 1 is the authoritative idle/unplugged signal for the live
-  // status path. Check it before charge power because Mate can retain a small
-  // stale `charge_power_kw` value after the cable is removed.
-  if (finiteTelemetryNumber(readChargeGunState(context)) === 1) return false;
-
+  // Real charge power wins regardless of gun state: car `way`'s Di+ gun state reads 1
+  // ("unplugged") for the *majority* of its genuine charging samples, so gun state alone
+  // is not a reliable unplug signal for this vehicle. Check it only as a fallback, for
+  // the case it was designed for — a stale `charge_power_kw`/`is_charging` reading left
+  // over from a charge that has actually ended.
   const chargePowerKw = finiteTelemetryNumber(telemetry.charge_power_kw);
   if (chargePowerKw != null && chargePowerKw > TELEMETRY_CHARGE_POWER_THRESHOLD_KW) {
     return true;
   }
+
+  if (finiteTelemetryNumber(readChargeGunState(context)) === 1) return false;
 
   const gun = readChargeGunState(context);
   if (gun != null) {
@@ -71,18 +74,19 @@ export function isTelemetryCharging(
 /**
  * Charging-session history only. Keeps the historical `is_charging` signal for
  * samples captured within an already-open session, but never treats traction
- * `power_kw` as charging and still rejects an explicit Di+ unplug state.
+ * `power_kw` as charging. Real charge power wins over an explicit Di+ unplug state
+ * (see `isTelemetryCharging`); the unplug state is only a fallback for stale readings.
  */
 export function isTelemetryHistoryCharging(
   telemetry: Pick<BydmateTelemetry, "is_charging" | "charge_power_kw">,
   context?: TelemetryChargingDiplusContext | null,
 ) {
-  if (finiteTelemetryNumber(readChargeGunState(context)) === 1) return false;
-
   const chargePowerKw = finiteTelemetryNumber(telemetry.charge_power_kw);
   if (chargePowerKw != null && chargePowerKw > TELEMETRY_CHARGE_POWER_THRESHOLD_KW) {
     return true;
   }
+
+  if (finiteTelemetryNumber(readChargeGunState(context)) === 1) return false;
 
   return telemetry.is_charging === true;
 }
@@ -104,17 +108,16 @@ export function isMateAutoSessionCharging(
 ) {
   if (!isVehicleParkedForCharging(speedKmh)) return false;
 
-  // `is_charging` and `charge_power_kw` can both remain stuck at stale nonzero/true
-  // values after unplug. A known Di+ gun state of 1 is authoritative for that
-  // stale-reading case, so it must be checked before charge_power_kw — otherwise a
-  // leftover nonzero charge_power_kw reading (e.g. from a charge that already ended)
-  // bypasses this override and creates/keeps a false auto session.
-  if (finiteTelemetryNumber(readChargeGunState(context)) === 1) return false;
-
+  // Real charge power wins regardless of gun state (see isTelemetryCharging: car `way`'s
+  // gun state reads 1 for the majority of its genuine charging samples). The gun-state
+  // override is a fallback only, for `is_charging`/`charge_power_kw` values stuck at a
+  // stale nonzero/true reading left over from a charge that has actually ended.
   const chargePowerKw = finiteTelemetryNumber(telemetry.charge_power_kw);
   if (chargePowerKw != null && chargePowerKw > TELEMETRY_CHARGE_POWER_THRESHOLD_KW) {
     return true;
   }
+
+  if (finiteTelemetryNumber(readChargeGunState(context)) === 1) return false;
 
   if (telemetry.is_charging !== true) return false;
   const soc = finiteTelemetryNumber(telemetry.soc);

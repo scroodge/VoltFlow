@@ -9,6 +9,37 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-07-27
+
+### Live status: charging must win over a stale gear signal, not the other way round
+
+- Fixed `deriveDashboardVehicleMode()` (`src/lib/vehicle-live-mode.ts`) and the Telegram
+  widget's `determineState()` (`src/lib/telegram/live-widget.ts`) both misreporting a
+  parked, actively charging car as "driving." Root cause: both checked the raw,
+  charge-unaware `isDriveTelemetry()` (any DiPlus gear D/R/N) before ever checking charge
+  signals; car `way`'s DiPlus gear does not reliably reset to "P" while parked and
+  charging, so it stayed stuck at "driving" for the whole charge.
+- `isChargingTelemetry()` now gates on measured speed (mirroring the auto-session
+  engine's `isVehicleParkedForCharging`) instead of gear, so a real `charge_power_kw`/
+  `is_charging` signal at ~0 km/h is no longer discarded just because gear still reads
+  non-P. Genuine movement (speed above the drive threshold) still wins over a stray
+  charge reading. `deriveDashboardVehicleMode` now uses the already-charge-aware
+  `isDrivingTelemetry()` wrapper instead of the raw gear check; the Telegram widget now
+  checks charging before gear too, reusing the same `isChargingTelemetry`.
+- Added a regression test (`src/lib/vehicle-live-mode.test.mjs`) asserting gear "D" +
+  `is_charging=true`/`charge_power_kw>0` + `speed_kmh=0` resolves to `live_charging`, not
+  `driving`. Verification: `npm run test` (155/155), `npx tsc --noEmit`, `npm run lint`
+  (no new findings in the touched files).
+- **Known residual gap, not fixed here:** replaying car `way`'s actual live snapshot
+  through the fixed code still resolves to `"driving"`, because `isTelemetryCharging()`
+  (`src/lib/bydmate/telemetry-charging.ts`) checks `diplus.charge_gun_state === 1` before
+  `charge_power_kw`, and this car's gun state reads `1` ("unplugged") during real charges
+  — the same unreliable-`gun_state` finding already on record in the "⏸️ Superseded:
+  Auto-charging detection regression" entry in [BACKLOG.md](BACKLOG.md), there for
+  `isMateAutoSessionCharging` specifically. `isTelemetryCharging` has ~6 call sites
+  (live status, drive-away detection, vehicle control guards, charge notifications), so
+  reordering it needs its own proposal and go-ahead rather than folding into this fix.
+
 ## 2026-07-24
 
 ### Repository audit remediation

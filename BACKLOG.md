@@ -58,84 +58,112 @@ Proposed 2026-07-23; awaiting go-ahead. **Should I build this?**
 
 ## Repository audit remediation (shipped 2026-07-24; see CHANGELOG.md)
 
-## ⏸️ Superseded: Auto-charging detection regression: yesterday's gun_state override blocks real AC charging
+## `gun_state === 1` overriding real charge power — systemic across three functions, plus a third gear-ordering site
+
+> Replaces the 2026-07-23 "⏸️ Superseded: Auto-charging detection regression" entry that
+> stood here (superseded, not built — `git log` shows only doc/test additions after it was
+> proposed, not the reorder itself). That entry proposed fixing `isMateAutoSessionCharging`
+> only; the ordering bug turns out to be copy-pasted into two more functions since, and
+> today's live-status fix (see [CHANGELOG.md](CHANGELOG.md), 2026-07-27) surfaced a third,
+> independent gear-ordering bug in a fourth file. All of its research below is folded in.
 
 ### Goal
 
-Restore correct automatic charging-session detection for car `way` (and any vehicle
-reporting a similar Di+ gun-state pattern) without reintroducing the false-session bug
-that yesterday's fix (commit `3d5b69d`) was trying to close.
+Stop a real, active charge on car `way` (and any vehicle with the same Di+ gun-state
+behavior) from being misread as "not charging" across every place that calls the
+gun-state-gated charging checks: live dashboard/Telegram status, drive-away/auto-complete
+gating, remote-control gating, charge push notifications, and charging-session chart
+history. Also fix the Android live-status push notification, which independently
+reimplements the gear-before-charging ordering already fixed today in the dashboard and
+Telegram widget.
 
 ### Research findings
 
-- User reported (2026-07-23) that car `way` is on a live AC charge right now, but the PWA
-  shows nothing and no `charging_sessions` row exists. The last live snapshot/telemetry
-  sample (07:12:14 device time, still the newest as of the report) reports
-  `diplus_charge_gun_state = 1`, `diplus_power_kw = 0`.
-- Commit `3d5b69d` (2026-07-22 22:14, "fix(telemetry): handle stale charge state after
-  unplugging") reordered `isMateAutoSessionCharging`
-  (`src/lib/bydmate/telemetry-charging.ts:76`) to check `gun_state === 1` → return `false`
-  **before** checking `charge_power_kw`, instead of after. Previously a positive
-  `charge_power_kw` reading won regardless of gun state; now `gun_state === 1`
-  unconditionally overrides it.
-- Queried every telemetry sample from car `way`'s last confirmed real AC charge
-  (`charging_sessions` id `3c9e2751`, 49%→100%, 2026-07-22 11:21:52–18:20:19 UTC):
-
-  | gun_state | samples | share | avg `diplus_power_kw` |
-  |---|---|---|---|
-  | 1 | 2230 | 71% | **+5.84 kW** |
-  | 2 | 911 | 29% | −3.98 kW (all merged from a secondary `autoservice_*` fallback source, used when OBD/DiPars was unavailable) |
-
-  `gun_state = 1` was the *majority* reading during real, active charging, with power
-  consistent with an AC charger actually delivering current — not a stale/unplugged
-  signal. Samples while genuinely driving (definitely unplugged) also read `gun_state = 1`,
-  so the field does not reliably distinguish plugged/unplugged at all for this vehicle's
-  DiPars source; the real charging signal is `charge_power_kw` itself.
-- The regression test added in that commit (`telemetry-charging.test.mjs:57`, "car way,
-  2026-07-22 15:18:58 UTC") documents the motivating incident as "stale... from a charge
-  that had already ended ~1h10m earlier" — but 15:18:58 UTC falls *inside* session
-  `3c9e2751`'s open window (11:21:52–18:20:19), which was still an active, continuous
-  charge at that moment. The premise behind yesterday's fix does not match what the
-  session history actually shows.
-- Net effect: yesterday's fix closed one observed false-positive (a low/noisy power
-  reading treated as a stale post-unplug artifact) by introducing a rule that discards
-  the *majority* of genuine charging samples for this vehicle, which is the direct cause
-  of today's non-detection.
+- **Confirmed again today (2026-07-27), independent of the 2026-07-23 report:** car
+  `way`'s current live snapshot, taken mid an active, DB-confirmed `charging_sessions` row
+  (43%→55%, started 11:38 UTC), reads `diplus.charge_gun_state = 1` alongside
+  `telemetry.is_charging = true`, `charge_power_kw = 4`. Same pattern as the 71%-of-samples
+  finding from the 2026-07-23 entry: `gun_state = 1` is not a reliable "unplugged" signal
+  for this vehicle's DiPars source, and a real, nonzero `charge_power_kw` is currently
+  being discarded because of it.
+- **`isTelemetryCharging`** (`src/lib/bydmate/telemetry-charging.ts:49`) checks
+  `gun_state === 1` → return `false` **before** checking `charge_power_kw`. This is the
+  function `isChargingTelemetry` (just fixed today for gear ordering) delegates to for the
+  real charge signal — so today's gear fix does not fully resolve car `way`'s dashboard;
+  replaying its live snapshot through the fixed code still returns `"driving"` because
+  `isTelemetryCharging` says not-charging regardless of gear. Also used directly by
+  `charging-live.ts` (`isFreshChargingSnapshot`, `shouldBlockAutoComplete` — live SOC/
+  auto-complete gating and the drive-away guard), `vehicle-control-guards.ts`
+  (`isStationaryForRemoteControl` — gates remote climate/window control while "charging"),
+  and `charge-notifications.ts` (charge milestone push notifications).
+- **`isMateAutoSessionCharging`** (`telemetry-charging.ts:100`, auto-session create/close)
+  has the identical `gun_state === 1`-before-`charge_power_kw` ordering — this is the
+  function the 2026-07-23 entry was about. Still unfixed.
+- **`isTelemetryHistoryCharging`** (`telemetry-charging.ts`, added 2026-07-23 22:31 in
+  commit `b3d422f`, *after* the regression entry was proposed) copied the same
+  `gun_state === 1`-first ordering into a brand-new function. It filters which telemetry
+  points render on a charging session's chart (`telemetry-history.ts:315`) — so charts for
+  car `way`'s sessions are currently dropping real charging samples too.
+- **A fourth, independently-written instance of the *gear*-ordering bug** (not the
+  `gun_state` bug): `liveStatusPhaseForSample()`
+  (`src/lib/push/live-status-notifications.ts:62`, Android lock-screen live charging
+  notification) checks `gearIsDrive(gear)` before `isTelemetryCharging(...)`, with a
+  comment literally reading "Mirrors vehicle-live-mode ordering" — i.e. it deliberately
+  copied the *old*, just-fixed ordering. Car `way`'s Android live-status push would
+  currently also announce "driving" during this charge.
+- **Existing tests lock in the current (wrong) behavior** and would need updating, not
+  just the code:
+  - `telemetry-charging.test.mjs:58` ("car way, 2026-07-22 15:18:58 UTC") — the 2026-07-23
+    entry already found this test's premise is wrong (the timestamp falls inside a
+    confirmed *active* charging session, not 1h10m after unplug).
+  - `telemetry-charging.test.mjs:89` ("gun unplugged overrides stale low charge power in
+    live status") — asserts `isTelemetryCharging` is `false` at `charge_power_kw = 1`,
+    calling 1 kW "stale low power"; today's evidence (avg `+5.84 kW` across 2230 real
+    charging samples, this session's `+4 kW` sample) suggests 1 kW is plausibly real too.
+  - `telemetry-charging.test.mjs:113` (`isTelemetryHistoryCharging`, second assertion) —
+    same pattern, same fix needed.
 
 ### Options
 
-1. **Revert the check order (recommended).** Put `charge_power_kw > threshold` back
-   first; keep the `gun_state === 1` override only as a fallback when power is at/below
-   threshold (its original position, pre-`3d5b69d`). This restores real-power charging
-   detection immediately and keeps the override for exactly the case it was designed for
-   (stale `is_charging`/near-zero leftover power after a real unplug), without discarding
-   samples where power is genuinely flowing.
-2. **Drop the gun_state override entirely**, relying only on `charge_power_kw` (with the
-   existing plausibility caps) and the `is_charging` fallback. Simpler, but loses the
-   protection against the original stale-reading false-positive bug entirely.
-3. **Require corroboration before trusting gun_state as "unplugged."** Only let
-   `gun_state === 1` override when power is also at/near zero *and* stays there for the
-   same consecutive-sample window used for auto-stop (i.e. reuse the existing
-   2-consecutive-sample rule instead of trusting a single sample). More robust than
-   option 1 but a bigger behavior change; needs its own test coverage for the interaction
-   with auto-stop.
+1. **Reorder all three `telemetry-charging.ts` functions so `charge_power_kw` wins, keep
+   `gun_state === 1` only as a fallback for near-zero power (recommended).** Move the
+   `gun_state === 1` check to after the `charge_power_kw > threshold` check in
+   `isTelemetryCharging`, `isMateAutoSessionCharging`, and `isTelemetryHistoryCharging`
+   (all three currently ordered the same wrong way). This is exactly the 2026-07-23
+   entry's option 1, now applied to all three functions instead of one, since they share
+   the same bug and the same fix. Separately, reorder `liveStatusPhaseForSample` to check
+   `isTelemetryCharging` before `gearIsDrive`, matching today's shipped dashboard/Telegram
+   fix. Update the three tests listed above to match (their premises are already
+   documented as wrong); add a regression test per function asserting a real
+   `charge_power_kw` wins over `gun_state === 1`.
+2. **Fix only `isTelemetryCharging`** (the function blocking today's dashboard fix from
+   fully resolving car `way`'s live status) and leave `isMateAutoSessionCharging`/
+   `isTelemetryHistoryCharging`/`live-status-notifications.ts` for later. Smaller diff, but
+   leaves the identical bug live in auto-session creation, chart history, and push
+   notifications — all four surfaces would need this exact fix eventually, and doing it
+   once now is cheaper than three more rounds of "why is X still wrong" later.
+3. **Add corroboration instead of reordering** (2026-07-23 entry's option 3): only trust
+   `gun_state === 1` when power is also at/near zero for 2 consecutive samples, reusing the
+   auto-stop window. More robust against a genuinely flaky single-sample gun reading, but a
+   bigger behavior change across four call sites/three functions at once, with its own new
+   test surface for the consecutive-sample interaction.
 
 ### Recommendation
 
-Option 1. It's the smallest change, directly undoes the specific reordering that caused
-today's regression, and keeps the override doing its original, narrower job (discarding
-stale near-zero readings) rather than discarding real charging power. Correct or remove
-`telemetry-charging.test.mjs:57`'s inaccurate premise/comment once the session timeline
-is fixed, and add a regression test asserting a real positive `charge_power_kw` wins even
-when `gun_state === 1` (matching the 71%-of-samples pattern just measured).
+Option 1. It fixes the root cause everywhere it was copied, is the same size of change
+per function as the already-drafted (never-built) 2026-07-23 proposal, and finally lets
+today's dashboard/Telegram fix actually resolve car `way`'s live status end to end. Land
+it as one PR touching `telemetry-charging.ts` (3 functions), `live-status-notifications.ts`
+(1 function), and their three test files, since all four fixes are the same one-line
+reorder applied consistently.
 
 ### Data ownership
 
-No new data model — this is a pure bug fix inside existing telemetry-interpretation logic
-in `src/lib/bydmate/telemetry-charging.ts`. No migration, no new user-owned or app-owned
-storage.
+No new data model — pure reordering of checks already reading existing Postgres-stored
+telemetry fields (`charge_power_kw`, `is_charging`, `diplus.charge_gun_state`). No
+migration, no new user-owned or app-owned storage.
 
-Proposed 2026-07-23; awaiting go-ahead. **Should I build this?**
+Proposed 2026-07-27; awaiting go-ahead. **Should I build this?**
 
 ---
 
