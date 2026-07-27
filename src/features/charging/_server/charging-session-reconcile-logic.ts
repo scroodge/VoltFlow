@@ -1,12 +1,10 @@
+import { deriveSessionProgressFromSoc, type ChargingParams } from "../_domain/charging-math.ts";
 import {
-  costFromGridEnergy,
-  deriveSessionProgressFromSoc,
-  energyFromGridKwh,
-  type ChargingParams,
-} from "./charging-math.ts";
-import { AUTO_CHARGING_DRIVE_STOP_SPEED_KMH, TELEMETRY_CHARGE_POWER_THRESHOLD_KW } from "./bydmate/telemetry-charging.ts";
-import { snapshotSoc } from "./charging-live.ts";
-import type { BydmateLiveSnapshotRow } from "../types/database.ts";
+  AUTO_CHARGING_DRIVE_STOP_SPEED_KMH,
+  TELEMETRY_CHARGE_POWER_THRESHOLD_KW,
+} from "../_domain/telemetry-charging.ts";
+import { snapshotSoc } from "../_domain/charging-live.ts";
+import type { BydmateLiveSnapshotRow } from "@/types/database";
 
 const CHARGE_POWER_THRESHOLD_KW = TELEMETRY_CHARGE_POWER_THRESHOLD_KW;
 
@@ -303,7 +301,6 @@ export function buildReconciledSessionPatch({
   // management load (~1.7 kW during DC charging). SOC×capacity matches grid truth
   // within 2% on AC and DC (BYD calibrates SOC against charger input). The BMS
   // counter is display-only (see AGENTS.md §FINDING 2026-06-30).
-  const measuredKwh = null;
   const chargedEnergyKwh = progress.chargedEnergyKwh;
   const estimatedCost = progress.estimatedCost;
 

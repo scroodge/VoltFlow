@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { deriveSessionProgressFromSoc } from "@/lib/charging-math";
+import { deriveSessionProgressFromSoc } from "@/features/charging/domain";
 import { efficiencyPercentForTariff } from "@/lib/charging-efficiency";
 import { mapChargingTariffLocation, mapUserProvider } from "@/lib/db-map";
 import { resolveSessionTariff, userProvidersFromRows } from "@/lib/charging-tariffs";
@@ -9,14 +9,14 @@ import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
 import {
   nextAutoChargingSessionStep,
   type AutoChargingSessionState,
-} from "@/lib/bydmate/charging-auto-session-step";
+} from "./charging-auto-session-step";
 import {
   finiteTelemetryNumber,
   isMateAutoSessionCharging,
   sanitizeChargerPowerKw,
   telemetryChargingContext,
   telemetrySpeedKmh,
-} from "@/lib/bydmate/telemetry-charging";
+} from "../_domain/telemetry-charging";
 import { latestDeviceTimeByVehicle } from "@/lib/bydmate/latest-sample";
 
   /** Auto-start only from recent samples in a batch (avoids replaying old driving buffers). */
@@ -31,8 +31,8 @@ import type { Car, ChargingSessionRow } from "@/types/database";
 
 const DEFAULT_TARGET_PERCENT = 100;
 
-export type { AutoChargingSessionState, AutoChargingSessionAction } from "@/lib/bydmate/charging-auto-session-step";
-export { nextAutoChargingSessionStep } from "@/lib/bydmate/charging-auto-session-step";
+export type { AutoChargingSessionState, AutoChargingSessionAction } from "./charging-auto-session-step";
+export { nextAutoChargingSessionStep } from "./charging-auto-session-step";
 
 const AUTO_CHARGING_STATE_COLUMNS =
   "user_id,vehicle_id,consecutive_charging_samples,consecutive_unplug_samples,last_is_charging,last_device_time,streak_start_percent,streak_start_device_time,last_idle_percent,last_idle_device_time";

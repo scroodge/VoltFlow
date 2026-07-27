@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { useTranslation } from "@/hooks/use-translation";
-import { syncChargingSessionTariffFromGps } from "@/actions/sessions";
+import { syncChargingSessionTariffFromGps } from "@/features/charging/actions";
 import {
   coordinatesFromLiveSnapshots,
   type GpsCoordinates,

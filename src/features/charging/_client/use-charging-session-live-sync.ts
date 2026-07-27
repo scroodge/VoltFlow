@@ -14,7 +14,7 @@ import {
   filterLiveSnapshotsForVehicle,
   resolveStateToPersist,
   staticDerivedFromSession,
-} from "@/lib/charging-session-sync";
+} from "@/features/charging/domain";
 import {
   CHARGING_PERSIST_SLACK_MS,
   chargingPersistIntervalMs,
@@ -22,10 +22,10 @@ import {
   shouldAllowMathAutoComplete,
   shouldAutoStopOnDriveAway,
   shouldBlockAutoComplete,
-} from "@/lib/charging-live";
+} from "@/features/charging/domain";
 import { createClient } from "@/lib/supabase/client";
 import { queryKeys } from "@/lib/query-keys";
-import type { DerivedChargingState } from "@/lib/charging-math";
+import type { DerivedChargingState } from "@/features/charging/domain";
 import type { BydmateLiveSnapshotRow, ChargingSessionRow } from "@/types/database";
 
 type UseChargingSessionLiveSyncOptions = {

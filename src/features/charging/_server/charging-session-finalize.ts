@@ -1,9 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { deriveChargingState, deriveSessionProgressFromSoc } from "@/lib/charging-math";
-import { chargingParamsFromSession } from "@/lib/charging-session-sync";
-import { isFreshLiveSnapshot, snapshotSoc } from "@/lib/charging-live";
-import { finiteTelemetryNumber } from "@/lib/bydmate/telemetry-charging";
+import { deriveChargingState, deriveSessionProgressFromSoc } from "@/features/charging/domain";
+import { chargingParamsFromSession } from "@/features/charging/domain";
+import { isFreshLiveSnapshot, snapshotSoc } from "@/features/charging/domain";
+import { finiteTelemetryNumber } from "@/features/charging/domain";
 import type { BydmateLiveSnapshotRow, ChargingSessionRow } from "@/types/database";
 
 export type StopSessionProgressSource = "live" | "telemetry" | "math";

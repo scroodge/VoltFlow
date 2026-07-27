@@ -166,7 +166,7 @@ restores. Breaking one of them causes the classic bugs (frozen percent, false
 | Subsystem | What it does | Canonical doc | Key code |
 | --- | --- | --- | --- |
 | **Telemetry ingest** | Validate + persist car data; trigger sessions, widgets and notifications; accept retries/offline batches | [supabase/TELEMETRY.md](../supabase/TELEMETRY.md), [VoltFlow Mate API](../supabase/VOLTFLOW_MATE_API.md) | `src/app/api/bydmate/telemetry/route.ts`, `src/lib/bydmate/*` |
-| **Charging sessions** | Start/stop, ~1 Hz progress, auto sessions, reconcile, tariffs | [CHARGING_SESSIONS.md](CHARGING_SESSIONS.md) | `src/lib/charging-*`, `src/lib/bydmate/charging-auto-session*` |
+| **Charging sessions** | Start/stop, ~1 Hz progress, auto sessions, reconcile, tariffs | [CHARGING_SESSIONS.md](CHARGING_SESSIONS.md) | `src/features/charging/` (public entry points plus private domain/server/client/UI implementation) |
 | **Trips** | Server-side trip inference, junk filtering, distance deltas, GPS tracks | [TRIPS.md](TRIPS.md) | `bydmate_ingest_telemetry` (SQL), `src/lib/bydmate/trip-*` |
 | **Analytics & charts** | History→Analytics, trip charts, route maps, route insights | [TRIPS.md](TRIPS.md) | `src/components/vehicle/*`, `src/lib/bydmate/telemetry-*` |
 | **Notifications** | Charge-threshold web push, Android live-status web push, and Telegram live-status widget | [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | `src/lib/push/*`, `src/lib/telegram/*` |
@@ -213,7 +213,7 @@ restores. Breaking one of them causes the classic bugs (frozen percent, false
 - **Migrations are append-only and idempotent.** Never edit an applied migration; add a
   new, guarded migration instead.
 - **Tests** use Node's built-in runner with `--experimental-strip-types` (no Jest/Vitest).
-  Tested `src/lib` modules must use **relative** `.ts` imports, not `@/` aliases.
+  Tested pure modules must use **relative** `.ts` imports, not `@/` aliases.
   `npm run test` runs `src/**/*.test.mjs`; `charging-auto-session.test.mjs` is excluded
   from the glob and must be run explicitly.
 - **When behavior changes, update the matching doc** (see §6) and add/adjust tests for

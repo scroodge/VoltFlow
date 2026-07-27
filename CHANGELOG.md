@@ -9,7 +9,27 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
-## 2026-07-27 (2)
+## 2026-07-27 (3)
+
+### Charging sessions now have one feature module
+
+- Moved charging-session lifecycle code into `src/features/charging/`: public
+  `domain`, `server`, `actions`, `client`, and `ui` entry points sit above private
+  domain/server/client/UI implementation. The former layer-based source paths were
+  removed, and Dashboard, Vehicle, History, MobileShell, telemetry ingest, route
+  handlers, notifications, and developer views now use the deliberate entry points.
+- Preserved all behavior and contracts: Route Handler URLs and payloads, Server Action
+  signatures, source-of-truth priority, RLS-scoped Postgres ownership, and existing
+  tariff/provider/efficiency configuration storage are unchanged. Routes remain thin
+  framework adapters; no self-fetching API layer or new endpoint was added.
+- Colocated focused tests with their pure/session implementation and updated the
+  architecture, schema, charging, and contributor guides to the new owner paths.
+- Verification: `npm run test` (108 passing), excluded auto-session suite passing,
+  `npx tsc --noEmit` passing. Repository-wide lint retains unrelated pre-existing
+  React-rule errors; the feature-local screen retains the same pre-existing
+  set-state-in-effect rule violation. A production build was started, but its terminal
+  handle was lost while the active Next.js build lock remained; do not remove that lock
+  blindly.
 
 ### `gun_state === 1` no longer overrides real charge power (car `way`'s live status now fully correct)
 

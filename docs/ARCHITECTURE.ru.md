@@ -169,7 +169,7 @@ Telegram Mini App (`/telegram`) сейчас является публичной
 | Подсистема | Что делает | Канонический документ | Ключевой код |
 | --- | --- | --- | --- |
 | **Telemetry ingest** | Валидирует и сохраняет данные авто; запускает сессии, widget и уведомления; принимает retries/offline-батчи | [supabase/TELEMETRY.md](../supabase/TELEMETRY.md), [VoltFlow Mate API](../supabase/VOLTFLOW_MATE_API.md) | `src/app/api/bydmate/telemetry/route.ts`, `src/lib/bydmate/*` |
-| **Сессии зарядки** | Start/stop, ~1 Hz progress, авто-сессии, reconcile, тарифы | [CHARGING_SESSIONS.md](CHARGING_SESSIONS.md) | `src/lib/charging-*`, `src/lib/bydmate/charging-auto-session*` |
+| **Сессии зарядки** | Start/stop, ~1 Hz progress, авто-сессии, reconcile, тарифы | [CHARGING_SESSIONS.md](CHARGING_SESSIONS.md) | `src/features/charging/` (публичные entry points и приватная domain/server/client/UI-реализация) |
 | **Поездки** | Серверный вывод поездок, фильтр мусора, дельты дистанции, GPS-треки | [TRIPS.md](TRIPS.md) | `bydmate_ingest_telemetry` (SQL), `src/lib/bydmate/trip-*` |
 | **Аналитика и графики** | History→Analytics, графики поездок, карты маршрутов, route insights | [TRIPS.md](TRIPS.md) | `src/components/vehicle/*`, `src/lib/bydmate/telemetry-*` |
 | **Уведомления** | Web push (пороги заряда) + Telegram-виджет живого статуса (одно сообщение, редактируется на месте) | [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | `src/lib/push/*`, `src/lib/telegram/*` |
@@ -216,7 +216,7 @@ Telegram Mini App (`/telegram`) сейчас является публичной
 - **Миграции append-only и идемпотентны.** Никогда не правьте применённую миграцию; вместо
   этого добавляйте новую миграцию с guard.
 - **Тесты** используют встроенный Node runner с `--experimental-strip-types` (без Jest/Vitest).
-  Тестируемые модули `src/lib` должны использовать **относительные** `.ts` import, а не alias
+  Тестируемые чистые модули должны использовать **относительные** `.ts` import, а не alias
   `@/`. `npm run test` запускает `src/**/*.test.mjs`; `charging-auto-session.test.mjs` исключён
   из glob и запускается явно.
 - **При изменении поведения обновляйте соответствующий документ** (см. §6) и добавляйте/правьте

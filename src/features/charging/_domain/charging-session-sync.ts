@@ -14,7 +14,7 @@ import {
   findFreshSocSnapshot,
   latestSnapshotSocReading,
 } from "./charging-live.ts";
-import type { BydmateLiveSnapshotRow, ChargingSessionRow } from "../types/database.ts";
+import type { BydmateLiveSnapshotRow, ChargingSessionRow } from "@/types/database";
 
 export function chargingParamsFromSession(row: ChargingSessionRow): ChargingParams {
   return {

@@ -17,7 +17,7 @@ import {
 } from "@/lib/bydmate/telemetry-ranges";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatDuration } from "@/lib/charging-math";
+import { formatDuration } from "@/features/charging/domain";
 import { useAppPath } from "@/lib/dev/dev-path";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useSessionsQuery } from "@/hooks/use-sessions-query";

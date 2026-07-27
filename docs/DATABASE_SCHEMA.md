@@ -660,8 +660,8 @@ the database:
 
 | Function | Purpose | File |
 |---|---|---|
-| `processBydmateAutoChargingSessions()` | Auto start/stop charging sessions on ingest | `src/lib/bydmate/charging-auto-session.ts` |
-| `reconcileChargingSessionsForUser()` | Repair broken session rows | `src/lib/charging-session-reconcile.ts` |
+| `processBydmateAutoChargingSessions()` | Auto start/stop charging sessions on ingest | `src/features/charging/_server/charging-auto-session.ts` |
+| `reconcileChargingSessionsForUser()` | Repair broken session rows | `src/features/charging/_server/charging-session-reconcile.ts` |
 
 ---
 

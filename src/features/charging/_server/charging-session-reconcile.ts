@@ -8,9 +8,9 @@ import {
   sessionNeedsReconcile,
   summarizeSessionTelemetry,
   type TelemetrySampleRow,
-} from "@/lib/charging-session-reconcile-logic";
+} from "./charging-session-reconcile-logic";
 import { captureSessionEndDelta } from "@/lib/bydmate/charge-end-delta";
-import { isFreshLiveSnapshot, snapshotSoc } from "@/lib/charging-live";
+import { isFreshLiveSnapshot, snapshotSoc } from "@/features/charging/domain";
 import type { BydmateLiveSnapshotRow, Car, ChargingSessionRow } from "@/types/database";
 
 export type ChargingSessionReconcileResult = {
@@ -22,7 +22,7 @@ export {
   buildReconciledSessionPatch,
   sessionNeedsReconcile,
   summarizeSessionTelemetry,
-} from "@/lib/charging-session-reconcile-logic";
+} from "./charging-session-reconcile-logic";
 
 const TELEMETRY_PAGE_SIZE = 1000;
 

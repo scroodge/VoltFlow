@@ -5,14 +5,14 @@ import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
 import { captureSessionEndDelta } from "@/lib/bydmate/charge-end-delta";
-import { costFromGridEnergy, deriveChargingState } from "@/lib/charging-math";
+import { costFromGridEnergy, deriveChargingState } from "@/features/charging/domain";
 import { efficiencyPercentForTariff } from "@/lib/charging-efficiency";
 import { mapChargingTariffLocation, mapUserProvider } from "@/lib/db-map";
-import { resolveStopProgressForSession } from "@/lib/charging-session-finalize";
+import { resolveStopProgressForSession } from "./_server/charging-session-finalize";
 import {
   sessionTariffMatches,
   shouldAutoApplyTariffResolution,
-} from "@/lib/charging-session-tariff-sync";
+} from "@/features/charging/domain";
 import {
   matchNearestTariffLocation,
   PROVIDER_LABELS,

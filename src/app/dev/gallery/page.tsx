@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 
-import { BatteryRing } from "@/components/charging/BatteryRing";
+import { BatteryRing } from "@/features/charging/ui";
 import { useTranslation } from "@/hooks/use-translation";
 import { formatTimeAgo } from "@/lib/time-ago";
 import {

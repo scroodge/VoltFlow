@@ -7,7 +7,7 @@ import { DEFAULT_SITE_URL } from "@/lib/site-url";
 import {
   finiteTelemetryNumber,
   isTelemetryCharging,
-} from "@/lib/bydmate/telemetry-charging";
+} from "@/features/charging/domain";
 import {
   nextChargeNotificationState,
   type ChargeNotificationState,

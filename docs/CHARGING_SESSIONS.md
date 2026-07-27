@@ -106,7 +106,7 @@ session reconciliation:
 
 ```bash
 npm run test
-node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/bydmate/charging-auto-session.test.mjs
+node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/features/charging/_server/auto-session.test.mjs
 ```
 
 `charging-auto-session.test.mjs` is intentionally outside the `npm run test` glob, so both

@@ -1,4 +1,4 @@
-import { isTelemetryCharging } from "./bydmate/telemetry-charging.ts";
+import { isTelemetryCharging } from "./telemetry-charging.ts";
 import {
   costFromGridEnergy,
   energyFromGridKwh,
@@ -6,7 +6,7 @@ import {
   type ChargingParams,
   type DerivedChargingState,
 } from "./charging-math.ts";
-import type { BydmateLiveSnapshotRow } from "../types/database.ts";
+import type { BydmateLiveSnapshotRow } from "@/types/database";
 
 export const LIVE_CHARGING_STALE_MS = 90_000;
 /** Speed above this (km/h) treats the vehicle as driving, not finishing a charge. */
@@ -210,7 +210,7 @@ export function deriveLiveChargingState({
     params.startPercent,
     currentPercent,
   );
-  const chargedEnergySource: "estimate" = "estimate";
+  const chargedEnergySource = "estimate" as const;
   const chargedEnergyKwh = energyFromGridKwh(batteryEnergyKwh, params.efficiencyPercent);
   const estimatedCost = costFromGridEnergy(chargedEnergyKwh, params.pricePerKwh);
   const elapsedSeconds = Math.max(0, (nowMs - startedAtMs) / 1000);

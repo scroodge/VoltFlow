@@ -1,5 +1,5 @@
 import type { ChargingTariffType } from "@/types/database";
-import type { TelemetrySampleRow } from "@/lib/charging-session-reconcile-logic";
+import type { TelemetrySampleRow } from "@/features/charging/server";
 
 /**
  * Smart Charge "Loose Mode": turns provider-corrected sessions into a measured efficiency

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { requestLiveFastStatus } from "@/actions/live-status";
 import { MateUpdateBanner } from "@/components/dashboard/mate-update-banner";
-import { ChargingSessionBackgroundSync } from "@/components/charging/charging-session-background-sync";
+import { ChargingSessionBackgroundSync } from "@/features/charging/client";
 import { DefaultProvidersSeed } from "@/components/settings/default-providers-seed";
 import { ChargingDevSourceProvider } from "@/components/dev/charging-dev-source-context";
 import { DashboardDevSnapshotProvider } from "@/components/dev/dashboard-dev-snapshot-context";

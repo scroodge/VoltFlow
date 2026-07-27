@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
 import { mapChargingSession } from "@/lib/db-map";
-import { reconcileChargingSessionsForUser } from "@/lib/charging-session-reconcile";
+import { reconcileChargingSessionsForUser } from "@/features/charging/server";
 
 export async function GET(request: NextRequest) {
   const access = await resolveVehicleApiAccess(request);

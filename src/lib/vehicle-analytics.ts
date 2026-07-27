@@ -6,7 +6,7 @@ import {
   type PhantomDrainDay,
   type PhantomDrainSample,
 } from "@/lib/bydmate/phantom-drain";
-import { chargingSessionAnalyticsScope } from "@/lib/charging-session-analytics-scope";
+import { chargingSessionAnalyticsScope } from "@/features/charging/domain";
 import { collectPagedRows } from "@/lib/bydmate/paged-query";
 import { pickWalkBackSessionPrice } from "@/lib/history-day-summary";
 import type { BydmateTelemetry, ChargingSessionRow, BydmateTripRow } from "@/types/database";

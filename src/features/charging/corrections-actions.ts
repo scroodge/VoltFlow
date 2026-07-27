@@ -10,7 +10,7 @@ import {
   measuredEfficiencyForSession,
   summarizeTelemetryContext,
 } from "@/lib/charging-efficiency-learning";
-import type { TelemetrySampleRow } from "@/lib/charging-session-reconcile-logic";
+import type { TelemetrySampleRow } from "@/features/charging/server";
 import type { Car, ChargingSessionRow } from "@/types/database";
 
 const TELEMETRY_PAGE_SIZE = 1000;

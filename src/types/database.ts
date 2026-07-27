@@ -68,6 +68,10 @@ export type ChargingSessionRow = {
   /** Set when charged_energy_kwh/estimated_cost/price_per_kwh were replaced with a
    *  provider-billed correction (see correctChargingSessionEnergy); null otherwise. */
   energy_corrected_at: string | null;
+  /** True when the user hand-entered this row for a charge ingest never detected
+   *  (see createManualChargingSession). Energy/cost are receipt figures; SOC and charger
+   *  power are derived from them, so the row is excluded from efficiency learning. */
+  manual_entry: boolean;
   charged_energy_kwh: number;
   estimated_cost: number;
   status: SessionStatus;

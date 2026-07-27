@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { correctChargingSessionEnergy } from "@/actions/session-corrections";
+import { correctChargingSessionEnergy } from "../corrections-actions";
 import { currencyTextWithIcon } from "@/components/currency-amount";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

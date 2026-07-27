@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 
-import { persistManualTariffLocationFromSession } from "@/actions/sessions";
+import { persistManualTariffLocationFromSession } from "@/features/charging/actions";
 import { TARIFF_LOCATION_AUTOSAVE_DELAY_MS } from "@/lib/charging-tariff-location-autosave";
 import { useTranslation } from "@/hooks/use-translation";
 import { queryKeys } from "@/lib/query-keys";

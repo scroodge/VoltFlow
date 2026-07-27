@@ -9,7 +9,7 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 
-import { startChargingSession, stopChargingSession } from "@/actions/sessions";
+import { startChargingSession, stopChargingSession } from "@/features/charging/actions";
 import { BrandBadge } from "@/components/brand/BrandBadge";
 import { ChargingBolt } from "@/components/brand/ChargingBolt";
 import { LogoFull } from "@/components/brand/LogoFull";
@@ -18,8 +18,7 @@ import {
   useDashboardDevSnapshot,
   useDashboardDevSnapshotOverride,
 } from "@/components/dev/dashboard-dev-snapshot-context";
-import { BatteryRing } from "@/components/charging/BatteryRing";
-import { ChargingActionButton } from "@/components/charging/ChargingActionButton";
+import { BatteryRing, ChargingActionButton } from "@/features/charging/ui";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -54,15 +53,15 @@ import {
   energyFromGridKwh,
   energyNeededKwh,
   formatDuration,
-} from "@/lib/charging-math";
+} from "@/features/charging/domain";
 import { useVehicleRangeEstimate } from "@/hooks/use-vehicle-range-estimate";
 import { resolveTariffLocationMatch } from "@/lib/charging-gps-location";
 import {
   chargingParamsFromSession,
   deriveChargingSessionLiveBundle,
   filterLiveSnapshotsForVehicle,
-} from "@/lib/charging-session-sync";
-import { resolveDisplayChargePowerKw, snapshotSoc } from "@/lib/charging-live";
+} from "@/features/charging/domain";
+import { resolveDisplayChargePowerKw, snapshotSoc } from "@/features/charging/domain";
 import { mapChargingTariffLocation } from "@/lib/db-map";
 import { isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { useAppPath } from "@/lib/dev/dev-path";

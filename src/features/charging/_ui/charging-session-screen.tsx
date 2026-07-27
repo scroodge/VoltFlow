@@ -3,16 +3,16 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { updateChargingSessionTariff } from "@/actions/sessions";
+import { updateChargingSessionTariff } from "../actions";
 import { toast } from "sonner";
 
-import { BatteryRing } from "@/components/charging/BatteryRing";
-import { ChargingDeltaCard } from "@/components/charging/charging-delta-card";
-import { EnergyCorrectionCard } from "@/components/charging/energy-correction-card";
+import { BatteryRing } from "./BatteryRing";
+import { ChargingDeltaCard } from "./charging-delta-card";
+import { EnergyCorrectionCard } from "./energy-correction-card";
 import {
   ChargingStatsGrid,
   type ChargingStat,
-} from "@/components/charging/ChargingStatsGrid";
+} from "./ChargingStatsGrid";
 import { CurrencyAmount, currencyTextWithIcon } from "@/components/currency-amount";
 import {
   useChargingDevLiveOverride,
@@ -38,7 +38,7 @@ import {
   secondsUntilTargetSoc,
   type ChargingParams,
   type DerivedChargingState,
-} from "@/lib/charging-math";
+} from "../domain";
 import { currencySymbols, formatCurrencyAmount, type TranslationKey } from "@/lib/i18n";
 import { resolveProviderTariff, resolveTariffTypeByPower } from "@/lib/charging-tariffs";
 import { resolveTariffLocationMatch } from "@/lib/charging-gps-location";
@@ -47,8 +47,8 @@ import { isDevMockChargingSessionId } from "@/lib/dev/build-mock-charging-sessio
 import { createClient } from "@/lib/supabase/client";
 import { mapChargingSession, mapChargingTariffLocation } from "@/lib/db-map";
 import { queryKeys } from "@/lib/query-keys";
-import { useChargingSessionLiveSync } from "@/hooks/use-charging-session-live-sync";
-import { useChargingSessionAutoTariff } from "@/hooks/use-charging-session-auto-tariff";
+import { useChargingSessionLiveSync } from "../_client/use-charging-session-live-sync";
+import { useChargingSessionAutoTariff } from "../_client/use-charging-session-auto-tariff";
 import { useUserProvidersQuery, useUserProviderMap } from "@/hooks/use-user-providers-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useSessionQuery } from "@/hooks/use-session-query";
@@ -59,11 +59,11 @@ import {
   chargingParamsFromSession,
   deriveChargingSessionLiveBundle,
   staticDerivedFromSession,
-} from "@/lib/charging-session-sync";
-import { deriveLiveChargingState, findFreshChargingSnapshot, snapshotChargePowerKw } from "@/lib/charging-live";
+} from "../domain";
+import { deriveLiveChargingState, findFreshChargingSnapshot, snapshotChargePowerKw } from "../domain";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import { useAppPath } from "@/lib/dev/dev-path";
-import { useChargingUi } from "@/stores/use-charging-ui";
+import { useChargingUi } from "../_client/use-charging-ui";
 import type {
   ChargingProviderType,
   ChargingSessionRow,

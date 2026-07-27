@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { ChargingSessionScreen } from "@/components/charging/charging-session-screen";
+import { ChargingSessionScreen } from "@/features/charging/client";
 
 export const metadata: Metadata = {
   title: "Session detail",

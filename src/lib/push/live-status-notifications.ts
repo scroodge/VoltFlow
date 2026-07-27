@@ -6,7 +6,7 @@ import {
   finiteTelemetryNumber,
   isTelemetryCharging,
   telemetrySpeedKmh,
-} from "../bydmate/telemetry-charging.ts";
+} from "@/features/charging/domain";
 import { isAppleWebPushEndpoint, sendPushToUser } from "./web-push.ts";
 
 /**

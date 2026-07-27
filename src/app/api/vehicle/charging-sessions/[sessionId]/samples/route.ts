@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { fetchChargingSessionSamples } from "@/lib/bydmate/telemetry-history";
-import { resolveChargingSessionVehicleId } from "@/lib/charging-session-vehicle";
+import { resolveChargingSessionVehicleId } from "@/features/charging/server";
 import { createClient } from "@/lib/supabase/server";
 
 type RouteContext = {

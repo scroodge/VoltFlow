@@ -12,7 +12,7 @@ import {
 import { usePathname } from "next/navigation";
 
 import { buildChargingSnapshot } from "@/app/dev/vehicle-telemetry-fixtures/build-charging-snapshot";
-import { percentPerSecond, type ChargingParams } from "@/lib/charging-math";
+import { percentPerSecond, type ChargingParams } from "@/features/charging/domain";
 import { getDevPathPrefix } from "@/lib/dev/dev-path";
 import type { BydmateLiveSnapshotRow, ChargingSessionRow } from "@/types/database";
 

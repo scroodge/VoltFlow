@@ -4,6 +4,222 @@ Per the agent workflow in [AGENTS.md](AGENTS.md): **plan first, build only on ex
 go-ahead.** These are researched but **not built**. Shipped work lives in
 [CHANGELOG.md](CHANGELOG.md).
 
+## Manual entry for a missed charging session
+
+### Goal
+
+Let the user add a charging session the ingest pipeline never created, from the History tab's
+day view, via a small form. Auto-start requires 4 consecutive charging samples within 3 min
+plus a parked vehicle and a plausible gun state; when the Mate app is closed, the head unit
+powers down mid-charge, or the gun state is misreported, a real charge produces **no**
+`charging_sessions` row — the day is blank in History and the charge is missing from the day
+summary and every monthly cost/energy total. `correctChargingSessionEnergy` can only edit an
+existing row; nothing can create one.
+
+### Data ownership and location
+
+**User-owned, in Postgres**, in the existing `charging_sessions` table under the existing
+`sessions_*_own` RLS policies. Not client-side: the row must feed `computeHistoryDaySummary`,
+monthly cost aggregation, and analytics identically to an auto-created session.
+
+### Confirmed scope
+
+1. Form collects **billed kWh + total paid + start/end time** — what a provider receipt says.
+   No SOC fields.
+2. **Add + delete**; delete restricted to manual rows so telemetry sessions stay immutable.
+3. New **`manual_entry boolean`** column, plus `energy_overridden = true` so reconcile skips
+   the row.
+
+### Trade-off of the billed-only form
+
+`charging_sessions` requires `start_percent`/`current_percent`/`target_percent`,
+`charger_power_kw` and `efficiency_percent` NOT NULL, with
+`check (start_percent < target_percent)` (`20250511000000_init.sql:24-43`). SOC and power must
+therefore be **derived server-side**. Because they are inferred, the session card renders
+"—" for the SOC range on manual rows that could not be anchored to telemetry — an invented
+percentage is never displayed as measured.
+
+### Derivation (pure, unit-tested in `_domain/manual-session.ts`)
+
+| Field | Source |
+|---|---|
+| `charger_power_kw` | `billedKwh / durationHours`, clamped to `(0, 350]` |
+| `tariff_type` | `resolveTariffTypeByPower(power)` (`src/lib/charging-tariffs.ts:150`) |
+| `efficiency_percent` | `efficiencyPercentForTariff(car, tariffType)` — per-tariff, AC ≈98% / DC ≈90% |
+| SOC delta | `billedKwh × efficiency/100 ÷ battery_capacity_kwh × 100`, clamped `[1,100]` |
+| `start_percent` | nearest `bydmate_telemetry_samples` SOC within ±10 min of `started_at`; else `0` (unanchored) |
+| `target_percent` = `current_percent` | `min(100, start + delta)`, shifting `start` down if the order check would fail |
+| `price_per_kwh` | `totalCost / billedKwh` |
+| `charged_energy_kwh` / `estimated_cost` | `billedKwh` / `totalCost` as entered |
+| `status` | `completed` |
+
+**No `charging_efficiency_observations` row is written** — the SOC delta is derived *from* the
+billed kWh, so an observation would be circular and would corrupt learned efficiency. This is
+the key difference from `correctChargingSessionEnergy`.
+
+**Reconcile safety:** `sessionNeedsReconcile` returns `false` on `energy_overridden`
+(`_server/charging-session-reconcile-logic.ts:150`), so a backdated manual row inside the
+lookback window is never rewritten by the reconcile that
+`src/app/api/vehicle/sessions/route.ts` runs on every list load.
+
+**Overlap guard:** reject an insert overlapping an existing session for the same car,
+otherwise day and monthly totals double-count.
+
+### Options and trade-offs
+
+1. **Billed kWh + cost only (chosen).** Matches a receipt, smallest form. Cost: SOC and power
+   must be inferred, and unanchored rows show "—" for SOC.
+2. **SOC + time + provider, energy computed.** Consistent with every other session and needs
+   no derivation, but the user must know their start/end SOC for a charge that already
+   happened — usually they only have the receipt.
+3. **Both, with billed fields overriding.** Most complete, largest form, and duplicates the
+   existing Provider correction card.
+
+### Recommendation and implementation plan
+
+Ship option 1 as scoped above:
+
+1. New idempotent migration `20260728120000_charging_sessions_manual_entry.sql` adding
+   `manual_entry boolean not null default false` + column comment.
+2. `src/types/database.ts:51` and `mapChargingSession` (`src/lib/db-map.ts:79`) gain the field.
+3. `src/features/charging/_domain/manual-session.ts` + `.test.mjs` — `deriveManualSessionFields`
+   and `manualSessionOverlaps`; re-export from `domain.ts`.
+4. `src/features/charging/manual-actions.ts` — `createManualChargingSession` and
+   `deleteManualChargingSession` (delete scoped `.eq("manual_entry", true)`), shaped like
+   `corrections-actions.ts`.
+5. `src/features/charging/_ui/manual-session-dialog.tsx` on `@/components/ui/dialog`, following
+   `service-record-form.tsx:157` for layout and `energy-correction-card.tsx` for
+   submit/toast/invalidate. Currency labels via `currencyTextWithIcon` (BYN needs the SVG icon).
+6. `src/components/history/history-view.tsx` — trigger button in `ChargingTab` under the day
+   summary and in the empty state; "Manual" badge and delete control on the session cards.
+7. `src/lib/i18n.ts` — `charging.manualEntry.*` in en/be/ru.
+8. `docs/CHARGING_SESSIONS.md` — "Manual entry for missed sessions" section.
+
+### Acceptance criteria
+
+- A manual session appears in the day list with a "Manual" badge and moves the day summary
+  energy/cost totals by exactly the entered figures.
+- It survives a page reload (i.e. survives reconcile on the sessions list load).
+- A second entry overlapping the same window is rejected.
+- Deleting a manual session restores the prior totals; auto sessions have no delete control
+  and cannot be deleted through the action.
+- `npm run test`, `npm run lint`, `npm run build` all pass.
+
+### Out of scope
+
+Editing a manual session's times/SOC after creation (the Provider correction card already
+handles kWh/cost), and any change to auto-detection thresholds — this is a repair path, not a
+detection fix.
+
+---
+
+## ~~Charging-session feature module — modern Next.js organization~~ — SHIPPED 2026-07-27
+
+> Implemented as the `src/features/charging/` module; see [CHANGELOG.md](CHANGELOG.md).
+
+### Goal
+
+Make the charging-session code easy to navigate and change by replacing its current
+technical-layer scatter with one deep, feature-oriented module. This is a structural
+refactor only: behaviour, existing HTTP routes, Server Action signatures, data, and
+source-of-truth rules remain unchanged.
+
+### Research findings
+
+- The session lifecycle is currently spread across `src/components/charging/`,
+  `src/hooks/`, `src/actions/sessions.ts`, `src/lib/charging-*`, and
+  `src/lib/bydmate/charging-auto-session.ts`. `ChargingSessionScreen` alone is 749
+  lines, while the session-action adapter is 550 lines. Dashboard, Vehicle, History,
+  telemetry ingest, and route handlers import the internals directly.
+- [Charging sessions](docs/CHARGING_SESSIONS.md) already defines one coherent domain:
+  manual/automatic start and stop, live progress, reconciliation, correction, and
+  the tariff applied to a session. Its data correctness rules must remain the module's
+  interface invariants.
+- Current official Next.js guidance supports splitting code by feature or route while
+  retaining `app/` for route conventions; it deliberately does not prescribe a single
+  folder layout. [Project organization](https://nextjs.org/docs/app/getting-started/project-structure)
+  also permits private colocated files and route groups without changing URLs.
+- Current Next.js guidance separates adapters by purpose: Server Actions are for
+  frontend mutations, Route Handlers are public HTTP/BFF endpoints, and Server
+  Components should access the data/service layer directly rather than self-fetching a
+  Route Handler. See [Backend for Frontend](https://nextjs.org/docs/app/guides/backend-for-frontend)
+  and [`use server`](https://nextjs.org/docs/app/api-reference/directives/use-server).
+- In this app, charging routes redirect to Vehicle/History; the active screen and
+  background synchronizer require TanStack Query, Supabase Realtime, timers, and
+  browser state. They are legitimately client-side rather than candidates for a forced
+  Server Component conversion.
+
+### Confirmed scope and invariants
+
+- **In scope:** session start/stop, live progress, automatic-session processing,
+  reconciliation, provider-billed correction, the tariff selected/applied to a
+  session, the live session UI, and their tests.
+- **Out of scope:** provider catalog management, saved tariff-location management, and
+  car efficiency settings. They remain reusable configuration dependencies.
+- Routes stay in `src/app/` as thin framework adapters. Existing Route Handler URLs,
+  requests, responses, and Server Action signatures do not change. No new HTTP API is
+  created.
+- Other features may use only documented charging-module entry points; they must not
+  deep-import its implementation. The migration updates all callers and removes the
+  old session-specific paths in the same change—no compatibility re-export layer.
+- Live session orchestration remains client-side. Pure rules and server-side mutations
+  remain independently testable behind the feature module's interface.
+
+### Data ownership and location
+
+No user-facing data model changes are proposed. `charging_sessions`, telemetry-derived
+session facts, and a session's selected tariff remain **user-owned Postgres data under
+RLS**. Provider/location/efficiency configuration retains its existing ownership and
+storage. No preference moves to or from `localStorage`.
+
+### Options and trade-offs
+
+1. **Feature module with explicit public entry points (recommended).** Create
+   `src/features/charging/` with private domain, server, client, and UI implementation;
+   expose only intentional server-action, server-use-case, client/UI, and pure-domain
+   entry points. Keep `src/app/` route files as adapters. This gives the strongest
+   locality and an unambiguous place to begin work, at the cost of a one-time import
+   migration.
+2. **Route-local private folders only.** Put UI and helpers beside the History/Vehicle
+   route segments under `_components` and `_lib`. This follows Next.js conventions but
+   splits one session lifecycle across the two screens and telemetry ingest, weakening
+   the module seam.
+3. **Keep the current layer folders and merely split large files.** Lowest migration
+   cost, but callers would still need to know whether a charging concern lives in
+   `lib`, `hooks`, `actions`, or `components`; it does not meet the navigation goal.
+
+### Recommendation and implementation plan
+
+Build option 1 in one contract-preserving refactor:
+
+1. Establish `src/features/charging/` as the sole home for session-lifecycle code.
+   Give it narrowly named public entry points, separated by runtime (`server-actions`,
+   server use cases, client/UI, and pure domain rules) so a Client Component cannot
+   accidentally import server-only code. Keep implementation directories private.
+2. Move and split the session lifecycle by reason to change: pure progress/live and
+   reconciliation rules; server use cases for manual and automatic lifecycle changes;
+   client live synchronization/background ownership; and focused UI composition. Split
+   the large session screen by cohesive visible responsibility, not arbitrary line
+   count. Keep configuration modules as dependencies rather than relocating them.
+3. Convert `src/actions/sessions.ts` and the existing `src/app/api/**/route.ts` files
+   into thin adapters over the new feature interface. Preserve every current public
+   signature and endpoint behaviour. Move automatic-session callers in telemetry
+   ingest to the same interface; do not add a second HTTP layer or have server code
+   fetch this app's own Route Handlers.
+4. Migrate Dashboard, Vehicle, History, MobileShell, and developer/gallery callers to
+   the documented feature entry points. Remove the superseded charging-session source
+   paths once all imports and tests use the new module.
+5. Move focused tests with their pure implementation modules, retain the explicit
+   automatic-session test invocation, and add only structural/contract coverage needed
+   to keep the public session interface honest. Run the relevant session, live,
+   reconciliation, tariff-application, and auto-session tests; then run the normal
+   test suite, lint, production build, and `git diff --check` before handoff.
+
+No new ADR is proposed: this is a reversible internal organization decision, not a new
+product or durable data-model policy. Proposed 2026-07-27; implemented 2026-07-27.
+
+---
+
 <!-- repository security/performance remediation shipped 2026-07-23; see CHANGELOG.md -->
 <!--
 

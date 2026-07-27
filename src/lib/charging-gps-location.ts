@@ -1,6 +1,6 @@
 import { haversineDistanceM } from "@/lib/home-charger-geofence";
 import { matchNearestTariffLocation } from "@/lib/charging-tariffs";
-import { filterLiveSnapshotsForVehicle } from "@/lib/charging-session-sync";
+import { filterLiveSnapshotsForVehicle } from "@/features/charging/domain";
 import type {
   BydmateLiveSnapshotRow,
   ChargingTariffLocationRow,

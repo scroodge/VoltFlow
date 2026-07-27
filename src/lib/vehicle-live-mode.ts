@@ -3,7 +3,7 @@ import {
   isDriveTelemetry,
   isParkStateTelemetry,
 } from "./bydmate/gear.ts";
-import { isTelemetryCharging } from "./bydmate/telemetry-charging.ts";
+import { isTelemetryCharging } from "../features/charging/domain.ts";
 import type { TranslationKey } from "@/lib/i18n";
 import type { BydmateLiveSnapshotRow } from "@/types/database";
 

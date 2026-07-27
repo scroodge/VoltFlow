@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 import { CurrencyAmount } from "@/components/currency-amount";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatDuration } from "@/lib/charging-math";
+import { formatDuration } from "@/features/charging/domain";
 import type { HistoryDaySummary, HistorySummaryScope } from "@/lib/history-day-summary";
 import { type Currency, type Locale, type TranslationKey } from "@/lib/i18n";
 import { useTranslation } from "@/hooks/use-translation";

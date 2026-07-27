@@ -62,7 +62,7 @@ import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
 import { useAppPath } from "@/lib/dev/dev-path";
 import { gearIsPark, readGear } from "@/lib/bydmate/gear";
-import { isTelemetryCharging } from "@/lib/bydmate/telemetry-charging";
+import { isTelemetryCharging } from "@/features/charging/domain";
 import { averageTripConsumption } from "@/lib/bydmate/range-estimate";
 import {
   computeHeroDriveMetrics,
@@ -100,9 +100,8 @@ import type {
   BydmateTripTrackPointRow,
   ChargingSessionRow,
 } from "@/types/database";
-import { ChargingDeltaCard } from "@/components/charging/charging-delta-card";
-import { chargingParamsFromSession } from "@/lib/charging-session-sync";
-import { deriveSessionProgressFromSoc, secondsUntilTargetSoc } from "@/lib/charging-math";
+import { ChargingDeltaCard } from "@/features/charging/ui";
+import { chargingParamsFromSession, deriveSessionProgressFromSoc, secondsUntilTargetSoc } from "@/features/charging/domain";
 
 function fmt(value: number | null | undefined, digits = 0) {
   return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";

@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
 import { isDriveTelemetry, isParkStateTelemetry } from "@/lib/bydmate/gear";
 import { latestSampleByVehicle } from "@/lib/bydmate/latest-sample";
-import { finiteTelemetryNumber } from "@/lib/bydmate/telemetry-charging";
+import { finiteTelemetryNumber } from "@/features/charging/domain";
 import { siteUrl as canonicalSiteUrl } from "@/lib/site-url";
 import { editTelegramMessageText, sendTelegramMessage } from "@/lib/telegram/bot-send";
 import { isChargingTelemetry } from "@/lib/vehicle-live-mode";

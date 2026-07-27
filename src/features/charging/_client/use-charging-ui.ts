@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-import type { DerivedChargingState } from "@/lib/charging-math";
+import type { DerivedChargingState } from "@/features/charging/domain";
 
 type ChargingUiState = {
   liveDerived: DerivedChargingState | null;

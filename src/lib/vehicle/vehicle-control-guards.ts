@@ -1,5 +1,5 @@
 import { gearIsPark, readGear } from "@/lib/bydmate/gear";
-import { isTelemetryCharging } from "@/lib/bydmate/telemetry-charging";
+import { isTelemetryCharging } from "@/features/charging/domain";
 import type { BydmateLiveSnapshotRow } from "@/types/database";
 
 export { gearIsPark, readGear };

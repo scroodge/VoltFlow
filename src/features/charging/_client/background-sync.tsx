@@ -5,8 +5,8 @@ import { useMemo } from "react";
 
 import { isDevAppRoute } from "@/lib/dev/dev-fetch";
 
-import { useChargingSessionLiveSync } from "@/hooks/use-charging-session-live-sync";
-import { useChargingSessionAutoTariff } from "@/hooks/use-charging-session-auto-tariff";
+import { useChargingSessionLiveSync } from "./use-charging-session-live-sync";
+import { useChargingSessionAutoTariff } from "./use-charging-session-auto-tariff";
 import { useChargingTariffLocationAutosave } from "@/hooks/use-charging-tariff-location-autosave";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
