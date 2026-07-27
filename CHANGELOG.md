@@ -9,6 +9,46 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-07-27 (2)
+
+### `gun_state === 1` no longer overrides real charge power (car `way`'s live status now fully correct)
+
+- Follow-up to the same-day live-status fix below: that fix stopped gear from
+  overriding charge detection, but replaying car `way`'s real live snapshot through the
+  fixed code still returned `"driving"` — a second bug was compounding it.
+- `isTelemetryCharging`, `isMateAutoSessionCharging`, and `isTelemetryHistoryCharging`
+  (`src/lib/bydmate/telemetry-charging.ts`) all checked `diplus.charge_gun_state === 1`
+  ("unplugged") **before** `charge_power_kw`, so an explicit unplug reading discarded a
+  real, above-threshold charge signal. Car `way`'s Di+ gun state reads `1` for the
+  *majority* (71%, measured 2026-07-23) of its genuine charging samples — it is not a
+  reliable unplug signal for this vehicle's DiPars source. All three now check
+  `charge_power_kw` first; `gun_state === 1` is a fallback only, for the case it was
+  originally built for (a stale near-zero `charge_power_kw`/`is_charging` reading left
+  over from a charge that has actually ended).
+- This replaces the 2026-07-23 "⏸️ Superseded: Auto-charging detection regression"
+  BACKLOG entry, which proposed the same fix for `isMateAutoSessionCharging` alone but
+  was never built; the identical ordering had since been copy-pasted into two more
+  functions (`isTelemetryHistoryCharging` was added 2026-07-23 22:31, *after* that entry
+  was proposed, carrying the same bug forward).
+- Also fixed a fourth, independent copy of the *gear*-ordering bug (not the `gun_state`
+  bug): `liveStatusPhaseForSample()` (`src/lib/push/live-status-notifications.ts`, the
+  Android lock-screen live charging notification) checked `gearIsDrive()` before
+  `isTelemetryCharging()`, with a comment noting it deliberately mirrored the
+  now-outdated dashboard ordering. Reordered to match: charging (speed-gated) wins over
+  a stale gear reading, real driving speed still wins over a stray charge reading.
+- Updated three existing tests in `telemetry-charging.test.mjs` whose asserted behavior
+  was based on a premise the 2026-07-23 investigation had already found incorrect (a
+  "stale post-unplug" sample that in fact fell inside an active, open charging session),
+  added coverage for the near-zero-power fallback case, updated `telemetry-history.test.mjs`
+  (chart filtering now correctly includes a real 1 kW sample previously excluded by
+  `gun_state = 1`), and updated `live-status-notifications.test.mjs`'s phase-detection test.
+- Verified end to end against car `way`'s actual live snapshot (gear `D`, `speed_kmh = 0`,
+  `is_charging = true`, `charge_power_kw = 4`, `charge_gun_state = 1`): dashboard mode,
+  Telegram widget state, and Android push phase all now resolve to charging, not driving.
+  Verification: `npm run test` (302/302 incl. new/updated cases), the excluded
+  `charging-auto-session.test.mjs` suite (7/7), `npx tsc --noEmit`, `npm run lint`
+  (clean on all touched files).
+
 ## 2026-07-27
 
 ### Live status: charging must win over a stale gear signal, not the other way round
