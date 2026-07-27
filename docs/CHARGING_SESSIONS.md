@@ -11,6 +11,7 @@ This document defines the public behavior of `charging_sessions`. See also
 | Vehicle telemetry ingest | Creates or closes automatic sessions; it does not write per-second progress. |
 | Reconciliation | Repairs inconsistent closed sessions from persisted vehicle telemetry. |
 | Provider correction | Replaces a finished session's energy/cost with user-entered, provider-billed figures. See below. |
+| Manual entry | Creates a whole session the ingest pipeline never detected, from receipt figures. See below. |
 
 Telemetry history is append-only. Session progress is shared through the normal
 authenticated data channel.
@@ -98,6 +99,58 @@ evidence (sample count, spread, average temperatures) next to the relevant field
 settings, and the user applies it with `applySuggestedEfficiency`
 (`src/actions/cars.ts`). Temperature/power context is stored for future analysis but does
 not yet drive a temperature-bucketed model — v1 is one value per car per efficiency group.
+
+## Manual entry for missed sessions
+
+Automatic detection is deliberately conservative — four consecutive charging samples within
+three minutes, vehicle parked, plausible gun state. When the Mate app is closed, the head
+unit powers down mid-charge, or the gun state is misreported, a real charge produces **no
+session row at all**. Provider correction cannot help there: it edits an existing row.
+
+From the History tab's day view, "Add missing charge" opens a small form collecting only
+what a receipt shows: **start time, end time, billed kWh, total paid**.
+
+### Why fields are derived
+
+`charging_sessions` requires `start_percent`, `current_percent`, `target_percent`,
+`charger_power_kw` and `efficiency_percent` as NOT NULL, under
+`check (start_percent < target_percent)`. A receipt has none of those, so
+`deriveManualSessionFields` (`src/features/charging/_domain/manual-session.ts`)
+reconstructs them:
+
+| Field | Derived from |
+| --- | --- |
+| `charger_power_kw` | `billedKwh / durationHours`, clamped to `(0, 350]` |
+| `tariff_type` | `resolveTariffTypeByPower(power)` — same band logic as a GPS-less auto session |
+| `efficiency_percent` | `efficiencyPercentForTariff(car, tariffType)` — per tariff, not per car |
+| SOC delta | `billedKwh × efficiency/100 ÷ battery_capacity_kwh × 100`, clamped to `[1, 100]` |
+| `start_percent` | nearest telemetry SOC within ±10 min of the start time; `0` when none |
+| `target_percent`, `current_percent` | `min(100, start + delta)`, sliding the window down if the gain would run past 100% |
+| `price_per_kwh` | `totalCost / billedKwh` |
+| `charged_energy_kwh`, `estimated_cost` | exactly as entered |
+| `status` | `completed` |
+
+Because the percent range is reconstructed rather than measured, the History cards show a
+manual session's **SOC gain** (`+33%`) instead of a `start% → end%` pair. Presenting a
+derived start and end as if telemetry had recorded them would be a lie the UI can't take
+back.
+
+### Two invariants
+
+1. **`energy_overridden` is always set.** `sessionNeedsReconcile` returns false for such
+   rows, so reconcile — which runs on every sessions-list load — leaves them alone. Without
+   this the row would be recomputed from telemetry that was, by definition, too sparse to
+   detect the charge in the first place.
+2. **No efficiency observation is recorded.** Unlike `correctChargingSessionEnergy`, a
+   manual entry writes **no** `charging_efficiency_observations` row. Its SOC delta was
+   derived *from* the billed kWh using the configured efficiency, so feeding it back as a
+   measurement would be circular and would corrupt learned efficiency.
+
+An overlap guard rejects an entry whose window intersects an existing session for the same
+car, since a duplicate would double-count in the day summary and every monthly total.
+
+Manual rows carry `manual_entry = true`, which drives the "Manual" badge and scopes
+`deleteManualChargingSession` — auto-detected sessions can never be deleted through it.
 
 ## Verification
 

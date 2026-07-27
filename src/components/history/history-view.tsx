@@ -5,7 +5,9 @@ import type { ReactNode } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { BrandBadge } from "@/components/brand/BrandBadge";
 import { LogoFull } from "@/components/brand/LogoFull";
@@ -18,8 +20,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDuration } from "@/features/charging/domain";
+import { ManualSessionDialog } from "@/features/charging/ui";
+import { deleteManualChargingSession } from "@/features/charging/manual-actions";
+import { queryKeys } from "@/lib/query-keys";
 import { useAppPath } from "@/lib/dev/dev-path";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
+import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useSessionsQuery } from "@/hooks/use-sessions-query";
 import { useLatestBydmateTripsQuery, useBydmateTripsQuery, useTripMonthDatesQuery } from "@/hooks/use-bydmate-trips-query";
 import { useTranslation } from "@/hooks/use-translation";
@@ -212,6 +218,65 @@ function StatusBadge({ status, compact }: { status: string; compact?: boolean })
   );
 }
 
+/** Marks a session the user typed in from a receipt rather than one telemetry detected. */
+function ManualBadge({ compact }: { compact?: boolean }) {
+  const { t } = useTranslation();
+  const tx = t as HistoryTranslator;
+  return (
+    <span
+      className={[
+        "shrink-0 rounded-full border border-border bg-white/[0.03] font-semibold uppercase text-muted-foreground",
+        compact
+          ? "px-2 py-0.5 text-[9px] tracking-[0.14em]"
+          : "px-2.5 py-0.5 text-[10px] tracking-[0.18em]",
+      ].join(" ")}
+    >
+      {tx("charging.manualEntry.badge")}
+    </span>
+  );
+}
+
+/**
+ * Delete control for hand-entered sessions only. The action itself is scoped to
+ * `manual_entry` rows, so this is a UI affordance over a server-side guarantee rather than
+ * the guarantee itself.
+ */
+function ManualDeleteButton({ session }: { session: ChargingSessionRow }) {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const tx = t as HistoryTranslator;
+  const [deleting, setDeleting] = useState(false);
+
+  if (!session.manual_entry) return null;
+
+  const handleDelete = async () => {
+    if (!window.confirm(tx("charging.manualEntry.deleteConfirm"))) return;
+    setDeleting(true);
+    const res = await deleteManualChargingSession({ sessionId: session.id });
+    setDeleting(false);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    await qc.invalidateQueries({ queryKey: queryKeys.sessions });
+    toast.success(tx("charging.manualEntry.deleted"));
+  };
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      disabled={deleting}
+      onClick={() => void handleDelete()}
+      className="h-8 w-full rounded-full text-xs font-semibold text-muted-foreground hover:text-destructive"
+    >
+      <Trash2 className="mr-1.5 size-3.5" aria-hidden />
+      {tx("charging.manualEntry.delete")}
+    </Button>
+  );
+}
+
 // ─── Mini Calendar ─────────────────────────────────────────────────────────────
 
 function toCalKey(year: number, month: number, day: number) {
@@ -396,11 +461,21 @@ function SessionStatsBlock({
                 : "Custom";
   return (
     <dl className="divide-y divide-border border-b border-border">
-      <CompactStatRow
-        label={tx("history.charging.startEnd")}
-        value={`${fmt(session.start_percent)}% → ${fmt(session.current_percent)}%`}
-      />
-      {session.current_percent + 0.5 < session.target_percent ? (
+      {session.manual_entry ? (
+        // A hand-entered session's percent range is reconstructed from the billed kWh, not
+        // measured, so show only the size of the gain rather than presenting a specific
+        // start → end pair as if telemetry had recorded it.
+        <CompactStatRow
+          label={tx("charging.manualEntry.socGain")}
+          value={`+${fmt(session.current_percent - session.start_percent)}%`}
+        />
+      ) : (
+        <CompactStatRow
+          label={tx("history.charging.startEnd")}
+          value={`${fmt(session.start_percent)}% → ${fmt(session.current_percent)}%`}
+        />
+      )}
+      {!session.manual_entry && session.current_percent + 0.5 < session.target_percent ? (
         <CompactStatRow
           label={tx("history.charging.target")}
           value={`${fmt(session.target_percent)}%`}
@@ -442,11 +517,17 @@ function SessionCardHeader({
             : tx("history.queued")}
         </p>
         <p className="mt-0.5 font-heading text-2xl font-bold leading-none tabular-nums">
-          {fmt(session.current_percent, 1)}
+          {/* Manual rows report the gain, not an end-of-charge SOC nobody measured. */}
+          {session.manual_entry
+            ? `+${fmt(session.current_percent - session.start_percent)}`
+            : fmt(session.current_percent, 1)}
           <span className="text-base font-semibold text-muted-foreground">%</span>
         </p>
       </div>
-      <StatusBadge status={session.status} compact />
+      <div className="flex shrink-0 items-center gap-1.5">
+        {session.manual_entry ? <ManualBadge compact /> : null}
+        <StatusBadge status={session.status} compact />
+      </div>
     </div>
   );
 }
@@ -483,6 +564,7 @@ function SessionCard({ session }: { session: ChargingSessionRow }) {
         >
           <Link href={appPath(`/history/${session.id}`)}>{tx("history.charging.viewDetail")}</Link>
         </Button>
+        <ManualDeleteButton session={session} />
       </div>
     </article>
   );
@@ -520,9 +602,12 @@ function SessionAccordionItem({
             {formatShortDate(started, locale)} · {formatClock(started)}
           </p>
         </div>
+        {session.manual_entry ? <ManualBadge compact /> : null}
         <StatusBadge status={session.status} compact />
         <span className="font-heading text-sm font-bold tabular-nums">
-          {fmt(session.current_percent, 1)}%
+          {session.manual_entry
+            ? `+${fmt(session.current_percent - session.start_percent)}%`
+            : `${fmt(session.current_percent, 1)}%`}
         </span>
         <span className="hidden max-w-[4.5rem] truncate text-[10px] text-muted-foreground min-[360px]:inline">
           {sessionDuration(session)}
@@ -543,6 +628,7 @@ function SessionAccordionItem({
                 {tx("history.charging.viewDetail")}
               </Link>
             </Button>
+            <ManualDeleteButton session={session} />
           </div>
         </div>
       )}
@@ -567,6 +653,17 @@ function ChargingTab({
     pickInitialChargingDate(sessions),
   );
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [manualOpen, setManualOpen] = useState(false);
+
+  // A manual entry has to be attributed to a car for capacity and efficiency. Prefer the
+  // car matching the vehicle whose history is on screen, then the user's preferred car.
+  const { data: carsResult } = useCarsQuery();
+  const cars = carsResult?.cars ?? [];
+  const manualCar =
+    cars.find((car) => car.vehicle_alias?.trim() === vehicleId) ??
+    cars.find((car) => car.id === carsResult?.preferredCarId) ??
+    cars[0] ??
+    null;
 
   const sessionDates = useMemo(() => {
     const set = new Set<string>();
@@ -656,6 +753,30 @@ function ChargingTab({
           ))}
         </div>
       )}
+
+      {selectedDate && manualCar ? (
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 w-full rounded-full border-dashed border-border text-xs font-semibold text-muted-foreground"
+            onClick={() => setManualOpen(true)}
+          >
+            <Plus className="mr-1.5 size-3.5" aria-hidden />
+            {tx("charging.manualEntry.add")}
+          </Button>
+          {/* Mounted only while open and keyed by day, so each opening starts blank. */}
+          {manualOpen ? (
+            <ManualSessionDialog
+              key={selectedDate}
+              open
+              onOpenChange={setManualOpen}
+              car={manualCar}
+              dateKey={selectedDate}
+            />
+          ) : null}
+        </>
+      ) : null}
     </div>
   );
 }

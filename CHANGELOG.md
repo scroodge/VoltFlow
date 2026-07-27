@@ -9,6 +9,37 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-07-27 (4)
+
+- **Manual entry for a missed charging session.** Auto-detection needs four consecutive
+  charging samples within three minutes with the vehicle parked, so a charge taken while
+  the Mate app was closed — or with the head unit powering down mid-charge — left no
+  session row at all, and went missing from the day summary and every monthly total.
+  The History day view now has "Add missing charge", a small form collecting only what a
+  provider receipt shows: start time, end time, billed kWh, total paid.
+- Because `charging_sessions` requires SOC, charger power and efficiency as NOT NULL under
+  `check (start_percent < target_percent)`, those columns are reconstructed server-side by
+  `deriveManualSessionFields` — power from energy over duration, tariff band from power,
+  efficiency from the tariff, and the SOC delta by running the billed (grid-side) energy
+  back through efficiency to battery-side. The range is anchored to the nearest telemetry
+  SOC within ±10 min of the start time when one exists. Since the range is derived rather
+  than measured, the History cards show a manual session's **gain** (`+33%`) instead of a
+  `start% → end%` pair.
+- Two invariants, both covered by tests: manual rows always set `energy_overridden` so
+  `sessionNeedsReconcile` skips them (otherwise the reconcile on every sessions-list load
+  would recompute them from telemetry too sparse to have detected the charge), and they
+  write **no** `charging_efficiency_observations` row — their SOC delta came *from* the
+  billed kWh, so recording it as a measurement would be circular and would corrupt learned
+  efficiency.
+- An overlap guard rejects an entry intersecting an existing session for the same car, to
+  prevent double-counting. New `manual_entry` column (migration
+  `20260727220000_charging_sessions_manual_entry.sql`, **applied to self-hosted prod
+  2026-07-27**; 182 existing sessions all defaulted to `false`) drives the "Manual" badge
+  and scopes `deleteManualChargingSession`, so auto-detected sessions stay undeletable.
+- New: `src/features/charging/_domain/manual-session.ts` (+ 20 tests),
+  `manual-actions.ts`, `_ui/manual-session-dialog.tsx`; wired into
+  `src/components/history/history-view.tsx` with en/be/ru strings.
+
 ## 2026-07-27 (3)
 
 ### Charging sessions now have one feature module

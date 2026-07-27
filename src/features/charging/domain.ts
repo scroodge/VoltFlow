@@ -9,4 +9,5 @@ export * from "./_domain/charging-math.ts";
 export * from "./_domain/charging-session-analytics-scope.ts";
 export * from "./_domain/charging-session-sync.ts";
 export * from "./_domain/charging-session-tariff-sync.ts";
+export * from "./_domain/manual-session.ts";
 export * from "./_domain/telemetry-charging.ts";

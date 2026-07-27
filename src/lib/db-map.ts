@@ -105,6 +105,7 @@ export function mapChargingSession(
     price_per_kwh: num(raw.price_per_kwh),
     energy_overridden: raw.energy_overridden === true,
     energy_corrected_at: raw.energy_corrected_at ? String(raw.energy_corrected_at) : null,
+    manual_entry: raw.manual_entry === true,
     charged_energy_kwh: num(raw.charged_energy_kwh),
     estimated_cost: num(raw.estimated_cost),
     status: raw.status as ChargingSessionRow["status"],
