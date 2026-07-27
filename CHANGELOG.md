@@ -9,6 +9,28 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-07-28
+
+### Next.js Vehicle-route loading boundaries
+
+- The Vehicle page now loads the Service Logbook only when its tab is selected. The live
+  cockpit remains the initial tab; the shared client shell, Realtime subscription,
+  fast-status heartbeat, charging background sync, and primary Dashboard charging controls
+  remain eager.
+- Expanding a saved trip now loads its chart/map detail panel on demand. The route-display
+  guard is preserved: a non-displayable, non-empty track still does not render a map.
+  The live-location card does not start its trip-track fallback query or render its map until
+  it comes within 300 px of the viewport, while reserving stable skeleton space.
+- No cache model, query cadence, API, RLS policy, retention rule, or data ownership changed.
+  Telemetry, tracks, service records, and charging data remain user-owned Postgres data;
+  existing local preferences remain in `localStorage`.
+- Verification: `npm run build` passed. The Vehicle build manifest emits the Service Logbook
+  and Trip Detail Panel as separate route chunks. `curl -I http://localhost:3000/vehicle`
+  returned `200` from the already-running dev server. Repository-wide and scoped lint remain
+  blocked by pre-existing Vehicle map-ref lint errors (and unrelated existing errors); no new
+  lint finding was reported for the added loading boundaries. Interactive browser verification
+  was unavailable in this session, so production p75 Web Vitals remain a post-deploy check.
+
 ## 2026-07-27 (4)
 
 - **Manual entry for a missed charging session.** Auto-detection needs four consecutive

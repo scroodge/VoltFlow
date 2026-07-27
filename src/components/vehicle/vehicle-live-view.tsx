@@ -1,7 +1,8 @@
 "use client";
 
-import { useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -53,7 +54,6 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useVehicleRangeEstimate } from "@/hooks/use-vehicle-range-estimate";
-import { useBydmateTripSamplesQuery } from "@/hooks/use-bydmate-trip-samples-query";
 import { useBydmateTripTrackQuery } from "@/hooks/use-bydmate-trip-track-query";
 import { useBydmateTripsQuery, useLatestBydmateTripsQuery } from "@/hooks/use-bydmate-trips-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
@@ -76,11 +76,7 @@ import {
   tripTractionEnergyKwh,
 } from "@/lib/bydmate/trip-metrics";
 import { isRouteTrackDisplayable } from "@/lib/bydmate/route-insights";
-import {
-  odometerDeltaFromSamples,
-  resolvePreferredTripDistanceKm,
-  trackPathDistanceKm,
-} from "@/lib/bydmate/trip-distance";
+import { resolvePreferredTripDistanceKm, trackPathDistanceKm } from "@/lib/bydmate/trip-distance";
 import type { Currency, Locale, TranslationKey } from "@/lib/i18n";
 import { formatTimeAgo } from "@/lib/time-ago";
 import {
@@ -102,6 +98,13 @@ import type {
 } from "@/types/database";
 import { ChargingDeltaCard } from "@/features/charging/ui";
 import { chargingParamsFromSession, deriveSessionProgressFromSoc, secondsUntilTargetSoc } from "@/features/charging/domain";
+
+const TripDetailPanel = dynamic(
+  () => import("@/components/vehicle/TripDetailPanel").then((module) => module.TripDetailPanel),
+  {
+    loading: () => <Skeleton className="mt-3 h-64 rounded-2xl" />,
+  },
+);
 
 function fmt(value: number | null | undefined, digits = 0) {
   return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
@@ -476,7 +479,7 @@ function VehicleLiveContent({
               <StaleTelemetryNotice />
               <LastTripCard vehicleId={snapshot.vehicle_id} hasMounted={hasMounted} />
               {!fixturePoints ? <VehicleAnalyticsTeaser /> : null}
-              <LocationCard snapshot={snapshot} hasMounted={hasMounted} />
+              <DeferredLocationCard snapshot={snapshot} hasMounted={hasMounted} />
             </>
           ) : (
             <>
@@ -502,7 +505,7 @@ function VehicleLiveContent({
                 expandedFixtureTrip={expandedFixtureTrip}
               />
               {!fixturePoints ? <VehicleAnalyticsTeaser /> : null}
-              <LocationCard snapshot={snapshot} hasMounted={hasMounted} />
+              <DeferredLocationCard snapshot={snapshot} hasMounted={hasMounted} />
             </>
           )}
         </>
@@ -1376,47 +1379,6 @@ function TripNetConsumptionMetric({ trip, label }: { trip: BydmateTripRow; label
   );
 }
 
-function ExpandedTripPanel({
-  tripId,
-  trip,
-}: {
-  tripId: string;
-  trip: BydmateTripRow;
-}) {
-  const {
-    data: samples = [],
-    isLoading: isSamplesLoading,
-    error: samplesError,
-  } = useBydmateTripSamplesQuery(tripId);
-  const {
-    data: track = [],
-    isLoading: isTrackLoading,
-    error: trackError,
-  } = useBydmateTripTrackQuery(tripId);
-  const odometerDistanceKm = useMemo(
-    () => odometerDeltaFromSamples(samples) ?? trip.distance_km,
-    [samples, trip.distance_km],
-  );
-  const showRouteMap = useMemo(
-    () => isRouteTrackDisplayable(track, 2, 75, { odometerDistanceKm }),
-    [track, odometerDistanceKm],
-  );
-
-  return (
-    <>
-      <TelemetryHistoryCharts
-        points={samples}
-        isLoading={isSamplesLoading}
-        hasError={Boolean(samplesError)}
-        embedded
-      />
-      {showRouteMap || isTrackLoading || trackError || track.length === 0 ? (
-        <RouteMap trackPoints={track} isLoading={isTrackLoading} hasError={Boolean(trackError)} embedded />
-      ) : null}
-    </>
-  );
-}
-
 function TripBrowser({
   showDateFilter = false,
   selectedDate = "",
@@ -1561,7 +1523,7 @@ function TripBrowser({
                       <RouteMap points={expandedFixtureTrip.points} embedded />
                     </>
                   ) : (
-                    <ExpandedTripPanel tripId={trip.id} trip={trip} />
+                    <TripDetailPanel tripId={trip.id} trip={trip} />
                   )
                 ) : null}
               </div>
@@ -4343,6 +4305,39 @@ function LiveLocationMap({
   );
 }
 
+function DeferredLocationCard({
+  snapshot,
+  hasMounted = true,
+}: {
+  snapshot: BydmateLiveSnapshotRow;
+  hasMounted?: boolean;
+}) {
+  const [isNearViewport, setIsNearViewport] = useState(false);
+  const observeNearViewport = useCallback((element: HTMLDivElement | null) => {
+    if (!element) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        setIsNearViewport(true);
+        observer.disconnect();
+      },
+      { rootMargin: "300px 0px" },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={observeNearViewport}>
+      {isNearViewport ? (
+        <LocationCard snapshot={snapshot} hasMounted={hasMounted} />
+      ) : (
+        <Skeleton className="h-52 rounded-2xl" />
+      )}
+    </div>
+  );
+}
+
 function LocationCard({
   snapshot,
   hasMounted = true,
@@ -4546,7 +4541,7 @@ function LastTripDetail({
         </div>
         <TripNetConsumptionMetric trip={trip} label={tx("vehicle.trips.netConsumption")} />
       </div>
-      <ExpandedTripPanel tripId={trip.id} trip={trip} />
+      <TripDetailPanel tripId={trip.id} trip={trip} />
     </div>
   );
 }

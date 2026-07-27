@@ -1,15 +1,22 @@
 "use client";
 
 import { CarFront, Wrench } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useMemo } from "react";
 
 import { ChargingDevToolbar } from "@/components/dev/charging-dev-toolbar";
 import { VehicleDevToolbar } from "@/components/dev/vehicle-dev-toolbar";
-import { ServiceView } from "@/components/service/service-view";
 import { VehicleLiveView } from "@/components/vehicle/vehicle-live-view";
 import { useTranslation } from "@/hooks/use-translation";
 import { cn } from "@/lib/utils";
+
+const ServiceView = dynamic(
+  () => import("@/components/service/service-view").then((module) => module.ServiceView),
+  {
+    loading: () => <VehicleTabLoading />,
+  },
+);
 
 // Charge is no longer a tab — charging detail (params + SOC graph) is shown inline on the
 // Live view when the car is charging. The full-control screen lives at /charging/[id]
@@ -20,6 +27,16 @@ const tabDefs: Record<VehicleTab, { icon: typeof CarFront }> = {
   live: { icon: CarFront },
   service: { icon: Wrench },
 };
+
+function VehicleTabLoading() {
+  return (
+    <div className="space-y-3" aria-busy="true" aria-label="Loading vehicle tab">
+      <div className="h-20 animate-pulse rounded-2xl bg-white/[0.05]" />
+      <div className="h-28 animate-pulse rounded-2xl bg-white/[0.04]" />
+      <div className="h-28 animate-pulse rounded-2xl bg-white/[0.04]" />
+    </div>
+  );
+}
 
 export function VehicleHub({ isAdmin }: { isAdmin: boolean }) {
   const searchParams = useSearchParams();

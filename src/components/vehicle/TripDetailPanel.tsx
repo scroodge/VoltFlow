@@ -2,9 +2,12 @@
 
 import { useBydmateTripSamplesQuery } from "@/hooks/use-bydmate-trip-samples-query";
 import { useBydmateTripTrackQuery } from "@/hooks/use-bydmate-trip-track-query";
+import { isRouteTrackDisplayable } from "@/lib/bydmate/route-insights";
+import { odometerDeltaFromSamples } from "@/lib/bydmate/trip-distance";
+import type { BydmateTripRow } from "@/types/database";
 import { TelemetryHistoryCharts, RouteMap } from "@/components/vehicle/vehicle-live-view";
 
-export function TripDetailPanel({ tripId }: { tripId: string }) {
+export function TripDetailPanel({ tripId, trip }: { tripId: string; trip?: BydmateTripRow }) {
   const {
     data: samples = [],
     isLoading: isSamplesLoading,
@@ -15,6 +18,8 @@ export function TripDetailPanel({ tripId }: { tripId: string }) {
     isLoading: isTrackLoading,
     error: trackError,
   } = useBydmateTripTrackQuery(tripId);
+  const odometerDistanceKm = odometerDeltaFromSamples(samples) ?? trip?.distance_km ?? null;
+  const showRouteMap = isRouteTrackDisplayable(track, 2, 75, { odometerDistanceKm });
 
   return (
     <>
@@ -24,12 +29,14 @@ export function TripDetailPanel({ tripId }: { tripId: string }) {
         hasError={Boolean(samplesError)}
         embedded
       />
-      <RouteMap
-        trackPoints={track}
-        isLoading={isTrackLoading}
-        hasError={Boolean(trackError)}
-        embedded
-      />
+      {!trip || showRouteMap || isTrackLoading || trackError || track.length === 0 ? (
+        <RouteMap
+          trackPoints={track}
+          isLoading={isTrackLoading}
+          hasError={Boolean(trackError)}
+          embedded
+        />
+      ) : null}
     </>
   );
 }
