@@ -8,7 +8,7 @@ import {
   AnalyticsSummaryStats,
   AnalyticsSummaryStatsLoading,
 } from "@/components/vehicle/telemetry-analytics-charts";
-import { TelemetryHistoryCharts } from "@/components/vehicle/vehicle-live-view";
+import { TelemetryHistoryCharts } from "@/components/vehicle/vehicle-telemetry-visualizations";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "@/hooks/use-translation";

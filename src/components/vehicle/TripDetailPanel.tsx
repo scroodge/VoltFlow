@@ -5,7 +5,8 @@ import { useBydmateTripTrackQuery } from "@/hooks/use-bydmate-trip-track-query";
 import { isRouteTrackDisplayable } from "@/lib/bydmate/route-insights";
 import { odometerDeltaFromSamples } from "@/lib/bydmate/trip-distance";
 import type { BydmateTripRow } from "@/types/database";
-import { TelemetryHistoryCharts, RouteMap } from "@/components/vehicle/vehicle-live-view";
+import { RouteMap } from "@/components/vehicle/vehicle-live-view";
+import { TelemetryHistoryCharts } from "@/components/vehicle/vehicle-telemetry-visualizations";
 
 export function TripDetailPanel({ tripId, trip }: { tripId: string; trip?: BydmateTripRow }) {
   const {

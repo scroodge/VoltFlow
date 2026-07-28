@@ -1,9 +1,7 @@
 import { notFound } from "next/navigation";
 
-import {
-  RouteMap,
-  TelemetryHistoryCharts,
-} from "@/components/vehicle/vehicle-live-view";
+import { RouteMap } from "@/components/vehicle/vehicle-live-view";
+import { TelemetryHistoryCharts } from "@/components/vehicle/vehicle-telemetry-visualizations";
 import type {
   BydmateLiveSnapshotRow,
   BydmateLocation,

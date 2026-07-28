@@ -16,7 +16,8 @@ import {
   useChargingBarCharts,
 } from "@/components/vehicle/telemetry-analytics-charts";
 import { RouteInsightsSection } from "@/components/vehicle/route-insights-section";
-import { RouteMap, TelemetryHistoryCharts } from "@/components/vehicle/vehicle-live-view";
+import { RouteMap } from "@/components/vehicle/vehicle-live-view";
+import { TelemetryHistoryCharts } from "@/components/vehicle/vehicle-telemetry-visualizations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";

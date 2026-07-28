@@ -14,9 +14,9 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 ### Preserve odometer across partial live telemetry
 
 - Added an idempotent `bydmate_live_snapshots` trigger that carries forward the last
-  known telemetry odometer, `diplus_mileage_km`, and DiPlus `mileage_km` when a heartbeat
-  omits them. This covers both normal and `live_only` ingest paths without changing the
-  client contract.
+  known telemetry odometer, battery temperature, outside temperature,
+  `diplus_mileage_km`, and DiPlus `mileage_km` when a heartbeat omits them. This covers
+  both normal and `live_only` ingest paths without changing the client contract.
 - Repaired the active `way` snapshot from its latest known raw sample (`43704.8 km`).
 - Production rollback verification confirmed that an odometer-less update retains all
   three representations.
