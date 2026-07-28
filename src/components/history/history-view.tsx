@@ -27,7 +27,12 @@ import { useAppPath } from "@/lib/dev/dev-path";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useSessionsQuery } from "@/hooks/use-sessions-query";
-import { useLatestBydmateTripsQuery, useBydmateTripsQuery, useTripMonthDatesQuery } from "@/hooks/use-bydmate-trips-query";
+import {
+  useBydmateTripRealtimeInvalidation,
+  useLatestBydmateTripsQuery,
+  useBydmateTripsQuery,
+  useTripMonthDatesQuery,
+} from "@/hooks/use-bydmate-trips-query";
 import { useTranslation } from "@/hooks/use-translation";
 import { HistoryDaySummaryCard } from "@/components/history/history-day-summary-card";
 import { computeHistoryDaySummary } from "@/lib/history-day-summary";
@@ -1094,6 +1099,7 @@ export function HistoryView() {
   const [tab, setTab] = useState<HistoryTab>(initialTab);
   const { t } = useTranslation();
   const tx = t as HistoryTranslator;
+  useBydmateTripRealtimeInvalidation();
   const { data: sessions = [], isLoading: sessionsLoading } = useSessionsQuery();
   const { data: liveRows = [], isLoading: liveLoading } = useBydmateLiveQuery();
   const tripVehicleId = liveRows[0]?.vehicle_id ?? null;

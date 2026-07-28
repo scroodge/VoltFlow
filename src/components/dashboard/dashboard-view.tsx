@@ -41,7 +41,10 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
-import { useLatestBydmateTripsQuery } from "@/hooks/use-bydmate-trips-query";
+import {
+  useBydmateTripRealtimeInvalidation,
+  useLatestBydmateTripsQuery,
+} from "@/hooks/use-bydmate-trips-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useUserProvidersQuery, useUserProviderMap } from "@/hooks/use-user-providers-query";
 import { usePageVisible } from "@/hooks/use-page-visible";
@@ -74,6 +77,7 @@ import { ensureNotificationsPermission, ensurePushSubscription } from "@/lib/pus
 import { queryKeys } from "@/lib/query-keys";
 import { createClient } from "@/lib/supabase/client";
 import { formatTimeAgo } from "@/lib/time-ago";
+import { vehicleReadyDurationBucket } from "@/lib/vehicle-ready-metrics";
 import { cn } from "@/lib/utils";
 import {
   canStartChargingSession,
@@ -493,19 +497,13 @@ function DashboardLoadingSkeleton() {
   );
 }
 
-function dashboardHeroDurationBucket(durationMs: number) {
-  if (durationMs <= 1_000) return "le_1s";
-  if (durationMs <= 2_500) return "le_2_5s";
-  if (durationMs <= 4_000) return "le_4s";
-  return "gt_4s";
-}
-
 export function DashboardView({ initialData }: { initialData?: DashboardBootstrapData }) {
   const router = useRouter();
   const appPath = useAppPath();
   const qc = useQueryClient();
   const pageVisible = usePageVisible();
   const heroReadyReported = useRef(false);
+  useBydmateTripRealtimeInvalidation();
   const [showDeferredDetails, setShowDeferredDetails] = useState(false);
   const {
     data: carsResult,
@@ -976,7 +974,7 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
     const durationMs = Math.round(performance.now());
     performance.mark("voltflow:dashboard-hero-ready");
     track("dashboard_hero_ready", {
-      duration_bucket: dashboardHeroDurationBucket(durationMs),
+      duration_bucket: vehicleReadyDurationBucket(durationMs),
       navigation_type: navigation.type,
       release: process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
     });

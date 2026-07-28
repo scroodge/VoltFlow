@@ -11,6 +11,30 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-07-28
 
+### Vehicle Live: Realtime/RUM foundation (partial; chart/map split remains in BACKLOG)
+
+- `VehicleHub` now loads the Live cockpit through a top-level `next/dynamic` boundary,
+  matching the existing inactive Service-tab pattern while retaining server rendering and
+  a stable loading fallback. This is a safe outer client boundary, but Live is the
+  default tab, so it does **not** by itself defer its chart/map implementation until a
+  trip or analytics interaction.
+- Trip query hooks now own data fetching only. Dashboard, History, and Vehicle each mount
+  one shared `bydmate_trips` Realtime invalidation observer, preserving the existing
+  five-second debounce, open-trip filter, and three query-family invalidations without
+  opening one channel per query hook.
+- Added the privacy-minimised `vehicle_live_ready` Vercel Analytics event for cold
+  document loads only (coarse timing bucket, navigation type, and release only) plus
+  coverage for its thresholds. App Router transitions are deliberately excluded until a
+  separate transition-timing seam exists. No
+  telemetry, account, vehicle, location, or preference is sent; all user data remains
+  user-owned and RLS-scoped in Postgres.
+- Verification: focused metric test, `npm run test` (111 passing), `npx tsc --noEmit`,
+  `npm run build`, and `git diff --check` pass. Focused ESLint retains pre-existing
+  React-rule errors in the large Vehicle, History, and Dashboard files; the new hunks
+  introduce none. Production RUM is still required before claiming a p75 improvement.
+  The approved inner visualization-module split and production bundle inspection remain
+  unbuilt and stay proposed in `BACKLOG.md`.
+
 ### Charging ETA uses live DC power
 
 - Fixed `/vehicle` charging ETA to prefer current positive `telemetry.charge_power_kw`

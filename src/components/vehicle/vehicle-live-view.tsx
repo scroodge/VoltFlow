@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
+import { track } from "@vercel/analytics";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -55,7 +56,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useVehicleRangeEstimate } from "@/hooks/use-vehicle-range-estimate";
 import { useBydmateTripTrackQuery } from "@/hooks/use-bydmate-trip-track-query";
-import { useBydmateTripsQuery, useLatestBydmateTripsQuery } from "@/hooks/use-bydmate-trips-query";
+import {
+  useBydmateTripRealtimeInvalidation,
+  useBydmateTripsQuery,
+  useLatestBydmateTripsQuery,
+} from "@/hooks/use-bydmate-trips-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useSessionsQuery } from "@/hooks/use-sessions-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
@@ -79,6 +84,7 @@ import { isRouteTrackDisplayable } from "@/lib/bydmate/route-insights";
 import { resolvePreferredTripDistanceKm, trackPathDistanceKm } from "@/lib/bydmate/trip-distance";
 import type { Currency, Locale, TranslationKey } from "@/lib/i18n";
 import { formatTimeAgo } from "@/lib/time-ago";
+import { vehicleReadyDurationBucket } from "@/lib/vehicle-ready-metrics";
 import {
   deriveDashboardVehicleMode,
   resolveLiveSnapshotForVehicle,
@@ -222,6 +228,7 @@ export function VehicleLiveView({ isAdmin = false }: { isAdmin?: boolean }) {
   const { data, isLoading, error } = useBydmateLiveQuery();
   const { data: carsResult } = useCarsQuery();
   const selectedCarId = useAppPreferences((state) => state.selectedCarId);
+  const vehicleReadyReported = useRef(false);
   const nowMs = useTickingClock(true);
   const scopedVehicleId = useMemo(() => {
     const cars = carsResult?.cars;
@@ -235,6 +242,27 @@ export function VehicleLiveView({ isAdmin = false }: { isAdmin?: boolean }) {
   );
   const snapshot = useVehicleDevSnapshotOverride(baseSnapshot);
   const hasMounted = useClientMounted();
+  useBydmateTripRealtimeInvalidation();
+
+  useEffect(() => {
+    if (vehicleReadyReported.current || isLoading || !snapshot) return;
+
+    const navigation = performance.getEntriesByType("navigation")[0] as
+      | PerformanceNavigationTiming
+      | undefined;
+    // Navigation Timing describes the document, not an App Router transition. Keep this
+    // event cold-document-only until a route-transition mark has its own measured seam.
+    if (!navigation || new URL(navigation.name).pathname !== window.location.pathname) return;
+
+    vehicleReadyReported.current = true;
+    const durationMs = Math.round(performance.now());
+    performance.mark("voltflow:vehicle-live-ready");
+    track("vehicle_live_ready", {
+      duration_bucket: vehicleReadyDurationBucket(durationMs),
+      navigation_type: navigation.type,
+      release: process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
+    });
+  }, [isLoading, snapshot]);
 
   if (isLoading) {
     return (

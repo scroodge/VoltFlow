@@ -132,7 +132,7 @@ async function fetchTripMonthDates(
   return dates;
 }
 
-function useBydmateTripRealtimeInvalidation() {
+export function useBydmateTripRealtimeInvalidation() {
   const queryClient = useQueryClient();
   const supabase = useMemo(() => createClient(), []);
   const devRoute = isDevAppRoute();
@@ -192,7 +192,6 @@ export function useBydmateTripsQuery(
   enabled = true,
 ) {
   const pageVisible = usePageVisible();
-  useBydmateTripRealtimeInvalidation();
 
   return useQuery({
     queryKey: queryKeys.bydmateTrips(date, vehicleId),
@@ -209,7 +208,6 @@ export function useLatestBydmateTripsQuery(
   lite = false,
 ) {
   const pageVisible = usePageVisible();
-  useBydmateTripRealtimeInvalidation();
 
   return useQuery({
     queryKey: queryKeys.bydmateLatestTrips(vehicleId, limit, lite),
@@ -226,7 +224,6 @@ export function useTripMonthDatesQuery(
   enabled = true,
 ) {
   const pageVisible = usePageVisible();
-  useBydmateTripRealtimeInvalidation();
 
   return useQuery({
     queryKey: queryKeys.bydmateTripMonthDates(year, month, vehicleId),

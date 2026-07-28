@@ -7,9 +7,15 @@ import { useCallback, useMemo } from "react";
 
 import { ChargingDevToolbar } from "@/components/dev/charging-dev-toolbar";
 import { VehicleDevToolbar } from "@/components/dev/vehicle-dev-toolbar";
-import { VehicleLiveView } from "@/components/vehicle/vehicle-live-view";
 import { useTranslation } from "@/hooks/use-translation";
 import { cn } from "@/lib/utils";
+
+const VehicleLiveView = dynamic(
+  () => import("@/components/vehicle/vehicle-live-view").then((module) => module.VehicleLiveView),
+  {
+    loading: () => <VehicleTabLoading />,
+  },
+);
 
 const ServiceView = dynamic(
   () => import("@/components/service/service-view").then((module) => module.ServiceView),
