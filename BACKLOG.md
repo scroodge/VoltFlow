@@ -4,47 +4,6 @@ Per the agent workflow in [AGENTS.md](AGENTS.md): **plan first, build only on ex
 go-ahead.** These are researched but **not built**. Shipped work lives in
 [CHANGELOG.md](CHANGELOG.md).
 
-## ~~Preserve odometer across partial live telemetry~~ — SHIPPED 2026-07-29
-
-### Goal
-
-Keep the Vehicle page's odometer visible when a newer BYDMate heartbeat omits the
-intermittent odometer field.
-
-### Research findings
-
-- The active `way` vehicle's raw telemetry alternates between samples containing
-  `43704.8` km and heartbeats with no odometer.
-- The live snapshot is one mutable row per user and vehicle, and its latest update
-  replaced the previously known odometer with null/absent fields.
-- Vehicle UI fallback logic is already correct for the snapshot fields it receives;
-  changing the UI alone would not restore the lost value.
-
-### Options and trade-offs
-
-1. **Database trigger preserving last-known odometer (recommended).** Apply the rule to
-   every live-snapshot write path, including full ingest and `live_only` fast-path writes,
-   without duplicating the large ingest RPC body. Narrow and reversible, with no client
-   protocol change.
-2. **Change each ingest RPC's upsert expression.** More explicit at each call site, but
-   duplicates the rule across several versioned functions and risks missing a future path.
-3. **Read historical telemetry from the Vehicle page.** Avoids a database change, but
-   adds another query and makes a historical sample an implicit live-state authority.
-
-### Data ownership and location
-
-The odometer remains **user-owned vehicle telemetry in Postgres** (`bydmate_live_snapshots`);
-no localStorage or preference data is introduced.
-
-### Recommendation and implementation plan
-
-Build option 1: add an idempotent trigger function that carries forward a non-empty
-telemetry odometer, `diplus_mileage_km`, and DiPlus `mileage_km` when an incoming snapshot
-omits them. Apply it to self-hosted production, repair the current active snapshot from
-the latest known raw sample, and verify that a subsequent partial update retains the value.
-
----
-
 ## ~~Charging-session feature module — modern Next.js organization~~ — SHIPPED 2026-07-27
 
 > Implemented as the `src/features/charging/` module; see [CHANGELOG.md](CHANGELOG.md).
@@ -159,7 +118,9 @@ product or durable data-model policy. Proposed 2026-07-27; implemented 2026-07-2
 > Vehicle-ready RUM event. See [CHANGELOG.md](CHANGELOG.md). The core visualization-module
 > extraction and production bundle inspection below remain required before this plan can
 > be closed; Live is the default tab, so the outer dynamic boundary alone is not proof
-> that chart/map code waits for interaction.
+> that chart/map code waits for interaction. Route Insights now also requests its map
+> preview only when a user expands a route; this is a safe consumer-level boundary, but
+> it does not satisfy the remaining initial `/vehicle` visualization criterion.
 
 ### Goal
 

@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Loader2, Pencil } from "lucide-react";
+import dynamic from "next/dynamic";
 
-import { RouteMapPreview } from "@/components/vehicle/vehicle-live-view";
 import { TempConsumptionBarChart } from "@/components/vehicle/telemetry-analytics-charts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,13 @@ import {
 import { devFetch, isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { cn } from "@/lib/utils";
 import type { BydmateTripTrackPointRow } from "@/types/database";
+
+const RouteMapPreview = dynamic(
+  () => import("@/components/vehicle/vehicle-live-view").then((module) => module.RouteMapPreview),
+  {
+    loading: () => <Skeleton className="h-44 rounded-xl" />,
+  },
+);
 
 type Translator = (key: TranslationKey, values?: Record<string, string | number>) => string;
 

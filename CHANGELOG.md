@@ -9,6 +9,20 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-07-29
+
+### Preserve odometer across partial live telemetry
+
+- Added an idempotent `bydmate_live_snapshots` trigger that carries forward the last
+  known telemetry odometer, `diplus_mileage_km`, and DiPlus `mileage_km` when a heartbeat
+  omits them. This covers both normal and `live_only` ingest paths without changing the
+  client contract.
+- Repaired the active `way` snapshot from its latest known raw sample (`43704.8 km`).
+- Production rollback verification confirmed that an odometer-less update retains all
+  three representations.
+
+---
+
 ## 2026-07-28
 
 ### Vehicle Live: Realtime/RUM foundation (partial; chart/map split remains in BACKLOG)
@@ -18,6 +32,10 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
   a stable loading fallback. This is a safe outer client boundary, but Live is the
   default tab, so it does **not** by itself defer its chart/map implementation until a
   trip or analytics interaction.
+- Route Insights now loads its named map-preview export through a top-level
+  `next/dynamic` boundary only after a route is expanded. This removes the large Live
+  visualization module from the initial Route Insights path without changing map data,
+  URLs, RLS scope, or server rendering.
 - Trip query hooks now own data fetching only. Dashboard, History, and Vehicle each mount
   one shared `bydmate_trips` Realtime invalidation observer, preserving the existing
   five-second debounce, open-trip filter, and three query-family invalidations without
