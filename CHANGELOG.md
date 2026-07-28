@@ -43,6 +43,23 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 - Fixed automatic DC session initialization so explicit `charge_type = DC` cannot fall
   back to the car's AC default. It now uses the safe DC fallback until a real DC power
   reading arrives, preserving `fast_dc` tariff and DC efficiency classification.
+
+### Vehicle page readiness and stable metric slots
+
+- Added a separate primary-cockpit readiness barrier: the page waits for a matched car and
+  fresh live snapshot before revealing the live cockpit, while settled no-contact, stale, and
+  error states remain explicit instead of indefinite skeletons.
+- Kept enrichment progressive. Session ETA and range-dependent values now retain their card
+  slots and use value-sized skeletons while their queries are pending, preventing the second
+  wave of layout shifts after the page shell appears. No artificial delay or data-model change
+  was introduced.
+- Added `deriveVehiclePrimaryReadiness` coverage for loading, ready, no-contact, stale, and
+  error states. User data remains user-owned Postgres under RLS; client preferences remain in
+  localStorage.
+- Verification: full test suite (116/116), focused vehicle/charging tests (61/61), and
+  `git diff --check` pass. Repository-wide TypeScript is blocked by pre-existing syntax errors
+  in `vehicle-telemetry-visualizations.tsx`, and scoped lint retains pre-existing ref-render
+  errors in `vehicle-live-view.tsx`.
 - Added regression coverage for live-power preference and the production-shaped
   `DC + 0 kW + 3.5 kW default` case. No schema or data-ownership changes.
 - Verification: focused charging tests (34/34), automatic-session tests (7/7), full test
