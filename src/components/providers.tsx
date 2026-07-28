@@ -6,12 +6,17 @@ import { useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { ServiceWorkerRegistrar } from "@/components/sw-register";
 import { hasPersistedLocalePreference } from "@/lib/app-preferences";
+import {
+  dashboardPreferencesCookieName,
+  serializeDashboardBrowserPreferences,
+} from "@/lib/dashboard-preferences";
 import { createClient } from "@/lib/supabase/client";
 import { isCurrency, isLocale } from "@/lib/i18n";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const locale = useAppPreferences((s) => s.locale);
+  const selectedCarId = useAppPreferences((s) => s.selectedCarId);
   const setCurrency = useAppPreferences((s) => s.setCurrency);
   const setDefaultPricePerKwh = useAppPreferences(
     (s) => s.setDefaultPricePerKwh,
@@ -32,6 +37,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     document.documentElement.lang = locale;
   }, [locale]);
+
+  useEffect(() => {
+    const value = serializeDashboardBrowserPreferences({ selectedCarId, locale });
+    const secure = window.location.protocol === "https:" ? "; Secure" : "";
+    document.cookie = `${dashboardPreferencesCookieName}=${value}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
+  }, [locale, selectedCarId]);
 
   useEffect(() => {
     let mounted = true;

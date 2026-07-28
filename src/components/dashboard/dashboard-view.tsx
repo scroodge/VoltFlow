@@ -1,12 +1,13 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BatteryCharging, Route } from "lucide-react";
+import { track } from "@vercel/analytics";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 
 import { startChargingSession, stopChargingSession } from "@/features/charging/actions";
@@ -18,6 +19,7 @@ import {
   useDashboardDevSnapshot,
   useDashboardDevSnapshotOverride,
 } from "@/components/dev/dashboard-dev-snapshot-context";
+import type { DashboardBootstrapData } from "@/components/dashboard/dashboard-bootstrap-types";
 import { BatteryRing, ChargingActionButton } from "@/features/charging/ui";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -81,7 +83,6 @@ import {
   isChargingTelemetry,
   isFreshLiveSnapshot,
   resolveLiveSnapshotForVehicle,
-  type DashboardVehicleMode,
 } from "@/lib/vehicle-live-mode";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import type {
@@ -110,6 +111,10 @@ const CAR_IMAGE_BY_GENERATION = {
   gen1_2024: "/images/cars/yuan-up.png",
   gen2_2025: "/images/cars/yuan-up.png",
 } as const;
+
+const DashboardDeferredSummaries = dynamic(() =>
+  import("./dashboard-deferred-summaries").then((module) => module.DashboardDeferredSummaries),
+);
 
 function defaultEstimatePowerKw(type: ChargingTariffType, homePowerKw?: number | null) {
   if (type === "fast_dc") return 65;
@@ -175,33 +180,8 @@ function liveStartPercent(snapshot: BydmateLiveSnapshotRow | null | undefined) {
   return String(Math.round(soc));
 }
 
-function localeCode(locale: string) {
-  return locale === "be" ? "be-BY" : locale === "ru" ? "ru-RU" : "en-US";
-}
-
 function fmt(value: number | null | undefined, digits = 0) {
   return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
-}
-
-function formatClockRange(startIso: string | null, endIso: string | null, locale: string) {
-  if (!startIso) return "—";
-  const code = localeCode(locale);
-  const start = new Date(startIso);
-  const end = endIso ? new Date(endIso) : null;
-  const date = start.toLocaleDateString(code, { day: "numeric", month: "short" });
-  const startTime = start.toLocaleTimeString(code, { hour: "2-digit", minute: "2-digit" });
-  const endTime = end?.toLocaleTimeString(code, { hour: "2-digit", minute: "2-digit" });
-  return endTime ? `${date}, ${startTime} - ${endTime}` : `${date}, ${startTime}`;
-}
-
-function durationBetween(startIso: string | null, endIso: string | null) {
-  if (!startIso || !endIso) return "—";
-  return formatDuration(Math.max(0, Math.round((Date.parse(endIso) - Date.parse(startIso)) / 1000)));
-}
-
-function tripSoc(trip: BydmateTripRow) {
-  if (typeof trip.soc_start !== "number" || typeof trip.soc_end !== "number") return "—";
-  return `${fmt(trip.soc_start)}% -> ${fmt(trip.soc_end)}%`;
 }
 
 function drivingStatsFromLive(
@@ -307,73 +287,6 @@ function drivingStatParts(
 ): { value: string; unit?: string } {
   if (value == null || !Number.isFinite(value)) return { value: "—" };
   return { value: fmt(value, digits), unit };
-}
-
-function liveVehicleSummaryTitle(
-  snapshot: BydmateLiveSnapshotRow | null,
-  mode: DashboardVehicleMode,
-  statusLabel: string,
-  chargePowerKw: number | null,
-  t: (key: TranslationKey, params?: Record<string, string | number>) => string,
-  formatNumber: (value: number | null | undefined, digits?: number) => string,
-) {
-  if (!snapshot) return t("dashboard.liveVehicleSpeed", { speed: "0" });
-
-  const telemetry = snapshot.telemetry;
-  if (mode === "app_charging" || mode === "live_charging") {
-    return t("dashboard.liveVehicleCharging", {
-      power: formatNumber(chargePowerKw, 1),
-    });
-  }
-  if (mode === "driving") {
-    return t("dashboard.liveVehicleSpeed", {
-      speed: formatNumber(telemetry.speed_kmh, 0),
-    });
-  }
-  if (mode === "stale") return statusLabel;
-
-  return t("dashboard.liveVehicleSpeed", {
-    speed: formatNumber(telemetry.speed_kmh, 0),
-  });
-}
-
-function DashboardSummaryCard({
-  href,
-  icon,
-  label,
-  title,
-  body,
-  meta,
-}: {
-  href: string;
-  icon: ReactNode;
-  label: string;
-  title: string;
-  body: string;
-  meta?: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="grid min-h-[92px] grid-cols-[1fr_auto] items-center gap-3 rounded-2xl border border-border bg-white/[0.03] p-4 transition hover:border-primary/50 hover:bg-white/[0.05]"
-    >
-      <span className="min-w-0">
-        <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-          {label}
-        </span>
-        <span className="block font-heading text-lg font-bold tracking-normal text-foreground">
-          {title}
-        </span>
-        <span className="mt-1 block text-sm leading-5 text-muted-foreground">{body}</span>
-        {meta ? (
-          <span className="mt-1 block truncate text-xs font-medium text-muted-foreground">
-            {meta}
-          </span>
-        ) : null}
-      </span>
-      <span className="text-[var(--voltflow-cyan)]">{icon}</span>
-    </Link>
-  );
 }
 
 function RangeBadge({ value }: { value: string | null }) {
@@ -580,17 +493,28 @@ function DashboardLoadingSkeleton() {
   );
 }
 
-export function DashboardView() {
+function dashboardHeroDurationBucket(durationMs: number) {
+  if (durationMs <= 1_000) return "le_1s";
+  if (durationMs <= 2_500) return "le_2_5s";
+  if (durationMs <= 4_000) return "le_4s";
+  return "gt_4s";
+}
+
+export function DashboardView({ initialData }: { initialData?: DashboardBootstrapData }) {
   const router = useRouter();
   const appPath = useAppPath();
   const qc = useQueryClient();
   const pageVisible = usePageVisible();
+  const heroReadyReported = useRef(false);
+  const [showDeferredDetails, setShowDeferredDetails] = useState(false);
   const {
     data: carsResult,
     isLoading: loadingCars,
     isError: carsError,
     refetch: refetchCars,
-  } = useCarsQuery();
+  } = useCarsQuery(
+    initialData ? { cars: initialData.cars, preferredCarId: null } : undefined,
+  );
   const cars = carsResult?.cars;
   const preferredCarId = carsResult?.preferredCarId ?? null;
   const { data: userProviderRows = [] } = useUserProvidersQuery();
@@ -613,19 +537,22 @@ export function DashboardView() {
     }
     return { providerType: (value as ChargingProviderType) ?? "custom", userProviderId: null };
   }
-  const { data: bydmateLive = [], isLoading: loadingLive } = useBydmateLiveQuery();
-  const selectedCarId = useAppPreferences((s) => s.selectedCarId);
+  const { data: bydmateLive = [], isLoading: loadingLive } = useBydmateLiveQuery(
+    initialData?.liveSnapshots,
+  );
+  const persistedSelectedCarId = useAppPreferences((s) => s.selectedCarId);
   const setSelectedCarId = useAppPreferences((s) => s.setSelectedCarId);
   const defaultPrice = useAppPreferences((s) => s.defaultPricePerKwh);
   const homePricePerKwh = useAppPreferences((s) => s.homePricePerKwh);
   const commercialAcPricePerKwh = useAppPreferences((s) => s.commercialAcPricePerKwh);
   const fastDcPricePerKwh = useAppPreferences((s) => s.fastDcPricePerKwh);
   const currency = useAppPreferences((s) => s.currency);
-  const { locale, t } = useTranslation();
+  const { locale, t } = useTranslation(initialData?.locale);
 
   const { data: sessions, isLoading: loadingSessions } = useQuery({
     queryKey: queryKeys.sessions,
     queryFn: fetchSessions,
+    initialData: initialData?.sessions,
     // Shared cadence — see chargingSessionsRefetchInterval. Was a flat 1s while
     // charging, which (via shortest-interval-wins on the shared queryKeys.sessions)
     // silently overrode the tiered background-sync poll whenever this screen mounted.
@@ -655,15 +582,18 @@ export function DashboardView() {
     },
   });
 
-  const selectedCar =
-    cars?.find((c) => c.id === selectedCarId) ?? cars?.[0] ?? null;
+  const selectedCarId =
+    persistedSelectedCarId ??
+    initialData?.selectedCarId ??
+    (cars?.length === 1 ? cars[0].id : null);
+  const selectedCar = cars?.find((c) => c.id === selectedCarId) ?? null;
   const selectedCarImage = selectedCar
     ? CAR_IMAGE_BY_GENERATION[selectedCar.model_generation]
     : null;
   const scopedVehicleId = selectedCar?.vehicle_alias ?? null;
 
   const baseBydmateSnapshot = useMemo(
-    () => resolveLiveSnapshotForVehicle(bydmateLive, scopedVehicleId),
+    () => (scopedVehicleId ? resolveLiveSnapshotForVehicle(bydmateLive, scopedVehicleId) : null),
     [bydmateLive, scopedVehicleId],
   );
   const dashboardDevSnapshot = useDashboardDevSnapshot();
@@ -673,12 +603,10 @@ export function DashboardView() {
 
   const activeSession = useMemo(
     () => {
-      if (forceDevMockMode) return null;
+      if (forceDevMockMode || !selectedCar) return null;
       return sessions?.find(
-        (s) => s.status === "charging" && (!selectedCar || s.car_id === selectedCar.id),
-      ) ??
-        sessions?.find((s) => s.status === "charging") ??
-        null;
+        (s) => s.status === "charging" && s.car_id === selectedCar.id,
+      ) ?? null;
     },
     [forceDevMockMode, sessions, selectedCar],
   );
@@ -702,7 +630,7 @@ export function DashboardView() {
   const carSessions = useMemo(() => {
     if (forceDevMockMode) return [];
     if (!sessions) return [];
-    if (!selectedCar) return sessions;
+    if (!selectedCar) return [];
     return sessions.filter((s) => s.car_id === selectedCar.id);
   }, [forceDevMockMode, sessions, selectedCar]);
 
@@ -710,7 +638,7 @@ export function DashboardView() {
   const latestTrip = forceDevMockMode ? null : (latestTrips[0] ?? null);
 
   useEffect(() => {
-    if (!cars?.length) return;
+    if (!cars?.length || selectedCarId || cars.length !== 1) return;
     const exists = cars.some((c) => c.id === selectedCarId);
     if (!exists) {
       const nextId =
@@ -1033,6 +961,33 @@ export function DashboardView() {
 
   const isPageLoading = loadingCars || (loadingLive && !latestBydmateSnapshot);
 
+  useEffect(() => {
+    if (heroReadyReported.current || isPageLoading || !selectedCar) return;
+
+    const navigation = performance.getEntriesByType("navigation")[0] as
+      | PerformanceNavigationTiming
+      | undefined;
+    // A client-side route change shares the document's old performance clock. Counting it
+    // would turn an otherwise quick dashboard transition into a false multi-minute cold load.
+    if (!navigation || new URL(navigation.name).pathname !== window.location.pathname) return;
+
+    heroReadyReported.current = true;
+
+    const durationMs = Math.round(performance.now());
+    performance.mark("voltflow:dashboard-hero-ready");
+    track("dashboard_hero_ready", {
+      duration_bucket: dashboardHeroDurationBucket(durationMs),
+      navigation_type: navigation.type,
+      release: process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
+    });
+  }, [isPageLoading, selectedCar]);
+
+  useEffect(() => {
+    if (isPageLoading || !selectedCar) return;
+    const timer = window.setTimeout(() => setShowDeferredDetails(true), 0);
+    return () => window.clearTimeout(timer);
+  }, [isPageLoading, selectedCar]);
+
   const handleStart = async () => {
     if (!selectedCar) return;
     const start = Number(startPct);
@@ -1288,7 +1243,7 @@ export function DashboardView() {
                         },
                       ]}
                     />
-                  ) : showParkEstimate ? (
+                  ) : showParkEstimate && showDeferredDetails ? (
                     <ParkChargeEstimatePanel
                       currency={currency}
                       estimatePowerKw={estimatePowerKw}
@@ -1407,69 +1362,21 @@ export function DashboardView() {
             </div>
           </section>
 
-          <section className="dashboard-summary-grid grid grid-cols-2 gap-2">
-            <DashboardSummaryCard
-              href={
-                latestTrip
-                  ? appPath(`/vehicle?trip=${encodeURIComponent(latestTrip.id)}`)
-                  : appPath("/vehicle")
-              }
-              icon={<Route className="size-5" aria-hidden />}
-              label={t("dashboard.latestTrip") as string}
-              title={
-                loadingTrips
-                  ? (t("dashboard.loading") as string)
-                  : latestTrip
-                    ? `${fmt(latestTrip.distance_km, 1)} km`
-                    : (t("dashboard.noTrip") as string)
-              }
-              body={
-                latestTrip
-                  ? formatClockRange(
-                      latestTrip.started_at,
-                      latestTrip.ended_at ?? latestTrip.last_device_time,
-                      locale,
-                    )
-                  : (t("dashboard.openVehicle") as string)
-              }
-              meta={
-                latestTrip
-                  ? `${tripSoc(latestTrip)} · ${fmt(latestTrip.avg_consumption_kwh_100km, 1)} kWh/100`
-                  : undefined
-              }
+          {showDeferredDetails ? (
+            <DashboardDeferredSummaries
+              appPath={appPath}
+              latestSession={latestSession}
+              latestTrip={latestTrip}
+              loadingTrips={loadingTrips}
+              locale={locale}
+              t={(key, values) => String(t(key, values))}
             />
-            <DashboardSummaryCard
-              href={
-                latestSession
-                  ? appPath(`/history/${latestSession.id}`)
-                  : appPath("/charging")
-              }
-              icon={<BatteryCharging className="size-5" aria-hidden />}
-              label={t("dashboard.latestCharge") as string}
-              title={
-                latestSession
-                  ? `${fmt(latestSession.start_percent)}% -> ${fmt(latestSession.current_percent)}%`
-                  : (t("dashboard.noCharge") as string)
-              }
-              body={
-                latestSession
-                  ? formatClockRange(
-                      latestSession.started_at ?? latestSession.created_at,
-                      latestSession.stopped_at ?? latestSession.updated_at,
-                      locale,
-                    )
-                  : (t("dashboard.startFirstCharge") as string)
-              }
-              meta={
-                latestSession
-                  ? `${fmt(latestSession.charged_energy_kwh, 2)} kWh · ${durationBetween(
-                      latestSession.started_at ?? latestSession.created_at,
-                      latestSession.stopped_at ?? latestSession.updated_at,
-                    )}`
-                  : undefined
-              }
-            />
-          </section>
+          ) : (
+            <section className="dashboard-summary-grid grid grid-cols-2 gap-2" aria-hidden>
+              <Skeleton className="h-[92px] rounded-2xl" />
+              <Skeleton className="h-[92px] rounded-2xl" />
+            </section>
+          )}
         </>
       ) : null}
 

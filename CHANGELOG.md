@@ -11,6 +11,28 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-07-28
 
+### Dashboard cold-load: live cockpit bootstrap
+
+- The authenticated Dashboard now reads cars, live snapshots, and sessions directly through the
+  request-bound Supabase client under existing RLS, in parallel. It passes that result through a
+  route-local TanStack Query hydration boundary, so the existing client queries and Realtime
+  subscription resume from the same data instead of repeating the client auth/query waterfall.
+- Selected-car ID and locale remain **user-owned browser preferences**. `localStorage` is still
+  canonical; a non-secret cookie mirrors those two values solely for the first server render. A
+  missing/invalid multi-car selection renders neutral state rather than guessing another car.
+- The existing 90-second live-snapshot freshness policy is unchanged: stale/no-contact data stays
+  stale and hidden, never rendered as current SOC. Recent history summaries load in a separate
+  client chunk after the cockpit is ready, and the parked-charge calculator waits for that first
+  paint.
+- Added the privacy-minimised Vercel Analytics event `dashboard_hero_ready`. It emits only a
+  coarse duration bucket, document-navigation type, and release label—no account, car, location,
+  telemetry, SOC, or locale. SPA navigations are excluded so they cannot corrupt cold-load p75.
+- Verification: focused browser-preference tests (2/2), `npx tsc --noEmit`, and
+  `git diff --check` pass. Scoped lint retains three pre-existing errors/warnings in the dashboard
+  and live-query hooks; the new deferred gate introduces none. Cold authenticated-PWA and
+  post-deploy Vercel Analytics p75 measurement remain required before claiming the 2.5-second
+  objective is met in production.
+
 ### Next.js Vehicle-route loading boundaries
 
 - The Vehicle page now loads the Service Logbook only when its tab is selected. The live

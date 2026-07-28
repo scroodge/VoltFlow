@@ -1677,3 +1677,69 @@ Worth a follow-up: the same box has no alerting for "systemd unit restart counte
 is why this ran undetected for ~61 days despite Grafana/Prometheus/`uptime-kuma` all being present.
 
 Shipped 2026-07-21 via option 2 — see [CHANGELOG.md](CHANGELOG.md).
+
+---
+
+## Charging ETA: prevent DC sessions from using the AC fallback power
+
+### Goal
+
+Make `/vehicle` show a truthful remaining-time estimate during DC charging and prevent
+automatic DC sessions from being classified as home/AC when the initial telemetry reports
+`charge_power_kw = 0`.
+
+### Research findings
+
+- Production session `35fe322b-197e-4906-af5d-b3265b5fe641` started on 2026-07-28 with
+  `charger_power_kw = 3.5`, `tariff_type = home`, and `efficiency_percent = 92`.
+- The latest production snapshot for vehicle `Yuan UP` reported `SOC = 56`,
+  `charge_power_kw = 31`, and `charge_type = DC`. The resulting ETA was 339.4 minutes
+  from the stored 3.5 kW versus 38.3 minutes from the live 31 kW.
+- At session start, telemetry reported `charge_type = DC`, `is_charging = true`, and
+  `charge_power_kw = 0`. `processBydmateAutoChargingSessions` passes the zero value into
+  the auto-session step; `sanitizeChargerPowerKw` then falls through to the car's 3.5 kW
+  default before it reaches the DC fallback. Tariff selection consequently sees 3.5 kW
+  and chooses `home`.
+- `ChargingModeCard` calculates ETA from the session's fixed `charger_power_kw` while
+  displaying the current telemetry power separately. The UI therefore exposes the stale
+  initialization value even after live DC power becomes available.
+
+### Data ownership and location
+
+No new user-facing data model is proposed. Charging-session facts and telemetry remain
+**user-owned Postgres data under existing RLS**. The ETA is a display calculation; no
+preference or session fact moves to `localStorage`, and no new table or migration is needed.
+
+### Options and trade-offs
+
+1. **Use fresh live charge power for the `/vehicle` ETA and harden DC session initialization
+   (recommended).** The live card uses current positive `charge_power_kw` when fresh and
+   falls back to the session value only when live power is unavailable. Session creation
+   treats an explicit `charge_type = DC` as DC even when instantaneous power is zero, uses
+   a DC-safe fallback rather than the AC car default, and preserves the existing live-power
+   value when it is available. Add focused regression tests for the exact production
+   payload. This fixes the visible ETA and prevents bad tariff/power snapshots; it requires
+   coordinated UI/domain changes.
+2. **UI-only fix.** Replace the ETA input with current live power and leave session creation
+   unchanged. Smallest change and likely fixes the immediate card, but sessions can still
+   be stored as `home` at 3.5 kW, making history, efficiency, and future fallbacks wrong.
+3. **Repair only the current production row.** Update the open session manually. This would
+   hide today's symptom but is not durable: the next DC session can repeat it, and a direct
+   production correction would bypass the normal code/test path.
+
+### Recommendation and implementation plan
+
+1. Add a pure helper for selecting ETA power from a fresh live snapshot, with the existing
+   session power as a bounded fallback; make the vehicle charging card depend on live power
+   as well as SOC so a power transition recomputes the estimate.
+2. Make DC classification explicit during auto-session start: when telemetry identifies DC,
+   do not accept the car's AC default as the fallback power; use the existing safe DC fallback
+   and resolve the tariff as `fast_dc` even if instantaneous power is zero.
+3. Add regression coverage for: DC + zero instantaneous power, later live DC ETA, AC fallback
+   behavior, and the production-shaped `home/3.5 kW` failure case. Run the focused charging
+   tests, the full test suite, lint, build, and `git diff --check` as permitted by the project
+   workflow.
+4. After approval and verification, move this plan to `CHANGELOG.md`; do not edit or rewrite
+   the already-applied migrations.
+
+Proposed 2026-07-28; awaiting go-ahead. **Should I build this?**

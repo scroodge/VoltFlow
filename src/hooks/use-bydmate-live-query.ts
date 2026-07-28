@@ -51,7 +51,7 @@ async function fetchBydmateLive(): Promise<BydmateLiveSnapshotRow[]> {
   );
 }
 
-export function useBydmateLiveQuery() {
+export function useBydmateLiveQuery(initialData?: BydmateLiveSnapshotRow[]) {
   const queryClient = useQueryClient();
   const supabase = useMemo(() => createClient(), []);
   const devRoute = isDevAppRoute();
@@ -104,6 +104,7 @@ export function useBydmateLiveQuery() {
   return useQuery({
     queryKey: queryKeys.bydmateLive,
     queryFn: fetchBydmateLive,
+    initialData,
     staleTime: 15_000,
     refetchInterval: pageVisible ? (devRoute ? 30_000 : 60_000) : false,
   });

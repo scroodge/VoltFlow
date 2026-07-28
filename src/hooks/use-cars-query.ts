@@ -55,10 +55,11 @@ async function fetchCars(): Promise<CarsQueryResult> {
   };
 }
 
-export function useCarsQuery() {
+export function useCarsQuery(initialData?: CarsQueryResult) {
   return useQuery({
     queryKey: queryKeys.cars,
     queryFn: fetchCars,
+    initialData,
   });
 }
 
