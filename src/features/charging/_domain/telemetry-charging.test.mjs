@@ -164,6 +164,12 @@ test("sanitizeChargerPowerKw allows real DC power", () => {
   assert.equal(sanitizeChargerPowerKw(64, "DC", 11), 64);
 });
 
+test("sanitizeChargerPowerKw uses the DC fallback when startup power is zero", () => {
+  // A DC session can report charge_type/is_charging before instantaneous power arrives.
+  // It must not inherit the car's small AC default and become a home tariff session.
+  assert.equal(sanitizeChargerPowerKw(0, "DC", 3.5), 50);
+});
+
 test("sanitizeChargerPowerKw falls back when reading and default are both bad", () => {
   assert.equal(sanitizeChargerPowerKw(null, "AC", 0), 7.2);
   assert.equal(sanitizeChargerPowerKw(999, "DC", 0), 50);

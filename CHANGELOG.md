@@ -11,6 +11,21 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-07-28
 
+### Charging ETA uses live DC power
+
+- Fixed `/vehicle` charging ETA to prefer current positive `telemetry.charge_power_kw`
+  over the session's startup power snapshot, eliminating multi-hour estimates during
+  fast DC charging when the initial power reading was zero.
+- Fixed automatic DC session initialization so explicit `charge_type = DC` cannot fall
+  back to the car's AC default. It now uses the safe DC fallback until a real DC power
+  reading arrives, preserving `fast_dc` tariff and DC efficiency classification.
+- Added regression coverage for live-power preference and the production-shaped
+  `DC + 0 kW + 3.5 kW default` case. No schema or data-ownership changes.
+- Verification: focused charging tests (34/34), automatic-session tests (7/7), full test
+  suite (110/110), and `git diff --check` pass. Repository lint remains blocked by
+  pre-existing React/compiler errors in unrelated files; the production build was
+  interrupted after producing no output for several minutes.
+
 ### Dashboard cold-load: live cockpit bootstrap
 
 - The authenticated Dashboard now reads cars, live snapshots, and sessions directly through the

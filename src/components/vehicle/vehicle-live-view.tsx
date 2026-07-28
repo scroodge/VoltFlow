@@ -97,7 +97,12 @@ import type {
   ChargingSessionRow,
 } from "@/types/database";
 import { ChargingDeltaCard } from "@/features/charging/ui";
-import { chargingParamsFromSession, deriveSessionProgressFromSoc, secondsUntilTargetSoc } from "@/features/charging/domain";
+import {
+  chargingParamsFromSession,
+  deriveSessionProgressFromSoc,
+  resolveDisplayChargePowerKw,
+  secondsUntilTargetSoc,
+} from "@/features/charging/domain";
 
 const TripDetailPanel = dynamic(
   () => import("@/components/vehicle/TripDetailPanel").then((module) => module.TripDetailPanel),
@@ -775,16 +780,23 @@ function ChargingModeCard({
     const liveSoc = telemetry.soc;
     if (!session || typeof liveSoc !== "number") return null;
     const params = chargingParamsFromSession(session);
+    const chargePowerKw = resolveDisplayChargePowerKw({
+      snapshot,
+      sessionChargerPowerKw: params.chargerPowerKw,
+    });
     const clampedSoc = Math.min(liveSoc, params.targetPercent);
     const deliveredKwh = deriveSessionProgressFromSoc(params, clampedSoc).chargedEnergyKwh;
     const fullCost = deriveSessionProgressFromSoc(params, params.targetPercent).estimatedCost;
-    const secsLeft = secondsUntilTargetSoc(params, clampedSoc);
+    const secsLeft = secondsUntilTargetSoc(
+      chargePowerKw != null ? { ...params, chargerPowerKw: chargePowerKw } : params,
+      clampedSoc,
+    );
     return {
       timeLeftLabel: secsLeft != null && secsLeft > 0 ? formatDuration(secsLeft * 1000) : null,
       deliveredLabel: `${deliveredKwh.toFixed(2)} kWh`,
       fullCostLabel: <CurrencyAmount currency={currency} value={fullCost} locale={locale} />,
     };
-  }, [session, telemetry.soc, currency, locale]);
+  }, [session, snapshot, telemetry.soc, telemetry.charge_power_kw, currency, locale]);
   const items = [
     { key: "chargeTimeLeft", icon: Clock3, label: tx("charging.remaining"), value: chargeSummary?.timeLeftLabel ?? "—" },
     { key: "chargeDelivered", icon: BatteryCharging, label: tx("charging.energyDelivered"), value: chargeSummary?.deliveredLabel ?? "—" },

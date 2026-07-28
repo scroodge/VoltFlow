@@ -7,6 +7,7 @@ import {
   deriveChargePowerFromEnergyDeltaKw,
   deriveLiveChargingState,
   latestSnapshotSocReading,
+  resolveDisplayChargePowerKw,
   snapshotKwhCharged,
 } from "./charging-live.ts";
 import { clampDerivedToSocCeiling, deriveChargingState } from "./charging-math.ts";
@@ -26,6 +27,15 @@ function chargingSnapshot({ soc = 49, kwhCharged } = {}) {
   if (kwhCharged !== undefined) telemetry.kwh_charged = kwhCharged;
   return { received_at: new Date(NOW).toISOString(), telemetry };
 }
+
+test("display charging power prefers live DC power over the session fallback", () => {
+  const power = resolveDisplayChargePowerKw({
+    snapshot: { telemetry: { charge_power_kw: 31 } },
+    sessionChargerPowerKw: 3.5,
+    defaultChargerPowerKw: 3.5,
+  });
+  assert.equal(power, 31);
+});
 
 test("deriveLiveChargingState uses SOC estimate even when kwh_charged is present", () => {
   const state = deriveLiveChargingState({

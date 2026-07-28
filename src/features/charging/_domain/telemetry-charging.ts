@@ -156,10 +156,19 @@ export function sanitizeChargerPowerKw(
   const isDc = chargeType === "DC";
   const cap = isDc ? MAX_PLAUSIBLE_DC_CHARGER_KW : MAX_PLAUSIBLE_AC_CHARGER_KW;
   const raw = finiteTelemetryNumber(rawKw);
+
+  // The car's configured default is its AC charger power. Never use it for an
+  // explicitly identified DC session when the initial instantaneous reading is
+  // zero/invalid — that would misclassify the session as home AC and poison its
+  // fixed fallback rate. Use the conservative DC fallback until live power arrives.
+  if (isDc) {
+    return raw != null && raw > 0 && raw <= cap ? raw : FALLBACK_DC_CHARGER_KW;
+  }
+
   if (raw != null && raw > 0 && raw <= cap) return raw;
   const def = finiteTelemetryNumber(defaultKw);
   if (def != null && def > 0 && def <= cap) return def;
-  return isDc ? FALLBACK_DC_CHARGER_KW : FALLBACK_AC_CHARGER_KW;
+  return FALLBACK_AC_CHARGER_KW;
 }
 
 export function telemetrySpeedKmh(telemetry: Pick<BydmateTelemetry, "speed_kmh">) {
