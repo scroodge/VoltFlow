@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 import type { BydmateTripTrackPointRow } from "@/types/database";
 
 const RouteMapPreview = dynamic(
-  () => import("@/components/vehicle/vehicle-live-view").then((module) => module.RouteMapPreview),
+  () => import("@/components/vehicle/vehicle-route-map").then((module) => module.RouteMapPreview),
   {
     loading: () => <Skeleton className="h-44 rounded-xl" />,
   },
