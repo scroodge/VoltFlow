@@ -58,6 +58,13 @@ updates the latest snapshot but intentionally skips durable sample, hourly-rollu
 writes. The grant expires without a client-side “off” request, so normal batched delivery resumes
 automatically when the view is no longer active.
 
+The server treats a batch as snapshot-only only when every sample explicitly sets `live_only: true`
+and it carries no client hourly or trip rollup. Such a batch skips persisted-snapshot verification,
+charging/session and notification fan-out, and rollup application; ordinary samples remain the
+authority for history, charging sessions, trips, and notifications. Its inactivity timestamp is
+refreshed at most hourly. Telegram widget edits retain their 30-second throttle, and a throttled
+edit does not load car metadata or construct widget HTML.
+
 ## Storage model
 
 ### `bydmate_live_snapshots`
