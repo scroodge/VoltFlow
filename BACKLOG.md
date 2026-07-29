@@ -652,17 +652,42 @@ analogue. Options:
   rejected always-on option scoped to active states; it spends invocations continuously and
   erodes offload phases 0-3. **Reject.**
 
-**Recommendation: A now, B as a follow-up.** A is nearly free and immediately extends the
-already-shipped work to the widget; B adds the standalone case without an always-on cost.
-A depends on G2 — see below.
+**Decision 2026-07-29: stage both A and B.** G2 will keep the 30-second edit throttle and
+make its eligibility check cheap first. Reconsider a faster widget cadence only after
+G2 has production evidence; B remains a separate follow-up. G1 depends on G2 — see below.
 
 #### G2 — Server-side persistence classes (this is P1, and it gates G1)
 
-Give `live_only` a route-level short-circuit mirroring what the RPC already does: skip
-auto-session, charge notifications and the persisted-verify select; gate `last_active_at`
-to roughly 1/hour; reorder the widget path to read the throttle row first and build HTML
-only when the edit will actually be sent. Target: a fast-mode push drops from ~12-15 round
-trips to ~3.
+**Confirmed scope 2026-07-29.** `live_only` is a strict snapshot-focused delivery class:
+
+- It may update `bydmate_live_snapshots`, perform the one-time `vehicle_connected_at`
+  write, and allow a Telegram widget edit only after its existing 30-second throttle
+  says an edit is due.
+- It skips persisted-snapshot verification, charge and live-status notifications,
+  automatic-session processing, reconciliation, and client hourly/trip rollups.
+- `last_active_at` is conditional at roughly one update per hour. Normal full samples
+  retain all current fan-out and are the authority for charging, trips, history, and
+  notifications.
+- After the cheap Telegram-connection check, widget work reads eligibility/throttle before
+  car lookup or HTML construction. Its 30-second edit cadence does not change in G2.
+
+**Options and trade-offs.**
+
+1. **Strict snapshot-only class (recommended and confirmed).** Make the route match the
+   RPC's snapshot-only persistence contract. This removes repeated work during a visible
+   fast-status window while preserving the normal full-sample path for durable and
+   user-notification effects. It relies on the existing independent full-sample timer.
+2. **Keep all fan-out for `live_only`.** Lowest behavioural risk, but contradicts the
+   delivery class and keeps the 12–15-round-trip hot path on every fast push.
+3. **Add per-request Postgres counters now.** Gives detailed attribution, but adds a new
+   write to the hot path being optimized. Rejected for G2; reconsider only if coarse
+   production evidence is insufficient.
+
+**Verification.** Add focused branch tests that prove `live_only` bypasses the listed
+side effects and full samples retain them. Use existing Vercel invocation/CPU trends and
+targeted logs for production comparison; add no migration, counters table, preference, or
+new user-facing data model. Target: a fast-mode push drops from roughly 12–15 round trips
+toward 3.
 
 This must land **before** G1. Widening the widget's cadence without it multiplies exactly
 the per-push cost that cloud-offload phases 0-3 were built to remove.

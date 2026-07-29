@@ -1,5 +1,6 @@
 import { processBydmateAutoChargingSessions, reconcileChargingSessionsForUser } from "@/features/charging/server";
 import { normalizePayloads, type HourlyBlock, type TripBlock } from "@/lib/bydmate/ingest-payload";
+import { planTelemetryIngestDelivery } from "@/lib/bydmate/ingest-delivery";
 import { parseIngestStats } from "@/lib/bydmate/ingest-stats";
 import { processBydmateChargeNotifications } from "@/lib/push/charge-notifications";
 import { processBydmateLiveStatusNotifications } from "@/lib/push/live-status-notifications";
@@ -22,6 +23,7 @@ import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
 
 export const runtime = "nodejs";
 const MAX_INGEST_BODY_BYTES = 2_000_000;
+const LAST_ACTIVE_REFRESH_MS = 60 * 60 * 1_000;
 
 type PersistedTelemetryRow = {
   vehicle_id: string;
@@ -232,6 +234,12 @@ export async function POST(request: Request) {
       locationSanitizedSamples,
       previousTelemetry,
     );
+    // Only a wholly live-only batch without client rollups can skip durable fan-out.
+    // A mixed batch stays on the full path so its normal sample remains authoritative.
+    const deliveryPlan = planTelemetryIngestDelivery(samples, {
+      hourlyBlockCount: hourlyBlocks.length,
+      tripBlockCount: tripBlocks.length,
+    });
 
     const { data: ingestResult, error: ingestError } =
       samples.length === 1
@@ -273,16 +281,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // Every telemetry sample resets the inactivity timer.
+    // The inactivity job works on a 30/60-day horizon. Updating this on every
+    // three-second fast-status push only contends with the command-poll profile read.
+    const lastActiveBefore = new Date(Date.now() - LAST_ACTIVE_REFRESH_MS).toISOString();
     activityUpdates.push(
       supabase
         .from("profiles")
         .update({ last_active_at: activityTime })
-        .eq("id", profile.id),
+        .eq("id", profile.id)
+        .or(`last_active_at.is.null,last_active_at.lt.${lastActiveBefore}`),
     );
 
     const lastSample = samples.at(-1);
-    const persistedLookup = lastSample
+    const persistedLookup = deliveryPlan.verifyPersistedSnapshot && lastSample
       ? supabase
           .from("bydmate_live_snapshots")
           .select(
@@ -291,43 +302,49 @@ export async function POST(request: Request) {
           .eq("user_id", profile.id)
           .eq("vehicle_id", lastSample.vehicle_id)
           .maybeSingle()
-      : Promise.resolve({ data: null, error: null });
+      : null;
 
-    const [, persistedResult] = await Promise.all([
-      Promise.all(activityUpdates),
-      persistedLookup,
-    ]);
-    const { data: persistedRow, error: persistedError } = persistedResult;
+    let persisted: PersistedTelemetryResponse | null = null;
+    if (persistedLookup) {
+      const [, persistedResult] = await Promise.all([Promise.all(activityUpdates), persistedLookup]);
+      const { data: persistedRow, error: persistedError } = persistedResult;
 
-    if (persistedError) {
-      return Response.json({ ok: false, error: "Persisted telemetry lookup failed" }, { status: 500 });
+      if (persistedError) {
+        return Response.json({ ok: false, error: "Persisted telemetry lookup failed" }, { status: 500 });
+      }
+
+      persisted = persistedRow ? persistedTelemetry(persistedRow) : null;
+      const error = lastSample
+        ? persistenceError(lastSample, persisted, persistedRow)
+        : "telemetry missing after persist";
+
+      if (error) {
+        return Response.json({
+          ok: false,
+          error,
+          persisted,
+        });
+      }
+    } else {
+      await Promise.all(activityUpdates);
     }
 
-    const persisted = persistedRow ? persistedTelemetry(persistedRow) : null;
-    const error = lastSample
-      ? persistenceError(lastSample, persisted, persistedRow)
-      : "telemetry missing after persist";
+    const chargeNotificationsPromise = deliveryPlan.runChargeNotifications
+      ? processBydmateChargeNotifications({
+          supabase,
+          userId: profile.id,
+          samples,
+          previousTelemetry: previousTelemetryBeforeSanitize,
+        }).catch(() => ({ sent: 0, thresholds: [] as number[] }))
+      : Promise.resolve({ sent: 0, thresholds: [] as number[] });
 
-    if (error) {
-      return Response.json({
-        ok: false,
-        error,
-        persisted,
-      });
-    }
-
-    const chargeNotificationsPromise = processBydmateChargeNotifications({
-      supabase,
-      userId: profile.id,
-      samples,
-      previousTelemetry: previousTelemetryBeforeSanitize,
-    }).catch(() => ({ sent: 0, thresholds: [] as number[] }));
-
-    const liveStatusNotificationsPromise = processBydmateLiveStatusNotifications({
-      supabase,
-      userId: profile.id,
-      samples,
-    }).catch(() => ({ sent: 0 }));
+    const liveStatusNotificationsPromise = deliveryPlan.runLiveStatusNotifications
+      ? processBydmateLiveStatusNotifications({
+          supabase,
+          userId: profile.id,
+          samples,
+        }).catch(() => ({ sent: 0 }))
+      : Promise.resolve({ sent: 0 });
 
     const telegramWidgetsPromise = updateTelegramLiveWidgets({
       supabase,
@@ -336,23 +353,25 @@ export async function POST(request: Request) {
       receivedAt,
     }).catch(() => ({ updated: 0 }));
 
-    const autoChargingSessionsPromise = processBydmateAutoChargingSessions({
-      supabase,
-      userId: profile.id,
-      samples,
-    }).catch((autoSessionError: unknown) => {
-      const message =
-        autoSessionError instanceof Error ? autoSessionError.message : "Auto session failed";
-      console.error("bydmate auto charging session:", message);
-      return { started: 0, stopped: 0, sessionIds: [] as string[], error: message };
-    });
+    const autoChargingSessionsPromise = deliveryPlan.runAutoChargingSessions
+      ? processBydmateAutoChargingSessions({
+          supabase,
+          userId: profile.id,
+          samples,
+        }).catch((autoSessionError: unknown) => {
+          const message =
+            autoSessionError instanceof Error ? autoSessionError.message : "Auto session failed";
+          console.error("bydmate auto charging session:", message);
+          return { started: 0, stopped: 0, sessionIds: [] as string[], error: message };
+        })
+      : Promise.resolve({ started: 0, stopped: 0, sessionIds: [] as string[] });
 
     // Phase 3 of the cloud-offload plan: apply the client's cumulative per-hour rollup(s), if
     // any were attached to this flush. Best-effort and separate from ingest — a failure here
     // must not fail the request or affect ack accounting (sentCount stays samples-only), since
     // the per-sample path (or the daemon/an old APK) already wrote an equivalent row for any
     // hour this fails to update.
-    const hourlyRollupPromise = hourlyBlocks.length
+    const hourlyRollupPromise = deliveryPlan.applyClientRollups && hourlyBlocks.length
       ? Promise.all(
           hourlyBlocks.map((block) =>
             supabase.rpc("bydmate_apply_client_hourly", {
@@ -375,7 +394,7 @@ export async function POST(request: Request) {
     // is UPDATE-only, so a block that fails here changes nothing at all. The row itself was
     // already stubbed by the ingest call above (which is why blocks must stay ordered after
     // the samples), and the client keeps re-sending the full cumulative trip until it acks.
-    const tripRollupPromise = tripBlocks.length
+    const tripRollupPromise = deliveryPlan.applyClientRollups && tripBlocks.length
       ? Promise.all(
           tripBlocks.map((block) =>
             supabase.rpc("bydmate_apply_client_trip", {

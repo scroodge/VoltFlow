@@ -81,6 +81,12 @@ type CarInfo = {
   default_charger_power_kw: number;
 };
 
+function isWidgetEditDue(existing: LiveWidgetRow | null, nowMs: number) {
+  if (!existing || existing.status !== "active") return true;
+  const lastEditMs = Date.parse(existing.updated_at);
+  return !Number.isFinite(lastEditMs) || nowMs - lastEditMs >= THROTTLE_MS;
+}
+
 function widgetHtml(data: {
   carName: string;
   emoji: string;
@@ -303,7 +309,8 @@ export async function updateTelegramLiveWidgets({
   );
   const latestSamples = latestSampleByVehicle(orderedSamples);
 
-  const cars = await loadCars(supabase, userId, vehicleIds);
+  // A user without Telegram should not pay a widget-row lookup for every ingest.
+  // Once a chat is connected, read throttle state before car metadata or HTML work.
   const { data: profile } = await supabase
     .from("profiles")
     .select("telegram_id")
@@ -316,9 +323,23 @@ export async function updateTelegramLiveWidgets({
   const webAppUrl = canonicalSiteUrl("/vehicle");
 
   const nowMs = new Date(receivedAt).getTime();
+  const existingByVehicle = new Map(
+    await Promise.all(
+      vehicleIds.map(async (vehicleId) => [
+        vehicleId,
+        await loadWidgetRow(supabase, userId, vehicleId),
+      ] as const),
+    ),
+  );
+  const eligibleVehicleIds = vehicleIds.filter((vehicleId) =>
+    isWidgetEditDue(existingByVehicle.get(vehicleId) ?? null, nowMs),
+  );
+  if (!eligibleVehicleIds.length) return { updated: 0 };
+
+  const cars = await loadCars(supabase, userId, eligibleVehicleIds);
   let updated = 0;
 
-  for (const vehicleId of vehicleIds) {
+  for (const vehicleId of eligibleVehicleIds) {
     const lastSample = latestSamples.get(vehicleId);
     if (!lastSample) continue;
 
@@ -352,14 +373,7 @@ export async function updateTelegramLiveWidgets({
       lon,
     });
 
-    const existing = await loadWidgetRow(supabase, userId, vehicleId);
-
-    if (existing && existing.status === "active") {
-      const lastEditMs = Date.parse(existing.updated_at);
-      if (Number.isFinite(lastEditMs) && nowMs - lastEditMs < THROTTLE_MS) {
-        continue;
-      }
-    }
+    const existing = existingByVehicle.get(vehicleId) ?? null;
 
     // Car was offline (>10 min) and is now back — send a new message
     const useExistingMessageId = existing?.status === "active" ? existing.message_id : null;
