@@ -25,13 +25,16 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-07-28
 
-### Vehicle Live: Realtime/RUM foundation (partial; chart/map split remains in BACKLOG)
+### Vehicle Live: modern client boundaries and Realtime fan-out
 
 - `VehicleHub` now loads the Live cockpit through a top-level `next/dynamic` boundary,
   matching the existing inactive Service-tab pattern while retaining server rendering and
-  a stable loading fallback. This is a safe outer client boundary, but Live is the
-  default tab, so it does **not** by itself defer its chart/map implementation until a
-  trip or analytics interaction.
+  a stable loading fallback.
+- Moved telemetry-history charts and route-map implementations into dedicated Client
+  modules. Their consumers now import the owning modules directly; `VehicleLiveView`
+  loads them through top-level `next/dynamic` boundaries only when a trip, analytics
+  panel, or map needs them. The development build contains separate route-map and
+  telemetry-visualization chunks, rather than keeping them in the initial Live module.
 - Route Insights now loads its named map-preview export through a top-level
   `next/dynamic` boundary only after a route is expanded. This removes the large Live
   visualization module from the initial Route Insights path without changing map data,
@@ -46,12 +49,14 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
   separate transition-timing seam exists. No
   telemetry, account, vehicle, location, or preference is sent; all user data remains
   user-owned and RLS-scoped in Postgres.
-- Verification: focused metric test, `npm run test` (111 passing), `npx tsc --noEmit`,
+- Verification: focused metric test, `npm run test` (116 passing), `npx tsc --noEmit`,
   `npm run build`, and `git diff --check` pass. Focused ESLint retains pre-existing
   React-rule errors in the large Vehicle, History, and Dashboard files; the new hunks
-  introduce none. Production RUM is still required before claiming a p75 improvement.
-  The approved inner visualization-module split and production bundle inspection remain
-  unbuilt and stay proposed in `BACKLOG.md`.
+  introduce none. The Vercel production deployment matches the verified commit, and
+  production Analytics recorded `vehicle_live_ready` for one visitor and three events
+  after a cold `/vehicle` reload with live telemetry. This proves event delivery, not a
+  p75 performance improvement; no direct Realtime cache patch or Cache Components
+  change was made.
 
 ### Charging ETA uses live DC power
 
