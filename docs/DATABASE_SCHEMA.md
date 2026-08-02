@@ -357,7 +357,8 @@ dropped `20260706000000`) — see
 ## Trips
 
 ### `bydmate_trips`
-One row per drive trip detected server-side.
+One row per drive trip. Legacy/daemon trips are server-derived; modern `client_trip` rows carry
+the Mate APK's cumulative aggregate.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -368,6 +369,7 @@ One row per drive trip detected server-side.
 | `ended_at` | timestamptz | Null if still open |
 | `last_device_time` | timestamptz | Last sample seen |
 | `sample_count` | integer | |
+| `client_trip` | boolean | True when the APK owns the cumulative aggregate and final block |
 | `track_point_count` | integer | |
 | `distance_km` | numeric | **Delta** from `trip_meter_baseline_km`, not raw odometer |
 | `trip_meter_baseline_km` | numeric | Odometer reading at trip start |
@@ -378,6 +380,22 @@ One row per drive trip detected server-side.
 | `track_simplified_at` | timestamptz | Set after Ramer-Douglas-Peucker simplification |
 | `source` | text | `telemetry` (default, from `bydmate_telemetry_samples`) or `byd_energydata` (imported from the car's own trip log, no ADB required, no SOC/track data) — `20260706190000` |
 | `fuel_kwh` | numeric | PHEV (DM-i) fuel consumption from BYD `energydata`. **Unit is ambiguous** — column is named `_kwh` but the migration comment says "liters equivalent"; NULL for pure EVs, >0 for PHEV (`20260708120000`) |
+
+---
+
+### `bydmate_trip_finalization_audits`
+User-owned operational evidence that a modern client-owned trip's final block was accepted.
+No GPS or raw telemetry is stored. The owner can read the row through RLS; clients cannot write
+it. Retained for 30 days for every entitlement tier.
+
+| Column | Type | Notes |
+|---|---|---|
+| `trip_id` | uuid PK/FK → bydmate_trips | One first-accepted final block per trip; cascade delete |
+| `user_id` | uuid FK | RLS owner |
+| `vehicle_id` | text | Vehicle scope |
+| `ended_at` | timestamptz | Client-reported trip end |
+| `accepted_at` | timestamptz | First server acceptance |
+| `delivery_delay_seconds` | integer | `accepted_at − ended_at`; may be negative if the device clock is ahead |
 
 ---
 
@@ -648,7 +666,7 @@ persists no additional user data.
 | `increment_knowledge_article_view(p_slug)` | `SECURITY DEFINER` view-count increment for `knowledge_article_views` |
 | `bydmate_simplify_trip_track(p_trip_id)` | Ramer-Douglas-Peucker GPS simplification |
 | `simplify_aged_bydmate_trip_tracks()` | Batch simplification for trips older than 48 h |
-| `purge_old_bydmate_telemetry_by_tier()` | **Current** retention purge (free: 30d raw / 3y hourly; Premium+Admin: retained while the account is active; stale live GPS cleared after 24h); scheduled by pg_cron |
+| `purge_old_bydmate_telemetry_by_tier()` | **Current** retention purge (free: 30d raw / 3y hourly; Premium+Admin: retained while the account is active; stale live GPS cleared after 24h; finalization audits always 30d); scheduled by pg_cron |
 | `is_user_premium(user_id)` | Effective premium check (admin OR flag OR term) |
 
 > Superseded purge functions kept in history only: `purge_old_bydmate_telemetry()`
@@ -686,6 +704,7 @@ Scheduled daily by the pg_cron job `purge-bydmate-telemetry` →
 | `bydmate_telemetry_samples` (raw) | 30 days | Retained while the account is active |
 | `bydmate_trip_track_points` | 30 days | Retained while the account is active |
 | `bydmate_telemetry_hourly` | 3 years | Retained while the account is active |
+| `bydmate_trip_finalization_audits` | 30 days | 30 days |
 
 - `is_user_premium()` already returns true for admins, so premium + admin are fully exempt.
 - Free-account `bydmate_trip_track_points` are simplified (RDP) after 48 h before their

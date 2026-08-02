@@ -21,6 +21,40 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 - Production rollback verification confirmed that an odometer-less update retains all
   three representations.
 
+### Snapshot-only `live_only` ingest (G2)
+
+- `live_only` now takes the low-cost snapshot path only when every sample explicitly
+  requests it and the batch has no client rollups. Mixed, legacy, and rollup-bearing
+  batches retain the complete charging, trip, history, notification, and verification path.
+- Snapshot-only requests skip persisted-snapshot verification, notifications,
+  auto-session/reconciliation work, and rollup application. `last_active_at` is refreshed
+  at most hourly, while the one-time vehicle-connected write is preserved.
+- The Telegram widget retains its 30-second cadence, but a throttled edit no longer loads
+  car metadata or builds HTML. No migration, new user data, preference, or counters table
+  was added.
+- Verification: delivery-plan tests cover snapshot-only, mixed, rollup-bearing, and legacy
+  batches; `npm run test` passes 116/116, TypeScript and changed-file ESLint pass, and the
+  Vercel production deployment is Ready on commit `15c370b`.
+
+### Client-trip finalization observability (G3)
+
+- Confirmed the existing Mate client contract rather than adding a second shutdown protocol:
+  modern `client_trip` batches already send a durable final block with `ended_at`, retry after
+  a `P → power off` flush attempt, and recover on the next app/daemon opportunity.
+- Added production migration `20260729190612_bydmate_trip_finalization_observability.sql`.
+  `bydmate_apply_client_trip` now atomically writes one idempotent audit row only when a final
+  block successfully updates its tenant-scoped trip. A rejected, missing, stale, or replayed
+  block cannot become a false success.
+- The audit is user-owned Postgres operational data under RLS: trip/vehicle IDs, client end,
+  first server acceptance, and delay only—no GPS or raw payload. Authenticated owners can read
+  their rows; clients have no write permission. The existing daily purge deletes all audit rows
+  after 30 days, irrespective of entitlement; no new scheduler, hot-path counter, or UI was
+  added.
+- Reconciled the canonical trip and schema documentation for the split client/legacy lifecycle.
+- Verification: production rollback test passed for SQL, RLS, grants, and function wiring;
+  transactional behavior test passed for final acceptance, duplicate replay, and missing-trip
+  rejection; live readback confirmed RLS, authenticated select, and authenticated insert denied.
+
 ---
 
 ## 2026-07-28

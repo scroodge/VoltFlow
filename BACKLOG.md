@@ -656,55 +656,30 @@ analogue. Options:
 make its eligibility check cheap first. Reconsider a faster widget cadence only after
 G2 has production evidence; B remains a separate follow-up. G1 depends on G2 — see below.
 
-#### G2 — Server-side persistence classes (this is P1, and it gates G1)
+#### G2 — Server-side persistence classes — SHIPPED 2026-07-29
 
-**Confirmed scope 2026-07-29.** `live_only` is a strict snapshot-focused delivery class:
+Implemented in production as commit `15c370b`; see
+[CHANGELOG.md](CHANGELOG.md#snapshot-only-live_only-ingest-g2). G1 remains staged until
+G2 has production cost evidence. The former G3 reliability premise was superseded by the
+current Mate contract: client-owned trips have a Room-first final block, immediate flush on
+confirmed `P → power off`, and a 20-minute next-boot finalizer. The cloud already accepts
+that final block through `bydmate_apply_client_trip`.
 
-- It may update `bydmate_live_snapshots`, perform the one-time `vehicle_connected_at`
-  write, and allow a Telegram widget edit only after its existing 30-second throttle
-  says an edit is due.
-- It skips persisted-snapshot verification, charge and live-status notifications,
-  automatic-session processing, reconciliation, and client hourly/trip rollups.
-- `last_active_at` is conditional at roughly one update per hour. Normal full samples
-  retain all current fan-out and are the authority for charging, trips, history, and
-  notifications.
-- After the cheap Telegram-connection check, widget work reads eligibility/throttle before
-  car lookup or HTML construction. Its 30-second edit cadence does not change in G2.
+#### G3 — Client-trip finalization observability — SHIPPED 2026-07-29
 
-**Options and trade-offs.**
-
-1. **Strict snapshot-only class (recommended and confirmed).** Make the route match the
-   RPC's snapshot-only persistence contract. This removes repeated work during a visible
-   fast-status window while preserving the normal full-sample path for durable and
-   user-notification effects. It relies on the existing independent full-sample timer.
-2. **Keep all fan-out for `live_only`.** Lowest behavioural risk, but contradicts the
-   delivery class and keeps the 12–15-round-trip hot path on every fast push.
-3. **Add per-request Postgres counters now.** Gives detailed attribution, but adds a new
-   write to the hot path being optimized. Rejected for G2; reconsider only if coarse
-   production evidence is insufficient.
-
-**Verification.** Add focused branch tests that prove `live_only` bypasses the listed
-side effects and full samples retain them. Use existing Vercel invocation/CPU trends and
-targeted logs for production comparison; add no migration, counters table, preference, or
-new user-facing data model. Target: a fast-mode push drops from roughly 12–15 round trips
-toward 3.
-
-This must land **before** G1. Widening the widget's cadence without it multiplies exactly
-the per-push cost that cloud-offload phases 0-3 were built to remove.
-
-#### G3 — Durable trip-end finalization
-
-Unchanged from P0 below. The `drive → P → power off` case can still lose a trip end. This
-is the reliability half of objective 2 and is independent of the latency work.
+Implemented in production; see
+[CHANGELOG.md](CHANGELOG.md#client-trip-finalization-observability-g3). Modern `client_trip`
+final blocks are now measured atomically when the cloud accepts them. G1 remains staged until
+G2 has production cost evidence.
 
 ### Data ownership and location for G1-G3
 
-**No new user-owned data, and no new user preference.** The fast-mode window remains
+**No new user preference.** The fast-mode window remains
 ephemeral app-owned state in the two existing nullable `profiles` columns
 (`live_fast_until`, `live_fast_vehicle_id`) with an expiry — extend-only, never an explicit
 off switch. G1 option B persists nothing beyond stamping those same columns. G2 removes
-writes rather than adding them. G3's finalization audit record is app-owned server state in
-Postgres, as already specified below. Existing GPS consent is untouched.
+writes rather than adding them. G3's audit is user-owned operational data in Postgres.
+Existing GPS consent is untouched.
 
 ### Observed constraints
 
@@ -716,9 +691,9 @@ Postgres, as already specified below. Existing GPS consent is untouched.
 - Raw samples currently also feed server-side trip inference, route tracks, detailed
   day/trip charts, SOH/energy diagnostics, and exports. Removing them in one cutover would
   change those features and risks missed trip-end events when the head unit powers off.
-- In the current APK, a `P` sample stays in the 10-minute drive latch and the async flush
-  is not guaranteed before an immediate process/power loss. Room persistence helps only
-  after the enqueue completes; the daemon's 60-second parked/off send is best effort.
+- The current APK writes a final client-trip block to its durable local queue before the
+  confirmed `P → power off` flush attempt, then retries on a later app/daemon opportunity.
+  The network flush is still best effort; G3 measures the actual server-accept delay.
 
 ### Data ownership and location — confirmation required before implementation
 
@@ -776,9 +751,9 @@ Postgres, as already specified below. Existing GPS consent is untouched.
 
 ### Delivery roadmap
 
-1. **P0 — reliable stop/off finalization.** Add a durable finalization outbox record before
-   shutdown, bounded best-effort flush, daemon/next-start replay, and a server grace-time
-   fallback. Measure finalization latency and missed closures.
+1. **P0 — reliable stop/off finalization — complete.** The current Mate client already has
+   the durable final block, immediate flush attempt, and 20-minute next-boot recovery. G3's
+   production audit now measures its first server acceptance; no duplicate protocol is planned.
 2. **P1 — reduce current ingest fan-out.** Gate charge-notification work to charging
    changes, check widget eligibility/throttle before unrelated reads, debounce profile
    activity writes, and avoid full auto-session reads when no charging/open-session signal

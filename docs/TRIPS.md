@@ -5,10 +5,11 @@ How driving trips are created, extended, closed, and filtered. Companion to
 `bydmate_ingest_telemetry` SQL function; the client-side display filter lives in
 `src/lib/bydmate/trip-filter.ts`.
 
-## Lifecycle (server, `bydmate_ingest_telemetry`)
+## Lifecycle
 
-Each telemetry sample drives a small state machine over the user's single open trip
-(`ended_at is null`):
+Each telemetry sample drives a server state machine over the user's single open trip
+(`ended_at is null`). This is the complete lifecycle for legacy APKs and daemon-only
+samples, which are not tagged `client_trip`:
 
 - **Open** — a sample with *drive evidence* (`v_is_drive_sample`: `speed_kmh > 5` **or**
   `gear ∈ {D, R, N}`) with no open trip creates a new `bydmate_trips` row.
@@ -17,6 +18,26 @@ Each telemetry sample drives a small state machine over the user's single open t
 - **Close** — the trip closes when a sample shows charging, gear **P** (with the
   `speed ≤ 5` guard, migration `20260612120000`), or the 5-minute gap elapses. On close the
   row is run through `bydmate_discard_trip_if_junk`; survivors get `bydmate_finalize_trip_energy`.
+
+### Client-owned trip finalization (`client_trip`)
+
+Modern Mate APKs send a cumulative `trips[]` block beside telemetry. A block has `ended_at`
+only after the local trip is closed. The server applies that aggregate through
+`bydmate_apply_client_trip`; a final block is idempotent, never reopens a trip, and is the
+canonical recovery path for `drive → P → power off` when no final sample reached ingest.
+
+The APK writes the final block to its durable local queue before shutdown, tries an immediate
+flush on confirmed `P → power off`, and retries it on the next app or daemon opportunity. Its
+next-boot finalizer closes a stale local trip after 20 minutes. The 5-minute server gap close
+is deliberately skipped for a `client_trip` row, because it could close an active client-owned
+trip while later cumulative blocks are still arriving. It remains the fallback for legacy APKs
+and untagged daemon traffic.
+
+`bydmate_trip_finalization_audits` records the first server acceptance of each final client
+block (not an HTTP attempt): client end time, server acceptance time, and delivery delay. It
+contains no GPS or raw payload, is visible only to its owner through RLS, and is retained for
+30 days for every account tier. Normal `P → power off` delivery targets under two minutes;
+recovery up to 20 minutes is expected.
 
 ### `distance_km` is a per-trip delta from the car trip meter (since `20260615120000`)
 
