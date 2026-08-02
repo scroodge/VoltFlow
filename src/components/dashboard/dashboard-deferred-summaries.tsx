@@ -60,7 +60,7 @@ function SummaryCard({
       className="grid min-h-[92px] grid-cols-[1fr_auto] items-center gap-3 rounded-2xl border border-border bg-white/[0.03] p-4 transition hover:border-primary/50 hover:bg-white/[0.05]"
     >
       <span className="min-w-0">
-        <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <span className="block text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           {label}
         </span>
         <span className="block font-heading text-lg font-bold tracking-normal text-foreground">

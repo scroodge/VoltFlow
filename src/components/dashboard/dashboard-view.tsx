@@ -210,7 +210,7 @@ function drivingStatsFromLive(
 function DashboardStatTile({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="grid min-h-[84px] grid-rows-[auto_1fr] rounded-xl border border-border bg-white/[0.03] p-2.5">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         {label}
       </p>
       <p className="flex items-center font-heading text-base font-bold tabular-nums">{value}</p>
@@ -231,11 +231,11 @@ function DashboardChargingProgressTile({
 }) {
   return (
     <div className="rounded-xl border border-border bg-white/[0.03] p-2.5">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         {timeLeftLabel}
       </p>
       <p className="mt-1 font-heading text-base font-bold tabular-nums">{timeLeft}</p>
-      <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         {chargedLabel}
       </p>
       <p className="mt-1 text-sm font-semibold tabular-nums text-muted-foreground">{charged}</p>
@@ -262,7 +262,7 @@ function DrivingStatsGrid({
           key={item.label}
           className="min-h-[4.25rem] bg-[#12151C]/90 px-3 py-2.5"
         >
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             {item.label}
           </p>
           <p
@@ -275,7 +275,7 @@ function DrivingStatsGrid({
           >
             <span className="text-xl tracking-normal">{item.value}</span>
             {item.unit ? (
-              <span className="text-[11px] font-semibold text-muted-foreground">{item.unit}</span>
+              <span className="text-xs font-semibold text-muted-foreground">{item.unit}</span>
             ) : null}
           </p>
         </div>
@@ -360,14 +360,14 @@ function ParkChargeEstimatePanel({
     <div className="grid gap-2.5 text-xs">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             {t("dashboard.parkEstimateEyebrow")}
           </p>
           <h2 className="mt-0.5 font-heading text-sm font-bold leading-tight tracking-normal">
             {t("dashboard.parkEstimateTitle")}
           </h2>
         </div>
-        <div className="shrink-0 rounded-full border border-[var(--voltflow-green)]/25 bg-[var(--voltflow-green)]/10 px-2 py-0.5 text-[9px] font-bold text-[var(--voltflow-green)]">
+        <div className="shrink-0 rounded-full border border-[var(--voltflow-green)]/25 bg-[var(--voltflow-green)]/10 px-2 py-0.5 text-xs font-bold text-[var(--voltflow-green)]">
           100%
         </div>
       </div>
@@ -388,7 +388,7 @@ function ParkChargeEstimatePanel({
                 setEstimatePowerKw(String(defaultEstimatePowerKw(next, homeChargerPowerKw)));
               }}
               className={cn(
-                "rounded-full px-2 py-1 font-heading text-[10px] font-bold uppercase tracking-[0.08em] transition",
+                "min-h-6 rounded-full px-2 py-1 font-heading text-xs font-bold uppercase tracking-[0.08em] transition",
                 selected
                   ? "bg-[var(--voltflow-green)]/18 text-[var(--voltflow-green)]"
                   : "text-muted-foreground hover:text-foreground",
@@ -403,7 +403,7 @@ function ParkChargeEstimatePanel({
 
       <div className="grid grid-cols-[1fr_4.35rem] gap-2">
         <div className="space-y-1">
-          <Label htmlFor="park-estimate-provider" className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
+          <Label htmlFor="park-estimate-provider" className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
             {t("dashboard.estimateProvider")}
           </Label>
           <Select
@@ -431,7 +431,7 @@ function ParkChargeEstimatePanel({
           </Select>
         </div>
         <div className="space-y-1">
-          <Label htmlFor="park-estimate-power" className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
+          <Label htmlFor="park-estimate-power" className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
             kW
           </Label>
           <Input
@@ -448,13 +448,13 @@ function ParkChargeEstimatePanel({
 
       <div className="rounded-2xl border border-border/70 bg-[#12151C]/55 px-3 py-2">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             {t("dashboard.estimateTimeToFull")}
           </span>
           <span className="font-heading text-base font-bold tabular-nums">{durationText}</span>
         </div>
         <div className="mt-1 flex items-baseline justify-between gap-2">
-          <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             {t("dashboard.estimateCostToFull")}
           </span>
           <span className="font-heading text-base font-bold tabular-nums">{costText}</span>
@@ -1121,7 +1121,7 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
           <section className="dashboard-primary-card voltflow-card overflow-hidden p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                   {t("dashboard.vehicle")}
                 </p>
                 <h1 className="mt-1 truncate font-heading text-xl font-bold tracking-normal">
@@ -1130,13 +1130,13 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1">
                 <div
-                  className={`rounded-full border border-border bg-white/[0.04] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] ${statusBadgeClass(vehicleMode)}`}
+                  className={`rounded-full border border-border bg-white/[0.04] px-3 py-1.5 text-xs font-bold uppercase tracking-[0.14em] ${statusBadgeClass(vehicleMode)}`}
                 >
                   {loadingSessions ? (t("dashboard.syncing") as string) : statusLabel}
                 </div>
                 {lastSeenLabel && !loadingSessions ? (
                   <p
-                    className="text-right text-[10px] leading-4 text-muted-foreground"
+                    className="text-right text-xs leading-4 text-muted-foreground"
                     suppressHydrationWarning
                   >
                     {t("dashboard.lastSeen", { value: lastSeenLabel })}
@@ -1436,7 +1436,7 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="session-provider-type">Provider</Label>
+              <Label htmlFor="session-provider-type">{t("dashboard.manualProvider")}</Label>
               <Select
                 value={manualUserProviderId ? `up_${manualUserProviderId}` : manualProviderType}
                 onValueChange={(value) => {
@@ -1462,32 +1462,32 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="session-tariff-type">Tariff type</Label>
+              <Label htmlFor="session-tariff-type">{t("dashboard.manualTariffType")}</Label>
               <Select
                 value={manualTariffType}
                 onValueChange={(value) =>
                   setManualTariffType(value as "auto" | ChargingTariffType)
                 }
                 items={[
-                  { value: "auto", label: "Auto by power/location" },
-                  { value: "home", label: "Home" },
-                  { value: "commercial_ac", label: "Commercial AC" },
-                  { value: "fast_dc", label: "Fast DC" },
+                  { value: "auto", label: t("dashboard.manualTariffAuto") },
+                  { value: "home", label: t("dashboard.manualTariffHome") },
+                  { value: "commercial_ac", label: t("dashboard.manualTariffCommercialAc") },
+                  { value: "fast_dc", label: t("dashboard.manualTariffFastDc") },
                 ]}
               >
                 <SelectTrigger id="session-tariff-type" className="h-[52px] rounded-xl text-lg">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="auto">Auto by power/location</SelectItem>
-                  <SelectItem value="home">Home</SelectItem>
-                  <SelectItem value="commercial_ac">Commercial AC</SelectItem>
-                  <SelectItem value="fast_dc">Fast DC</SelectItem>
+                  <SelectItem value="auto">{t("dashboard.manualTariffAuto")}</SelectItem>
+                  <SelectItem value="home">{t("dashboard.manualTariffHome")}</SelectItem>
+                  <SelectItem value="commercial_ac">{t("dashboard.manualTariffCommercialAc")}</SelectItem>
+                  <SelectItem value="fast_dc">{t("dashboard.manualTariffFastDc")}</SelectItem>
                 </SelectContent>
               </Select>
               {manualTariffType === "auto" ? (
                 <p className="text-muted-foreground text-xs">
-                  Auto rule: AC 4.0-9.99 kW, fast DC 10.0+ kW.
+                  {t("dashboard.manualTariffAutoHelp")}
                 </p>
               ) : null}
             </div>

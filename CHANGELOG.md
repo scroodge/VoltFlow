@@ -9,6 +9,26 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-08-02
+
+### Dashboard interface accessibility, localization, and interaction polish
+
+- Raised the shared dark-theme muted text token from `#6B7280` to `#808A9B`, bringing its
+  contrast to 4.95:1 on dashboard cards and 5.24:1 on the page background.
+- Promoted essential compact dashboard labels to `text-xs`; the three tariff-mode controls now
+  guarantee a 24px minimum height while preserving their current three-column layout and
+  `aria-pressed` state.
+- Localized every remaining quick-session provider/tariff label, choice, and automatic-rule
+  helper in English, Belarusian, and Russian.
+- Replaced the shared Button's `transition-all` with an explicit color/background/border/shadow/
+  transform transition list. No data loading, charging math, preferences, navigation, telemetry,
+  or data ownership changed.
+- Verification: `npx tsc --noEmit` and `git diff --check` pass. The existing dashboard server
+  returned `200` after an earlier interruption, but browser control was unavailable; the planned
+  320px/430px and keyboard visual checks remain unverified. It was not started or restarted.
+
+---
+
 ## 2026-07-29
 
 ### Preserve odometer across partial live telemetry
