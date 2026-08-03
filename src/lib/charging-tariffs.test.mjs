@@ -149,6 +149,37 @@ test("manual override wins over location and power (legacy bare-enum provider)",
   assert.equal(result.pricePerKwh, 0.66);
 });
 
+test("an intentionally entered zero manual price still wins over location and power", () => {
+  const result = resolveSessionTariff({
+    manualPricePerKwh: 0,
+    manualTariffType: "fast_dc",
+    manualProviderType: "evika",
+    chargerPowerKw: 4.4,
+    location: { lat: 53.9, lon: 27.56 },
+    locationPresets: [
+      {
+        id: "loc-zero",
+        user_id: "u1",
+        name: "Different location tariff",
+        lat: 53.9,
+        lng: 27.56,
+        radius_m: 150,
+        tariff_type: "home",
+        provider_type: "home",
+        user_provider_id: null,
+        price_per_kwh_override: 0.3,
+        created_at: "",
+        updated_at: "",
+      },
+    ],
+    profile,
+  });
+  assert.equal(result.source, "manual");
+  assert.equal(result.tariffType, "fast_dc");
+  assert.equal(result.providerType, "evika");
+  assert.equal(result.pricePerKwh, 0);
+});
+
 test("resolveProviderTariff falls back to the hardcoded preset for legacy bare-enum providers", () => {
   assert.deepEqual(resolveProviderTariff("malanka"), PROVIDER_TARIFF_PRESETS.malanka);
   assert.deepEqual(resolveProviderTariff("evika"), PROVIDER_TARIFF_PRESETS.evika);

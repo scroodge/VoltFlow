@@ -11,6 +11,25 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-08-02
 
+### Checkout start-flow validation and recovery
+
+- Added a focused quick-session validator that rejects blank, non-finite, out-of-range,
+  and unordered values before the Server Action. A deliberately entered zero electricity
+  price remains valid and preserves the selected manual tariff/provider rather than
+  falling back to location or charger-power selection.
+- Converted the quick-session dialog into a semantic form with localized inline errors,
+  `aria-invalid`/`aria-describedby`, and first-invalid-field focus. Expected start
+  failures now use localized recovery copy instead of raw server error strings.
+- A saved session now closes and navigates immediately; notification/push setup is
+  best-effort and cannot report an already-created session as failed. The price helper
+  now correctly describes grid energy for AC and DC charging.
+- Replaced the charging action button's `transition-all` with an explicit transition
+  property list. No charging-session schema, ownership, RLS, or storage changed.
+- Verification: `npx tsc --noEmit`, the new checkout-input tests, the tariff-resolution
+  test suite, and `git diff --check` pass. Browser control remains unavailable, so the
+  authenticated visual checkout was not run; the supplied local credentials were not
+  exposed or persisted.
+
 ### Dashboard interface accessibility, localization, and interaction polish
 
 - Raised the shared dark-theme muted text token from `#6B7280` to `#808A9B`, bringing its

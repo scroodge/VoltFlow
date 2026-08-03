@@ -208,7 +208,7 @@ export function resolveSessionTariff(params: {
   const providerType = normalizeProviderType(params.manualProviderType ?? "custom");
   const userProviderId =
     providerType === "user_provider" ? (params.userProviderId ?? null) : null;
-  if (manualPrice > 0) {
+  if (params.manualPricePerKwh !== undefined && Number.isFinite(manualPrice)) {
     const tariffType = normalizeTariffType(
       params.manualTariffType ?? resolveTariffTypeByPower(params.chargerPowerKw),
     );

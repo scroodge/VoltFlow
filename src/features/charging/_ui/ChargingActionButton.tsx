@@ -38,7 +38,7 @@ export function ChargingActionButton({
       disabled={disabled || loading}
       onClick={onClick}
       className={cn(
-        "inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-full px-6 font-heading text-base font-bold uppercase tracking-[0.08em] transition-all active:scale-[0.99] disabled:pointer-events-none disabled:opacity-55",
+        "inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-full px-6 font-heading text-base font-bold uppercase tracking-[0.08em] transition-[color,background-color,border-color,box-shadow,transform] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-55",
         isCharging
           ? "border border-[#ff4d6d]/40 bg-[#ff4d6d]/12 text-[#ff8aa0] shadow-[0_0_24px_rgba(255,77,109,0.18)]"
           : isDriving

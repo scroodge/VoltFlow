@@ -6,6 +6,7 @@
  */
 export * from "./_domain/charging-live.ts";
 export * from "./_domain/charging-math.ts";
+export * from "./_domain/checkout-input.ts";
 export * from "./_domain/charging-session-analytics-scope.ts";
 export * from "./_domain/charging-session-sync.ts";
 export * from "./_domain/charging-session-tariff-sync.ts";

@@ -44,16 +44,16 @@ export async function startChargingSession(input: z.infer<typeof startSchema>) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return { ok: false as const, error: "Unauthorized" };
+  if (!user) return { ok: false as const, error: "unauthorized" };
 
   const parsed = startSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false as const, error: "Invalid input" };
+    return { ok: false as const, error: "invalid_input" };
   }
 
   const { carId, startPercent, targetPercent } = parsed.data;
   if (startPercent >= targetPercent) {
-    return { ok: false as const, error: "Target must be above current charge" };
+    return { ok: false as const, error: "target_not_above_start" };
   }
 
   const { data: car, error: carError } = await supabase
@@ -63,7 +63,7 @@ export async function startChargingSession(input: z.infer<typeof startSchema>) {
     .eq("user_id", user.id)
     .single();
 
-  if (carError || !car) return { ok: false as const, error: "Car not found" };
+  if (carError || !car) return { ok: false as const, error: "car_not_found" };
 
   const chargerPowerKw =
     parsed.data.chargerPowerKw ?? Number(car.default_charger_power_kw);
@@ -156,7 +156,7 @@ export async function startChargingSession(input: z.infer<typeof startSchema>) {
     .single();
 
   if (insertError || !session) {
-    return { ok: false as const, error: insertError?.message ?? "Insert failed" };
+    return { ok: false as const, error: "session_create_failed" };
   }
 
   revalidatePath("/dashboard");

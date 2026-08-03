@@ -6,7 +6,7 @@ import Image from "next/image";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import type { FormEvent, ReactNode, RefObject } from "react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 
@@ -58,6 +58,9 @@ import {
   energyFromGridKwh,
   energyNeededKwh,
   formatDuration,
+  type QuickSessionField,
+  type QuickSessionFieldErrors,
+  validateQuickSessionInput,
 } from "@/features/charging/domain";
 import { useVehicleRangeEstimate } from "@/hooks/use-vehicle-range-estimate";
 import { resolveTariffLocationMatch } from "@/lib/charging-gps-location";
@@ -110,6 +113,20 @@ const CUSTOM_PROVIDER_OPTION: { value: ChargingProviderType; label: string } = {
   value: "custom",
   label: PROVIDER_LABELS.custom,
 };
+
+function quickSessionServerErrorKey(error: string): TranslationKey {
+  switch (error) {
+    case "unauthorized":
+      return "dashboard.sessionUnauthorized";
+    case "car_not_found":
+      return "dashboard.sessionCarUnavailable";
+    case "invalid_input":
+    case "target_not_above_start":
+    case "session_create_failed":
+    default:
+      return "dashboard.sessionSaveError";
+  }
+}
 
 const CAR_IMAGE_BY_GENERATION = {
   gen1_2024: "/images/cars/yuan-up.png",
@@ -716,6 +733,11 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   );
   const [submitting, setSubmitting] = useState(false);
   const [stopping, setStopping] = useState(false);
+  const [checkoutErrors, setCheckoutErrors] = useState<QuickSessionFieldErrors>({});
+  const startPctInputRef = useRef<HTMLInputElement>(null);
+  const targetPctInputRef = useRef<HTMLInputElement>(null);
+  const chargerKwInputRef = useRef<HTMLInputElement>(null);
+  const priceInputRef = useRef<HTMLInputElement>(null);
   const hasMounted = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -986,42 +1008,65 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
     return () => window.clearTimeout(timer);
   }, [isPageLoading, selectedCar]);
 
-  const handleStart = async () => {
-    if (!selectedCar) return;
-    const start = Number(startPct);
-    const target = Number(targetPct);
-    if (!(start < target))
-      return toast.error(t("dashboard.targetError") as string);
-    if (start < 0 || target > 100)
-      return toast.error(t("dashboard.percentError") as string);
+  const clearCheckoutError = (field: QuickSessionField) => {
+    setCheckoutErrors((errors) =>
+      errors[field] ? { ...errors, [field]: undefined } : errors,
+    );
+  };
 
+  const focusFirstCheckoutError = (errors: QuickSessionFieldErrors) => {
+    const inputs: Record<QuickSessionField, RefObject<HTMLInputElement | null>> = {
+      startPct: startPctInputRef,
+      targetPct: targetPctInputRef,
+      chargerKw: chargerKwInputRef,
+      price: priceInputRef,
+    };
+    const firstInvalid = (Object.keys(inputs) as QuickSessionField[]).find(
+      (field) => errors[field],
+    );
+    if (!firstInvalid) return;
+    window.requestAnimationFrame(() => inputs[firstInvalid].current?.focus());
+  };
+
+  const handleStart = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedCar) return;
+    const validation = validateQuickSessionInput({ startPct, targetPct, chargerKw, price });
+    if (!validation.ok) {
+      setCheckoutErrors(validation.errors);
+      focusFirstCheckoutError(validation.errors);
+      return;
+    }
+
+    setCheckoutErrors({});
     setSubmitting(true);
-    const chargerPowerKw =
-      chargerKw.trim() !== "" ? parseDecimalInput(chargerKw) : undefined;
-    const overrides =
-      chargerPowerKw !== undefined ? { chargerPowerKw } : {};
     try {
       const res = await startChargingSession({
         carId: selectedCar.id,
-        startPercent: start,
-        targetPercent: target,
-        pricePerKwh: parseDecimalInput(price) || 0,
+        startPercent: validation.value.startPercent,
+        targetPercent: validation.value.targetPercent,
+        pricePerKwh: validation.value.pricePerKwh,
         tariffType:
           manualTariffType === "auto"
             ? undefined
             : (manualTariffType as ChargingTariffType),
         providerType: manualProviderType,
         userProviderId: manualUserProviderId ?? undefined,
-        ...overrides,
+        chargerPowerKw: validation.value.chargerPowerKw,
       });
-      if (!res.ok) throw new Error(res.error);
-      await ensureNotificationsPermission();
-      await ensurePushSubscription();
+      if (!res.ok) {
+        toast.error(t(quickSessionServerErrorKey(res.error)) as string);
+        return;
+      }
+
+      void ensureNotificationsPermission()
+        .then(() => ensurePushSubscription())
+        .catch(() => undefined);
       setDialogOpen(false);
       toast.success(t("dashboard.started") as string);
       router.push(appPath(`/charging/${res.sessionId}`));
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : (t("dashboard.couldNotStart") as string));
+    } catch {
+      toast.error(t("dashboard.sessionSaveError") as string);
     } finally {
       setSubmitting(false);
     }
@@ -1033,7 +1078,13 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
     setPrice(String(defaultPrice));
     setManualTariffType("auto");
     setManualProviderType("custom");
+    setCheckoutErrors({});
     setDialogOpen(true);
+  };
+
+  const handleDialogOpenChange = (open: boolean) => {
+    setDialogOpen(open);
+    if (!open) setCheckoutErrors({});
   };
 
   const handleMainAction = async () => {
@@ -1378,7 +1429,7 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
         </>
       ) : null}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
         <DialogContent className="gap-6 rounded-[1.75rem] border-border bg-card">
           <DialogHeader>
             <DialogTitle className="font-heading text-xl">
@@ -1388,11 +1439,12 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
               {t("dashboard.quickSessionBody")}
             </p>
           </DialogHeader>
-          <div className="space-y-4">
+          <form className="space-y-4" onSubmit={handleStart} noValidate>
             <div className="space-y-2">
               <Label htmlFor="start-pct">{t("dashboard.currentCharge")}</Label>
               <Input
                 id="start-pct"
+                ref={startPctInputRef}
                 inputMode="numeric"
                 pattern="[0-9]*"
                 min={0}
@@ -1400,29 +1452,51 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                 step="1"
                 type="number"
                 value={startPct}
-                onChange={(e) => setStartPct(e.target.value)}
+                onChange={(e) => {
+                  setStartPct(e.target.value);
+                  clearCheckoutError("startPct");
+                }}
+                aria-invalid={checkoutErrors.startPct || undefined}
+                aria-describedby={checkoutErrors.startPct ? "start-pct-error" : undefined}
                 className="h-[52px] rounded-xl text-lg"
               />
+              {checkoutErrors.startPct ? (
+                <p id="start-pct-error" className="text-sm text-destructive">
+                  {t("dashboard.startChargeError")}
+                </p>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label htmlFor="target-pct">{t("dashboard.targetCharge")}</Label>
               <Input
                 id="target-pct"
+                ref={targetPctInputRef}
                 inputMode="numeric"
                 pattern="[0-9]*"
                 type="number"
                 value={targetPct}
-                min={Number(startPct) + 1}
+                min={1}
                 max={100}
                 step="1"
-                onChange={(e) => setTargetPct(e.target.value)}
+                onChange={(e) => {
+                  setTargetPct(e.target.value);
+                  clearCheckoutError("targetPct");
+                }}
+                aria-invalid={checkoutErrors.targetPct || undefined}
+                aria-describedby={checkoutErrors.targetPct ? "target-pct-error" : undefined}
                 className="h-[52px] rounded-xl text-lg"
               />
+              {checkoutErrors.targetPct ? (
+                <p id="target-pct-error" className="text-sm text-destructive">
+                  {t("dashboard.targetChargeError")}
+                </p>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label htmlFor="charger-kw">{t("dashboard.powerOverride")}</Label>
               <Input
                 id="charger-kw"
+                ref={chargerKwInputRef}
                 placeholder={t("dashboard.defaultPower", {
                   power: selectedCar?.default_charger_power_kw ?? "--",
                 }) as string}
@@ -1431,9 +1505,19 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                 pattern="[0-9]*[,.]?[0-9]*"
                 step="0.1"
                 value={chargerKw}
-                onChange={(e) => setChargerKw(e.target.value)}
+                onChange={(e) => {
+                  setChargerKw(e.target.value);
+                  clearCheckoutError("chargerKw");
+                }}
+                aria-invalid={checkoutErrors.chargerKw || undefined}
+                aria-describedby={checkoutErrors.chargerKw ? "charger-kw-error" : undefined}
                 className="h-[52px] rounded-xl text-lg"
               />
+              {checkoutErrors.chargerKw ? (
+                <p id="charger-kw-error" className="text-sm text-destructive">
+                  {t("dashboard.powerOverrideError")}
+                </p>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label htmlFor="session-provider-type">{t("dashboard.manualProvider")}</Label>
@@ -1500,21 +1584,32 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
               </Label>
               <Input
                 id="energy-price"
+                ref={priceInputRef}
                 type="text"
                 inputMode="decimal"
                 pattern="[0-9]*[,.]?[0-9]*"
                 step="any"
                 value={price}
-                onChange={(e) => setPrice(e.target.value)}
+                onChange={(e) => {
+                  setPrice(e.target.value);
+                  clearCheckoutError("price");
+                }}
+                aria-invalid={checkoutErrors.price || undefined}
+                aria-describedby={checkoutErrors.price ? "energy-price-error" : undefined}
                 className="h-[52px] rounded-xl text-lg"
               />
               <p className="text-muted-foreground text-xs">
                 {t("dashboard.priceHelp")}
               </p>
+              {checkoutErrors.price ? (
+                <p id="energy-price-error" className="text-sm text-destructive">
+                  {t("dashboard.priceError")}
+                </p>
+              ) : null}
             </div>
-          </div>
           <DialogFooter className="flex gap-3 sm:flex-col">
             <Button
+              type="button"
               variant="outline"
               className="min-h-[48px] rounded-full border-white/25"
               onClick={() => setDialogOpen(false)}
@@ -1522,13 +1617,14 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
               {t("common.later")}
             </Button>
             <Button
+              type="submit"
               className="min-h-[52px] flex-1 rounded-full bg-[linear-gradient(90deg,#00E676_0%,#00D1FF_100%)] text-base font-semibold text-[#06110B] hover:brightness-110"
               disabled={submitting || !selectedCar}
-              onClick={() => void handleStart()}
             >
               {submitting ? t("dashboard.starting") : t("dashboard.startSession")}
             </Button>
           </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
