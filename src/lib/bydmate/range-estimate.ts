@@ -1,3 +1,4 @@
+import { tripNetConsumptionKwh100 } from "./trip-metrics.ts";
 import type { BydmateLiveSnapshotRow, BydmateTripRow } from "@/types/database";
 
 const DEFAULT_USABLE_BATTERY_KWH = 45.1;
@@ -303,15 +304,11 @@ function averageEnergyConsumption(
   let totalDistance = 0;
 
   for (const trip of trips) {
-    const regen = validNumber(trip.regen_energy_kwh);
-    const traction = validNumber(trip.traction_energy_kwh);
     const distance = validNumber(trip.distance_km);
-    if (regen == null || traction == null || distance == null || distance < 1) continue;
+    if (distance == null || distance < 1) continue;
 
-    const netEnergy = traction - regen;
-    if (netEnergy <= 0) continue;
-
-    const consumption = (netEnergy / distance) * 100;
+    const consumption = tripNetConsumptionKwh100(trip);
+    if (consumption == null || consumption <= 0) continue;
     if (
       consumption < MIN_FORECAST_CONSUMPTION_KWH_100KM ||
       consumption > MAX_FORECAST_CONSUMPTION_KWH_100KM

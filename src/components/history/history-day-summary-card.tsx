@@ -38,7 +38,15 @@ function CompactStat({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function EnergyCell({ label, valueKwh }: { label: string; valueKwh: string }) {
+function EnergyCell({
+  label,
+  valueKwh,
+  unit = "kWh",
+}: {
+  label: string;
+  valueKwh: string;
+  unit?: string;
+}) {
   return (
     <div className="min-w-0 px-2.5 py-2 text-center">
       <p className="text-[9px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
@@ -46,7 +54,7 @@ function EnergyCell({ label, valueKwh }: { label: string; valueKwh: string }) {
       </p>
       <p className="mt-1 font-heading text-base font-semibold tabular-nums leading-none">
         {valueKwh}
-        <span className="ml-0.5 text-[11px] font-medium text-muted-foreground">kWh</span>
+        <span className="ml-0.5 text-[11px] font-medium text-muted-foreground">{unit}</span>
       </p>
     </div>
   );
@@ -173,6 +181,10 @@ export function HistoryDaySummaryCard({
   const distanceValue = summary.hasTrips ? `${fmt(summary.distanceKm, 0)} km` : "—";
   const chargedStr = fmt(summary.chargedKwh, 1);
   const driveStr = summary.hasTrips ? fmt(summary.driveKwh, 1) : "—";
+  const avgConsumptionStr =
+    summary.hasTrips && summary.avgConsumptionKwh100 != null
+      ? fmt(summary.avgConsumptionKwh100, 1)
+      : "—";
 
   return (
     <section
@@ -191,9 +203,14 @@ export function HistoryDaySummaryCard({
         <CompactStat label={tx("history.daySummary.distance")} value={distanceValue} />
       </div>
 
-      <div className="grid grid-cols-2 divide-x divide-border border-b border-border">
+      <div className="grid grid-cols-3 divide-x divide-border border-b border-border">
         <EnergyCell label={tx("history.daySummary.charged")} valueKwh={chargedStr} />
         <EnergyCell label={tx("history.daySummary.drive")} valueKwh={driveStr} />
+        <EnergyCell
+          label={tx("history.daySummary.avgConsumption")}
+          valueKwh={avgConsumptionStr}
+          unit="kWh/100km"
+        />
       </div>
 
       {!summary.hasTrips ? (

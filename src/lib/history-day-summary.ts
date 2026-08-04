@@ -1,4 +1,5 @@
 import { resolveLocalCalendarDayWindow } from "./bydmate/telemetry-ranges.ts";
+import { tripTractionEnergyKwh } from "./bydmate/trip-metrics.ts";
 import type { BydmateTripRow, ChargingSessionRow } from "@/types/database";
 
 const BALANCE_THRESHOLD_KWH = 0.5;
@@ -13,6 +14,7 @@ export type HistoryDaySummary = {
   chargedKwh: number;
   distanceKm: number;
   driveKwh: number;
+  avgConsumptionKwh100: number | null;
   regenKwh: number;
   sessionCount: number;
   tripCount: number;
@@ -44,27 +46,6 @@ function sessionDurationSec(session: ChargingSessionRow) {
   return (ended - started) / 1000;
 }
 
-export function tripDriveKwh(
-  trip: Pick<BydmateTripRow, "traction_energy_kwh" | "distance_km" | "avg_consumption_kwh_100km">,
-) {
-  const traction = trip.traction_energy_kwh;
-  if (typeof traction === "number" && Number.isFinite(traction)) return traction;
-
-  const distance = trip.distance_km;
-  const consumption = trip.avg_consumption_kwh_100km;
-  if (
-    typeof distance === "number" &&
-    Number.isFinite(distance) &&
-    distance > 0 &&
-    typeof consumption === "number" &&
-    Number.isFinite(consumption)
-  ) {
-    return (distance * consumption) / 100;
-  }
-
-  return 0;
-}
-
 /**
  * Session walk-back (BACKLOG.md "Attribute cost to no-charge driving days",
  * option 5): given recent finished sessions (newest first, already filtered to
@@ -82,7 +63,11 @@ export function pickWalkBackSessionPrice(
   }[],
   trips: readonly Pick<
     BydmateTripRow,
-    "traction_energy_kwh" | "distance_km" | "avg_consumption_kwh_100km" | "started_at"
+    | "traction_energy_kwh"
+    | "regen_energy_kwh"
+    | "distance_km"
+    | "avg_consumption_kwh_100km"
+    | "started_at"
   >[],
 ): number | null {
   for (const session of candidates) {
@@ -91,7 +76,7 @@ export function pickWalkBackSessionPrice(
     const stoppedAt = session.stopped_at;
     const cumulativeDriveKwh = trips
       .filter((trip) => trip.started_at != null && trip.started_at > stoppedAt)
-      .reduce((sum, trip) => sum + tripDriveKwh(trip), 0);
+      .reduce((sum, trip) => sum + (tripTractionEnergyKwh(trip) ?? 0), 0);
     if (cumulativeDriveKwh <= session.charged_energy_kwh) {
       return session.price_per_kwh;
     }
@@ -136,11 +121,16 @@ function aggregateHistorySummary(
 
   for (const trip of periodTrips) {
     distanceKm += trip.distance_km ?? 0;
-    driveKwh += tripDriveKwh(trip);
+    driveKwh += tripTractionEnergyKwh(trip) ?? 0;
     regenKwh += trip.regen_energy_kwh ?? 0;
   }
 
   const deltaKwh = chargedKwh - driveKwh;
+  // Net of regen, matching the per-trip "netConsumption" convention used on the
+  // Trips tab / vehicle live view (tripNetConsumptionKwh100) — see BACKLOG.md
+  // "Consolidate average consumption formulas".
+  const avgConsumptionKwh100 =
+    distanceKm > 0 ? ((driveKwh - regenKwh) / distanceKm) * 100 : null;
 
   return {
     chargingCost,
@@ -148,6 +138,7 @@ function aggregateHistorySummary(
     chargedKwh,
     distanceKm,
     driveKwh,
+    avgConsumptionKwh100,
     regenKwh,
     sessionCount: periodSessions.length,
     tripCount: periodTrips.length,

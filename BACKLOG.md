@@ -4,6 +4,85 @@ Per the agent workflow in [AGENTS.md](AGENTS.md): **plan first, build only on ex
 go-ahead.** These are researched but **not built**. Shipped work lives in
 [CHANGELOG.md](CHANGELOG.md).
 
+## 🔵 Consumption formula map — reference for the parts left as separate tools
+
+The "average consumption" discrepancy investigation (shipped 2026-08-04, see
+CHANGELOG.md) found 8 distinct kWh/100km formulas across the app. Two were genuine
+duplicate re-derivations of the same math and have been consolidated (see CHANGELOG).
+The rest are **intentionally different tools**, kept here as a map so a future "why does
+X disagree with Y" doesn't have to be re-researched from scratch.
+
+### Research — every distinct formula found (8, feeding 15+ display sites)
+
+**A. Per-trip, net of regen** — `(traction_kwh − regen_kwh) / distance_km × 100`.
+Canonical home: `src/lib/bydmate/trip-metrics.ts` (`tripTractionEnergyKwh()`,
+`tripNetConsumptionKwh100()`, `tripEnergyPerKm()`).
+- `tripNetConsumptionKwh100()` → History → Trips tab (`history-view.tsx:147-149,799`,
+  label `vehicle.trips.netConsumption`) and Vehicle Live trip list
+  (`vehicle-live-view.tsx:1306-1308,1316`, same label).
+- `tripEnergyPerKm()` — gross kWh/**km** (not /100), same two files, label
+  `vehicle.trips.energyPerKm`.
+- ~~`range-estimate.ts` `averageEnergyConsumption()` re-derived the same net formula
+  inline~~ — **consolidated 2026-08-04**, now calls `tripNetConsumptionKwh100()`.
+- ~~`history-day-summary.ts` `tripDriveKwh()` re-derived the same gross-traction
+  fallback~~ — **consolidated 2026-08-04**, now calls `tripTractionEnergyKwh()`.
+
+**B. Device-reported `avg_consumption_kwh_100km` field, distance-weighted average**
+(4 independent implementations of the same idea):
+- `src/lib/bydmate/day-insights.ts:50` `weightedAvgConsumptionKwh100()` → Analytics day
+  view "Day average" (`analytics-day-view.tsx:241,262,264`) + baseline/regen-compare
+  cards on the same page.
+- `src/lib/vehicle-analytics.ts:126-169` (inside `fetchMonthlyStats()`) → Analytics
+  summary stat tile (`telemetry-analytics-charts.tsx:92-97`).
+- `src/lib/bydmate/telemetry-buckets.ts:197-256` `buildAnalyticsSummary()` → Vehicle
+  Analytics summary panels (`vehicle-analytics-panels.tsx:438`).
+- `telemetry-analytics-charts.tsx:216-274` `buildBarCharts()` inline calc → efficiency bar
+  chart + period-average dashed line.
+- `src/lib/bydmate/range-estimate.ts:275` `averageTripConsumption()` → Vehicle Live
+  SummaryPill (`vehicle-live-view.tsx:1361,1418`, label `vehicle.trips.consumption`) and
+  the range/ETA blend.
+
+**C. Device-reported field, median** (baseline/fallback pools)
+- `src/lib/vehicle-analytics.ts:469-513` `fetchConsumptionBaseline()` (30-day rolling) →
+  "X% better/worse than your 30-day median" (`analytics-day-view.tsx:126-130,286`).
+- `range-estimate.ts:40` `userMedianConsumption()` → range-estimate fallback pool.
+
+**D. Device-reported field, unweighted average per bucket**
+- `telemetry-buckets.ts:266-291` `consumptionByOutsideTemp()` → temp-vs-consumption chart
+  (`vehicle-analytics-panels.tsx:477`).
+- `src/lib/bydmate/route-insights.ts:526-572` per-route median/min/max → route prediction
+  card (`route-insights-section.tsx:244,254-262`).
+
+**E. Net-of-regen total-over-total (day/period)**:
+- `src/lib/history-day-summary.ts` `avgConsumptionKwh100 = (driveKwh − regenKwh) /
+  distanceKm × 100`, where `driveKwh` sums `tripTractionEnergyKwh()` per trip (group A's
+  canonical helper) → `HistoryDaySummaryCard`, all scopes (day/week/month/quarter/year).
+  Matches group A's net-of-regen semantic by decision (2026-08-04); the card's "On trips"
+  cell intentionally stays gross traction (it feeds the charge/drive balance math), so
+  avg-consumption × distance will not exactly equal "On trips" kWh — accepted trade-off.
+
+**F. Raw device/live field, no averaging** — displayed as-is:
+- `dashboard-view.tsx:217-220` `drivingStatsFromLive()`, `dashboard-deferred-summaries.tsx:108`,
+  `vehicle-live-view.tsx:949` — each reads `current_trip_consumption_kwh_100km` or
+  `trip.avg_consumption_kwh_100km` directly.
+
+**G. Blended forecast** (range/ETA — legitimately its own thing, not "a consumption
+display"): `range-estimate.ts:67-225` `estimateVehicleRangeKm()` weights B, F, and an
+A-variant together, clamped 8–42 kWh/100km, to project range. Out of scope for
+consolidation — it's a forecast, not a reported stat.
+
+### Why B/C/D/F/G stay separate (deliberate, not drift)
+
+Aggregation strategy varies **on purpose**: weighted-by-distance average of device values
+(B) vs. median (C, deliberately outlier-resistant for baselines) vs. net total-over-total
+(E, deliberately exact for a day/period) vs. raw instantaneous (F, deliberately "right
+now") vs. a multi-signal blend (G, a forecast, not a reported stat). Collapsing these into
+one aggregation would likely make at least one of {30-day baseline, live tile, day
+summary, range forecast} worse at its actual job — so only the genuine duplicates (group
+A's re-derivations) were consolidated; see CHANGELOG.md 2026-08-04.
+
+---
+
 ## 🔵 Suspended head unit: "app is offline" while Di+ keeps recording
 
 ### Goal

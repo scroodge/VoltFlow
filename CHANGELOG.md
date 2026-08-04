@@ -9,6 +9,51 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-08-04
+
+### "Day at a glance" card: average consumption per 100 km, plus formula consolidation
+
+- Added `avgConsumptionKwh100` to `HistoryDaySummary` (`src/lib/history-day-summary.ts`),
+  computed **net of regen**: `(driveKwh − regenKwh) ÷ distanceKm × 100`, from totals the
+  summary already aggregates — no new query, no schema change. Null when there's no
+  distance for the period.
+- `HistoryDaySummaryCard`'s second row (`src/components/history/history-day-summary-card.tsx`)
+  is now a 3-column grid: Charged (AC) / On trips / Avg. consumption (`kWh/100km`).
+  Generalized `EnergyCell`'s hardcoded `"kWh"` suffix into a `unit` prop instead of adding
+  a near-duplicate component.
+- New `history.daySummary.avgConsumption` translation key added to all three locales
+  (en/be/ru) in `src/lib/i18n.ts`.
+- Same card/type is shared by History (day tab) and Analytics (week/month/quarter/year),
+  so the new field surfaces on both without further changes.
+- **Formula consolidation** (initially shipped as gross traction/distance, revised same
+  day after it produced a different number than the existing per-trip "Расход"/"Net
+  consumption" figure — see BACKLOG.md "Consumption formula map" for the full 8-formula
+  survey): switched to net-of-regen to match the app's majority convention
+  (`tripNetConsumptionKwh100()` in `src/lib/bydmate/trip-metrics.ts`, used on the Trips
+  tab and Vehicle Live). Removed two duplicate re-derivations of the same traction/distance
+  math and pointed them at the shared `trip-metrics.ts` helpers instead:
+  `history-day-summary.ts`'s local `tripDriveKwh()` → `tripTractionEnergyKwh()`;
+  `range-estimate.ts`'s inline `(traction − regen)/distance×100` in
+  `averageEnergyConsumption()` → `tripNetConsumptionKwh100()`. The Day-at-a-glance card's
+  "On trips" cell intentionally stays gross (it feeds the charge/drive balance math), so
+  avg-consumption × distance won't exactly equal "On trips" kWh — accepted trade-off.
+  Other consumption formulas in the app (device-field weighted averages, medians,
+  raw live values, the range/ETA blend) were deliberately left alone — they serve
+  different purposes, not accidental drift.
+- Verification: `npx tsc --noEmit` (full project), `npm run test` (119 tests, same 3
+  pre-existing unrelated failures as `main`, 2 new passing cases for the derived field),
+  `npm run build` all pass.
+- **Follow-up label clarity:** user then found a *third* consumption figure — "Расход" in
+  the Analytics "Сводка за период"/"Period summary" panel — that still disagreed (12.4 vs
+  the now-reconciled 11.4). Traced to `buildAnalyticsSummary()`
+  (`src/lib/bydmate/telemetry-buckets.ts:230-252`): a distance-weighted average of each
+  trip's own car-reported `avg_consumption_kwh_100km` field — Group B in the formula map,
+  never touching `traction_energy_kwh`/`regen_energy_kwh` at all, so it's a different
+  *measurement source*, not formula drift. Renamed the label (`vehicle.analytics.summary.consumption`
+  in `src/lib/i18n.ts`) from "Consumption"/"Расход" to "Car consumption"/"Расход авто"/
+  "Расход аўто" so it reads as the vehicle's own reported figure rather than implying it's
+  the same computed stat as the other two cards.
+
 ## 2026-08-02
 
 ### Checkout start-flow validation and recovery
