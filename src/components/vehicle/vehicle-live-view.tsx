@@ -349,7 +349,10 @@ function VehicleLiveContent({
   });
   const isCharging =
     vehicleMode === "live_charging" || vehicleMode === "app_charging";
-  const isStale = vehicleMode === "stale";
+  // Asleep counts as stale for everything that needs *live* data (trip query, live map):
+  // a suspended head unit has nothing current to show. The two differ only in how the state
+  // is labelled to the user — see LIVE_SNAPSHOT_ASLEEP_MS.
+  const isStale = vehicleMode === "stale" || vehicleMode === "asleep";
   const [fallbackDate] = useState(() => localDateKey(Date.now()));
   const [selectedDateOverride, setSelectedDateOverride] = useState<string | null>(null);
   const fixtureDateKeys = useMemo(() => {
@@ -548,6 +551,9 @@ function heroStatusBadgeClass(mode: DashboardVehicleMode) {
   switch (mode) {
     case "stale":
       return "border-yellow-300/25 bg-yellow-300/10 text-yellow-200";
+    // Not the warning colour: a sleeping car is resting normally, not in trouble.
+    case "asleep":
+      return "border-slate-300/20 bg-slate-300/10 text-slate-200";
     case "live_charging":
     case "app_charging":
       return "border-cyan-300/25 bg-cyan-300/10 text-cyan-100";

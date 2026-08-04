@@ -15,6 +15,7 @@ import {
 } from "@/lib/bydmate/telemetry-sanitizer";
 import { createServiceClient } from "@/lib/supabase/service";
 import { resolveBydmateApiKeyProfile } from "@/lib/bydmate/api-auth";
+import { liveFastSecondsFor } from "@/lib/bydmate/live-fast";
 import {
   readBodyWithLimit,
   RequestBodyTooLargeError,
@@ -454,6 +455,11 @@ export async function POST(request: Request) {
       persisted,
       vehicle_id: headerVehicleId,
       sample_count: samples.length,
+      // Second carrier for the fast live-status grant, alongside the command poll. Derived
+      // from the profile row this request already loaded for auth, so it costs no query —
+      // and it is what lets the command poll drop from 6s to 60s while remote commands are
+      // suspended without stranding the live view at the slower cadence.
+      live_fast_seconds: liveFastSecondsFor(profile, headerVehicleId),
       ...parseIngestStats(ingestResult, samples.length),
       dropped_location_count: droppedLocations,
       dropped_telemetry_field_count: droppedTelemetryFields,

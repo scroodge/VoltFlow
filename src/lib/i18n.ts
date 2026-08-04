@@ -346,6 +346,7 @@ export const dictionaries = {
       statusDriving: "Driving",
       statusLive: "Live",
       statusStale: "Last seen",
+      statusAsleep: "Asleep",
       statusLiveCharging: "Charging (live)",
       cannotChargeWhileDriving: "Park the car before starting a charging session.",
       trackCharge: "Track this charge",
@@ -645,6 +646,7 @@ export const dictionaries = {
         driving: "driving",
         live: "live",
         stale: "stale",
+        asleep: "asleep",
         charging: "charging",
       },
       metrics: {
@@ -1650,6 +1652,7 @@ export const dictionaries = {
       statusDriving: "Рух",
       statusLive: "Live",
       statusStale: "Без сувязі",
+      statusAsleep: "Спіць",
       statusLiveCharging: "Зарадка (live)",
       cannotChargeWhileDriving: "Спыніце аўто, перш чым пачынаць зарадку.",
       trackCharge: "Сачыць за зарадкай",
@@ -1951,6 +1954,7 @@ export const dictionaries = {
         driving: "рух",
         live: "жыва",
         stale: "састарэла",
+        asleep: "спіць",
         charging: "зарадка",
       },
       metrics: {
@@ -2956,6 +2960,7 @@ export const dictionaries = {
       statusDriving: "В движении",
       statusLive: "Live",
       statusStale: "Давно не обновлялось",
+      statusAsleep: "Спит",
       statusLiveCharging: "Зарядка (live)",
       cannotChargeWhileDriving: "Остановите авто, прежде чем начать зарядку.",
       trackCharge: "Отслеживать зарядку",
@@ -3257,6 +3262,7 @@ export const dictionaries = {
         driving: "в движении",
         live: "онлайн",
         stale: "устарело",
+        asleep: "спит",
         charging: "зарядка",
       },
       metrics: {

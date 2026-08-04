@@ -1,4 +1,5 @@
 import { resolveBydmateApiKeyProfile } from "@/lib/bydmate/api-auth";
+import { liveFastSecondsFor } from "@/lib/bydmate/live-fast";
 import { createServiceClient } from "@/lib/supabase/service";
 
 export const runtime = "nodejs";
@@ -9,6 +10,33 @@ const MAX_BATCH = 10;
 // Temporary operational kill switch. Keep the response protocol-compatible so older Mate
 // clients stop receiving commands and fast-status grants without entering an error/retry loop.
 const REMOTE_COMMANDS_DISABLED = true;
+
+/**
+ * Poll cadence handed back to the car in `poll_after_seconds`.
+ *
+ * This route was the single largest source of Vercel invocations: every car polls it around
+ * the clock (the daemon's command loop is not gated on the app being alive), so a 6s interval
+ * is ~14.4k invocations/car/day — several times the entire telemetry ingest path, and while
+ * [REMOTE_COMMANDS_DISABLED] every one of them returns an empty array.
+ *
+ * A car running an older build ignores the field and keeps its built-in 6s, so this is purely
+ * additive and needs no version gate.
+ */
+const ACTIVE_POLL_AFTER_SECONDS = 6;
+/**
+ * While commands are suspended the poll carries nothing a slower cadence would lose: the
+ * `live_fast_seconds` grant now also rides the telemetry ingest response, which every car
+ * sends at 15s (driving) to 60s (parked/charging). Live-view *entry* latency is therefore
+ * bounded by that cadence rather than by this one, and once fast mode is on the 3s
+ * `live_only` pings renew the grant themselves.
+ *
+ * Drop this back to [ACTIVE_POLL_AFTER_SECONDS] the moment remote commands come back.
+ */
+const SUSPENDED_POLL_AFTER_SECONDS = 60;
+
+const POLL_AFTER_SECONDS = REMOTE_COMMANDS_DISABLED
+  ? SUSPENDED_POLL_AFTER_SECONDS
+  : ACTIVE_POLL_AFTER_SECONDS;
 
 type PendingCommand = {
   id: string;
@@ -33,29 +61,6 @@ async function expireStalePending(
     .eq("status", "pending");
 }
 
-// Seconds of fast live-status cadence to grant the car per poll. Deliberately a little
-// longer than the ~6s poll interval so a single dropped poll does not drop the car out of
-// fast mode mid-view, and short enough that closing the app stops the traffic promptly.
-const LIVE_FAST_GRANT_SECONDS = 20;
-
-/**
- * How much longer (if at all) this vehicle should keep pushing `live_only` status at the
- * fast cadence. Derived from the profile row the caller already fetched, so this adds no
- * query to a path that runs every ~6s per car.
- */
-function liveFastSecondsFor(
-  profile: { liveFastUntil: string | null; liveFastVehicleId: string | null },
-  vehicleId: string,
-): number {
-  if (!profile.liveFastUntil) return 0;
-  // A multi-car account watching car A must not speed up car B. A null vehicle id means
-  // the window was set before we knew which car, so honour it rather than dropping it.
-  if (profile.liveFastVehicleId && profile.liveFastVehicleId !== vehicleId) return 0;
-  const remainingMs = new Date(profile.liveFastUntil).getTime() - Date.now();
-  if (!Number.isFinite(remainingMs) || remainingMs <= 0) return 0;
-  return Math.min(LIVE_FAST_GRANT_SECONDS, Math.ceil(remainingMs / 1000));
-}
-
 export async function GET(request: Request) {
   const apiKey = request.headers.get("x-api-key") ?? "";
   const vehicleId = request.headers.get("x-vehicle-id")?.trim();
@@ -72,7 +77,12 @@ export async function GET(request: Request) {
 
     const liveFastSeconds = liveFastSecondsFor(profile, vehicleId);
     if (REMOTE_COMMANDS_DISABLED) {
-      return Response.json({ ok: true, commands: [], live_fast_seconds: liveFastSeconds });
+      return Response.json({
+        ok: true,
+        commands: [],
+        live_fast_seconds: liveFastSeconds,
+        poll_after_seconds: POLL_AFTER_SECONDS,
+      });
     }
 
     const { error: scheduleError } = await supabase.rpc("enqueue_due_vehicle_command_schedules", {
@@ -100,7 +110,12 @@ export async function GET(request: Request) {
     // writes. Only touch the table when there is something stale to expire or fresh to send.
     const pending = (rows ?? []) as PendingCommand[];
     if (pending.length === 0) {
-      return Response.json({ ok: true, commands: [], live_fast_seconds: liveFastSeconds });
+      return Response.json({
+        ok: true,
+        commands: [],
+        live_fast_seconds: liveFastSeconds,
+        poll_after_seconds: POLL_AFTER_SECONDS,
+      });
     }
 
     const cutoff = Date.now() - COMMAND_TIMEOUT_MS;
@@ -125,7 +140,14 @@ export async function GET(request: Request) {
         .eq("status", "pending");
     }
 
-    return Response.json({ ok: true, commands, live_fast_seconds: liveFastSeconds });
+    // Something was actually delivered, so keep the car on the fast cadence to pick up the
+    // ack round trip and any follow-up command promptly, regardless of the suspended default.
+    return Response.json({
+      ok: true,
+      commands,
+      live_fast_seconds: liveFastSeconds,
+      poll_after_seconds: ACTIVE_POLL_AFTER_SECONDS,
+    });
   } catch {
     return Response.json({ ok: false, error: "Command poll failed" }, { status: 500 });
   }

@@ -4,6 +4,144 @@ Per the agent workflow in [AGENTS.md](AGENTS.md): **plan first, build only on ex
 go-ahead.** These are researched but **not built**. Shipped work lives in
 [CHANGELOG.md](CHANGELOG.md).
 
+## 🔵 Suspended head unit: "app is offline" while Di+ keeps recording
+
+### Goal
+
+A parked or locked car must keep reporting often enough that the PWA can tell **"car
+asleep"** from **"no contact"**. Today the reporting cadence on a suspended head unit
+collapses to **one sample per ~15 minutes**, which the PWA's 90 s freshness threshold
+reads as stale ~94% of the time.
+
+Reported by user `kevlar_5@meta.ua` (2026-08-03), who correctly noted that **Di+ keeps
+writing video** through the whole outage — Di+ is BYD's own privileged app and is exempt
+from the head unit's power management; VoltFlow Mate is not.
+
+### Research findings — prod DB, read-only (2026-08-03)
+
+All times Europe/Minsk (the reporter's profile TZ). Evidence from
+`bydmate_telemetry_samples` on self-hosted prod.
+
+**3 August — matches the report exactly**
+
+| Time | Observed |
+| --- | --- |
+| …–16:20:14 | Healthy: 1 Hz sampling, batches of ~14 delivered every ~17 s |
+| 16:22:44 | +150 s |
+| 16:30:44 | +480 s |
+| 16:45:44 / 17:00:44 / 17:16:48 / 17:31:48 | **+900 s each** — one single sample per 15 min |
+| 17:38 (his check) | Newest data 17:31:48 = **6+ min old** → past 90 s → shown stale |
+| 17:55:28 | App wakes, dumps backlog whose oldest sample is 16:20:14 — **5714 s (95 min)** delivery lag |
+
+**1 August — also matches, to the minute.** Last dense sample 13:03:29, then singles at
+13:13:02 → 13:28:02 → 13:43:05 → 13:58:09 → 14:13:09 → **14:28:12**, then nothing until
+15:00:57. His *"прога связывалась с авто до 14.30"* is literally the daemon's last 15-min
+wake-up at 14:28:12.
+
+**The 900 s interval matches no constant in the code.** `MAX_BACKOFF_MS` 30 s,
+`PARKED_CLOUD_HEARTBEAT_MS` 30 s, `TELEMETRY_PUSH_MS` 60 s, daemon loop 6 s. It is imposed
+from outside the app by platform suspend.
+
+**Two distinct device-side defects, one per sender** (the "two senders" rule in
+[AGENTS.md](AGENTS.md) applies — a fix in one is not a fix):
+
+1. **`CommandDaemon` (car off) holds no wakelock at all.** A plain `Thread.sleep` loop in a
+   shell-uid process; when the head unit suspends it only advances during the platform's own
+   wake windows. `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` is declared in the manifest but
+   covers only the app process, not the shell daemon.
+2. **`TrackingService` (app path) has a self-deadlocking wakelock.**
+   `WAKE_LOCK_DURATION_MS` is 30 min but `renewWakeLockIfNeeded()` is called *only from
+   inside the polling loop* (`TrackingService.kt:908,969`). Once the loop is starved past
+   30 min the lock expires and can never renew itself — which is why the 3 Aug stall ran
+   95 min.
+
+This extends the existing rule in AGENTS.md ("the daemon's loop period — not its push
+interval — is the floor on its latency"): **on a suspended head unit the platform's wake
+period is the floor, and the loop period is irrelevant.**
+
+**Fleet-wide, not user-specific.** Share of long gaps landing at exactly 14–16 min over
+7 days: barbaly3615 **80.4%**, philon96 **83.4%**, alexavr69 **85.9%**, scroodgemac 29.4%,
+kevlar_5 **39.5%**. Worst per-user delivery lag runs 8 h to **42 h**. The 15-min phase is
+spread across `minute % 15` fleet-wide — each device runs its own idle timer, so this is
+per-device suspend, not coalesced alarms or anything server-side.
+
+**Confirmed working, do not touch:** `bydmate_prevent_stale_live_snapshot_update`
+correctly rejected the 95-min-old backlog (`if new.device_time < old.device_time then
+return old`), so the live snapshot was never rewritten backwards. `isFreshLiveSnapshot`
+keys off `received_at` and was accurate — the data really was stale.
+
+### Repo boundary
+
+Items 1–2 land in **`BYDMate-own`** (Android/Kotlin). Item 3 lands in **this repo**. They
+ship independently; item 3 is worth doing regardless, because no cadence fix makes a
+sleeping car report continuously.
+
+### Options and trade-offs
+
+**A — Device settings only (no code).** Have users exempt Mate from battery optimization /
+enable autostart on the head unit.
+*Pro:* zero code, testable today, likely fixes the app path immediately.
+*Con:* per-user manual step, silently regresses on reinstall or OS update, does nothing for
+the shell-uid daemon, and cannot be verified remotely. Not a fix — a workaround.
+
+**B — Fix both senders' wake handling (recommended).**
+Give `CommandDaemon` a wakelock (or drive it from `setExactAndAllowWhileIdle` rather than
+`Thread.sleep`), and renew the `TrackingService` wakelock from an independent timer that
+cannot be starved by the loop it is protecting.
+*Pro:* addresses both root causes; restores the *intended* 30–60 s parked cadence.
+*Con:* touches the hardest-to-test code in the project; exact-alarm rate limits mean the
+daemon may still not reach 60 s on every OEM. Battery cost on a car-off head unit needs
+measuring, not assuming.
+
+**C — UI honesty only.** Leave cadence alone; replace the binary stale badge with a
+"last contact HH:MM" and an explicit asleep state.
+*Pro:* small, entirely in this repo, removes the false "broken" impression.
+*Con:* the car still is not reporting — comfort controls and auto-stop stay degraded.
+
+### Recommendation
+
+**B + C together, in that priority order.** B removes the cause; C makes the remaining,
+legitimate sleep windows legible instead of alarming. A is worth telling the reporter
+*today* as an interim step while B is built, but must not be recorded as the resolution.
+
+Do not raise `LIVE_SNAPSHOT_STALE_MS` to paper over this — it would mask a real 15-min
+outage and weaken every freshness guarantee that depends on it (charging priority rules
+in `docs/CHARGING_SESSIONS.md` use the same 90 s notion of fresh).
+
+### Data ownership and location
+
+No new user-facing data model, no new preference, no schema change. Item 3 is a pure
+presentation change over the existing `bydmate_live_snapshots.received_at`. Items 1–2 are
+device-side runtime behavior only. **Nothing to confirm on ownership/location.**
+
+### Implementation phases after approval
+
+1. **Instrument first.** Per the AGENTS.md rule about fire-and-forget paths, log daemon
+   wake-ups and wakelock acquire/renew/expire before changing behavior — otherwise "it
+   still stalls" is unattributable.
+2. `CommandDaemon` wakelock / alarm-driven wake. Keep the decision logic in the pure
+   `internal` functions (`planPush`, `loopSleepMs`) covered by `CommandDaemonTest`.
+3. `TrackingService` independent wakelock renewal.
+4. PWA: asleep-vs-offline state + "last contact HH:MM".
+
+### Acceptance criteria
+
+- On a locked car, ≥95% of consecutive `device_time` gaps are ≤90 s over a 2 h parked
+  window (currently ~900 s).
+- No sample delivered with `received_at - device_time > 5 min` in normal operation.
+- Fleet 14–16 min gap share drops below 5% for users on the fixed build.
+- PWA never labels a car "offline" when a sample arrived within the last 15 min.
+
+### Side finding — separate issue, needs its own check
+
+The sparse daemon samples carry `is_charging: true` with `charge_power_kw: null` and
+`diplus_charge_gun_state = 1`. Per AGENTS.md, gun state `1` is **unplugged** and the
+`is_charging` fallback is invalid there. Reduced DiPars payloads on the daemon path may be
+feeding a false charging state into `processBydmateAutoChargingSessions`. Not part of this
+plan — flagged so it is not lost.
+
+---
+
 ## ~~Charging-session feature module — modern Next.js organization~~ — SHIPPED 2026-07-27
 
 > Implemented as the `src/features/charging/` module; see [CHANGELOG.md](CHANGELOG.md).
