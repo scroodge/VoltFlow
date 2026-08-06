@@ -3,7 +3,6 @@
 import { type CSSProperties, type ReactNode, useEffect, useMemo } from "react";
 import { usePathname } from "next/navigation";
 
-import { requestLiveFastStatus } from "@/actions/live-status";
 import { MateUpdateBanner } from "@/components/dashboard/mate-update-banner";
 import { ChargingSessionBackgroundSync } from "@/features/charging/client";
 import { DefaultProvidersSeed } from "@/components/settings/default-providers-seed";
@@ -19,11 +18,31 @@ import { touchUserActivity } from "@/actions/activity";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { usePageVisible } from "@/hooks/use-page-visible";
 import { isDevAppRoute } from "@/lib/dev/dev-fetch";
+import { createClient } from "@/lib/supabase/client";
 import { getTelegramThemeStyle } from "@/lib/telegram/theme";
 import { useTelegramWebApp } from "@/lib/telegram/useTelegramWebApp";
 import { cn } from "@/lib/utils";
 
 const LIVE_FAST_HEARTBEAT_MS = 8_000;
+const LIVE_FAST_WINDOW_SECONDS = 20;
+
+/**
+ * Stamp a short fast-status window for the current browser user. This remains a heartbeat,
+ * not a toggle: the window is only extended and naturally expires when heartbeats stop.
+ */
+async function requestLiveFastStatus(vehicleId: string) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const until = new Date(Date.now() + LIVE_FAST_WINDOW_SECONDS * 1000).toISOString();
+  await supabase
+    .from("profiles")
+    .update({ live_fast_until: until, live_fast_vehicle_id: vehicleId })
+    .eq("id", user.id);
+}
 
 function LiveStatusHost() {
   const { data: bydmateLive = [] } = useBydmateLiveQuery();

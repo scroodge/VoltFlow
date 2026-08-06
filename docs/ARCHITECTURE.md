@@ -94,7 +94,10 @@ when the PWA is closed.
 
 Normal delivery is deliberately batched to control backend work. While a user has a live
 VoltFlow view visible, the PWA renews an expiring, per-vehicle **app-owned** fast-status window
-in Postgres. Mate learns the remaining window from its existing command poll and sends a
+in Postgres directly through its authenticated Supabase browser client under profile-own RLS;
+this does not invoke a Vercel server action. That includes an authenticated Telegram user after
+the Mini App opens the dashboard, while the public `/telegram` knowledge-base route has no
+live-view heartbeat. Mate learns the remaining window from its existing command poll and sends a
 `live_only` snapshot on its configured roughly three-second cadence after it observes that
 window. Those snapshots update only `bydmate_live_snapshots`, so they do not create history,
 hourly-rollup, or trip rows. The configured delivery behavior is detailed in

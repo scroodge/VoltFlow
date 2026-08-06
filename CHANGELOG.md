@@ -11,6 +11,19 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-08-06
 
+### Live-status heartbeat bypasses Vercel
+
+- `MobileShell` now renews the existing 20-second, per-vehicle fast-status window directly
+  through the authenticated Supabase browser client and the existing profile-own RLS policies.
+  The 8-second best-effort cadence, extend-only expiry behavior, and command-poll/Mate contract
+  are unchanged, but an open dashboard no longer invokes a Vercel server action for each beat.
+- An authenticated Telegram Mini App user reaches the same `MobileShell` after opening the
+  dashboard, so it receives the same fast-status behavior. The public `/telegram` knowledge-base
+  route does not render private vehicle telemetry and does not send a heartbeat.
+- Removed the unused `src/actions/live-status.ts`; no schema, migration, user preference, or
+  daemon behavior changed. Verification: source/RLS review and `git diff --check`; build, lint,
+  and tests were not run under the repository's local no-test-without-request instruction.
+
 ### Repository-wide documentation current-state refresh
 
 - Reconciled the public entry points and product-status page with shipped manual charging
@@ -825,8 +838,8 @@ create/extend was the largest remaining lever after Phase 3.
   why a manual plug/unplug test could not be judged either way.
 - **Design (owner chose option B over an always-on 3 s heartbeat).** The car pushes fast only
   while someone is watching, so cloud-offload phases 0-3 keep their savings. The PWA live view
-  heartbeats every 8 s (`requestLiveFastStatus`, `src/actions/live-status.ts`) stamping
-  `profiles.live_fast_until` (+20 s) and `live_fast_vehicle_id`; `GET /api/bydmate/commands`
+  heartbeats every 8 s from `MobileShell`, stamping `profiles.live_fast_until` (+20 s) and
+  `live_fast_vehicle_id`; `GET /api/bydmate/commands`
   returns the remaining seconds as `live_fast_seconds`, and Mate pushes a `live_only` snapshot
   every 3 s while it lasts. The window is **only ever extended, never cleared** — expiry is
   what stops it, so a crashed tab or dead network cannot strand a car in fast mode.
