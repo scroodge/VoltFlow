@@ -12,6 +12,54 @@ export type ChargingParams = {
   pricePerKwh: number;
 };
 
+export const OBSERVED_ETA_MIN_ELAPSED_SECONDS = 15 * 60;
+export const OBSERVED_ETA_MIN_SOC_GAIN_PERCENT = 2;
+
+function positiveFinite(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+/**
+ * Pick the power used for an active-session ETA.
+ *
+ * Fresh live power best describes the future, especially during DC taper. When it is
+ * unavailable, a sufficiently mature session can infer average grid-side power from the
+ * same SOC-derived energy already shown by the UI. Early sessions stay on the configured
+ * fallback until integer SOC has moved far enough to make that average meaningful.
+ */
+export function resolveChargingEtaPowerKw({
+  freshLivePowerKw,
+  chargedGridEnergyKwh,
+  elapsedSeconds,
+  socGainPercent,
+  fallbackPowerKw,
+}: {
+  freshLivePowerKw: number | null | undefined;
+  chargedGridEnergyKwh: number;
+  elapsedSeconds: number;
+  socGainPercent: number;
+  fallbackPowerKw: number | null | undefined;
+}): number | null {
+  const livePower = positiveFinite(freshLivePowerKw);
+  if (livePower != null) return livePower;
+
+  const canUseObservedAverage =
+    Number.isFinite(elapsedSeconds) &&
+    elapsedSeconds >= OBSERVED_ETA_MIN_ELAPSED_SECONDS &&
+    Number.isFinite(socGainPercent) &&
+    socGainPercent >= OBSERVED_ETA_MIN_SOC_GAIN_PERCENT;
+  const chargedEnergy = positiveFinite(chargedGridEnergyKwh);
+  if (canUseObservedAverage && chargedEnergy != null) {
+    const observedAverageKw = chargedEnergy / (elapsedSeconds / 3600);
+    const validObservedAverage = positiveFinite(observedAverageKw);
+    if (validObservedAverage != null && validObservedAverage <= 350) {
+      return validObservedAverage;
+    }
+  }
+
+  return positiveFinite(fallbackPowerKw);
+}
+
 export function percentPerHour(params: ChargingParams): number {
   return (params.chargerPowerKw / params.batteryCapacityKwh) * 100;
 }

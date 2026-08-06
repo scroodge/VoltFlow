@@ -58,6 +58,8 @@ import {
   energyFromGridKwh,
   energyNeededKwh,
   formatDuration,
+  resolveChargingEtaPowerKw,
+  snapshotChargePowerKw,
   type QuickSessionField,
   type QuickSessionFieldErrors,
   validateQuickSessionInput,
@@ -894,9 +896,19 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
         : capacityKwh > 0
           ? `— / ${fmt(capacityKwh, 1)} kWh`
           : "-- kWh";
+    const freshLiveChargePowerKw = isFreshLiveSnapshot(latestBydmateSnapshot, nowMs)
+      ? snapshotChargePowerKw(latestBydmateSnapshot)
+      : null;
+    const etaPowerKw = resolveChargingEtaPowerKw({
+      freshLivePowerKw: freshLiveChargePowerKw,
+      chargedGridEnergyKwh: liveActive.chargedEnergyKwh,
+      elapsedSeconds: liveActive.elapsedSeconds,
+      socGainPercent: currentSoc - activeSession.start_percent,
+      fallbackPowerKw: displayChargePowerKw,
+    });
     const timeLeftSeconds =
-      remainingGridEnergyKwh != null && displayChargePowerKw != null && displayChargePowerKw > 0
-        ? (remainingGridEnergyKwh / displayChargePowerKw) * 3600
+      remainingGridEnergyKwh != null && etaPowerKw != null
+        ? (remainingGridEnergyKwh / etaPowerKw) * 3600
         : liveActive.remainingSeconds;
 
     return {
@@ -905,7 +917,16 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
       costToFull,
       packValue,
     };
-  }, [activeSession, currency, defaultPrice, displayChargePowerKw, liveActive, locale]);
+  }, [
+    activeSession,
+    currency,
+    defaultPrice,
+    displayChargePowerKw,
+    latestBydmateSnapshot,
+    liveActive,
+    locale,
+    nowMs,
+  ]);
 
   const parkEstimate = useMemo(() => {
     const capacityKwh =

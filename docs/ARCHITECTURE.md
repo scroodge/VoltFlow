@@ -191,6 +191,7 @@ restores. Breaking one of them causes the classic bugs (frozen percent, false
 | [../INSTALL.md](../INSTALL.md) | User-facing PWA install guide (RU) |
 | [CHARGING_SESSIONS.md](CHARGING_SESSIONS.md) | Charging sync, auto sessions, reconcile, tariffs, energy/cost |
 | [TRIPS.md](TRIPS.md) | Trip lifecycle, junk filtering, distance deltas |
+| [WEB_INTERFACE_FORMULAS.md](WEB_INTERFACE_FORMULAS.md) | Page-by-page map of calculated values shown in the web interface |
 | [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | Telegram live-status widget (single message, edited in place) |
 | [PREMIUM_ADMIN.md](PREMIUM_ADMIN.md) | Entitlements, retention tiers, admin runbook |
 | [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Full schema, RLS, RPCs, enums, storage |

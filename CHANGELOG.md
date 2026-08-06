@@ -9,6 +9,43 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-08-06
+
+### Dashboard charging ETA observed-rate fallback
+
+- Kept fresh positive Mate `charge_power_kw` as the primary dashboard `Time left`
+  input, so the estimate follows current DC taper and resumed charging power.
+- When fresh live power is unavailable, sessions with at least 15 elapsed minutes and
+  2 percentage points of SOC gain now infer average grid-side power as
+  `charged grid kWh / elapsed hours`; younger or low-progress sessions retain the existing
+  session/default-power fallback.
+- Added a pure ETA-power policy helper with focused cases for DC taper, stable observed
+  progress, early/insufficient progress, resumed charging after a pause, and invalid data.
+  The visible power tile is unchanged and still represents current/fallback power rather
+  than relabeling the inferred session average as live power.
+- Updated `docs/WEB_INTERFACE_FORMULAS.md`. No schema, query, persisted-data,
+  `localStorage`, energy-source priority, or BMS `kwh_charged` behavior changed.
+- Verification: `git diff --check` passes. Focused tests were added but not run in this
+  session, following the repository's local no-test-without-request instruction.
+
+### Web interface formula reference
+
+- Added `docs/WEB_INTERFACE_FORMULAS.md`, a page-by-page table of the calculated values
+  shown on Dashboard, Charging, charging-session detail, History, Vehicle and analytics,
+  Service, Settings, and Knowledge Search.
+- Each entry records the formula or source-selection rule, a plain-language explanation,
+  and the owning implementation. Raw telemetry passthrough values are distinguished from
+  totals, estimates, fallbacks, and multi-signal forecasts.
+- Added a plain-language glossary and worked charging example defining battery-side versus
+  grid-side energy, remaining grid energy, efficiency, power versus energy, traction,
+  regeneration, net consumption, weighted averages, estimates, and forecasts.
+- Expanded the opening notation into a complete formula-operand reference, including all
+  SOC variants, grid/battery/usable energy, rates, time values, weights, `clamp`, and `Σ`,
+  so readers do not need to infer terminology from later page sections.
+- Added the reference to `docs/ARCHITECTURE.md`'s living documentation map. No runtime,
+  schema, data ownership, or storage behavior changed.
+- Verification: repository-relative Markdown links checked; `git diff --check` passes.
+
 ## 2026-08-04
 
 ### "Day at a glance" card: average consumption per 100 km, plus formula consolidation
