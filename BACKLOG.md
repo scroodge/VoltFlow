@@ -4,6 +4,108 @@ Per the agent workflow in [AGENTS.md](AGENTS.md): **plan first, build only on ex
 go-ahead.** These are researched but **not built**. Shipped work lives in
 [CHANGELOG.md](CHANGELOG.md).
 
+## 🔵 Repository-wide documentation current-state refresh
+
+### Goal
+
+Reconcile the living documentation with the current code, migrations, shipped-work log,
+and public/private documentation boundary without turning historical plans into current
+behavior or copying private operational details into public references.
+
+### Research findings — read-only audit (2026-08-06)
+
+- The repository contains 28 Markdown files with different roles: canonical behavior and
+  API references, product/status pages, process files, shipped history, proposal history,
+  and local-only operations. Treating all of them as equivalent "current status" docs
+  would erase useful history and create conflicting sources of truth.
+- `supabase/MIGRATIONS_AUDIT.md` says chain currency was checked only through
+  `20260717134341`, while the active chain currently ends at
+  `20260729190612_bydmate_trip_finalization_observability.sql`. It also documents linked/
+  pooler Supabase CLI commands that conflict with the current self-hosted rule: production
+  migrations must use `psql` because the CLI forces TLS and the pooler has no TLS.
+- `docs/ADMIN_USERS_METRICS_IMPLEMENTATION_PLAN.md` is marked implemented but still ends
+  with "Decisions required before implementation" and points to a proposal-era backlog
+  anchor. Its shipped outcome belongs in current admin/schema references and
+  `CHANGELOG.md`; deferred phases must remain proposals rather than appearing half-current.
+- `docs/GROWTH_MARKETING.md` mixes shipped product facts, unbuilt marketing proposals,
+  stale references (including the absent `docs/EGRESS_CPU_MASTER_PLAN.md`), and
+  environment-specific infrastructure/payment notes. That conflicts with the reusable
+  private-workflow rule that public docs must not contain private operations, account
+  details, or environment endpoints.
+- `docs/ARCHITECTURE.md` was updated on 2026-08-06, but
+  `docs/ARCHITECTURE.ru.md` was last updated on 2026-07-27. The Russian copy therefore
+  needs an explicit parity pass against the canonical English architecture rather than
+  independent edits.
+- The canonical database, telemetry, Mate API, charging-session, trip, product-status,
+  README, and owner-map docs cover much of the late-July system, but they need a focused
+  cross-check for the newest shipped behavior: manual charging entries and recovery,
+  visible-view fast-status renewal, live odometer/temperature preservation, client trip
+  finalization audits, current analytics/formula pages, and admin-user RPCs.
+- The relative Markdown link audit found no missing linked files. That is link-existence
+  evidence only; it does not prove anchors, commands, behavior descriptions, or external
+  links are current.
+- `BACKLOG.md` still contains some sections visibly marked shipped. They should be moved
+  to or represented by `CHANGELOG.md`, leaving only genuinely proposed work here.
+- `AGENTS.md`, `CLAUDE.md`, `SKILLS.md`, and `docs/AGENT_RULES_TEMPLATE.md` are workflow/
+  ownership instructions, not product-status pages. `docs/OPS_LOCAL.md` is local-only.
+  They should receive only factual link/command corrections required by the audit, not a
+  product-copy rewrite.
+
+### Options and trade-offs
+
+**A — Update only obvious stale dates and labels.** Smallest diff, but leaves semantic
+contradictions, proposal/shipped ambiguity, bilingual drift, and the public/private
+boundary problem unresolved.
+
+**B — Evidence-based refresh by document class (recommended).** Reconcile living
+references with owners; restore English/Russian parity; turn implemented plans into
+historical outcome records; keep unresolved work in this backlog; sanitize public status
+material; and remove shipped backlog sections only when `CHANGELOG.md` preserves them.
+This is a larger documentation-only diff, but creates a maintainable current-state set.
+
+**C — Rewrite and consolidate all Markdown into a small new doc set.** This could reduce
+duplication, but has the highest risk of losing incident rationale, translation coverage,
+migration history, and narrow domain authority.
+
+### Recommendation
+
+Choose **B**. Update by authority and document class, not by file count. English remains
+the canonical implementation reference; Russian mirrors user-facing/current architecture
+content. Historical evidence stays historical, proposals stay in this backlog, and local
+operations stay private.
+
+### Proposed scope after approval
+
+1. Build a source-to-doc matrix for each living reference and record concrete drift.
+2. Refresh `README.md`, `docs/PRODUCT_STATUS.md`, both architecture references, and the
+   documentation map.
+3. Reconcile `docs/CHARGING_SESSIONS.md`, `docs/TRIPS.md`,
+   `supabase/TELEMETRY.md`, `supabase/VOLTFLOW_MATE_API.md`, and
+   `docs/DATABASE_SCHEMA.md` against current owners and migrations.
+4. Refresh `supabase/MIGRATIONS_AUDIT.md` to the active chain and correct local versus
+   self-hosted production procedures without publishing private connection details.
+5. Reconcile focused references (`WEB_INTERFACE_FORMULAS*`, `CHART_OPTIMIZATION_SPEC`,
+   `KNOWLEDGE_SEARCH`, `PREMIUM_ADMIN`, notifications, install, and admin status) only
+   where source evidence shows drift.
+6. Reclassify or trim the admin implementation plan and growth document; move any still-
+   proposed work to `BACKLOG.md` and preserve shipped facts in canonical docs/
+   `CHANGELOG.md`.
+7. Clean shipped entries out of `BACKLOG.md`, then record this completed documentation
+   refresh in `CHANGELOG.md`.
+8. Verify relative links and anchors, referenced paths, package scripts, migration names,
+   cross-language parity, and `git diff --check`. No application build, lint, tests, dev
+   server action, production query, migration, or deployment is required.
+
+### Data ownership and location
+
+This refresh changes no user-facing data model, preference, schema, or runtime behavior.
+There is therefore no user-owned/app-owned or Postgres/localStorage choice to confirm.
+
+### Approval gate
+
+Awaiting explicit approval before editing project documentation beyond this required
+backlog proposal.
+
 ## 🔵 Consumption formula map — reference for the parts left as separate tools
 
 The "average consumption" discrepancy investigation (shipped 2026-08-04, see
