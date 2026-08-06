@@ -6,6 +6,11 @@ import { latestSampleByVehicle } from "@/lib/bydmate/latest-sample";
 import { finiteTelemetryNumber } from "@/features/charging/domain";
 import { siteUrl as canonicalSiteUrl } from "@/lib/site-url";
 import { editTelegramMessageText, sendTelegramMessage } from "@/lib/telegram/bot-send";
+import {
+  newestActiveSessionByCar,
+  resolveTelegramChargingMetrics,
+  type TelegramActiveChargingSession,
+} from "@/lib/telegram/live-widget-charging";
 import { isChargingTelemetry } from "@/lib/vehicle-live-mode";
 
 const THROTTLE_MS = 30_000;
@@ -41,16 +46,6 @@ function formatHoursMinutes(totalHours: number): string {
   return `~${m}м`;
 }
 
-function chargeTimeToFull(
-  soc: number | null,
-  chargePowerKw: number | null,
-  batteryCapacityKwh: number | null,
-): string | null {
-  if (soc == null || chargePowerKw == null || batteryCapacityKwh == null || chargePowerKw <= 0 || soc >= 100) return null;
-  const remainingKwh = (batteryCapacityKwh * (100 - soc)) / 100;
-  return formatHoursMinutes(remainingKwh / chargePowerKw);
-}
-
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -76,6 +71,7 @@ type LiveWidgetRow = {
 };
 
 type CarInfo = {
+  id: string;
   name: string;
   battery_capacity_kwh: number;
   default_charger_power_kw: number;
@@ -195,7 +191,7 @@ async function loadCars(
 ): Promise<Map<string, CarInfo>> {
   const { data } = await supabase
     .from("cars")
-    .select("name, vehicle_alias, battery_capacity_kwh, default_charger_power_kw")
+    .select("id, name, vehicle_alias, battery_capacity_kwh, default_charger_power_kw")
     .eq("user_id", userId)
     .in("vehicle_alias", vehicleIds);
 
@@ -204,6 +200,7 @@ async function loadCars(
     const alias = String(row.vehicle_alias ?? "");
     if (alias) {
       map.set(alias, {
+        id: String(row.id ?? ""),
         name: String(row.name ?? "Автомобиль"),
         battery_capacity_kwh: Number(row.battery_capacity_kwh ?? 0),
         default_charger_power_kw: Number(row.default_charger_power_kw ?? 4.4),
@@ -211,6 +208,41 @@ async function loadCars(
     }
   }
   return map;
+}
+
+async function loadActiveChargingSessions(
+  supabase: SupabaseClient,
+  userId: string,
+  carIds: string[],
+): Promise<Map<string, TelegramActiveChargingSession>> {
+  if (!carIds.length) return new Map();
+
+  const { data, error } = await supabase
+    .from("charging_sessions")
+    .select(
+      "car_id,start_percent,target_percent,battery_capacity_kwh,efficiency_percent,tariff_type,started_at,created_at",
+    )
+    .eq("user_id", userId)
+    .eq("status", "charging")
+    .in("car_id", carIds)
+    .order("started_at", { ascending: false });
+
+  if (error) {
+    console.error("telegram live widget charging sessions:", error.message);
+    return new Map();
+  }
+
+  const sessions = ((data ?? []) as Record<string, unknown>[]).map((row) => ({
+    car_id: String(row.car_id ?? ""),
+    start_percent: Number(row.start_percent ?? 0),
+    target_percent: Number(row.target_percent ?? 100),
+    battery_capacity_kwh: Number(row.battery_capacity_kwh ?? 0),
+    efficiency_percent: Number(row.efficiency_percent ?? 100),
+    tariff_type: String(row.tariff_type ?? "home"),
+    started_at: typeof row.started_at === "string" ? row.started_at : null,
+    created_at: String(row.created_at ?? ""),
+  }));
+  return newestActiveSessionByCar(sessions);
 }
 
 type VehicleState = "charging" | "parked" | "driving" | "offline";
@@ -337,6 +369,11 @@ export async function updateTelegramLiveWidgets({
   if (!eligibleVehicleIds.length) return { updated: 0 };
 
   const cars = await loadCars(supabase, userId, eligibleVehicleIds);
+  const activeSessions = await loadActiveChargingSessions(
+    supabase,
+    userId,
+    Array.from(cars.values(), (car) => car.id).filter(Boolean),
+  );
   let updated = 0;
 
   for (const vehicleId of eligibleVehicleIds) {
@@ -352,12 +389,23 @@ export async function updateTelegramLiveWidgets({
     const lat = finiteTelemetryNumber(lastSample.location?.lat);
     const lon = finiteTelemetryNumber(lastSample.location?.lon);
 
-    let chargePowerKw = finiteTelemetryNumber(lastSample.telemetry.charge_power_kw);
-    if ((chargePowerKw == null || chargePowerKw <= 0) && state === "charging" && carInfo) {
-      chargePowerKw = carInfo.default_charger_power_kw;
-    }
-
-    const timeToFull = chargeTimeToFull(soc, chargePowerKw, carInfo?.battery_capacity_kwh ?? null);
+    const rawChargePowerKw = finiteTelemetryNumber(lastSample.telemetry.charge_power_kw);
+    const chargingMetrics = resolveTelegramChargingMetrics({
+      soc,
+      rawChargePowerKw,
+      defaultChargePowerKw:
+        state === "charging" ? (carInfo?.default_charger_power_kw ?? null) : null,
+      batteryCapacityKwh: carInfo?.battery_capacity_kwh ?? null,
+      chargeType: lastSample.telemetry.charge_type,
+      session:
+        state === "charging" && carInfo ? (activeSessions.get(carInfo.id) ?? null) : null,
+      nowMs,
+    });
+    const chargePowerKw = chargingMetrics.chargePowerKw;
+    const timeToFull =
+      chargingMetrics.timeToFullHours != null
+        ? formatHoursMinutes(chargingMetrics.timeToFullHours)
+        : null;
 
     const html = widgetHtml({
       carName: carInfo?.name ?? "Автомобиль",

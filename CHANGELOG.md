@@ -11,6 +11,37 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-08-06
 
+### Telegram live widget AC decimal power and ETA
+
+- Added one user-scoped batched `charging_sessions` read for eligible car IDs after the
+  widget's existing Telegram-link and 30-second throttle gates. This avoids N+1 queries and
+  adds no work for unlinked or throttled users.
+- Telegram now applies the shared mature-session AC integer-bucket refinement and uses the
+  resolved grid-side power for both its one-decimal `kW` display and efficiency-aware
+  time-to-full. DC, disagreeing evidence, and missing session context retain live/default
+  behavior.
+- Isolated session selection and Telegram charging metrics in a pure module with focused
+  cases for AC `1 -> 1.4`, DC veto, no-session fallback, efficiency-aware ETA, and newest
+  session selection per car. A session created concurrently by the same telemetry ingest
+  may appear on the next approximately 30-second widget refresh rather than serializing and
+  slowing the ingest fan-out.
+- Query failures are logged and fall back without failing telemetry ingest. No schema,
+  migration, persistence, Postgres, or `localStorage` change was needed. Verification:
+  `git diff --check` passes; focused tests were added but not run under the repository's
+  local no-test-without-request instruction.
+
+### Refreshed web-interface formula reference
+
+- Reconciled `docs/WEB_INTERFACE_FORMULAS.md` with the current charging, vehicle,
+  history, and analytics implementations.
+- Documented grid-side versus battery-side active charging power, the guarded mature-AC
+  observed-average selection, and the shared ETA/forward-projection behavior.
+- Corrected the Dashboard active-charge scope to time-to-100%, clarified the rolling 50 km
+  Math Range window and fallback, and added charging-chart and full-charge cell-delta
+  trend formulas.
+- No application code, schema, Postgres, `localStorage`, or runtime behavior changed.
+  Verification: documentation links and whitespace checked; tests/build/lint were not run.
+
 ### Consistent AC decimal power across active PWA charging surfaces
 
 - Applied the shared quantization-aware charge-power policy to `/vehicle` and active
