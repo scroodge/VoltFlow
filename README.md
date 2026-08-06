@@ -7,8 +7,11 @@ maintenance records. It is built with Next.js, React, and Supabase.
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Russian architecture reference](docs/ARCHITECTURE.ru.md)
+- [Current product status](docs/PRODUCT_STATUS.md)
 - [Charging sessions](docs/CHARGING_SESSIONS.md)
 - [Trips](docs/TRIPS.md)
+- [Web interface formulas](docs/WEB_INTERFACE_FORMULAS.md)
+- [Knowledge search](docs/KNOWLEDGE_SEARCH.md)
 - [Database schema](docs/DATABASE_SCHEMA.md)
 - [Telemetry storage](supabase/TELEMETRY.md)
 - [VoltFlow Mate API](supabase/VOLTFLOW_MATE_API.md)
@@ -19,7 +22,10 @@ maintenance records. It is built with Next.js, React, and Supabase.
 ## Features
 
 - Charging sessions with SOC, energy, tariff-aware estimates, and history.
+- Manual recovery of missed charging sessions from provider receipt data.
 - Live vehicle telemetry, trip history, route tracks, and analytics.
+- Expiring visible-view fast status for compatible VoltFlow Mate clients without adding
+  dense history rows.
 - Vehicle energy analytics with trip efficiency, parked-vehicle consumption context, and
   cell-balance trends.
 - Offline-capable PWA with responsive mobile navigation.
@@ -47,7 +53,14 @@ Useful commands:
 npm run lint
 npm run test
 npm run build
+npm run search:eval
+npm run db:migrations:status
 ```
+
+The charging auto-session suite is intentionally outside the default test glob; use the
+focused command documented in [AGENTS.md](AGENTS.md). Local migrations are applied one at a
+time. Self-hosted production uses the private `psql` procedure in `docs/OPS_LOCAL.md`, not
+the Supabase CLI pooler path.
 
 ## Security
 

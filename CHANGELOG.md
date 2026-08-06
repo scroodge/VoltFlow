@@ -11,6 +11,30 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-08-06
 
+### Repository-wide documentation current-state refresh
+
+- Reconciled the public entry points and product-status page with shipped manual charging
+  recovery, visible-view fast status, client-trip finalization audits, the formula reference,
+  and the current one-at-a-time migration workflow.
+- Expanded the English and Russian architecture maps to classify canonical references,
+  proposals, shipped history, migration audit material, and local-only operations. English
+  remains canonical for implementation; the Russian map now links the current formula and
+  search references.
+- Updated the migration audit through
+  `20260729190612_bydmate_trip_finalization_observability.sql`, separated repository-chain
+  currency from environment deployment proof, and removed the obsolete self-hosted Supabase
+  CLI pooler procedure in favor of the private `psql` runbook.
+- Reclassified the admin KPI document as a shipped implementation record and removed its
+  false pre-build decision state. Sanitized growth research so private endpoints, payment
+  readiness, host costs, and operational details stay out of public documentation.
+- Reviewed the narrow charging, trip, telemetry, Mate API, schema, formula, search,
+  notification, premium, installation, workflow, and owner-map references against their
+  current owning source. Correct material was preserved rather than rewritten.
+- Documentation-only: no runtime code, schema, migration, Postgres data, preference,
+  `localStorage`, deployment, or server state changed. Verification covered relative links,
+  referenced repository paths/scripts, English/Russian map parity, and whitespace; no build,
+  lint, tests, production query, or dev-server action was run.
+
 ### Russian copy of the web-interface formula reference
 
 - Added ignored/local companion documentation at `docs/WEB_INTERFACE_FORMULAS.ru.md`.
@@ -856,7 +880,8 @@ session — has nothing to change. A valid manual test must leave the charger ou
 
 - Finished sessions (`completed`/`stopped`) can now be corrected with the provider's
   billed kWh and total amount paid (`EnergyCorrectionCard` on the history session detail
-  page → `correctChargingSessionEnergy` in `src/actions/session-corrections.ts`). Only
+  page → `correctChargingSessionEnergy`, now in
+  `src/features/charging/corrections-actions.ts`). Only
   energy/cost/price are editable — SOC and timestamps stay telemetry-derived, since they
   define the session's analysis window.
 - The correction sets `energy_overridden = true` (this is the flag's first runtime

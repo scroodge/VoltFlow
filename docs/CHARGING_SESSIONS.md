@@ -73,7 +73,7 @@ value.
 
 A finished session (`completed` or `stopped`) can be corrected with the provider's billed
 kWh and total amount paid via `correctChargingSessionEnergy`
-(`src/actions/session-corrections.ts`). Only energy/cost/price are editable — SOC and
+(`src/features/charging/corrections-actions.ts`). Only energy/cost/price are editable — SOC and
 timestamps stay telemetry-derived, since they define the session's analysis window. The
 correction:
 

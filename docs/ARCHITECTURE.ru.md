@@ -184,6 +184,10 @@ Telegram Mini App (`/telegram`) сейчас является публичной
 
 ## 6. Карта документации
 
+Проверка текущего состояния: **2026-08-06**, по checked-in source tree и цепочке
+миграций до `20260729190612`. Эта дата подтверждает только сверку репозитория, но не
+является доказательством production deployment.
+
 ### Живой справочник (актуальное поведение — поддерживать в актуальном состоянии)
 
 | Документ | Область |
@@ -194,6 +198,9 @@ Telegram Mini App (`/telegram`) сейчас является публичной
 | [../INSTALL.md](../INSTALL.md) | Пользовательское руководство по установке PWA (RU) |
 | [CHARGING_SESSIONS.md](CHARGING_SESSIONS.md) | Синхронизация зарядки, авто-сессии, reconcile, тарифы, энергия/стоимость |
 | [TRIPS.md](TRIPS.md) | Жизненный цикл поездки, фильтр мусора, дельты расстояния |
+| [WEB_INTERFACE_FORMULAS.md](WEB_INTERFACE_FORMULAS.md) | Каноническая карта расчётных значений по страницам веб-интерфейса |
+| [WEB_INTERFACE_FORMULAS.ru.md](WEB_INTERFACE_FORMULAS.ru.md) | Русский перевод справочника формул |
+| [KNOWLEDGE_SEARCH.md](KNOWLEDGE_SEARCH.md) | Индексация семантического поиска, confidence/refusal и evaluation |
 | [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | Telegram-виджет живого статуса (одно сообщение, редактируется на месте) |
 | [PREMIUM_ADMIN.md](PREMIUM_ADMIN.md) | Entitlements, тарифы retention, admin runbook |
 | [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Полная схема, RLS, RPC, enum, storage |
@@ -205,6 +212,13 @@ Telegram Mini App (`/telegram`) сейчас является публичной
 | Документ | Область |
 | --- | --- |
 | [PRODUCT_STATUS.md](PRODUCT_STATUS.md) | Возможности простым языком + roadmap улучшений |
+| [../BACKLOG.md](../BACKLOG.md) | Предложенная, но не реализованная работа и нерешённые вопросы |
+| [../CHANGELOG.md](../CHANGELOG.md) | Реализованные результаты и свидетельства проверки |
+| [../supabase/MIGRATIONS_AUDIT.md](../supabase/MIGRATIONS_AUDIT.md) | Аудит активной цепочки миграций и ограничения применения |
+
+Исторические планы реализации и продуктовые исследования не являются описанием текущего
+поведения. Приватные endpoints, credentials, данные аккаунтов и operational runbooks должны
+оставаться только в игнорируемой локальной документации, например `OPS_LOCAL.md`.
 
 ---
 

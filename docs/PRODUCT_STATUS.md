@@ -8,6 +8,8 @@
   charging history.
 - Per-car charging settings and tariff-aware calculations.
 - Automatic session start/stop when compatible vehicle telemetry is available.
+- Manual entry and deletion of missed charging sessions from provider receipt totals,
+  clearly marked as reconstructed rather than measured.
 - Live data takes priority over time-based estimates to avoid false completion states.
 
 ### Vehicle
@@ -27,6 +29,8 @@
 ### History and maintenance
 
 - Trip history, route maps, energy summaries, and export.
+- Day, period, and trip views use deliberately different consumption aggregations; the
+  maintained formula reference documents which value each screen presents.
 - Date-range analytics show per-trip and summary traction energy, plus a cell-balance trend
   based on completed full charges with partial charges shown as context.
 - Maintenance records and reminders per vehicle.
@@ -40,6 +44,8 @@
   live-status widgets, and data retention controls.
 - Compatible VoltFlow Mate clients can submit cumulative hourly telemetry rollups alongside
   sample batches; sample-only clients remain supported.
+- Final client-owned trip blocks are accepted idempotently and audited for 30 days without
+  retaining additional GPS or raw payload data.
 
 ### Administration
 
@@ -48,7 +54,8 @@
 - An attention queue highlights stale telemetry, inactive or outdated Mate clients, and
   premium access nearing expiry.
 
-## Public roadmap principles
+## Status boundary
 
-Future product work is evaluated for user value, data ownership, privacy, reliability,
-and accessibility before implementation. Public documentation describes released behavior.
+This page describes released behavior, not deployment health or proposed work. Current
+proposals live in `BACKLOG.md`; shipped engineering history lives in `CHANGELOG.md`.
+Environment-specific operations remain in local-only documentation.

@@ -181,6 +181,10 @@ restores. Breaking one of them causes the classic bugs (frozen percent, false
 
 ## 6. Documentation map
 
+Current-state review: **2026-08-06**, against the checked-in source tree and migration
+chain through `20260729190612`. This date proves repository reconciliation only; it is not
+production deployment evidence.
+
 ### Living reference (current truth — keep updated)
 
 | Doc | Scope |
@@ -192,6 +196,8 @@ restores. Breaking one of them causes the classic bugs (frozen percent, false
 | [CHARGING_SESSIONS.md](CHARGING_SESSIONS.md) | Charging sync, auto sessions, reconcile, tariffs, energy/cost |
 | [TRIPS.md](TRIPS.md) | Trip lifecycle, junk filtering, distance deltas |
 | [WEB_INTERFACE_FORMULAS.md](WEB_INTERFACE_FORMULAS.md) | Page-by-page map of calculated values shown in the web interface |
+| [WEB_INTERFACE_FORMULAS.ru.md](WEB_INTERFACE_FORMULAS.ru.md) | Russian translation of the formula reference; English remains canonical |
+| [KNOWLEDGE_SEARCH.md](KNOWLEDGE_SEARCH.md) | Semantic-search indexing, confidence/refusal behavior, evaluation |
 | [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | Telegram live-status widget (single message, edited in place) |
 | [PREMIUM_ADMIN.md](PREMIUM_ADMIN.md) | Entitlements, retention tiers, admin runbook |
 | [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Full schema, RLS, RPCs, enums, storage |
@@ -203,6 +209,13 @@ restores. Breaking one of them causes the classic bugs (frozen percent, false
 | Doc | Scope |
 | --- | --- |
 | [PRODUCT_STATUS.md](PRODUCT_STATUS.md) | Plain-language capabilities + improvement roadmap |
+| [../BACKLOG.md](../BACKLOG.md) | Proposed, unbuilt work and unresolved decisions |
+| [../CHANGELOG.md](../CHANGELOG.md) | Shipped outcomes and verification evidence |
+| [../supabase/MIGRATIONS_AUDIT.md](../supabase/MIGRATIONS_AUDIT.md) | Active migration-chain audit and apply constraints |
+
+Historical implementation plans and product research are evidence, not current behavior.
+Private endpoints, credentials, account details, and operational runbooks belong only in
+ignored local documentation such as `OPS_LOCAL.md`.
 
 ---
 
