@@ -24,6 +24,15 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
   daemon behavior changed. Verification: source/RLS review and `git diff --check`; build, lint,
   and tests were not run under the repository's local no-test-without-request instruction.
 
+### Telegram-widget profile lookup removed from telemetry fan-out
+
+- API-key authentication now includes `telegram_id` in its existing profile read and passes it to
+  the Telegram widget fan-out. An unlinked account therefore exits without a second `profiles`
+  query on every telemetry request, including three-second `live_only` status pings.
+- The value remains server-only and is not added to the paired-client response. Linked accounts
+  retain the existing widget-row lookup and 30-second edit throttle; no schema, migration, or
+  Telegram behavior changed.
+
 ### Repository-wide documentation current-state refresh
 
 - Reconciled the public entry points and product-status page with shipped manual charging

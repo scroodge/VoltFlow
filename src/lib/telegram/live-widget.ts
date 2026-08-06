@@ -325,11 +325,13 @@ async function sendOrEditWidget(
 export async function updateTelegramLiveWidgets({
   supabase,
   userId,
+  telegramId,
   samples,
   receivedAt,
 }: {
   supabase: SupabaseClient;
   userId: string;
+  telegramId: number | null;
   samples: TelemetryPayload[];
   receivedAt: string;
 }) {
@@ -341,16 +343,10 @@ export async function updateTelegramLiveWidgets({
   );
   const latestSamples = latestSampleByVehicle(orderedSamples);
 
-  // A user without Telegram should not pay a widget-row lookup for every ingest.
-  // Once a chat is connected, read throttle state before car metadata or HTML work.
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("telegram_id")
-    .eq("id", userId)
-    .maybeSingle();
-
-  const chatId = ((profile as Record<string, unknown> | null)?.telegram_id as number | null) ?? null;
-  if (chatId == null) return { updated: 0 };
+  // The API-key profile lookup already loaded this server-only eligibility field. A user
+  // without Telegram therefore avoids another profiles query on every telemetry ingest.
+  if (telegramId == null) return { updated: 0 };
+  const chatId = telegramId;
 
   const webAppUrl = canonicalSiteUrl("/vehicle");
 

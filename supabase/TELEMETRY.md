@@ -58,6 +58,10 @@ updates the latest snapshot but intentionally skips durable sample, hourly-rollu
 writes. The grant expires without a client-side “off” request, so normal batched delivery resumes
 automatically when the view is no longer active.
 
+Telegram-widget eligibility (`profiles.telegram_id`) is carried by the existing API-key profile
+lookup into ingest fan-out, so a `live_only` status ping does not add a second profile query just
+to establish that no Telegram chat is linked. Linked chats retain the normal widget throttle.
+
 The server treats a batch as snapshot-only only when every sample explicitly sets `live_only: true`
 and it carries no client hourly or trip rollup. Such a batch skips persisted-snapshot verification,
 charging/session and notification fan-out, and rollup application; ordinary samples remain the

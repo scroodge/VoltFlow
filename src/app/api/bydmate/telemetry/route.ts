@@ -350,6 +350,7 @@ export async function POST(request: Request) {
     const telegramWidgetsPromise = updateTelegramLiveWidgets({
       supabase,
       userId: profile.id,
+      telegramId: profile.telegramId,
       samples,
       receivedAt,
     }).catch(() => ({ updated: 0 }));

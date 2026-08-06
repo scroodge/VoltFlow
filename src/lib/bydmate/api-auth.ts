@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type BydmateApiKeyProfile = {
   id: string;
+  /** Present only for server-side fan-out eligibility; never returned to the paired client. */
+  telegramId: number | null;
   /** See `profiles.live_fast_until` — while in the future, Mate should send status fast. */
   liveFastUntil: string | null;
   liveFastVehicleId: string | null;
@@ -44,7 +46,7 @@ export async function resolveBydmateApiKeyProfile(
   // every ~6s per car, and reading them here keeps that hot path at one indexed read.
   // Legacy plaintext values remain readable only during the one-way migration; newly
   // paired cars are authenticated solely by the keyed hash.
-  const fields = "id, live_fast_until, live_fast_vehicle_id, vehicle_connected_at";
+  const fields = "id, telegram_id, live_fast_until, live_fast_vehicle_id, vehicle_connected_at";
   const { data: hashedProfile, error: hashError } = await supabase
     .from("profiles")
     .select(fields)
@@ -55,6 +57,7 @@ export async function resolveBydmateApiKeyProfile(
   if (hashedProfile?.id) {
     return {
       id: hashedProfile.id,
+      telegramId: hashedProfile.telegram_id ?? null,
       liveFastUntil: hashedProfile.live_fast_until ?? null,
       liveFastVehicleId: hashedProfile.live_fast_vehicle_id ?? null,
       vehicleConnectedAt: hashedProfile.vehicle_connected_at ?? null,
@@ -82,6 +85,7 @@ export async function resolveBydmateApiKeyProfile(
 
   return {
     id: legacyProfile.id,
+    telegramId: legacyProfile.telegram_id ?? null,
     liveFastUntil: legacyProfile.live_fast_until ?? null,
     liveFastVehicleId: legacyProfile.live_fast_vehicle_id ?? null,
     vehicleConnectedAt: legacyProfile.vehicle_connected_at ?? null,
