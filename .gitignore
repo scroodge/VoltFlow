@@ -49,8 +49,20 @@ package-lock.json
 opencode.json
 /.opencode/
 
-/docs
-/docs/archive
+/docs/agents/
+/docs/archive/
+/docs/ADMIN_USERS_METRICS_IMPLEMENTATION_PLAN.md
+/docs/CHARGING_SESSIONS.md
+/docs/TRIPS.md
+/docs/TELEMETRY.md
+/docs/AGENT_RULES_TEMPLATE.md
+/docs/CLOUD_OFFLOAD_BASELINE.sql
+/docs/GROWTH_MARKETING.md
+/docs/OPS_LOCAL.md
+/docs/PLAN_A_PARTITION_DRAFT.sql
+/docs/PREMIUM_ADMIN.md
+/docs/PRODUCT_STATUS.md
+
 
 .claude/
 .codegraph/

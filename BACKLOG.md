@@ -4,39 +4,6 @@ Per the agent workflow in [AGENTS.md](AGENTS.md): **plan first, build only on ex
 go-ahead.** These are researched but **not built**. Shipped work lives in
 [CHANGELOG.md](CHANGELOG.md).
 
-## Russian copy of `docs/WEB_INTERFACE_FORMULAS.md` — proposed 2026-08-06
-
-### Goal
-
-Create a Russian companion at `docs/WEB_INTERFACE_FORMULAS.ru.md`, translating the
-current English formula reference while keeping the English document canonical for
-implementation terminology and links.
-
-### Options and trade-offs
-
-**A — Direct faithful translation (recommended).** Translate all 381 lines, preserve
-the same headings, tables, formulas, code identifiers, routes, and source links. This
-keeps the Russian copy easy to compare and avoids changing technical meaning.
-
-**B — Russian summary.** Translate only the explanatory sections and omit some tables.
-Shorter, but it would no longer be a complete companion reference.
-
-**C — Machine-style literal copy.** Fastest, but risks awkward Russian and ambiguous
-technical terms around grid-side/battery-side energy, SOC, ETA, and fallback priority.
-
-### Recommendation and boundary
-
-Choose **A**. Add only `docs/WEB_INTERFACE_FORMULAS.ru.md`; do not change formulas,
-application code, schema, migrations, or the English canonical reference. Preserve
-all code identifiers, formulas, route names, and relative source links. Validate that
-the translated copy has the same section/table coverage and passes whitespace checks.
-After approval and completion, move this proposal to `CHANGELOG.md`.
-
-### Data ownership and location
-
-No user-facing data model is introduced or changed. This is a documentation-only
-translation; no Postgres or `localStorage` choice is involved.
-
 ## 🔵 Consumption formula map — reference for the parts left as separate tools
 
 The "average consumption" discrepancy investigation (shipped 2026-08-04, see

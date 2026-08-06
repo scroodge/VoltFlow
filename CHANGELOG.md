@@ -11,6 +11,16 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-08-06
 
+### Russian copy of the web-interface formula reference
+
+- Added ignored/local companion documentation at `docs/WEB_INTERFACE_FORMULAS.ru.md`.
+- Translated the complete current English reference while preserving formulas, code
+  identifiers, routes, relative source links, and the distinction between raw values,
+  exact totals, fallbacks, and forecasts.
+- No application code, schema, Postgres, `localStorage`, or runtime behavior changed.
+  Verification: section coverage, source paths, and whitespace checked; tests/build/lint
+  were not run.
+
 ### Telegram live widget AC decimal power and ETA
 
 - Added one user-scoped batched `charging_sessions` read for eligible car IDs after the
