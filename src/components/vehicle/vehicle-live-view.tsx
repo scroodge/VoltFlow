@@ -70,6 +70,7 @@ import { formatTimeAgo } from "@/lib/time-ago";
 import { vehicleReadyDurationBucket } from "@/lib/vehicle-ready-metrics";
 import {
   deriveDashboardVehicleMode,
+  isFreshLiveSnapshot,
   resolveLiveSnapshotForVehicle,
   type DashboardVehicleMode,
   vehicleStatusLabelKey,
@@ -89,8 +90,10 @@ import { ChargingDeltaCard } from "@/features/charging/ui";
 import {
   chargingParamsFromSession,
   deriveSessionProgressFromSoc,
+  resolveChargingEtaPowerKw,
   resolveDisplayChargePowerKw,
   secondsUntilTargetSoc,
+  snapshotChargePowerKw,
 } from "@/features/charging/domain";
 
 const TripDetailPanel = dynamic(
@@ -465,7 +468,11 @@ function VehicleLiveContent({
       />
       {isCharging ? (
         <>
-          <ChargingModeCard snapshot={snapshot} session={activeChargingSession} />
+          <ChargingModeCard
+            snapshot={snapshot}
+            session={activeChargingSession}
+            nowMs={nowMs}
+          />
           <RestMetricsCard
             snapshot={snapshot}
             rangeLabel={rangeLabel}
@@ -782,9 +789,11 @@ function HeroMetric({
 function ChargingModeCard({
   snapshot,
   session,
+  nowMs,
 }: {
   snapshot: BydmateLiveSnapshotRow;
   session: ChargingSessionRow | null;
+  nowMs: number;
 }) {
   const { locale, t } = useTranslation();
   const tx = t as Translator;
@@ -797,23 +806,44 @@ function ChargingModeCard({
     const liveSoc = telemetry.soc;
     if (!session || typeof liveSoc !== "number") return null;
     const params = chargingParamsFromSession(session);
-    const chargePowerKw = resolveDisplayChargePowerKw({
+    const fallbackPowerKw = resolveDisplayChargePowerKw({
       snapshot,
       sessionChargerPowerKw: params.chargerPowerKw,
     });
     const clampedSoc = Math.min(liveSoc, params.targetPercent);
     const deliveredKwh = deriveSessionProgressFromSoc(params, clampedSoc).chargedEnergyKwh;
+    const elapsedSeconds = session.started_at
+      ? Math.max(0, (nowMs - Date.parse(session.started_at)) / 1000)
+      : 0;
+    const chargePowerKw = resolveChargingEtaPowerKw({
+      freshLivePowerKw: isFreshLiveSnapshot(snapshot, nowMs)
+        ? snapshotChargePowerKw(snapshot)
+        : null,
+      chargedGridEnergyKwh: deliveredKwh,
+      elapsedSeconds,
+      socGainPercent: clampedSoc - params.startPercent,
+      fallbackPowerKw,
+      isDc:
+        session.tariff_type === "fast_dc" ||
+        snapshot.telemetry.charge_type?.toUpperCase() === "DC",
+    });
     const fullCost = deriveSessionProgressFromSoc(params, params.targetPercent).estimatedCost;
     const secsLeft = secondsUntilTargetSoc(
-      chargePowerKw != null ? { ...params, chargerPowerKw: chargePowerKw } : params,
+      chargePowerKw != null
+        ? {
+            ...params,
+            chargerPowerKw: chargePowerKw * (params.efficiencyPercent / 100),
+          }
+        : params,
       clampedSoc,
     );
     return {
       timeLeftLabel: secsLeft != null && secsLeft > 0 ? formatDuration(secsLeft * 1000) : null,
       deliveredLabel: `${deliveredKwh.toFixed(2)} kWh`,
       fullCostLabel: <CurrencyAmount currency={currency} value={fullCost} locale={locale} />,
+      chargePowerKw,
     };
-  }, [session, snapshot, telemetry.soc, telemetry.charge_power_kw, currency, locale]);
+  }, [session, snapshot, telemetry.soc, telemetry.charge_power_kw, currency, locale, nowMs]);
   const items = [
     { key: "chargeTimeLeft", icon: Clock3, label: tx("charging.remaining"), value: chargeSummary?.timeLeftLabel ?? "—" },
     { key: "chargeDelivered", icon: BatteryCharging, label: tx("charging.energyDelivered"), value: chargeSummary?.deliveredLabel ?? "—" },
@@ -822,7 +852,7 @@ function ChargingModeCard({
       key: "chargePower",
       icon: Zap,
       label: tx("vehicle.telemetry.chargePower"),
-      value: `${telemetry.charge_type ? `${telemetry.charge_type} · ` : ""}${fmt(telemetry.charge_power_kw, 1)} kW`,
+      value: `${telemetry.charge_type ? `${telemetry.charge_type} · ` : ""}~ ${fmt(chargeSummary?.chargePowerKw ?? telemetry.charge_power_kw, 1)} kW`,
     },
     { key: "batteryTemp", icon: Thermometer, label: tx("vehicle.telemetry.batteryTemp"), value: fmtTemp(telemetry.battery_temp_c) },
     { key: "outsideTemp", icon: Thermometer, label: tx("vehicle.telemetry.outsideTemp"), value: fmtTemp(telemetry.outside_temp_c) },

@@ -58,6 +58,7 @@ import { useTranslation } from "@/hooks/use-translation";
 import {
   chargingParamsFromSession,
   deriveChargingSessionLiveBundle,
+  resolveChargingEtaPowerKw,
   staticDerivedFromSession,
 } from "../domain";
 import { deriveLiveChargingState, findFreshChargingSnapshot, snapshotChargePowerKw } from "../domain";
@@ -257,12 +258,17 @@ export function ChargingSessionScreen({
     () => snapshotChargePowerKw(freshChargingSnapshot),
     [freshChargingSnapshot],
   );
-  // Power display uses the di+ integer (grid-side, matches the car's own display). The BMS
-  // float (deriveChargePowerFromEnergyDeltaKw) is cell-side — ~2 kW below the car's reading
-  // because of thermal-management draw — so it's misleading here. See AGENTS.md §FINDING.
+  const liveChargeType = freshChargingSnapshot?.telemetry?.charge_type?.toUpperCase();
   const displayAcPowerKw =
-    session?.status === "charging"
-      ? (liveChargePowerKw ?? session.charger_power_kw ?? 0)
+    session?.status === "charging" && derived
+      ? (resolveChargingEtaPowerKw({
+          freshLivePowerKw: liveChargePowerKw,
+          chargedGridEnergyKwh: derived.chargedEnergyKwh,
+          elapsedSeconds: derived.elapsedSeconds,
+          socGainPercent: derived.currentPercent - session.start_percent,
+          fallbackPowerKw: session.charger_power_kw,
+          isDc: session.tariff_type === "fast_dc" || liveChargeType === "DC",
+        }) ?? 0)
       : (session?.charger_power_kw ?? 0);
   const displayAcPowerDecimals = 1;
 
@@ -443,9 +449,14 @@ export function ChargingSessionScreen({
     );
 
   const chargeParams = toParams(session);
+  const projectionParams = {
+    ...chargeParams,
+    chargerPowerKw:
+      displayAcPowerKw > 0
+        ? displayAcPowerKw * (chargeParams.efficiencyPercent / 100)
+        : chargeParams.chargerPowerKw,
+  };
   const startedAtMs = session.started_at ? Date.parse(session.started_at) : null;
-  const estimatedFinishMs =
-    charging && derived.remainingSeconds > 0 ? nowMs + derived.remainingSeconds * 1000 : null;
   const morningTargetMs = (() => {
     const anchor = new Date(nowMs);
     anchor.setHours(7, 0, 0, 0);
@@ -454,12 +465,14 @@ export function ChargingSessionScreen({
   })();
   const projectedSocAtMorning =
     charging && startedAtMs != null
-      ? projectSocAtTime(chargeParams, startedAtMs, morningTargetMs)
+      ? projectSocAtTime(projectionParams, startedAtMs, morningTargetMs)
       : null;
   const secondsToTarget =
     charging && derived.currentPercent != null
-      ? secondsUntilTargetSoc(chargeParams, derived.currentPercent)
+      ? secondsUntilTargetSoc(projectionParams, derived.currentPercent)
       : null;
+  const estimatedFinishMs =
+    secondsToTarget != null && secondsToTarget > 0 ? nowMs + secondsToTarget * 1000 : null;
 
   const localeCode =
     locale === "be" ? "be-BY" : locale === "ru" ? "ru-RU" : "en-US";
@@ -472,7 +485,7 @@ export function ChargingSessionScreen({
       ? [
           {
             label: t("charging.remaining") as string,
-            value: charging ? formatDuration(derived.remainingSeconds) : "—",
+            value: charging && secondsToTarget != null ? formatDuration(secondsToTarget) : "—",
             accent: "cyan" as const,
           },
         ]

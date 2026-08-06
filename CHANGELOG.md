@@ -11,6 +11,21 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-08-06
 
+### Consistent AC decimal power across active PWA charging surfaces
+
+- Applied the shared quantization-aware charge-power policy to `/vehicle` and active
+  charging-session detail in addition to Dashboard. A mature integer-only AC reading can
+  now display its guarded observed decimal consistently on all three surfaces.
+- `/vehicle` uses the resolved value for both its charge-power metric and time-left.
+  Charging-session detail uses it for the power stat, remaining time, estimated finish,
+  projected SOC at 07:00, and seconds-to-target.
+- Historical sessions, raw telemetry charts, settings, calculators, and the Telegram live
+  widget remain unchanged: they either own a different value semantic or lack active-session
+  context without an additional hot-path query.
+- No schema, query, persistence, Postgres, `localStorage`, energy, or cost behavior changed.
+  Updated the formula reference. Verification: `git diff --check` passes; tests/build/lint
+  were not run and the existing dev server was not restarted.
+
 ### Dashboard AC charge-power decimal refinement
 
 - Refined integer-only Di+ AC readings with the complete SOC/time observed average after

@@ -4,6 +4,57 @@ Per the agent workflow in [AGENTS.md](AGENTS.md): **plan first, build only on ex
 go-ahead.** These are researched but **not built**. Shipped work lives in
 [CHANGELOG.md](CHANGELOG.md).
 
+## 🔵 Refresh `WEB_INTERFACE_FORMULAS.md` against the current codebase — proposed 2026-08-06
+
+### Goal
+
+Bring [`docs/WEB_INTERFACE_FORMULAS.md`](docs/WEB_INTERFACE_FORMULAS.md) back into
+line with the current user-visible calculations and owning implementations, with
+particular attention to the recently shipped AC charge-power refinement across
+Dashboard, Vehicle, and active charging-session detail.
+
+### Research findings
+
+- `resolveChargingEtaPowerKw()` now selects fresh live power first, then a guarded
+  observed session average after 15 minutes and 2 SOC points; integer-only AC readings
+  may use the observed decimal only when both readings share an integer bucket.
+- The resolved grid-side power drives the active-session power display and forward ETA/
+  projection on the three active surfaces. DC and already-decimal live readings retain
+  their live value.
+- The existing reference already documents the broad rule, but it should be checked
+  line by line against `dashboard-view.tsx`, `vehicle-live-view.tsx`,
+  `charging-session-screen.tsx`, `charging-math.ts`, `range-estimate.ts`, trip metrics,
+  analytics, history summaries, and the current UI labels.
+- Existing consumption research identifies intentionally different aggregation semantics
+  (net trip math, device-reported weighted averages, medians, raw values, and forecasts);
+  the refresh must preserve those distinctions and not collapse them into one formula.
+
+### Options and trade-offs
+
+**A — Targeted charge-power edit.** Update only the active charging power and ETA rows.
+Smallest diff and lowest review cost, but risks leaving other formula drift undocumented.
+
+**B — Full current-codebase reference audit (recommended).** Reconcile every existing
+page/section with its owner source, add missing user-visible calculations, correct stale
+formula wording, and retain explicit raw/estimate/forecast distinctions. More review work,
+but produces a dependable reference instead of another narrow patch.
+
+**C — Generate the document from source annotations.** More automation potential, but
+requires a new annotation/maintenance convention and would not reliably capture product
+meaning, fallback priority, or intentional semantic differences.
+
+### Recommendation and boundary
+
+Choose **B**. Update only `docs/WEB_INTERFACE_FORMULAS.md`; do not change application code,
+canonical domain behavior, migrations, schema, or runtime data. Validate links, headings,
+formula/code references, and whitespace with read-only checks. After approval and completion,
+move this proposal to `CHANGELOG.md`.
+
+### Data ownership and location
+
+No user-facing data model is introduced or changed. The document describes existing
+user-owned facts and app-owned calculations; no Postgres or `localStorage` choice is needed.
+
 ## 🔵 Consumption formula map — reference for the parts left as separate tools
 
 The "average consumption" discrepancy investigation (shipped 2026-08-04, see
