@@ -38,7 +38,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
 import { useVehicleRangeEstimate } from "@/hooks/use-vehicle-range-estimate";
-import { useBydmateTripTrackQuery } from "@/hooks/use-bydmate-trip-track-query";
+import { useVehicleLastKnownLocation } from "@/hooks/use-vehicle-last-known-location";
 import {
   useBydmateTripRealtimeInvalidation,
   useBydmateTripsQuery,
@@ -1693,40 +1693,15 @@ function LocationCard({
 }) {
   const { locale, t } = useTranslation();
   const tx = t as Translator;
-  const loc = snapshot.location;
-  const hasLiveLocation = typeof loc.lat === "number" && typeof loc.lon === "number";
+  const { location: resolved, isLoading } = useVehicleLastKnownLocation(
+    snapshot.vehicle_id,
+    snapshot,
+  );
 
-  // Fall back to the last GPS point of the latest trip when the live snapshot has no location.
-  const { data: latestTrips = [] } = useLatestBydmateTripsQuery(snapshot.vehicle_id, 1);
-  const lastTripId = hasLiveLocation ? null : (latestTrips[0]?.id ?? null);
-  const {
-    data: trackPoints = [],
-    isLoading: isTrackLoading,
-  } = useBydmateTripTrackQuery(lastTripId);
-
-  const lastTrackPoint = trackPoints[trackPoints.length - 1] ?? null;
-  const usingLastTripFinish =
-    !hasLiveLocation &&
-    lastTrackPoint != null &&
-    validNumber(lastTrackPoint.lat) != null &&
-    validNumber(lastTrackPoint.lon) != null;
-
-  const displayLat = hasLiveLocation
-    ? (loc.lat as number)
-    : validNumber(lastTrackPoint?.lat);
-  const displayLon = hasLiveLocation
-    ? (loc.lon as number)
-    : validNumber(lastTrackPoint?.lon);
-  const hasAnyLocation = displayLat != null && displayLon != null;
-
-  const locationDeviceTimeMs = hasLiveLocation
-    ? Date.parse(snapshot.device_time)
-    : lastTrackPoint
-      ? Date.parse(lastTrackPoint.device_time)
-      : Number.NaN;
+  const deviceTimeMs = resolved ? Date.parse(resolved.deviceTimeIso) : Number.NaN;
   const deviceTimeLabel =
-    hasMounted && Number.isFinite(locationDeviceTimeMs)
-      ? new Date(locationDeviceTimeMs).toLocaleString(localeCode(locale))
+    hasMounted && Number.isFinite(deviceTimeMs)
+      ? new Date(deviceTimeMs).toLocaleString(localeCode(locale))
       : "—";
 
   return (
@@ -1738,43 +1713,44 @@ function LocationCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 px-3 pb-3 text-sm">
-        {isTrackLoading && lastTripId ? (
+        {isLoading ? (
           <Skeleton className="h-40 rounded-xl" />
-        ) : hasLiveLocation ? (
-          <LiveLocationMap
-            location={loc}
-            deviceTimeMs={Date.parse(snapshot.device_time)}
-            telemetry={snapshot.telemetry}
-          />
-        ) : usingLastTripFinish && lastTrackPoint ? (
+        ) : resolved?.source === "live" ? (
           <LiveLocationMap
             location={{
-              lat: lastTrackPoint.lat,
-              lon: lastTrackPoint.lon,
-              accuracy_m: lastTrackPoint.accuracy_m,
+              lat: resolved.lat,
+              lon: resolved.lon,
+              accuracy_m: resolved.accuracyM,
+              bearing_deg: resolved.bearingDeg,
             }}
-            deviceTimeMs={Date.parse(lastTrackPoint.device_time)}
-            telemetry={{
-              power_kw: lastTrackPoint.power_kw,
-              speed_kmh: lastTrackPoint.speed_kmh,
-              soc: lastTrackPoint.soc,
+            deviceTimeMs={deviceTimeMs}
+            telemetry={snapshot.telemetry}
+          />
+        ) : resolved?.source === "lastTrip" ? (
+          <LiveLocationMap
+            location={{
+              lat: resolved.lat,
+              lon: resolved.lon,
+              accuracy_m: resolved.accuracyM,
             }}
+            deviceTimeMs={deviceTimeMs}
+            telemetry={resolved.telemetry}
           />
         ) : (
           <p className="text-muted-foreground">{tx("vehicle.location.empty")}</p>
         )}
-        {hasAnyLocation ? (
+        {resolved ? (
           <p className="text-center font-mono text-[11px] tabular-nums text-muted-foreground">
-            {displayLat.toFixed(5)}, {displayLon.toFixed(5)}
-            {!hasLiveLocation ? (
+            {resolved.lat.toFixed(5)}, {resolved.lon.toFixed(5)}
+            {resolved.source === "lastTrip" ? (
               <span className="ml-1.5 text-muted-foreground/60">({tx("vehicle.location.lastTrip")})</span>
             ) : null}
           </p>
         ) : null}
         <div className="space-y-0">
           <Row label={tx("vehicle.location.deviceTime")} value={deviceTimeLabel} />
-          {hasLiveLocation ? (
-            <Row label={tx("vehicle.location.accuracy")} value={`${fmt(loc.accuracy_m, 1)} m`} />
+          {resolved?.source === "live" ? (
+            <Row label={tx("vehicle.location.accuracy")} value={`${fmt(resolved.accuracyM, 1)} m`} />
           ) : null}
         </div>
       </CardContent>

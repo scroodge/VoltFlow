@@ -65,6 +65,7 @@ import {
   validateQuickSessionInput,
 } from "@/features/charging/domain";
 import { useVehicleRangeEstimate } from "@/hooks/use-vehicle-range-estimate";
+import { useVehicleLastKnownLocation } from "@/hooks/use-vehicle-last-known-location";
 import { resolveTariffLocationMatch } from "@/lib/charging-gps-location";
 import {
   chargingParamsFromSession,
@@ -82,6 +83,8 @@ import { ensureNotificationsPermission, ensurePushSubscription } from "@/lib/pus
 import { queryKeys } from "@/lib/query-keys";
 import { createClient } from "@/lib/supabase/client";
 import { formatTimeAgo } from "@/lib/time-ago";
+import { isIos, noopSubscribe } from "@/lib/pwa";
+import { buildWalkingDirectionsUrl } from "@/lib/vehicle-navigation-link";
 import { vehicleReadyDurationBucket } from "@/lib/vehicle-ready-metrics";
 import { cn } from "@/lib/utils";
 import {
@@ -643,6 +646,35 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
     Boolean(tripVehicleId) && !forceDevMockMode,
     vehicleMode !== "driving",
   );
+
+  // "Walk to my car": last known GPS (live snapshot, else last trip's final GPS
+  // point — see useVehicleLastKnownLocation) handed off to the phone's native
+  // maps app. Hidden while driving (nonsensical) or with no location at all.
+  const { location: walkToCarLocation } = useVehicleLastKnownLocation(
+    scopedVehicleId,
+    latestBydmateSnapshot,
+  );
+  const walkToCarIsIos = useSyncExternalStore(noopSubscribe, isIos, () => false);
+  const walkToCarHref = walkToCarLocation
+    ? buildWalkingDirectionsUrl(walkToCarLocation.lat, walkToCarLocation.lon, walkToCarIsIos)
+    : null;
+  const walkToCarTimeAgo = walkToCarLocation
+    ? formatTimeAgo(walkToCarLocation.deviceTimeIso, nowMs, (key, values) =>
+        String(t(key, values)),
+      )
+    : null;
+  const walkToCarCaption =
+    walkToCarLocation && walkToCarTimeAgo
+      ? String(
+          t(
+            walkToCarLocation.source === "live"
+              ? "dashboard.walkToCarLive"
+              : "dashboard.walkToCarLastTrip",
+            { value: walkToCarTimeAgo },
+          ),
+        )
+      : null;
+  const showWalkToCar = Boolean(walkToCarHref) && vehicleMode !== "driving";
 
   const carSessions = useMemo(() => {
     if (forceDevMockMode) return [];
@@ -1450,6 +1482,24 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
               <Skeleton className="h-[92px] rounded-2xl" />
             </section>
           )}
+
+          {showWalkToCar ? (
+            <section className="flex flex-col items-center gap-1.5">
+              <Button asChild variant="outline" className="w-full rounded-full">
+                <a href={walkToCarHref as string} target="_blank" rel="noreferrer">
+                  {t("dashboard.walkToCar")}
+                </a>
+              </Button>
+              {walkToCarCaption ? (
+                <p
+                  className="text-center text-xs text-muted-foreground"
+                  suppressHydrationWarning
+                >
+                  {walkToCarCaption}
+                </p>
+              ) : null}
+            </section>
+          ) : null}
         </>
       ) : null}
 

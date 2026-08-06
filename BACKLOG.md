@@ -1183,6 +1183,92 @@ Proposed 2026-07-21; awaiting go-ahead.
 
 ---
 
+## 🟡 Dashboard "Walk to my car" button — pedestrian handoff to the phone's maps app
+
+### Goal
+
+Add a button below the existing Dashboard content (after `DashboardDeferredSummaries`,
+before the `Dialog`) that hands off the vehicle's last known GPS point to the phone's
+native maps app for walking directions from the user's current position to the car.
+Grilled via `/grill-with-docs` (2026-08-06); every point below is a confirmed decision,
+not an open option.
+
+### Research findings
+
+- **The fallback logic this needs already exists**, inline in `LocationCard`
+  (`src/components/vehicle/vehicle-live-view.tsx:1657-1753`, rendered on the separate
+  `/vehicle` page, not the Dashboard): live snapshot location when fresh, else the last
+  trip's final GPS track point (`useLatestBydmateTripsQuery` + `useBydmateTripTrackQuery`).
+- **Exact GPS has a hard 24h ceiling for every tier**, not just free. Migration
+  `20260720150000_security_gps_retention_and_mate_key_hash.sql`
+  (`purge_old_bydmate_telemetry_by_tier()`) zeroes `bydmate_live_snapshots.location` after
+  24h **unconditionally** — the `is_user_premium` tier check that protects other tables in
+  the same function does not apply to this update. So the live-location half of the
+  fallback chain is time-boxed regardless of plan; the last-trip fallback is what carries
+  the feature past that window.
+- **No existing turn-by-turn maps deep-link in the codebase.** The one precedent
+  (`settings-view.tsx` `TariffLocationMapPreview`) links to the OpenStreetMap web viewer
+  (a static map, not routable directions) — not reusable for this.
+- **Platform detection already exists**: `isIos()` / `isStandalone()` in `src/lib/pwa.ts`,
+  already consumed by `install-prompt.tsx` and `start-tracking-button.tsx`.
+- **Relative-time formatting already exists**: `formatTimeAgo` (`src/lib/time-ago.ts`) is
+  already imported into `dashboard-view.tsx` for an analogous "how long ago did the car
+  report" caption (line 758).
+- **The base trip-history hooks live in `src/hooks/`**
+  (`use-bydmate-trips-query.ts`, `use-bydmate-trip-track-query.ts`), which is where the new
+  shared hook belongs.
+
+### Decisions (confirmed in the grilling session)
+
+1. **Location source**: live snapshot (fresh ≤24h) → fallback to the last trip's final
+   track point → else no location. Extract this out of `LocationCard` into a shared hook
+   `useVehicleLastKnownLocation(vehicleId)` in `src/hooks/use-vehicle-last-known-location.ts`;
+   refactor `LocationCard` to consume it instead of duplicating the resolution logic in two
+   places (the project's own two-senders lesson in AGENTS.md: a fix in one copy is not a
+   fix).
+2. **No location at all** → hide the button entirely; no disabled state.
+3. **Deep link, platform-branched via the existing `isIos()`**:
+   - iOS → `https://maps.apple.com/?daddr={lat},{lon}&dirflg=w`
+   - else → `https://www.google.com/maps/dir/?api=1&destination={lat},{lon}&travelmode=walking`
+4. **No `navigator.geolocation` permission requested.** Both URLs above resolve "current
+   location" as origin inside the native maps app itself once opened; the app only ever
+   needs the destination coordinates it already has.
+5. **Hidden while the vehicle is in driving mode** (via the existing
+   `deriveDashboardVehicleMode`), in addition to rule 2 — guiding someone to a car they are
+   currently driving is nonsensical.
+6. **Staleness caption shown**, reusing `formatTimeAgo` + the existing
+   `timeAgoSeconds/Minutes/Hours` i18n keys, labeled by source ("last seen" for live vs.
+   "from last trip" for the fallback) so the user can judge trust before tapping through.
+7. **Label**, matching the app's existing terse verb-first copy (`dashboard.addVehicle`
+   "Add vehicle", `dashboard.startCharging` "Start charging") and its "авто" noun choice
+   across locales:
+   | Locale | Label |
+   | --- | --- |
+   | en | Walk to my car |
+   | be | Дайсці да аўто |
+   | ru | Дойти до авто |
+8. **Visual weight**: secondary/outline button, matching `charging.checkAgain` /
+   `dashboard.signIn`'s existing `variant="outline"` rounded-pill treatment — not the
+   primary gradient CTA style (`dashboard.addVehicle`), since this is a convenience
+   shortcut, not the dashboard's primary action.
+9. **Placement**: new section after `DashboardDeferredSummaries`
+   (`dashboard-view.tsx:1414-1428`), before the `Dialog` (line 1432).
+
+### Data ownership and location
+
+No new data model, no new Postgres column, no `localStorage`. Fully read-only against
+existing app-owned vehicle telemetry (`bydmate_live_snapshots.location`,
+`bydmate_trip_track_points`) — already governed by the existing RLS and 24h/tiered
+retention rules, unchanged by this feature. The destination URL is built client-side from
+that data and handed to the OS in one shot (`window.location`/anchor `href`); nothing is
+written anywhere. This differs from the tariff-location case in AGENTS.md's past-rework
+warning — that was new user-preference data needing an ownership decision; this reads an
+existing telemetry field and persists nothing new.
+
+Proposed 2026-08-06; awaiting go-ahead. **Should I build this?**
+
+---
+
 ## Frontend hosting: stay on Vercel, or move to the Contabo VPS alongside Supabase?
 
 ### Goal
