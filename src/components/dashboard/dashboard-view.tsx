@@ -812,6 +812,21 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
     sessionChargerPowerKw: activeSession?.charger_power_kw,
     defaultChargerPowerKw: selectedCar?.default_charger_power_kw,
   });
+  const freshLiveChargePowerKw = isFreshLiveSnapshot(latestBydmateSnapshot, nowMs)
+    ? snapshotChargePowerKw(latestBydmateSnapshot)
+    : null;
+  const liveChargeType = latestBydmateSnapshot?.telemetry?.charge_type?.toUpperCase();
+  const dashboardChargePowerKw =
+    activeSession && liveActive
+      ? resolveChargingEtaPowerKw({
+          freshLivePowerKw: freshLiveChargePowerKw,
+          chargedGridEnergyKwh: liveActive.chargedEnergyKwh,
+          elapsedSeconds: liveActive.elapsedSeconds,
+          socGainPercent: liveActive.currentPercent - activeSession.start_percent,
+          fallbackPowerKw: displayChargePowerKw,
+          isDc: activeSession.tariff_type === "fast_dc" || liveChargeType === "DC",
+        })
+      : displayChargePowerKw;
 
   const rangeEstimate = useVehicleRangeEstimate({
     baseSnapshot: forceDevMockMode ? latestBydmateSnapshot : baseBydmateSnapshot,
@@ -896,19 +911,9 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
         : capacityKwh > 0
           ? `— / ${fmt(capacityKwh, 1)} kWh`
           : "-- kWh";
-    const freshLiveChargePowerKw = isFreshLiveSnapshot(latestBydmateSnapshot, nowMs)
-      ? snapshotChargePowerKw(latestBydmateSnapshot)
-      : null;
-    const etaPowerKw = resolveChargingEtaPowerKw({
-      freshLivePowerKw: freshLiveChargePowerKw,
-      chargedGridEnergyKwh: liveActive.chargedEnergyKwh,
-      elapsedSeconds: liveActive.elapsedSeconds,
-      socGainPercent: currentSoc - activeSession.start_percent,
-      fallbackPowerKw: displayChargePowerKw,
-    });
     const timeLeftSeconds =
-      remainingGridEnergyKwh != null && etaPowerKw != null
-        ? (remainingGridEnergyKwh / etaPowerKw) * 3600
+      remainingGridEnergyKwh != null && dashboardChargePowerKw != null
+        ? (remainingGridEnergyKwh / dashboardChargePowerKw) * 3600
         : liveActive.remainingSeconds;
 
     return {
@@ -921,11 +926,9 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
     activeSession,
     currency,
     defaultPrice,
-    displayChargePowerKw,
-    latestBydmateSnapshot,
+    dashboardChargePowerKw,
     liveActive,
     locale,
-    nowMs,
   ]);
 
   const parkEstimate = useMemo(() => {
@@ -998,7 +1001,7 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
 
   const isChargingMode =
     vehicleMode === "app_charging" || vehicleMode === "live_charging";
-  const chargingTileKw = displayChargePowerKw;
+  const chargingTileKw = dashboardChargePowerKw;
 
   const isPageLoading = loadingCars || (loadingLive && !latestBydmateSnapshot);
 
@@ -1390,7 +1393,7 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                       />
                       <DashboardStatTile
                         label={t("dashboard.chargerShort") as string}
-                        value={<span className="whitespace-nowrap">~ {fmt(chargingTileKw)} kW</span>}
+                        value={<span className="whitespace-nowrap">~ {fmt(chargingTileKw, 1)} kW</span>}
                       />
                     </div>
                   ) : (
@@ -1407,7 +1410,7 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                       {isChargingMode ? (
                         <DashboardStatTile
                           label={t("dashboard.chargerShort") as string}
-                          value={<span className="whitespace-nowrap">~ {fmt(chargingTileKw)} kW</span>}
+                          value={<span className="whitespace-nowrap">~ {fmt(chargingTileKw, 1)} kW</span>}
                         />
                       ) : null}
                     </div>

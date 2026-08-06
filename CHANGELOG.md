@@ -11,6 +11,22 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-08-06
 
+### Dashboard AC charge-power decimal refinement
+
+- Refined integer-only Di+ AC readings with the complete SOC/time observed average after
+  at least 15 elapsed minutes and 2 percentage points of SOC gain, but only when both
+  sources remain in the same integer bucket (`1 kW` plus observed `1.4 kW` displays
+  `~1.4 kW`).
+- Kept the live value unchanged for DC, already-decimal readings, insufficient evidence,
+  and integer-bucket disagreement. This avoids attaching an unrelated fractional part to
+  stale or pause-depressed session averages.
+- The dashboard power tile and `Time left` now share the same resolved power value. No
+  charging-session energy/cost, persistence, ingest, detailed-session UI, schema,
+  Postgres, or `localStorage` behavior changed.
+- Added focused pure-helper cases for AC refinement and its safety guards, and updated the
+  formula reference. Verification: `git diff --check` passes; tests were not run under the
+  repository's local no-test-without-request instruction.
+
 ### Dashboard charging ETA observed-rate fallback
 
 - Kept fresh positive Mate `charge_power_kw` as the primary dashboard `Time left`

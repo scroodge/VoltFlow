@@ -33,16 +33,16 @@ export function resolveChargingEtaPowerKw({
   elapsedSeconds,
   socGainPercent,
   fallbackPowerKw,
+  isDc = false,
 }: {
   freshLivePowerKw: number | null | undefined;
   chargedGridEnergyKwh: number;
   elapsedSeconds: number;
   socGainPercent: number;
   fallbackPowerKw: number | null | undefined;
+  isDc?: boolean;
 }): number | null {
   const livePower = positiveFinite(freshLivePowerKw);
-  if (livePower != null) return livePower;
-
   const canUseObservedAverage =
     Number.isFinite(elapsedSeconds) &&
     elapsedSeconds >= OBSERVED_ETA_MIN_ELAPSED_SECONDS &&
@@ -53,11 +53,24 @@ export function resolveChargingEtaPowerKw({
     const observedAverageKw = chargedEnergy / (elapsedSeconds / 3600);
     const validObservedAverage = positiveFinite(observedAverageKw);
     if (validObservedAverage != null && validObservedAverage <= 350) {
+      // Di+ truncates stable AC power to whole kW on some cars. Use the full observed
+      // average only when it belongs to the same integer bucket; never graft an unrelated
+      // fractional part onto a disagreeing reading. DC and already-decimal live readings
+      // stay live because their present value matters more than the session average.
+      if (
+        livePower != null &&
+        !isDc &&
+        Number.isInteger(livePower) &&
+        Math.floor(validObservedAverage) === Math.floor(livePower)
+      ) {
+        return validObservedAverage;
+      }
+      if (livePower != null) return livePower;
       return validObservedAverage;
     }
   }
 
-  return positiveFinite(fallbackPowerKw);
+  return livePower ?? positiveFinite(fallbackPowerKw);
 }
 
 export function percentPerHour(params: ChargingParams): number {
