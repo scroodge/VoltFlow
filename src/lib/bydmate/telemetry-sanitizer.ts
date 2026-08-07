@@ -193,6 +193,20 @@ function mergeAcceptedTelemetry(
   return merged;
 }
 
+/**
+ * Di+ uses -1 as an unavailable-SOC sentinel. Preserve the rest of its diagnostic
+ * payload, but never let that invalid value reach flattened columns or raw analytics.
+ */
+function sanitizeDiplusSoc(diplus: TelemetryPayload["diplus"]) {
+  if (!diplus || diplus.soc == null || isWithinRule(diplus.soc, numericTelemetryRules.soc)) {
+    return { diplus, droppedFields: 0 };
+  }
+
+  const sanitized = { ...diplus };
+  delete sanitized.soc;
+  return { diplus: sanitized, droppedFields: 1 };
+}
+
 function normalizeBearing(value: number | null | undefined) {
   const bearing = finiteNumber(value);
   if (bearing == null) return null;
@@ -397,11 +411,13 @@ export function sanitizePayloadTelemetry(
   for (const item of ordered) {
     const previous = previousTelemetry.get(item.payload.vehicle_id);
     const result = sanitizeTelemetry(item.payload.telemetry ?? {}, previous, item.deviceTimeMs);
-    droppedTelemetryFields += result.droppedFields;
+    const diplus = sanitizeDiplusSoc(item.payload.diplus);
+    droppedTelemetryFields += result.droppedFields + diplus.droppedFields;
 
     sanitized[item.index] = {
       ...sanitized[item.index],
       telemetry: result.telemetry,
+      diplus: diplus.diplus,
     };
 
     previousTelemetry.set(item.payload.vehicle_id, {

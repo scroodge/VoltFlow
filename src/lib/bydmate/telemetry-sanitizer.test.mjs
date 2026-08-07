@@ -5,6 +5,7 @@ import {
   filterDisplayTripTrackPoints,
   sanitizeLocation,
   sanitizePayloadLocations,
+  sanitizePayloadTelemetry,
   sanitizeTripTrackPoints,
 } from "./telemetry-sanitizer.ts";
 
@@ -115,6 +116,27 @@ test("counts dropped coordinates in ordered batch sanitizing", () => {
   assert.equal(result.droppedLocations, 1);
   assert.equal(result.payloads[0].location.lat, undefined);
   assert.equal(result.payloads[1].location.lat, 53.92644457);
+});
+
+test("drops the DiPlus negative SOC sentinel without discarding valid telemetry", () => {
+  const result = sanitizePayloadTelemetry(
+    [
+      {
+        schema_version: 1,
+        vehicle_id: "way",
+        device_time: "2026-08-07T12:39:05.683Z",
+        source: "BYDMate",
+        telemetry: { soc: 100, charge_power_kw: 4 },
+        diplus: { soc: -1, charge_gun_state: 2 },
+      },
+    ],
+    new Map(),
+  );
+
+  assert.equal(result.payloads[0].telemetry.soc, 100);
+  assert.equal(result.payloads[0].diplus.soc, undefined);
+  assert.equal(result.payloads[0].diplus.charge_gun_state, 2);
+  assert.equal(result.droppedTelemetryFields, 1);
 });
 
 test("filters persisted trip track points for legacy dirty trips", () => {

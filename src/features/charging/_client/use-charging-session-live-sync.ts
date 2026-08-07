@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 
 import { sendChargeCompletedPush } from "@/actions/push";
+import { completeChargingSession } from "@/features/charging/actions";
 import { notifyChargeCompleted } from "@/lib/push/charge-complete-notification";
 import { fetchSessionById } from "@/hooks/use-session-query";
 import { useTranslation } from "@/hooks/use-translation";
@@ -126,21 +127,14 @@ export function useChargingSessionLiveSync({
 
       if (mayComplete && completionState) {
         completingRef.current = true;
-        const stoppedAt = new Date().toISOString();
-        const { error: upErr } = await supabase
-          .from("charging_sessions")
-          .update({
-            current_percent: completionState.currentPercent,
-            charged_energy_kwh: completionState.chargedEnergyKwh,
-            estimated_cost: completionState.estimatedCost,
-            status: "completed",
-            stopped_at: stoppedAt,
-          })
-          .eq("id", sessionId);
-
-        if (upErr) {
+        const completion = await completeChargingSession(sessionId);
+        if (!completion.ok) {
           completingRef.current = false;
-          toast.error(upErr.message);
+          toast.error(completion.error);
+          return;
+        }
+        if (!completion.completed) {
+          completingRef.current = false;
           return;
         }
 
@@ -148,11 +142,11 @@ export function useChargingSessionLiveSync({
           old
             ? {
                 ...old,
-                current_percent: completionState.currentPercent,
-                charged_energy_kwh: completionState.chargedEnergyKwh,
-                estimated_cost: completionState.estimatedCost,
+                current_percent: completion.progress.currentPercent,
+                charged_energy_kwh: completion.progress.chargedEnergyKwh,
+                estimated_cost: completion.progress.estimatedCost,
                 status: "completed",
-                stopped_at: stoppedAt,
+                stopped_at: completion.stoppedAt,
               }
             : old,
         );

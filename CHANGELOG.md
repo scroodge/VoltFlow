@@ -23,6 +23,18 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 - Verification: elevated `npm run build` passed compilation, TypeScript, static generation
   (126 pages), and route optimization; `git diff --check` passed.
 
+### Cabin temperature survives sparse parked heartbeats
+
+- Added migration `20260807120000_preserve_live_cabin_temperature.sql`, a table-boundary
+  `BEFORE UPDATE` trigger that carries forward the last valid
+  `telemetry.cabin_temp_c`, `diplus_inside_temp_c`, and `diplus.inside_temp_c` when a
+  parked/live-only update omits them.
+- This fixes the Kevlar report where a full sample had `33°C`, then a reduced parked
+  heartbeat replaced the live snapshot with no cabin-temperature fields. No new data model
+  or preference was introduced; this remains app-owned telemetry in Postgres.
+- Applied to self-hosted production. Verification: trigger presence, rollback-only sparse
+  update test returned `33` in all three fields, and `git diff --check` passed.
+
 ### One average-consumption formula: group B's five copies collapsed into one helper
 
 Reported as "different pages use different formulas". The 2026-08-04 pass had mapped the

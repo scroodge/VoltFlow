@@ -9,6 +9,7 @@ import { costFromGridEnergy, deriveChargingState } from "@/features/charging/dom
 import { efficiencyPercentForTariff } from "@/lib/charging-efficiency";
 import { mapChargingTariffLocation, mapUserProvider } from "@/lib/db-map";
 import { resolveStopProgressForSession } from "./_server/charging-session-finalize";
+import { resolveAutoCompletionProgress } from "./_server/charging-session-auto-complete";
 import {
   sessionTariffMatches,
   shouldAutoApplyTariffResolution,
@@ -217,6 +218,70 @@ export async function stopChargingSession(sessionId: string) {
   revalidatePath(`/charging/${sessionId}`);
 
   return { ok: true as const };
+}
+
+/**
+ * Completes an active session only from server-observed progress. A browser's cached
+ * live snapshot may be stale while the canonical ingest has already received newer SOC.
+ */
+export async function completeChargingSession(sessionId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Unauthorized" };
+  if (!z.string().uuid().safeParse(sessionId).success) {
+    return { ok: false as const, error: "Invalid session id" };
+  }
+
+  const { data: session, error } = await supabase
+    .from("charging_sessions")
+    .select("*")
+    .eq("id", sessionId)
+    .eq("user_id", user.id)
+    .eq("status", "charging")
+    .maybeSingle();
+  if (error || !session) {
+    return { ok: false as const, error: "Charging session not found" };
+  }
+
+  const now = new Date();
+  const serverProgress = await resolveStopProgressForSession(
+    supabase,
+    user.id,
+    session,
+    now.getTime(),
+  );
+  const progress = resolveAutoCompletionProgress({
+    session,
+    measuredProgress: serverProgress.source === "math" ? null : serverProgress,
+    mathProgress: serverProgress.source === "math" ? serverProgress : null,
+  });
+  if (!progress) return { ok: true as const, completed: false as const };
+
+  const stoppedAt = now.toISOString();
+  const { data: updated, error: updateError } = await supabase
+    .from("charging_sessions")
+    .update({
+      current_percent: progress.currentPercent,
+      charged_energy_kwh: progress.chargedEnergyKwh,
+      estimated_cost: progress.estimatedCost,
+      status: "completed" as SessionStatus,
+      stopped_at: stoppedAt,
+    })
+    .eq("id", sessionId)
+    .eq("user_id", user.id)
+    .eq("status", "charging")
+    .select("id")
+    .maybeSingle();
+  if (updateError) return { ok: false as const, error: updateError.message };
+  if (!updated) return { ok: true as const, completed: false as const };
+
+  revalidatePath("/dashboard");
+  revalidatePath("/history");
+  revalidatePath(`/charging/${sessionId}`);
+
+  return { ok: true as const, completed: true as const, progress, stoppedAt };
 }
 
 const updateTariffSchema = z.object({

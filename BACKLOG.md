@@ -1356,3 +1356,134 @@ over quota *after* P1 ships, and only once the VPS has real CPU headroom.
 Proposed 2026-07-21; awaiting go-ahead.
 
 ---
+
+## 🟠 Charging session closed `completed` short of target while live SOC was fresh
+
+### Goal
+
+Investigate a live-ingest spot check (prompted by new `bydmate_live_snapshots` /
+`bydmate_telemetry_samples` rows arriving) that surfaced a violation of the documented
+invariant in AGENTS.md: *"Never persist math-only completion while live SOC is fresh."*
+Read-only investigation against prod, 2026-08-07.
+
+### Finding
+
+Session `debd8803-2e96-4de1-af90-2c677db9d205` (car `way`, started 07:36:53, target 100%)
+is stored as:
+
+```
+status: completed
+current_percent: 95.8979058881498   -- fractional, a wall-clock-math signature
+target_percent:  100
+stopped_at:      2026-08-07 12:39:13.437+00
+```
+
+Telemetry contradicts the persisted value:
+
+| Event | Time (UTC) |
+| --- | --- |
+| First `diplus_soc = 100` sample, device time | 12:38:30.503 |
+| That sample **received** server-side | 12:38:43.470 |
+| Session `stopped_at` | 12:39:13.437 — **30 s after** live SOC hit 100, well inside the 90 s freshness window |
+
+The car is still plugged in and reporting SOC 100 right now (checked at investigation
+time), so there was no unplug or drive-away edge that would legitimately justify a lower
+final SOC. The row is also internally inconsistent on its own terms: `status =
+"completed"` normally means "reached target," but `current_percent` sits 4.1 points below
+`target_percent`.
+
+**Cost impact:** recorded 20.25 kWh / 7.38 BYN charged. A true 51% → 100% on this car's
+45.1 kWh pack at 98% AC efficiency is 22.55 kWh / 8.22 BYN — **the stored session
+undercounts by ~2.3 kWh / 0.84 BYN, about 10%**, which feeds directly into the user's
+cost history.
+
+**Scope: rare, not systemic.** Of 76 `completed` sessions in the table, this is the only
+one with `current_percent` more than 0.5 points short of `target_percent` (avg gap on the
+one outlier: 4.1 pp). Not urgent, but real and reproducible in the data.
+
+### Root-cause narrowing (not fully proven)
+
+Three writers can set `status: "completed"`; two are ruled out by code inspection:
+
+- **`stopChargingSession`** (`src/features/charging/actions.ts:169`) — ruled out. It always
+  sets `status: "stopped"`, never `"completed"`, and uses the documented
+  live → in-session-telemetry → math priority chain via `resolveStopProgressForSession`.
+- **Server reconcile** (`src/features/charging/_server/charging-session-reconcile-logic.ts:250-268,290-298`)
+  — ruled out. Both reconcile branches force `finalSoc = target_percent` whenever
+  `reachedTarget` is true, so a reconcile-driven completion would have written exactly
+  `100`, not a fractional value.
+- **Client auto-complete** (`src/features/charging/_client/use-charging-session-live-sync.ts:119-166`)
+  — the remaining candidate. It persists `completionState.currentPercent` (which can come
+  from a math-derived `completionSource === "math"` branch) gated by
+  `shouldAllowMathAutoComplete(freshSocSnapshot, now)` at line 125. This session's fractional
+  `current_percent` matches a math-derived value, and the guard function's behavior around
+  the moment live SOC first reports 100 hasn't been read yet — that's the next step, not
+  something this investigation confirmed.
+
+### Options
+
+1. **Trace the guard, fix, and consider repairing the one affected row (recommended).**
+   Read `shouldAllowMathAutoComplete` and `deriveChargingSessionLiveBundle` in
+   `src/features/charging/_domain/charging-session-sync.ts` to find why a math completion
+   was allowed to win over a live SOC that had already reported 100 for 30+ seconds before
+   the write. Likely candidates: a race where the math branch fires before the client's
+   local snapshot cache has the fresh sample, or an off-by-one in the freshness check.
+   Fix the guard; separately decide whether to backfill `debd8803`'s `current_percent`/
+   `charged_energy_kwh`/`estimated_cost` to the live-SOC-correct values (data repair is a
+   distinct decision from the code fix).
+2. **Leave it — one stale row, not worth chasing.** *Con:* the underlying race can recur on
+   any user whose app closes or backgrounds at the exact moment SOC crosses target; silent
+   ~10% undercounts erode trust in the cost history feature this app exists to provide.
+
+### Data ownership and location
+
+No new data model. This is a bug-fix investigation against the existing app-owned
+`charging_sessions` table in Postgres; no client-storage or ownership question arises.
+
+---
+
+## 🟡 Ingest accepts sentinel `diplus_soc = -1` readings
+
+### Finding
+
+`bydmate_telemetry_samples.diplus_soc = -1` has been persisted **379 times across 9
+vehicles** since 2026-05-23 (most recent: today, 13:25:55). This looks like an unfiltered
+device/parse sentinel for "no reading" rather than a real SOC value, but it's stored and
+available to any downstream code that reads `diplus_soc` without a sanity check (e.g. the
+`measuredSocFromMate` / `deriveSessionProgressFromSoc` paths that feed reconcile and
+session math).
+
+Separately confirmed **not a bug**: `Bulbazavr` reported `diplus_charging_status = 1`
+in 296 of 298 samples over 15 minutes while driving at up to 65 km/h — this is the
+documented-unreliable flag (AGENTS.md: prefer `charge_power_kw`, the `is_charging`
+fallback is invalid when gun state is `1`/unplugged), and the parked + `charge_power_kw`
+auto-start guards correctly did not fire on it. No action needed there.
+
+### Options
+
+1. **Reject/null out `diplus_soc < 0` at ingest (recommended).** Cheapest fix, closest to
+   the source, stops the value from ever reaching session math or analytics. Needs
+   confirming this sentinel is never a legitimate signal (e.g. "sensor unavailable" that
+   some other field should carry instead) before dropping it silently.
+2. **Filter at every read site instead.** More defensive-in-depth but repeats the same
+   guard across reconcile, session math, and analytics — same category of duplicated logic
+   AGENTS.md already warns about for the two-senders case.
+3. **Leave it.** *Con:* a session or analytic view that doesn't already guard against a
+   negative percent will render nonsense; low but nonzero blast radius given 379 occurrences
+   over 9 vehicles.
+
+### Recommendation
+
+Option 1, once confirmed that `-1` never carries meaning elsewhere in the DiPlus/Mate
+contract. Lower priority than the completion-math bug above — no confirmed incorrect
+persisted session traced to it yet, just a latent data-quality risk.
+
+### Data ownership and location
+
+No new data model; a validation change to the existing ingest path
+(`POST /api/bydmate/telemetry`) writing to the existing app-owned
+`bydmate_telemetry_samples` table.
+
+Proposed 2026-08-07; awaiting go-ahead on both entries above. **Should I build these?**
+
+---
