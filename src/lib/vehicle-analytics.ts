@@ -8,6 +8,7 @@ import {
 } from "@/lib/bydmate/phantom-drain";
 import { chargingSessionAnalyticsScope } from "@/features/charging/domain";
 import { collectPagedRows } from "@/lib/bydmate/paged-query";
+import { weightedAvgConsumptionKwh100 } from "@/lib/bydmate/trip-metrics";
 import { pickWalkBackSessionPrice } from "@/lib/history-day-summary";
 import type { BydmateTelemetry, ChargingSessionRow, BydmateTripRow } from "@/types/database";
 
@@ -123,18 +124,6 @@ export async function fetchMonthlyStats({
     });
   }
 
-  let weightedConsumption = 0;
-  let weightedDistance = 0;
-
-  for (const trip of tripRows) {
-    const distance = trip.distance_km ?? 0;
-    const consumption = trip.avg_consumption_kwh_100km;
-    if (distance > 0 && consumption != null) {
-      weightedConsumption += consumption * distance;
-      weightedDistance += distance;
-    }
-  }
-
   let regenKwh = tripRows.reduce((sum, trip) => sum + (trip.regen_energy_kwh ?? 0), 0);
   let tractionKwh = tripRows.reduce((sum, trip) => sum + (trip.traction_energy_kwh ?? 0), 0);
 
@@ -166,7 +155,7 @@ export async function fetchMonthlyStats({
     chargedKwh: sessionRows.reduce((sum, session) => sum + session.charged_energy_kwh, 0),
     chargingCost: sessionRows.reduce((sum, session) => sum + session.estimated_cost, 0),
     sessionCount: sessionRows.length,
-    avgConsumptionKwh100: weightedDistance > 0 ? weightedConsumption / weightedDistance : null,
+    avgConsumptionKwh100: weightedAvgConsumptionKwh100(tripRows),
   };
 }
 

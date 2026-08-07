@@ -1,4 +1,10 @@
+import {
+  MIN_CONSUMPTION_TRIP_DISTANCE_KM,
+  weightedAvgConsumptionKwh100,
+} from "./trip-metrics.ts";
 import type { BydmateTripRow } from "@/types/database";
+
+export { weightedAvgConsumptionKwh100 };
 
 export type TripWithEnergy = BydmateTripRow & {
   outside_temp_avg?: number | null;
@@ -39,28 +45,12 @@ export type DayInsight =
     }
   | { kind: "regen_insufficient" };
 
-const MIN_TRIP_DISTANCE_KM = 1;
+const MIN_TRIP_DISTANCE_KM = MIN_CONSUMPTION_TRIP_DISTANCE_KM;
 const REGEN_SHARE_THRESHOLD = 0.1;
 const REGEN_COMPARE_MIN_KWH100_DELTA = 1;
 
 function validNumber(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-export function weightedAvgConsumptionKwh100(trips: TripWithEnergy[]): number | null {
-  let weightedSum = 0;
-  let weightedDistance = 0;
-
-  for (const trip of trips) {
-    const distance = trip.distance_km ?? 0;
-    const consumption = trip.avg_consumption_kwh_100km;
-    if (distance >= MIN_TRIP_DISTANCE_KM && consumption != null && consumption > 0) {
-      weightedSum += consumption * distance;
-      weightedDistance += distance;
-    }
-  }
-
-  return weightedDistance > 0 ? weightedSum / weightedDistance : null;
 }
 
 /** Returns a trustworthy day total only when every displayed trip has measured energy. */

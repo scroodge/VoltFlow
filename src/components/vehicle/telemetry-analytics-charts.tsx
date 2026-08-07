@@ -22,6 +22,7 @@ import {
   type TelemetryBucket,
   type TempConsumptionBucket,
 } from "@/lib/bydmate/telemetry-buckets";
+import { weightedAvgConsumptionKwh100 } from "@/lib/bydmate/trip-metrics";
 import type { TelemetryHistoryPoint } from "@/lib/bydmate/telemetry-history";
 import type { ChargingSessionRow } from "@/types/database";
 import type { TelemetryHistoryRange } from "@/lib/bydmate/telemetry-ranges";
@@ -228,9 +229,9 @@ function buildBarCharts(
   // the efficiency chart can appear at position [0] (most actionable insight)
   const granularity = range === "quarter" || range === "year" ? "week" : "day";
   const distanceByLabel = new Map<string, number>();
-  const consumptionWeighted = new Map<string, { sum: number; weight: number }>();
-  let periodConsumptionSum = 0;
-  let periodConsumptionWeight = 0;
+  // Trips grouped by bucket so each bar — and the period line — go through the
+  // one shared consumption average rather than a local re-derivation.
+  const tripsByLabel = new Map<string, typeof trips>();
 
   for (const trip of trips) {
     const ms = Date.parse(trip.started_at);
@@ -247,18 +248,12 @@ function buildBarCharts(
       key = d.toLocaleDateString(locale, { month: "short", day: "numeric" });
     }
     distanceByLabel.set(key, (distanceByLabel.get(key) ?? 0) + (trip.distance_km ?? 0));
-    if (trip.avg_consumption_kwh_100km != null && trip.distance_km != null && trip.distance_km > 0) {
-      periodConsumptionSum += trip.avg_consumption_kwh_100km * trip.distance_km;
-      periodConsumptionWeight += trip.distance_km;
-      const row = consumptionWeighted.get(key) ?? { sum: 0, weight: 0 };
-      row.sum += trip.avg_consumption_kwh_100km * trip.distance_km;
-      row.weight += trip.distance_km;
-      consumptionWeighted.set(key, row);
-    }
+    const bucketTrips = tripsByLabel.get(key);
+    if (bucketTrips) bucketTrips.push(trip);
+    else tripsByLabel.set(key, [trip]);
   }
 
-  const periodAvgConsumption =
-    periodConsumptionWeight > 0 ? periodConsumptionSum / periodConsumptionWeight : null;
+  const periodAvgConsumption = weightedAvgConsumptionKwh100(trips);
 
   // Chart order: Efficiency → Mileage → Regen → Outside Temp
   const charts: BarChartModel[] = [
@@ -280,8 +275,8 @@ function buildBarCharts(
         label: tx("vehicle.analytics.efficiencyBarLabel"),
         color: "#a78bfa",
         values: labels.map((label) => {
-          const row = consumptionWeighted.get(label);
-          return row && row.weight > 0 ? row.sum / row.weight : 0;
+          const bucketTrips = tripsByLabel.get(label);
+          return (bucketTrips && weightedAvgConsumptionKwh100(bucketTrips)) ?? 0;
         }),
       }],
       barInsideText: labels.map((label) => {

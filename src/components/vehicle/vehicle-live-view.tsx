@@ -51,7 +51,6 @@ import { useTranslation } from "@/hooks/use-translation";
 import { useAppPath } from "@/lib/dev/dev-path";
 import { gearIsPark, readGear } from "@/lib/bydmate/gear";
 import { isTelemetryCharging } from "@/features/charging/domain";
-import { averageTripConsumption } from "@/lib/bydmate/range-estimate";
 import {
   computeHeroDriveMetrics,
   formatHeroDistanceKm,
@@ -62,12 +61,14 @@ import {
   tripEnergyPerKm,
   tripNetConsumptionKwh100,
   tripTractionEnergyKwh,
+  weightedAvgConsumptionKwh100,
 } from "@/lib/bydmate/trip-metrics";
 import { isRouteTrackDisplayable } from "@/lib/bydmate/route-insights";
 import { resolvePreferredTripDistanceKm, trackPathDistanceKm } from "@/lib/bydmate/trip-distance";
 import type { Currency, Locale, TranslationKey } from "@/lib/i18n";
 import { formatTimeAgo } from "@/lib/time-ago";
 import { vehicleReadyDurationBucket } from "@/lib/vehicle-ready-metrics";
+import { readDiPlusCabinTemperature } from "@/lib/vehicle-cabin-temperature";
 import {
   deriveDashboardVehicleMode,
   isFreshLiveSnapshot,
@@ -352,6 +353,11 @@ function VehicleLiveContent({
   });
   const isCharging =
     vehicleMode === "live_charging" || vehicleMode === "app_charging";
+  const cabinTempC = readDiPlusCabinTemperature({
+    modelGeneration: matchedCar?.model_generation,
+    isParkedOrCharging: isCharging || vehicleMode === "parked",
+    diplusInsideTempC: snapshot.diplus?.inside_temp_c,
+  });
   // Asleep counts as stale for everything that needs *live* data (trip query, live map):
   // a suspended head unit has nothing current to show. The two differ only in how the state
   // is labelled to the user — see LIVE_SNAPSHOT_ASLEEP_MS.
@@ -436,7 +442,7 @@ function VehicleLiveContent({
       : null;
   const mathRangeLabel = mathRangeKm != null ? `≈ ${fmt(mathRangeKm, 0)} km` : "—";
   const parkedAvgConsumptionKwh100 = useMemo(
-    () => averageTripConsumption(heroDriveMetrics.rangeEstimateTrips),
+    () => weightedAvgConsumptionKwh100(heroDriveMetrics.rangeEstimateTrips),
     [heroDriveMetrics.rangeEstimateTrips],
   );
   const parkedRecentEnergyKwh =
@@ -472,6 +478,7 @@ function VehicleLiveContent({
             snapshot={snapshot}
             session={activeChargingSession}
             nowMs={nowMs}
+            cabinTempC={cabinTempC}
           />
           <RestMetricsCard
             snapshot={snapshot}
@@ -509,7 +516,7 @@ function VehicleLiveContent({
             </>
           ) : (
             <>
-              <TelemetryGrid snapshot={snapshot} vehicleMode={vehicleMode} />
+              <TelemetryGrid snapshot={snapshot} vehicleMode={vehicleMode} cabinTempC={cabinTempC} />
               <TripBrowser
                 showDateFilter={Boolean(fixturePoints)}
                 selectedDate={selectedDate}
@@ -790,10 +797,12 @@ function ChargingModeCard({
   snapshot,
   session,
   nowMs,
+  cabinTempC,
 }: {
   snapshot: BydmateLiveSnapshotRow;
   session: ChargingSessionRow | null;
   nowMs: number;
+  cabinTempC: number | null;
 }) {
   const { locale, t } = useTranslation();
   const tx = t as Translator;
@@ -855,6 +864,7 @@ function ChargingModeCard({
       value: `${telemetry.charge_type ? `${telemetry.charge_type} · ` : ""}~ ${fmt(chargeSummary?.chargePowerKw ?? telemetry.charge_power_kw, 1)} kW`,
     },
     { key: "batteryTemp", icon: Thermometer, label: tx("vehicle.telemetry.batteryTemp"), value: fmtTemp(telemetry.battery_temp_c) },
+    { key: "cabinTemp", icon: Thermometer, label: tx("vehicle.telemetry.cabinTemp"), value: fmtTemp(cabinTempC) },
     { key: "outsideTemp", icon: Thermometer, label: tx("vehicle.telemetry.outsideTemp"), value: fmtTemp(telemetry.outside_temp_c) },
   ];
   const visibleItems = items.filter((item) => !isMissingMetricValue(item.value));
@@ -929,9 +939,11 @@ function StaleTelemetryNotice() {
 function TelemetryGrid({
   snapshot,
   vehicleMode,
+  cabinTempC,
 }: {
   snapshot: BydmateLiveSnapshotRow;
   vehicleMode: DashboardVehicleMode;
+  cabinTempC: number | null;
 }) {
   const { t } = useTranslation();
   const tx = t as Translator;
@@ -958,6 +970,12 @@ function TelemetryGrid({
         icon: Thermometer,
         label: tx("vehicle.telemetry.batteryTemp"),
         value: fmtTemp(telemetry.battery_temp_c),
+      },
+      {
+        key: "cabinTemp",
+        icon: Thermometer,
+        label: tx("vehicle.telemetry.cabinTemp"),
+        value: fmtTemp(cabinTempC),
       },
       {
         key: "outsideTemp",
@@ -990,7 +1008,7 @@ function TelemetryGrid({
 
     if (vehicleMode === "parked") {
       return all.filter(
-        (item) => item.key === "batteryTemp" || item.key === "outsideTemp",
+        (item) => item.key === "batteryTemp" || item.key === "cabinTemp" || item.key === "outsideTemp",
       );
     }
 
@@ -1002,7 +1020,7 @@ function TelemetryGrid({
       }
       return !isMissingMetricValue(item.value);
     });
-  }, [isCharging, telemetry, tx, vehicleMode]);
+  }, [cabinTempC, isCharging, telemetry, tx, vehicleMode]);
 
   if (items.length === 0) return null;
 
@@ -1388,7 +1406,7 @@ function TripBrowser({
         : null;
     return sum + (trip.regen_energy_kwh ?? fallbackRegen ?? 0);
   }, 0);
-  const avgConsumption = averageTripConsumption(trips);
+  const avgConsumption = weightedAvgConsumptionKwh100(trips);
 
   return (
     <section className="voltflow-card p-5">

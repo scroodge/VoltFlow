@@ -1,3 +1,4 @@
+import { weightedAvgConsumptionKwh100 } from "@/lib/bydmate/trip-metrics";
 import type { TelemetryHistoryPoint } from "@/lib/bydmate/telemetry-history";
 import {
   resolveTelemetryWindow,
@@ -220,19 +221,11 @@ export function buildAnalyticsSummary({
 
   let distanceKm = 0;
   let regenKwh = 0;
-  let weightedConsumption = 0;
-  let weightedDistance = 0;
   let maxSpeed: number | null = null;
 
   for (const trip of trips) {
     distanceKm += trip.distance_km ?? 0;
     regenKwh += trip.regen_energy_kwh ?? 0;
-    const consumption = trip.avg_consumption_kwh_100km;
-    const dist = trip.distance_km;
-    if (consumption != null && dist != null && dist > 0) {
-      weightedConsumption += consumption * dist;
-      weightedDistance += dist;
-    }
     if (trip.max_speed_kmh != null) {
       maxSpeed = maxSpeed == null ? trip.max_speed_kmh : Math.max(maxSpeed, trip.max_speed_kmh);
     }
@@ -249,7 +242,7 @@ export function buildAnalyticsSummary({
     distanceKm,
     regenKwh,
     chargedKwh: chargedKwh ?? null,
-    avgConsumptionKwh100: weightedDistance > 0 ? weightedConsumption / weightedDistance : null,
+    avgConsumptionKwh100: weightedAvgConsumptionKwh100(trips),
     maxSpeedKmh: maxSpeed,
     socSwing: Number.isFinite(socMin) && Number.isFinite(socMax) ? socMax - socMin : null,
     telemetryPoints: points.length,

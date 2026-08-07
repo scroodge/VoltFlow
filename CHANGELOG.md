@@ -9,6 +9,68 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-08-07
+
+### One average-consumption formula: group B's five copies collapsed into one helper
+
+Reported as "different pages use different formulas". The 2026-08-04 pass had mapped the
+8 formulas and consolidated group A's duplicates, but concluded B/C/D/F/G were all
+"deliberately different tools". That held **between** groups and not **inside** group B,
+which was one formula — distance-weighted mean of `bydmate_trips.avg_consumption_kwh_100km`
+— written five times with three different filters, so the same trips produced different
+numbers on different pages.
+
+- New canonical `weightedAvgConsumptionKwh100(trips, { minDistanceKm? })` in
+  `src/lib/bydmate/trip-metrics.ts`, alongside the existing energy-derived helpers. One
+  policy for every caller: **distance ≥ 1 km** (`MIN_CONSUMPTION_TRIP_DISTANCE_KM`) and
+  **consumption > 0**.
+- Five call sites now share it, replacing four inline re-derivations and one divergent
+  helper: `day-insights.ts` (re-exports it, so `analytics-day-view.tsx` is unchanged),
+  `vehicle-analytics.ts` `fetchMonthlyStats()`, `telemetry-buckets.ts`
+  `buildAnalyticsSummary()`, `telemetry-analytics-charts.tsx` `buildBarCharts()` (now
+  groups trips per bucket and calls the helper per bar plus once for the period line), and
+  `range-estimate.ts`, whose `averageTripConsumption()` was **deleted** in favor of it
+  (`vehicle-live-view.tsx` imports the shared helper directly).
+- Three real divergences fixed. Sub-1 km trips were dropped by the day view but counted by
+  the analytics summary and efficiency chart — and short trips are the cold-start,
+  high-consumption ones, so the two disagreed systematically. Zero/negative readings (long
+  regen descents) were dropped by one site and averaged in by four. And the Vehicle Live
+  pill silently fell back to an **unweighted arithmetic mean** when no trip had a distance,
+  showing a different formula under the same label; it now returns `null` and
+  `estimateRangeFromSoc()`'s existing `userMedianConsumption()` fallback handles it.
+- Deliberately **not** changed: the cross-group difference. History → Trips reports
+  net-of-regen energy (`tripNetConsumptionKwh100`, physically derived) while the Vehicle
+  Live pill reports the device field, so the same trip still reads differently on the two
+  screens. Making one basis authoritative moves the headline number on four pages and
+  invalidates the stored 30-day baseline's comparability, so it stays a separate decision
+  (Option 3 in the BACKLOG entry, not taken).
+- Worth recording: `avg_consumption_kwh_100km` is itself a **sample-count running mean** of
+  `current_trip_consumption_kwh_100km` in `bydmate_ingest_telemetry`
+  (`(avg * sample_count + v) / (sample_count + 1)`) — a minute idling at a light weighs the
+  same as a minute at 90 km/h — and client trips derive it from lifetime-consumption
+  baselines instead (migration `20260720140000`). So group B is not one uniform "device
+  number"; its derivation differs by trip source.
+- No schema, migration, or stored preference. Read-path aggregation only; nothing moved
+  between Postgres and localStorage.
+- Verification: 4 new cases in `trip-metrics.test.mjs` covering each divergence — file
+  passes 7/7. `npm run test` 122 pass / 3 fail, `npx tsc --noEmit` 1 error, `npm run lint`
+  68 problems (13 errors) — all three failure counts **identical on a clean stashed tree**,
+  and none of the errors are in the touched files. `npm run build` could not run (another
+  `next build` process held the lock).
+
+### Di+ cabin temperature on Vehicle Live
+
+- Added a `Cabin temp` tile sourced from Di+ `inside_temp_c` for `gen2_2025` cars.
+- The tile appears only while the vehicle is parked or charging, alongside the existing
+  battery and outside temperature tiles. It stays hidden for 2024 cars, driving, stale or
+  asleep states, and missing/invalid Di+ values.
+- Reused the existing localized `vehicle.telemetry.cabinTemp` labels and temperature
+  validation. No migration, sender change, new preference, or new storage was introduced;
+  the value remains read-only app-owned Postgres telemetry.
+- Verification: focused cabin-temperature tests pass (3/3) and `git diff --check` passes.
+  `npm run build` was started but stopped after several minutes with no incremental output;
+  build status remains unverified.
+
 ## 2026-08-06
 
 ### Live-status heartbeat bypasses Vercel

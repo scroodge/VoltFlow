@@ -1,4 +1,4 @@
-import { tripNetConsumptionKwh100 } from "./trip-metrics.ts";
+import { tripNetConsumptionKwh100, weightedAvgConsumptionKwh100 } from "./trip-metrics.ts";
 import type { BydmateLiveSnapshotRow, BydmateTripRow } from "@/types/database";
 
 const DEFAULT_USABLE_BATTERY_KWH = 45.1;
@@ -108,7 +108,7 @@ export function estimateRangeFromSoc({
   const validSoc = validNumber(soc);
   if (validSoc == null) return { estimatedRangeKm: null, consumptionKwh100Km: null };
 
-  const tripAverage = averageTripConsumption(
+  const tripAverage = weightedAvgConsumptionKwh100(
     recentTrips.filter((trip) => {
       const consumption = validNumber(trip.avg_consumption_kwh_100km);
       const distance = validNumber(trip.distance_km);
@@ -156,7 +156,7 @@ function estimateConsumptionKwh100Km(
     reliableCount += 1;
   }
 
-  const tripAverage = averageTripConsumption(
+  const tripAverage = weightedAvgConsumptionKwh100(
     recentTrips.filter((trip) => {
       const consumption = validNumber(trip.avg_consumption_kwh_100km);
       const distance = validNumber(trip.distance_km);
@@ -271,30 +271,6 @@ function environmentConsumptionFactor(snapshot: BydmateLiveSnapshotRow) {
   }
 
   return clamp(factor, 0.9, 1.45);
-}
-
-export function averageTripConsumption(trips: BydmateTripRow[]) {
-  let weightedConsumption = 0;
-  let weightedDistance = 0;
-  let sampleConsumption = 0;
-  let sampleCount = 0;
-
-  for (const trip of trips) {
-    const consumption = trip.avg_consumption_kwh_100km;
-    if (consumption == null) continue;
-
-    sampleConsumption += consumption;
-    sampleCount += 1;
-
-    const distance = trip.distance_km;
-    if (distance != null && distance > 0) {
-      weightedConsumption += consumption * distance;
-      weightedDistance += distance;
-    }
-  }
-
-  if (weightedDistance > 0) return weightedConsumption / weightedDistance;
-  return sampleCount > 0 ? sampleConsumption / sampleCount : null;
 }
 
 function averageEnergyConsumption(
