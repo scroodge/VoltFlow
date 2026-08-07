@@ -83,6 +83,91 @@ A's re-derivations) were consolidated; see CHANGELOG.md 2026-08-04.
 
 ---
 
+## 🔵 Group B is still 5 copies of one formula with 3 different filters (re-raised 2026-08-07)
+
+### Problem
+
+The 2026-08-04 pass consolidated group A's re-derivations and justified B/C/D/F/G as
+"deliberately different tools". That justification holds **across** groups, but **not
+inside group B**. Group B is not five different tools — it is one tool
+(distance-weighted mean of `bydmate_trips.avg_consumption_kwh_100km`) implemented five
+times, and the copies disagree on which trips to include. Same trips, different pages,
+different numbers.
+
+| # | Site | Include when | No usable trips → |
+|---|---|---|---|
+| B1 | `day-insights.ts:50` `weightedAvgConsumptionKwh100()` | `distance ≥ 1` **and** `consumption > 0` | `null` |
+| B2 | `vehicle-analytics.ts:129-136` (inline, `fetchMonthlyStats`) | `distance > 0` and `consumption != null` | `null` |
+| B3 | `telemetry-buckets.ts:227-235` (inline, `buildAnalyticsSummary`) | `distance > 0` and `consumption != null` | `null` |
+| B4 | `telemetry-analytics-charts.tsx:250-256` (inline, `buildBarCharts`) | `distance > 0` and `consumption != null` | `null` |
+| B5 | `range-estimate.ts:276` `averageTripConsumption()` | any `consumption != null`; distance-weighted **only** when `distance > 0` | **unweighted mean** |
+
+Divergences that change a displayed number:
+
+- **Sub-1 km trips.** A 0.6 km trip reading 30 kWh/100 is dropped by B1, kept by B2/B3/B4.
+  Short trips are exactly the high-consumption ones (cold start, no cruise), so B1 reads
+  systematically lower than B2/B3/B4 on the same day.
+- **Zero / negative consumption.** The device reports ≤ 0 on a long regen descent. B1
+  drops those trips; B2/B3/B4/B5 average them in.
+- **B5's fallback is a different formula.** When no trip has a positive distance it
+  silently returns a plain unweighted mean instead of `null` — a distance-weighted
+  average and an arithmetic mean shown under the same label
+  (`vehicle.trips.consumption`).
+
+Second-order note (documentation, not a bug to fix here): the field itself is a
+**sample-count running mean** of `current_trip_consumption_kwh_100km`
+(`bydmate_ingest_telemetry`: `(avg * sample_count + v) / (sample_count + 1)`), so a
+minute idling at a light weighs the same as a minute at 90 km/h. Client trips (APK
+`TripRollupAccumulator`, migration `20260720140000`) derive it from lifetime-consumption
+baselines instead. So group B is not "the device's number" uniformly — the derivation
+differs by trip source. Group A (energy ÷ distance) is the physically correct one; B is
+kept because it is what the car itself displays.
+
+### Options
+
+**Option 1 — one shared helper, one filter policy (recommended).**
+Move a single `weightedAvgConsumptionKwh100(trips, options?)` into `trip-metrics.ts`
+(already the canonical consumption module) and call it from all five sites. Adopt B1's
+filter as the policy (`distance ≥ 1 km`, `consumption > 0`) because it is the only one
+that defends against both short-trip skew and negative device readings; expose
+`minDistanceKm` so B5 can opt out if the forecast genuinely wants every trip. Delete B5's
+unweighted-mean fallback — return `null` and let the caller's existing
+`userMedianConsumption()` fallback handle it (`range-estimate.ts:125` already does).
+Covered by a new `trip-metrics.test.mjs` case per divergence above.
+*Cost:* ~5 call sites + 1 helper + tests. *Risk:* Analytics summary / efficiency chart
+numbers shift slightly (they lose sub-1 km trips) — a correction, but visible.
+
+**Option 2 — shared helper, keep each site's current filter as an explicit option.**
+Same helper, but every call passes its existing thresholds, so no displayed number moves.
+Removes the copy-paste, keeps the disagreement.
+*Cost:* same. *Risk:* none. *Downside:* does not fix what was actually reported.
+
+**Option 3 — go further: make the user-facing "average consumption" energy-based.**
+Switch B1-B4's display sites to group A's `tripNetConsumptionKwh100()` so History,
+Analytics and the day card all report the same physically-derived number, and keep the
+device field only where the point is "what the car shows". This ends the cross-group
+mismatch too (History → Trips "net consumption" vs Vehicle Live "consumption" pill on the
+same trip).
+*Cost:* Option 1 plus a label/semantics review across ~8 display sites and the
+30-day baseline in `fetchConsumptionBaseline()` (which would have to move to the same
+basis or it inverts the better/worse arrow). *Risk:* highest — changes the headline
+number on four pages and invalidates the stored baseline's comparability.
+
+### Recommendation
+
+**Option 1** now. It is the only genuine duplication left, it is contained, and it makes
+the five sites agree. Option 3 is the right long-term answer but should be its own
+decision — it changes the headline number users have been reading, so it needs an
+explicit call on which basis is "the" consumption, not a silent refactor.
+
+### Data ownership
+
+No new user-facing data model. No schema change, no migration, no new stored preference —
+this is read-path aggregation over `bydmate_trips` rows that already exist. Nothing moves
+between Postgres and localStorage.
+
+---
+
 ## 🔵 Suspended head unit: "app is offline" while Di+ keeps recording
 
 ### Goal
