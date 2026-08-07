@@ -1,7 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { resolveChargingEtaPowerKw } from "./charging-math.ts";
+import {
+  energyFromGridKwh,
+  energyNeededKwh,
+  resolveChargingEtaPowerKw,
+} from "./charging-math.ts";
+
+test("keeps battery gain distinct from grid energy", () => {
+  const batteryGainKwh = energyNeededKwh(45.1, 0, 93);
+  const gridEnergyKwh = energyFromGridKwh(batteryGainKwh, 92);
+
+  assert.ok(Math.abs(batteryGainKwh - 41.943) < 1e-9);
+  assert.ok(Math.abs(gridEnergyKwh - 45.59) < 1e-9);
+  assert.ok(gridEnergyKwh > 45.1);
+});
 
 test("fresh live power wins over the whole-session average during DC taper", () => {
   assert.equal(

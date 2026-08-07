@@ -476,6 +476,15 @@ export function ChargingSessionScreen({
 
   const localeCode =
     locale === "be" ? "be-BY" : locale === "ru" ? "ru-RU" : "en-US";
+  const batteryGainKwh = energyNeededKwh(
+    session.battery_capacity_kwh,
+    session.start_percent,
+    derived.currentPercent,
+  );
+  const gridEnergyLabel =
+    historyMode && session.energy_overridden
+      ? (t("charging.energyFromCharger") as string)
+      : (t("charging.energyFromChargerEstimate") as string);
   const chargingStats: ChargingStat[] = [
     {
       label: historyMode ? (t("history.duration") as string) : (t("charging.elapsed") as string),
@@ -491,8 +500,13 @@ export function ChargingSessionScreen({
         ]
       : []),
     {
-      label: t("charging.energyDelivered") as string,
+      label: gridEnergyLabel,
       value: `${derived.chargedEnergyKwh.toFixed(2)} kWh`,
+      accent: "green",
+    },
+    {
+      label: t("charging.energyToBatteryEstimate") as string,
+      value: `${batteryGainKwh.toFixed(2)} kWh`,
       accent: "green",
     },
     ...(historyMode

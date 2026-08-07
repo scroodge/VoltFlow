@@ -137,7 +137,8 @@ vehicle truth.
 | Displayed result | Formula or rule | Explanation |
 | --- | --- | --- |
 | Current SOC | Fresh live SOC, then telemetry, then wall-clock estimate | Selects the most trustworthy source. |
-| Live charged energy | `C × (current SOC − start SOC) / 100 / (η/100)` | Converts measured SOC gain into grid-side energy. |
+| To battery (estimated) | `C × (current SOC − start SOC) / 100` | Energy represented by the measured or selected SOC gain; it cannot exceed the configured pack capacity for a full 0–100% charge. |
+| From charger (estimated) | `C × (current SOC − start SOC) / 100 / (η/100)` | Grid-side energy used for charging cost. It can exceed pack capacity because it includes charging losses and auxiliary load. A receipt-corrected completed session is labelled “From charger” without the estimate marker. |
 | Live charging cost | `charged grid energy × p` | Running estimated session cost. |
 | Elapsed time | `now − start time` | Time since the session began. |
 | Remaining grid energy | `C × (target SOC − current SOC) / 100 / (η/100)` | Electricity the charger is expected to draw from now until the target, including charging losses. It is not the energy currently stored in the battery. |

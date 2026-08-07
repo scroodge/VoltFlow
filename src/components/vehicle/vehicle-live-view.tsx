@@ -91,6 +91,7 @@ import { ChargingDeltaCard } from "@/features/charging/ui";
 import {
   chargingParamsFromSession,
   deriveSessionProgressFromSoc,
+  energyNeededKwh,
   resolveChargingEtaPowerKw,
   resolveDisplayChargePowerKw,
   secondsUntilTargetSoc,
@@ -821,6 +822,11 @@ function ChargingModeCard({
     });
     const clampedSoc = Math.min(liveSoc, params.targetPercent);
     const deliveredKwh = deriveSessionProgressFromSoc(params, clampedSoc).chargedEnergyKwh;
+    const batteryGainKwh = energyNeededKwh(
+      params.batteryCapacityKwh,
+      params.startPercent,
+      clampedSoc,
+    );
     const elapsedSeconds = session.started_at
       ? Math.max(0, (nowMs - Date.parse(session.started_at)) / 1000)
       : 0;
@@ -848,14 +854,16 @@ function ChargingModeCard({
     );
     return {
       timeLeftLabel: secsLeft != null && secsLeft > 0 ? formatDuration(secsLeft * 1000) : null,
-      deliveredLabel: `${deliveredKwh.toFixed(2)} kWh`,
+      gridEnergyLabel: `${deliveredKwh.toFixed(2)} kWh`,
+      batteryGainLabel: `${batteryGainKwh.toFixed(2)} kWh`,
       fullCostLabel: <CurrencyAmount currency={currency} value={fullCost} locale={locale} />,
       chargePowerKw,
     };
   }, [session, snapshot, telemetry.soc, telemetry.charge_power_kw, currency, locale, nowMs]);
   const items = [
     { key: "chargeTimeLeft", icon: Clock3, label: tx("charging.remaining"), value: chargeSummary?.timeLeftLabel ?? "—" },
-    { key: "chargeDelivered", icon: BatteryCharging, label: tx("charging.energyDelivered"), value: chargeSummary?.deliveredLabel ?? "—" },
+    { key: "chargeFromGrid", icon: BatteryCharging, label: tx("charging.energyFromChargerEstimate"), value: chargeSummary?.gridEnergyLabel ?? "—" },
+    { key: "chargeToBattery", icon: BatteryCharging, label: tx("charging.energyToBatteryEstimate"), value: chargeSummary?.batteryGainLabel ?? "—" },
     { key: "chargeFullCost", icon: Activity, label: tx("charging.fullCost"), value: chargeSummary?.fullCostLabel ?? "—" },
     {
       key: "chargePower",

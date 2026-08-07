@@ -11,6 +11,23 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-08-07
 
+### Charging energy now distinguishes grid draw from battery gain
+
+- The active `/vehicle` card and charging-session view now show two SOC-derived values:
+  **From charger (est.)** is grid-side energy and remains the basis for cost; **To battery
+  (est.)** is the corresponding battery-side SOC gain. A completed session corrected from a
+  provider receipt is labelled **From charger**, without the estimate marker.
+- This makes a valid result such as a 45.1 kWh car at 93% SOC and 92% efficiency legible:
+  about 41.943 kWh reaches the battery while about 45.590 kWh is drawn from the charger.
+  No formula, billing behavior, schema, preference, or data ownership changed; existing
+  user-owned car and charging-session data remains in Postgres.
+- Added English, Belarusian, and Russian copy, refreshed the charging-formula reference,
+  removed the stale BMS-primary-source comment, and added a focused pure-math case for the
+  grid-versus-battery example.
+- Verification: `git diff --check` passed and source review confirms no remaining use of
+  the ambiguous `energyDelivered` label. The new focused test, full test suite, build, lint,
+  and browser check were not run because they were not explicitly requested.
+
 ### Production build no longer depends on Google Fonts
 
 - Removed the `next/font/google` Geist Mono loader from `src/app/layout.tsx` and replaced

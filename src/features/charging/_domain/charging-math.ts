@@ -144,13 +144,6 @@ export type DerivedChargingState = {
   elapsedSeconds: number;
   remainingSeconds: number;
   isComplete: boolean;
-  /**
-   * Where `chargedEnergyKwh` came from:
-   *   "bms"      — BMS-measured per-session energy counter (FID_CHARGING_CAPACITY,
-   *                arrives as telemetry.kwh_charged); directly measured, accurate.
-   *   "estimate" — SOC-delta × battery_capacity ÷ efficiency fallback.
-   * Optional so existing consumers are unaffected.
-   */
   chargedEnergySource?: "bms" | "estimate";
 };
 
