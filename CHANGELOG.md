@@ -11,6 +11,18 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-08-07
 
+### Production build no longer depends on Google Fonts
+
+- Removed the `next/font/google` Geist Mono loader from `src/app/layout.tsx` and replaced
+  the `--font-mono` token with a standard system monospace stack in `src/app/globals.css`.
+  Production builds no longer require access to `fonts.googleapis.com`.
+- Updated `scripts/test-live-widget.ts` with the required nullable `telegramId` fixture
+  field after the build exposed a stale caller of `updateTelegramLiveWidgets`.
+- No user data, preferences, schema, migrations, or storage behavior changed. The
+  non-blocking Turbopack workspace-root warning remains separate.
+- Verification: elevated `npm run build` passed compilation, TypeScript, static generation
+  (126 pages), and route optimization; `git diff --check` passed.
+
 ### One average-consumption formula: group B's five copies collapsed into one helper
 
 Reported as "different pages use different formulas". The 2026-08-04 pass had mapped the

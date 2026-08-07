@@ -33,7 +33,13 @@ async function main() {
   }];
 
   console.log(`Sending test live widget (${phase})...`);
-  const result = await updateTelegramLiveWidgets({ supabase, userId, samples, receivedAt: now });
+  const result = await updateTelegramLiveWidgets({
+    supabase,
+    userId,
+    telegramId: null,
+    samples,
+    receivedAt: now,
+  });
   console.log("Result:", JSON.stringify(result));
 }
 
