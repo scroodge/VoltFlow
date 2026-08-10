@@ -1357,133 +1357,126 @@ Proposed 2026-07-21; awaiting go-ahead.
 
 ---
 
-## 🟠 Charging session closed `completed` short of target while live SOC was fresh
+## 🟡 Negative-SOC sentinel: Postgres guard shipped 2026-08-10, root cause still open
 
-### Goal
+> **Status update 2026-08-10.** The sibling issue in this same investigation — a charging
+> session closing `completed` short of target on stale math — **shipped and is verified
+> working**: commit `1e4ca70` (2026-08-07 21:25, `feat(charging, telemetry): enhance
+> session completion logic and sanitize negative SOC readings`) added
+> `resolveAutoCompletionProgress()` (`src/features/charging/_server/charging-session-auto-complete.ts`),
+> which refuses to complete a session unless server-measured progress has actually reached
+> target. Verified against prod 2026-08-10: **zero** sessions have completed short of
+> target since the fix deployed (previously 1 of 76). See CHANGELOG.md 2026-08-07. The one
+> pre-fix row (`debd8803-2e96-4de1-af90-2c677db9d205`) is still uncorrected — repairing it
+> is a separate data-repair decision, not yet made.
+>
+> The *same commit* also shipped `sanitizeDiplusSoc()` in
+> `src/lib/bydmate/telemetry-sanitizer.ts`, intended to fix this entry. **It does not work
+> in production.** Re-verifying this entry 2026-08-10 found the leak continuing past the
+> fix, so this entry stays open with the new evidence below, promoted to 🟠 since it now has
+> a confirmed-ineffective fix rather than just an open question.
 
-Investigate a live-ingest spot check (prompted by new `bydmate_live_snapshots` /
-`bydmate_telemetry_samples` rows arriving) that surfaced a violation of the documented
-invariant in AGENTS.md: *"Never persist math-only completion while live SOC is fresh."*
-Read-only investigation against prod, 2026-08-07.
+### Finding (updated)
 
-### Finding
+`bydmate_telemetry_samples.diplus_soc = -1` continues after the fix commit: **56
+occurrences since 2026-08-07 18:25 UTC** (the fix's deploy time), as recent as **this
+morning, 2026-08-10 07:17 UTC** (`Bulbazavr`). Original finding (379 occurrences across 9
+vehicles since 2026-05-23) is unchanged in nature, just now known to persist post-fix.
 
-Session `debd8803-2e96-4de1-af90-2c677db9d205` (car `way`, started 07:36:53, target 100%)
-is stored as:
+### Root-cause trace — the fix targets a field that isn't the one actually written
 
-```
-status: completed
-current_percent: 95.8979058881498   -- fractional, a wall-clock-math signature
-target_percent:  100
-stopped_at:      2026-08-07 12:39:13.437+00
-```
+Traced the full data path from JS sanitizer to the persisted column, live against prod:
 
-Telemetry contradicts the persisted value:
+1. `sanitizeDiplusSoc()` operates on `item.payload.diplus.soc` and deletes the key when out
+   of `{min:0,max:100}`. Confirmed correct in isolation — its own test
+   ("drops the DiPlus negative SOC sentinel without discarding valid telemetry") passes, and
+   a focused run of both new test files is 10/10 green.
+2. The sanitized `diplus` object flows unmodified as `p_diplus` into RPC
+   `bydmate_ingest_telemetry` (`src/app/api/bydmate/telemetry/route.ts:247-263`), which
+   builds `v_diplus := coalesce(p_diplus, '{}'::jsonb)` and — for non-`live_only` samples —
+   calls `bydmate_apply_diplus_columns('public.bydmate_telemetry_samples'::regclass, ...,
+   v_diplus, ...)`.
+3. That function (read live via `pg_get_functiondef`) sets
+   `diplus_soc = public.bydmate_jsonb_numeric($2, 'soc')` where `$2 = v_diplus` — i.e. it
+   reads exactly the field the JS layer is supposed to have already stripped.
 
-| Event | Time (UTC) |
-| --- | --- |
-| First `diplus_soc = 100` sample, device time | 12:38:30.503 |
-| That sample **received** server-side | 12:38:43.470 |
-| Session `stopped_at` | 12:39:13.437 — **30 s after** live SOC hit 100, well inside the 90 s freshness window |
-
-The car is still plugged in and reporting SOC 100 right now (checked at investigation
-time), so there was no unplug or drive-away edge that would legitimately justify a lower
-final SOC. The row is also internally inconsistent on its own terms: `status =
-"completed"` normally means "reached target," but `current_percent` sits 4.1 points below
-`target_percent`.
-
-**Cost impact:** recorded 20.25 kWh / 7.38 BYN charged. A true 51% → 100% on this car's
-45.1 kWh pack at 98% AC efficiency is 22.55 kWh / 8.22 BYN — **the stored session
-undercounts by ~2.3 kWh / 0.84 BYN, about 10%**, which feeds directly into the user's
-cost history.
-
-**Scope: rare, not systemic.** Of 76 `completed` sessions in the table, this is the only
-one with `current_percent` more than 0.5 points short of `target_percent` (avg gap on the
-one outlier: 4.1 pp). Not urgent, but real and reproducible in the data.
-
-### Root-cause narrowing (not fully proven)
-
-Three writers can set `status: "completed"`; two are ruled out by code inspection:
-
-- **`stopChargingSession`** (`src/features/charging/actions.ts:169`) — ruled out. It always
-  sets `status: "stopped"`, never `"completed"`, and uses the documented
-  live → in-session-telemetry → math priority chain via `resolveStopProgressForSession`.
-- **Server reconcile** (`src/features/charging/_server/charging-session-reconcile-logic.ts:250-268,290-298`)
-  — ruled out. Both reconcile branches force `finalSoc = target_percent` whenever
-  `reachedTarget` is true, so a reconcile-driven completion would have written exactly
-  `100`, not a fractional value.
-- **Client auto-complete** (`src/features/charging/_client/use-charging-session-live-sync.ts:119-166`)
-  — the remaining candidate. It persists `completionState.currentPercent` (which can come
-  from a math-derived `completionSource === "math"` branch) gated by
-  `shouldAllowMathAutoComplete(freshSocSnapshot, now)` at line 125. This session's fractional
-  `current_percent` matches a math-derived value, and the guard function's behavior around
-  the moment live SOC first reports 100 hasn't been read yet — that's the next step, not
-  something this investigation confirmed.
+**So the SQL trace is airtight and the JS fix's own logic is correct — yet -1 still lands
+in the column.** That means either (a) the affected traffic never goes through
+`sanitizePayloadTelemetry` at all, or (b) something rebuilds/duplicates `diplus.soc` after
+sanitization runs, before the RPC call. (a) is more likely given the project's documented
+"two senders"/two-ingress-path pattern (AGENTS.md): confirmed the Supabase Edge Function
+at `supabase/functions/bydmate-telemetry/index.ts` is, in the *repo*, a pure proxy to the
+Next.js route (converted 2026-07-23, predates this fix) — so if it is actually deployed
+and NOT stale, it should not bypass sanitization. Ruled out Vercel deploy staleness as the
+cause: `vercel ls` shows deployments continuing normally through and after the fix commit,
+and the *sibling* fix in the same commit (the completion guard, pure Next.js code) is
+confirmed working in prod, so the Next.js deployment is current. **Not yet checked:**
+whether the Android Mate app (`BYDMate-own`, a separate repo) calls the Supabase RPC
+directly via a Postgres/PostgREST client for some code path, bypassing the Next.js route
+(and therefore all JS-side sanitization) entirely — this is the leading remaining
+hypothesis and needs the Android source, which isn't in this repo.
 
 ### Options
 
-1. **Trace the guard, fix, and consider repairing the one affected row (recommended).**
-   Read `shouldAllowMathAutoComplete` and `deriveChargingSessionLiveBundle` in
-   `src/features/charging/_domain/charging-session-sync.ts` to find why a math completion
-   was allowed to win over a live SOC that had already reported 100 for 30+ seconds before
-   the write. Likely candidates: a race where the math branch fires before the client's
-   local snapshot cache has the fresh sample, or an off-by-one in the freshness check.
-   Fix the guard; separately decide whether to backfill `debd8803`'s `current_percent`/
-   `charged_energy_kwh`/`estimated_cost` to the live-SOC-correct values (data repair is a
-   distinct decision from the code fix).
-2. **Leave it — one stale row, not worth chasing.** *Con:* the underlying race can recur on
-   any user whose app closes or backgrounds at the exact moment SOC crosses target; silent
-   ~10% undercounts erode trust in the cost history feature this app exists to provide.
-
-### Data ownership and location
-
-No new data model. This is a bug-fix investigation against the existing app-owned
-`charging_sessions` table in Postgres; no client-storage or ownership question arises.
-
----
-
-## 🟡 Ingest accepts sentinel `diplus_soc = -1` readings
-
-### Finding
-
-`bydmate_telemetry_samples.diplus_soc = -1` has been persisted **379 times across 9
-vehicles** since 2026-05-23 (most recent: today, 13:25:55). This looks like an unfiltered
-device/parse sentinel for "no reading" rather than a real SOC value, but it's stored and
-available to any downstream code that reads `diplus_soc` without a sanity check (e.g. the
-`measuredSocFromMate` / `deriveSessionProgressFromSoc` paths that feed reconcile and
-session math).
-
-Separately confirmed **not a bug**: `Bulbazavr` reported `diplus_charging_status = 1`
-in 296 of 298 samples over 15 minutes while driving at up to 65 km/h — this is the
-documented-unreliable flag (AGENTS.md: prefer `charge_power_kw`, the `is_charging`
-fallback is invalid when gun state is `1`/unplugged), and the parked + `charge_power_kw`
-auto-start guards correctly did not fire on it. No action needed there.
-
-### Options
-
-1. **Reject/null out `diplus_soc < 0` at ingest (recommended).** Cheapest fix, closest to
-   the source, stops the value from ever reaching session math or analytics. Needs
-   confirming this sentinel is never a legitimate signal (e.g. "sensor unavailable" that
-   some other field should carry instead) before dropping it silently.
-2. **Filter at every read site instead.** More defensive-in-depth but repeats the same
-   guard across reconcile, session math, and analytics — same category of duplicated logic
-   AGENTS.md already warns about for the two-senders case.
-3. **Leave it.** *Con:* a session or analytic view that doesn't already guard against a
-   negative percent will render nonsense; low but nonzero blast radius given 379 occurrences
-   over 9 vehicles.
+1. **Check the Android Mate app for a direct-to-Supabase ingest path (recommended first
+   step).** If some APK version/path posts straight to
+   `.../rest/v1/rpc/bydmate_ingest_telemetry_batch` instead of `/api/bydmate/telemetry`,
+   sanitization needs to move server-side (into `bydmate_apply_diplus_columns` itself, or a
+   `CHECK`/trigger on `bydmate_telemetry_samples`) so it can't be bypassed by any client.
+   This matches the project's existing lesson that a fix in one sender is not a fix.
+2. **Move the `-1` guard into Postgres regardless of root cause.** Add the range check
+   directly inside `bydmate_jsonb_numeric` (or a `CHECK (diplus_soc IS NULL OR diplus_soc
+   BETWEEN 0 AND 100)` constraint) so it holds for every ingress path, present and future,
+   independent of which sender is at fault. *Pro:* closes the hole regardless of cause,
+   defense-in-depth the project already leans on elsewhere (self-hosted `search_path` bugs,
+   RLS). *Con:* doesn't explain *why* -1 is arriving, so option 1 is still worth doing to
+   understand blast radius (is this only these ~9 vehicles' traffic, or could other invalid
+   diplus fields be leaking the same way?).
+3. **Leave it.** Same as originally: low but nonzero blast radius (56 occurrences across at
+   least 5 vehicles in under 3 days), and now a *known-ineffective* fix sitting in the
+   codebase, which risks someone believing this is already handled.
 
 ### Recommendation
 
-Option 1, once confirmed that `-1` never carries meaning elsewhere in the DiPlus/Mate
-contract. Lower priority than the completion-math bug above — no confirmed incorrect
-persisted session traced to it yet, just a latent data-quality risk.
+Do both 1 and 2, in that order — 2 is cheap defense-in-depth and closes the hole
+immediately regardless of what's found; 1 explains why the JS-layer fix (which is correct
+code, just not on the path this traffic takes) didn't help, and matters for deciding
+whether other JS-side telemetry sanitization has the same blind spot.
+
+### ✅ Option 2 shipped 2026-08-10
+
+Migration `20260810120000_guard_diplus_soc_range.sql`: `bydmate_apply_diplus_columns`
+now clamps `diplus_soc` to `NULL` whenever the parsed value falls outside `0–100`, via a
+`CASE` around the existing `bydmate_jsonb_numeric($2, 'soc')` read — same function serves
+both `bydmate_telemetry_samples` and `bydmate_live_snapshots`, so both are covered by one
+change regardless of which sender is responsible. Applied to self-hosted prod via `psql -f`
+(the CLI can't reach the pooler over TLS). Verified: `pg_get_functiondef` on prod shows the
+new `CASE` expression live. This closes the hole even though the root cause (which sender
+bypasses the Next.js sanitizer) is still unknown.
+
+**Also applied 2026-08-10:** session `debd8803` (see the sibling entry above) was
+backfilled to its live-SOC-correct values — `current_percent: 100`,
+`charged_energy_kwh: 22.55`, `estimated_cost: 8.2156415` (was 95.898% / 20.249 kWh / 7.377
+BYN) — computed from the same `energyNeededKwh`/`energyFromGridKwh`/`costFromGridEnergy`
+formulas the app itself uses (51%→100% on a 45.1 kWh pack at 98% efficiency,
+0.36433 BYN/kWh).
+
+### Still open — option 1
+
+The Postgres guard is a backstop, not an explanation. Nobody has confirmed *why* -1 was
+reaching the RPC despite the JS sanitizer being correct and tested — the leading hypothesis
+(the Android Mate app calling the Supabase RPC directly for some code path, bypassing
+`/api/bydmate/telemetry` and all JS-side sanitization) still needs the `BYDMate-own`
+Android source, which isn't in this repo. Worth doing if other JS-side telemetry
+sanitization might have the same blind spot, but no longer urgent — the column can no
+longer carry the bad value regardless of the answer.
 
 ### Data ownership and location
 
-No new data model; a validation change to the existing ingest path
-(`POST /api/bydmate/telemetry`) writing to the existing app-owned
-`bydmate_telemetry_samples` table.
+No new data model. Same as originally: a validation change to existing app-owned ingest
+(`bydmate_telemetry_samples`, `bydmate_apply_diplus_columns`) in Postgres.
 
-Proposed 2026-08-07; awaiting go-ahead on both entries above. **Should I build these?**
+Postgres guard + data repair shipped 2026-08-10; root-cause investigation (option 1) still
+awaiting go-ahead if wanted.
 
 ---

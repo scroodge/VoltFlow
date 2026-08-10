@@ -9,7 +9,93 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-08-10
+
+### Main Mate sender now delivers all four tyre pressures
+
+- Added `tire_press_fl_kpa`, `tire_press_fr_kpa`, `tire_press_rl_kpa`, and
+  `tire_press_rr_kpa` to both full and parked/status `diplus` payloads produced by
+  `CloudTelemetryPayload`. Unknown readings remain omitted rather than serialized as
+  null. The car-off daemon already sent the same wire fields.
+- This activates the existing cloud path end to end: the ingest contract, flattened
+  live/history columns, RPC and range estimator already support the four values. No
+  migration or policy change was required. The pressures remain user-owned vehicle
+  telemetry in Postgres; Mate's Room queue is only a transient delivery cache.
+- Added focused payload assertions for full and parked shapes plus unknown-value
+  omission, and updated the English telemetry map and Russian wire contract.
+- Verification: both repositories pass `git diff --check`, and source review confirms
+  the four keys are present in both serializers and match the existing server contract.
+  The focused Android test was attempted twice but could not run because unrelated
+  `CommandDaemonTest` code already fails unit-test compilation against removed
+  `nextParkedWakeUntilMs` / `parkedWakeUntilMs` APIs and
+  `PARKED_UNPLUGGED_WAKE_WINDOW_MS`. No EvAcChargeTimer build or test suite was run.
+
+### di+ readable-data reference now covers the full published catalog
+
+- Expanded sibling Mate documentation `docs/DIPLUS_DATA.md` from the 48 parameters
+  currently requested by `DiParsClient` to all 141 parameters in the current first-party
+  di+ catalog. The supplied beta16 APK corroborates 140 entries; newer `1105` (`里程值`)
+  is explicitly marked official-only.
+- Added numeric IDs, exact Chinese names, established meanings/units, APK enum labels,
+  and a `Used` marker for the 48 current VoltFlow fields. Unknown units and compatibility
+  remain explicitly unknown rather than inferred.
+- Corrected the charge-connector, gear and charging-state enum summaries, distinguished
+  raw `里程` from display `里程值`, and added a concise index of the separate trips,
+  charging-record, alarm, video/camera, configuration and automation read APIs.
+- Documentation only: no telemetry payload, database, UI, ownership, or storage behavior
+  changed. Verification found 141 table rows, 141 unique IDs, exact agreement between
+  the 140 APK IDs and the documented non-`1105` IDs, all 48 template parameters present,
+  exactly 48 `Used` markers, and clean diffs in both repositories.
+
+## 2026-08-10
+
+### `diplus_soc` guarded in Postgres against the negative-SOC sentinel that bypassed the JS sanitizer
+
+- Follow-up to the 2026-08-07 telemetry sanitizer below: re-verifying it in production
+  found `diplus_soc = -1` still landing in `bydmate_telemetry_samples` after the fix
+  deployed (56 occurrences over the following ~2.5 days). Traced the full JS→RPC→Postgres
+  data path live against prod: the JS sanitizer's own logic is correct (its test passes),
+  but the flattened `diplus_soc` column is written by `bydmate_apply_diplus_columns`, a
+  shared Postgres function also reachable by any sender that calls the ingest RPC directly
+  — so a client bypassing the Next.js route bypasses the sanitizer entirely. Root cause
+  (which sender does this) is still unconfirmed; needs the `BYDMate-own` Android source,
+  not in this repo.
+- Added migration `20260810120000_guard_diplus_soc_range.sql`: `diplus_soc` is now clamped
+  to `NULL` whenever the parsed value falls outside `0–100`, inside
+  `bydmate_apply_diplus_columns` itself. One function serves both
+  `bydmate_telemetry_samples` and `bydmate_live_snapshots`, so this closes the hole for
+  both tables and for any future sender, independent of the unresolved root cause. Applied
+  to self-hosted prod via `psql -f` per the standard self-hosted procedure.
+- **Data repair:** session `debd8803` (2026-08-07, car `way`), the one session found closed
+  short of target by the sibling completion-guard bug, was backfilled to its live-SOC-
+  correct values: `current_percent 100` (was `95.8979058881498`), `charged_energy_kwh
+  22.55` (was `20.249`), `estimated_cost 8.2156415 BYN` (was `7.377`) — computed from the
+  same formulas the app uses for a 51%→100% charge on a 45.1 kWh pack at 98% efficiency,
+  0.36433 BYN/kWh.
+- No schema or data-ownership change; same app-owned Postgres tables.
+
 ## 2026-08-07
+
+### Charging session completion now refuses to persist a stale math value
+
+- Prompted by a live-ingest spot check that caught session `debd8803` (car `way`) closing
+  as `completed` at a fractional `current_percent` (95.898%) 4.1 points below its 100%
+  target, ~10% under the true energy/cost, while telemetry showed live SOC had already
+  reported 100% for 30+ seconds — violating the documented invariant "never persist
+  math-only completion while live SOC is fresh."
+- Added `completeChargingSession()` (`src/features/charging/actions.ts`) and
+  `resolveAutoCompletionProgress()` (new file,
+  `src/features/charging/_server/charging-session-auto-complete.ts`): completion is now a
+  server decision made from a fresh server-side read (live snapshot → in-session telemetry
+  → wall-clock math), and a resolved value below target **blocks** completion outright
+  rather than persisting a partial number under a `"completed"` status.
+  `useChargingSessionLiveSync` now calls this action instead of writing completion state
+  computed from the client's local snapshot cache.
+- Verified against production 2026-08-10 (three days after deploy): **zero** sessions have
+  completed short of target since, versus the one pre-fix occurrence found in the original
+  76-session history. The pre-fix row itself remains uncorrected; a data-repair decision on
+  backfilling it has not been made.
+- No schema or data-ownership change; same app-owned `charging_sessions` table.
 
 ### Charging energy now distinguishes grid draw from battery gain
 
