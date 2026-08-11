@@ -1451,20 +1451,22 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
               </div>
             </div>
 
-            <div className="mt-4 grid gap-2">
-              <ChargingActionButton
-                status={actionButtonStatus}
-                disabled={!selectedCar || stopping || hasLiveChargingData}
-                loading={stopping}
-                labels={{
-                  start: mainButtonLabel ?? (t("dashboard.startCharging") as string),
-                  stop: t("charging.stop") as string,
-                  syncing: t("dashboard.syncing") as string,
-                  driving: t("dashboard.statusDriving") as string,
-                }}
-                onClick={() => void handleMainAction()}
-              />
-            </div>
+            {!hasLiveChargingData ? (
+              <div className="mt-4 grid gap-2">
+                <ChargingActionButton
+                  status={actionButtonStatus}
+                  disabled={!selectedCar || stopping}
+                  loading={stopping}
+                  labels={{
+                    start: mainButtonLabel ?? (t("dashboard.startCharging") as string),
+                    stop: t("charging.stop") as string,
+                    syncing: t("dashboard.syncing") as string,
+                    driving: t("dashboard.statusDriving") as string,
+                  }}
+                  onClick={() => void handleMainAction()}
+                />
+              </div>
+            ) : null}
           </section>
 
           {showDeferredDetails ? (

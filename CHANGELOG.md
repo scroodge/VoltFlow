@@ -11,6 +11,20 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-08-10
 
+### Charging dashboard no longer shows a disabled stop-tracking button during live charging
+
+- When a fresh car snapshot explicitly reports charging, the dashboard now omits the
+  Start/Stop tracking action entirely. The existing UI already disabled that button in this
+  state, but leaving a disabled “Stop charging” control made automatic tracking look like a
+  broken manual action.
+- The action returns if telemetry is stale/absent or the car reports unplugged, preserving
+  the fallback recovery path for an open app-managed session. This does not send a command
+  to the car or charger and does not change automatic start/stop, telemetry, schema,
+  ownership, or storage.
+- Verification: source review confirms the condition is exactly the existing fresh,
+  charging-telemetry guard; `git diff --check` passed. Build, lint, tests, and browser
+  checks were not run because they were not explicitly requested.
+
 ### Main Mate sender now delivers all four tyre pressures
 
 - Added `tire_press_fl_kpa`, `tire_press_fr_kpa`, `tire_press_rl_kpa`, and

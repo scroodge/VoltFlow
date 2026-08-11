@@ -444,16 +444,74 @@ Existing GPS consent is untouched.
 1. **P0 — reliable stop/off finalization — complete.** The current Mate client already has
    the durable final block, immediate flush attempt, and 20-minute next-boot recovery. G3's
    production audit now measures its first server acceptance; no duplicate protocol is planned.
-2. **P1 — reduce current ingest fan-out.** Gate charge-notification work to charging
-   changes, check widget eligibility/throttle before unrelated reads, debounce profile
-   activity writes, and avoid full auto-session reads when no charging/open-session signal
-   exists. No wire-contract change.
+2. **P1 — reduce current ingest fan-out — half-shipped, see refined plan below.** No
+   wire-contract change.
 3. **P2 — v2 events in shadow mode.** Add event ids, sequence, algorithm version and
    idempotency validation. Upload `trip_segment`/end events alongside existing samples;
    compare distance, SOC, start/end, and track fidelity per trip.
 4. **P3 — measured cutover and retention.** Reduce ordinary raw persistence only when
    parity thresholds hold. Keep adaptive route points and short diagnostic retention;
    retain cloud aggregates and final facts for all supported history views.
+
+### P1 refined plan (2026-08-10) — two of four items already shipped under G2
+
+Re-checked P1 against current code before proposing anything further, since G2 (shipped
+2026-07-29) already touches adjacent ground.
+
+**Already done, no action needed:**
+- **Debounce `last_active_at` writes** — done, and not scoped to `live_only` only:
+  `route.ts`'s `lastActiveBefore` filter applies to every request.
+- **Widget throttle before unrelated reads** — done per G2: a throttled widget edit skips
+  loading car metadata and building HTML before the throttle check.
+
+**Still open, with a concrete design and one correctness risk flagged:**
+
+1. **Gate charge-notification work to charging changes.**
+   `processBydmateChargeNotifications` (`src/lib/push/charge-notifications.ts:161`)
+   unconditionally calls `loadNotificationProfile` and selects
+   `bydmate_charge_notification_state` on every non-`live_only` request, even a plain
+   driving sample with zero charging signal.
+   - **Design:** skip the call entirely when neither of the following holds: (a) any
+     sample in the batch is charging per `isTelemetryCharging(sample.telemetry, sample)`
+     (`src/features/charging/_domain/telemetry-charging.ts:50`), or (b) the vehicle's
+     last known telemetry, already held in-memory as `previousTelemetryBeforeSanitize`
+     (`route.ts:229`, populated before this function runs, no extra query), was charging.
+     Condition (b) catches the just-stopped-charging transition the function needs to
+     close out, without a DB read to discover it.
+   - **Needs verification during implementation, not assumed:** `isTelemetryCharging`
+     takes an optional `context` carrying Di+ gun-state fields for its fallback path
+     (`telemetry-charging.ts:52,64-68`); confirm what `previousTelemetryBeforeSanitize`'s
+     stored shape actually carries before relying on it for condition (b), or the skip
+     could be wrong in the gun-state-fallback case specifically (the one AGENTS.md already
+     flags as unreliable for car `way`).
+2. **Avoid full auto-session reads with no charging/open-session signal.**
+   `processBydmateAutoChargingSessions` (`src/features/charging/_server/charging-auto-session.ts:270`)
+   unconditionally fires 3 selects (`cars`, open `charging_sessions`, auto-session state)
+   on every non-`live_only` request.
+   - **Correctness risk, not just a cost question:** unlike item 1, this function's job
+     includes detecting the **charging → not-charging** transition to auto-stop a session
+     (unplug, drive-away). A naive gate of "skip unless currently charging" would silently
+     break auto-stop for exactly the samples where charging just ended — a regression to
+     charging correctness, which is worse than the invocation cost this phase is trying to
+     reduce. The same-signal check from item 1 (currently charging OR was charging per
+     `previousTelemetryBeforeSanitize`) covers the *known* transition case, but does not by
+     itself confirm whether a session is actually open server-side without a read.
+   - **Options:** (a) apply the same charging-signal gate as item 1 — cheaper than nothing,
+     but relies entirely on `previousTelemetryBeforeSanitize` correctly reflecting
+     "was charging" across every legitimate transition path (including drive-away-while-
+     charging, not just unplug), which has not been verified against
+     `shouldAutoStopOnDriveAway`'s speed-based trigger (`charging-live.ts:267-272`) — a
+     drive-away sample may show `isTelemetryCharging: false` with no prior-charging
+     telemetry difference the naive check would catch differently from a normal drive.
+     (b) denormalize an `has_open_charging_session` flag onto `cars`, updated whenever a
+     session opens/closes, so the route can check it with the data it already loads instead
+     of a fresh select — closes the gap fully but is schema work, out of scope for a
+     "fan-out reduction" pass. (c) leave this one alone for now; ship item 1 only.
+   - **Recommendation: (c).** Ship item 1 (charge notifications) on its own — it's a clear,
+     low-risk win. Defer item 2 until the drive-away-while-charging interaction with a
+     signal-only gate is verified against real samples, or until option (b)'s schema change
+     is separately proposed and approved; a broken auto-stop is a worse outcome than the
+     invocation cost it would save.
 
 ### Design-review gates before P2/P3
 
