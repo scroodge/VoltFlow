@@ -1252,7 +1252,12 @@ Proposed 2026-07-21; awaiting go-ahead.
 
 ---
 
-## 🟡 Dashboard "Walk to my car" button — pedestrian handoff to the phone's maps app
+## ~~Dashboard "Walk to my car" button — pedestrian handoff to the phone's maps app~~ — SHIPPED 2026-08-06
+
+> **Closed 2026-08-11.** Shipped in commit `50a4b75` (2026-08-06 17:13,
+> `feat(dashboard, vehicle): add "Walk to my car" button for GPS handoff to maps app`)
+> and confirmed by the owner as live in production and working. The plan below is kept
+> for the decision record only — no work remains.
 
 ### Goal
 
@@ -1416,7 +1421,7 @@ Proposed 2026-07-21; awaiting go-ahead.
 
 ---
 
-## 🟡 Negative-SOC sentinel: Postgres guard shipped 2026-08-10, root cause still open
+## 🟡 Negative-SOC sentinel: Postgres guard shipped 2026-08-10, root cause answered 2026-08-11
 
 > **Status update 2026-08-10.** The sibling issue in this same investigation — a charging
 > session closing `completed` short of target on stale math — **shipped and is verified
@@ -1520,15 +1525,41 @@ BYN) — computed from the same `energyNeededKwh`/`energyFromGridKwh`/`costFromG
 formulas the app itself uses (51%→100% on a 45.1 kWh pack at 98% efficiency,
 0.36433 BYN/kWh).
 
-### Still open — option 1
+### ~~Still open — option 1~~ — ANSWERED 2026-08-11 against the `BYDMate-own` source
 
-The Postgres guard is a backstop, not an explanation. Nobody has confirmed *why* -1 was
-reaching the RPC despite the JS sanitizer being correct and tested — the leading hypothesis
-(the Android Mate app calling the Supabase RPC directly for some code path, bypassing
-`/api/bydmate/telemetry` and all JS-side sanitization) still needs the `BYDMate-own`
-Android source, which isn't in this repo. Worth doing if other JS-side telemetry
-sanitization might have the same blind spot, but no longer urgent — the column can no
-longer carry the bad value regardless of the answer.
+The Postgres guard is a backstop, not an explanation, so the question was: why was -1
+reaching the RPC despite the JS sanitizer being correct and tested? The leading hypothesis
+was that the Android Mate app calls the Supabase RPC directly for some code path, bypassing
+`/api/bydmate/telemetry` and all JS-side sanitization.
+
+**That hypothesis is wrong.** Checked directly against
+`/Users/way/Dev/Voltflow_Project/BYDMate-own`:
+
+- A grep for `rest/v1`, `/rpc/`, `supabase`, and `bydmate_ingest` across the whole of
+  `app/src/main/kotlin/` returns **no matches**. The APK has no Supabase client, no REST
+  URL, and no RPC call — there is no bypass path, and there never was one.
+- Both senders post to the same HTTP ingest route. The app uses
+  `SettingsRepository.DEFAULT_CLOUD_SYNC_URL = "https://voltflow.life/api/bydmate/telemetry"`,
+  and `CommandDaemon` normalizes any configured URL back to `…/api/bydmate/telemetry`
+  before sending. Everything goes through the sanitized route.
+
+**Actual root cause: the client never filters SOC at all, and -1 is a legitimate Di+
+value.** `CloudTelemetryPayload` emits SOC with a bare `putIfPresent("soc", soc)` (both in
+the `telemetry` block and the flattened `diplus` block), and a grep for any negative-SOC
+guard (`soc in 0`, `>= 0`, `< 0`, `coerce`, `takeIf`) across `app/src/main/kotlin/` returns
+**zero hits**. Di+'s -1 unavailable-sentinel is therefore forwarded verbatim, arriving at
+`/api/bydmate/telemetry` through the front door.
+
+So the sanitizer was never bypassed — it had a **coverage gap**, exactly as this issue's own
+"the fix targets a field that isn't the one actually written" note suspected. The Postgres
+clamp plus `sanitizeDiplusSoc` (commit `1e4ca70`) now cover it server-side.
+
+**Follow-up worth doing (small, not urgent):** the same "client sends whatever Di+ reports,
+server is the only validator" shape applies to *every* numeric telemetry field, not just
+SOC. Any field whose Di+ sentinel falls outside its plausible range has the same exposure.
+The durable fix is to keep range rules server-side in `numericTelemetryRules` and make sure
+each flattened column is covered — do **not** rely on the APK to filter, since head units
+update on their own schedule and an old APK will keep sending sentinels for a long time.
 
 ### Data ownership and location
 
