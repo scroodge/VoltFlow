@@ -1,6 +1,6 @@
 import { processBydmateAutoChargingSessions, reconcileChargingSessionsForUser } from "@/features/charging/server";
 import { normalizePayloads, type HourlyBlock, type TripBlock } from "@/lib/bydmate/ingest-payload";
-import { planTelemetryIngestDelivery } from "@/lib/bydmate/ingest-delivery";
+import { batchHasChargingSignal, planTelemetryIngestDelivery } from "@/lib/bydmate/ingest-delivery";
 import { parseIngestStats } from "@/lib/bydmate/ingest-stats";
 import { processBydmateChargeNotifications } from "@/lib/push/charge-notifications";
 import { processBydmateLiveStatusNotifications } from "@/lib/push/live-status-notifications";
@@ -237,9 +237,11 @@ export async function POST(request: Request) {
     );
     // Only a wholly live-only batch without client rollups can skip durable fan-out.
     // A mixed batch stays on the full path so its normal sample remains authoritative.
+    const chargingSignal = batchHasChargingSignal(samples, previousTelemetryBeforeSanitize);
     const deliveryPlan = planTelemetryIngestDelivery(samples, {
       hourlyBlockCount: hourlyBlocks.length,
       tripBlockCount: tripBlocks.length,
+      chargingSignal,
     });
 
     const { data: ingestResult, error: ingestError } =

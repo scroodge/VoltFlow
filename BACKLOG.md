@@ -464,9 +464,10 @@ Re-checked P1 against current code before proposing anything further, since G2 (
 - **Widget throttle before unrelated reads** — done per G2: a throttled widget edit skips
   loading car metadata and building HTML before the throttle check.
 
-**Still open, with a concrete design and one correctness risk flagged:**
+**✅ Item 1 shipped 2026-08-11** — see CHANGELOG.md. Item 2 (auto-session gating) remains
+open, deferred for the correctness reason below.
 
-1. **Gate charge-notification work to charging changes.**
+1. **Gate charge-notification work to charging changes — SHIPPED.**
    `processBydmateChargeNotifications` (`src/lib/push/charge-notifications.ts:161`)
    unconditionally calls `loadNotificationProfile` and selects
    `bydmate_charge_notification_state` on every non-`live_only` request, even a plain

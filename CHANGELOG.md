@@ -61,6 +61,38 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
   the 140 APK IDs and the documented non-`1105` IDs, all 48 template parameters present,
   exactly 48 `Used` markers, and clean diffs in both repositories.
 
+## 2026-08-11
+
+### Charge-notification ingest work now gated to an actual charging signal (P1 item 1)
+
+- Part of the "Telemetry efficiency and reliable trip-finalization" roadmap's P1
+  (BACKLOG.md). Re-checking P1 against current code found G2 (2026-07-29) only gates the
+  narrow all-`live_only` batch case; the general path — any batch with at least one normal
+  sample, which is most traffic — still ran `processBydmateChargeNotifications`
+  unconditionally, loading the notification profile and `bydmate_charge_notification_state`
+  on every request regardless of whether anything charging-relevant happened.
+- Added `batchHasChargingSignal()` in `src/lib/bydmate/ingest-delivery.ts`: true when any
+  sample in the batch is charging (`isTelemetryCharging`), or when the vehicle's last known
+  telemetry was — the latter catches the just-stopped-charging sample, which still needs to
+  close out any pending notification state even though it no longer reports charging itself.
+  `planTelemetryIngestDelivery` now takes this as a `chargingSignal` param and sets
+  `runChargeNotifications: !snapshotOnly && chargingSignal`; the other three fan-out flags
+  are unchanged.
+- Deliberately scoped to charge-notifications only. The sibling item (gating
+  `processBydmateAutoChargingSessions`'s 3 selects) was evaluated and **not built**: that
+  function must also catch the charging → not-charging transition to auto-stop a session,
+  and a naive "skip unless currently charging" gate risks silently breaking auto-stop on
+  drive-away/unplug — a correctness regression worse than the invocation cost it would save.
+  See BACKLOG.md's P1 refined plan for the deferred design.
+- No wire-contract change, no schema, no new data model.
+- Verification: `npx tsc --noEmit` clean, `npx eslint` clean on the three touched files,
+  `npm run test` 122/125 pass (3 pre-existing failures, unrelated to touched files, same
+  baseline recorded in the 2026-08-07 entry above), the excluded
+  `charging-auto-session.test.mjs` 7/7 pass, and 8 new/updated
+  `ingest-delivery.test.mjs` cases pass (originally failed standalone on a `@/`-aliased
+  import inside a file the bare Node test runner loads directly — switched to a relative
+  import per the project's test convention, then green).
+
 ## 2026-08-10
 
 ### `diplus_soc` guarded in Postgres against the negative-SOC sentinel that bypassed the JS sanitizer
