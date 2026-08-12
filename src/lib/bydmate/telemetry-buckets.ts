@@ -1,3 +1,4 @@
+import { dedupeTripsBySource } from "@/lib/bydmate/hero-drive-metrics";
 import { weightedAvgConsumptionKwh100 } from "@/lib/bydmate/trip-metrics";
 import type { TelemetryHistoryPoint } from "@/lib/bydmate/telemetry-history";
 import {
@@ -204,6 +205,7 @@ export function buildAnalyticsSummary({
   trips: BydmateTripRow[];
   chargedKwh?: number | null;
 }): AnalyticsSummary {
+  const dedupedTrips = dedupeTripsBySource(trips);
   let socMin = Infinity;
   let socMax = -Infinity;
 
@@ -223,7 +225,7 @@ export function buildAnalyticsSummary({
   let regenKwh = 0;
   let maxSpeed: number | null = null;
 
-  for (const trip of trips) {
+  for (const trip of dedupedTrips) {
     distanceKm += trip.distance_km ?? 0;
     regenKwh += trip.regen_energy_kwh ?? 0;
     if (trip.max_speed_kmh != null) {
@@ -238,11 +240,11 @@ export function buildAnalyticsSummary({
   }
 
   return {
-    tripCount: trips.length,
+    tripCount: dedupedTrips.length,
     distanceKm,
     regenKwh,
     chargedKwh: chargedKwh ?? null,
-    avgConsumptionKwh100: weightedAvgConsumptionKwh100(trips),
+    avgConsumptionKwh100: weightedAvgConsumptionKwh100(dedupedTrips),
     maxSpeedKmh: maxSpeed,
     socSwing: Number.isFinite(socMin) && Number.isFinite(socMax) ? socMax - socMin : null,
     telemetryPoints: points.length,

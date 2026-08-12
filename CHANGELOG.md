@@ -9,6 +9,39 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-08-12
+
+### Trip-distance stats no longer double-count `byd_energydata` twin trips
+
+- Investigating a user report that the app's distance reading "does not correspond to
+  odometer" (`kevlar_5@meta.ua`) found the live odometer itself was correct
+  (`telemetry.odometer_km`, `diplus_mileage_km`, and `diplus.mileage_km` all agreed and
+  were stable), but surfaced a separate bug: three stat-aggregation call sites summed raw
+  `distance_km`/traction/regen energy across `bydmate_trips` without excluding
+  `byd_energydata` rows that duplicate a `telemetry`/`client_trip` row for the same
+  physical drive (documented, expected dual-source behavior per migration
+  `20260706190000`) — so a drive with a twin was counted twice.
+- `dedupeTripsBySource()` (`src/lib/bydmate/hero-drive-metrics.ts`) already existed for
+  exactly this and was applied to "distance since charge" / km-per-%-SOC, but not to:
+  `fetchMonthlyStats()` (`src/lib/vehicle-analytics.ts`, feeds Monthly Stats and the
+  Analytics summary stat tile), `aggregateHistorySummary()`
+  (`src/lib/history-day-summary.ts`, feeds the History tab's day/week/month/quarter/year
+  summary card), and `buildAnalyticsSummary()` (`src/lib/bydmate/telemetry-buckets.ts`,
+  feeds the Vehicle Analytics summary panels). All three now dedupe trips before summing;
+  `tripCount`/`hasTrips` in the history summary also switched to the deduped count so it
+  matches the now-correct distance/energy totals.
+- Deliberately left the History → Trips tab's raw trip *list* undeduped — it already shows
+  a "logged from BYD" badge on `byd_energydata` rows for transparency, so collapsing them
+  there would remove information users can currently see, not just fix a stat.
+- No schema, ownership, or storage change — pure aggregation-logic fix, reusing existing
+  app-owned trip rows in Postgres.
+- Verification: `npx tsc --noEmit` clean; `hero-drive-metrics.test.mjs` and
+  `history-day-summary.test.mjs` pass (21/21). Full `npm run test` run: 3 unrelated
+  failures in `vehicle-live-mode.test.mjs` (pre-existing, untouched file — stale/asleep
+  gear-mode timing tests), no regressions in files this change touched.
+
+---
+
 ## 2026-08-10
 
 ### Charging dashboard no longer shows a disabled stop-tracking button during live charging

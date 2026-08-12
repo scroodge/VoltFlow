@@ -1570,3 +1570,4 @@ Postgres guard + data repair shipped 2026-08-10; root-cause investigation (optio
 awaiting go-ahead if wanted.
 
 ---
+

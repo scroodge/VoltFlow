@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { enrichTripsWithEnergy } from "@/lib/bydmate/attach-trip-energy";
+import { dedupeTripsBySource } from "@/lib/bydmate/hero-drive-metrics";
 import {
   calculatePhantomDrainDays,
   type PhantomDrainDay,
@@ -112,7 +113,7 @@ export async function fetchMonthlyStats({
           .in("status", ["completed", "stopped"]),
   ]);
 
-  let tripRows = (trips ?? []) as BydmateTripRow[];
+  let tripRows = dedupeTripsBySource((trips ?? []) as BydmateTripRow[]);
   const sessionRows = (sessions ?? []) as ChargingSessionRow[];
 
   if (tripRows.length > 0) {

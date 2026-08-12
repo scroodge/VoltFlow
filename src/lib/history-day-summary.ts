@@ -1,3 +1,4 @@
+import { dedupeTripsBySource } from "./bydmate/hero-drive-metrics.ts";
 import { resolveLocalCalendarDayWindow } from "./bydmate/telemetry-ranges.ts";
 import { tripTractionEnergyKwh } from "./bydmate/trip-metrics.ts";
 import type { BydmateTripRow, ChargingSessionRow } from "@/types/database";
@@ -94,6 +95,7 @@ function aggregateHistorySummary(
   periodSessions: ChargingSessionRow[],
   periodTrips: BydmateTripRow[],
 ): HistoryDaySummary {
+  const dedupedTrips = dedupeTripsBySource(periodTrips);
   const finishedSessions = periodSessions.filter(
     (s) => s.status === "completed" || s.status === "stopped",
   );
@@ -119,7 +121,7 @@ function aggregateHistorySummary(
   let driveKwh = 0;
   let regenKwh = 0;
 
-  for (const trip of periodTrips) {
+  for (const trip of dedupedTrips) {
     distanceKm += trip.distance_km ?? 0;
     driveKwh += tripTractionEnergyKwh(trip) ?? 0;
     regenKwh += trip.regen_energy_kwh ?? 0;
@@ -141,11 +143,11 @@ function aggregateHistorySummary(
     avgConsumptionKwh100,
     regenKwh,
     sessionCount: periodSessions.length,
-    tripCount: periodTrips.length,
+    tripCount: dedupedTrips.length,
     deltaKwh,
     verdict: verdictFromDelta(deltaKwh),
     hasCharging: periodSessions.length > 0,
-    hasTrips: periodTrips.length > 0,
+    hasTrips: dedupedTrips.length > 0,
     hasPricedSessions,
   };
 }
