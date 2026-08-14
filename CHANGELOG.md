@@ -14,8 +14,9 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 ### Live tyre pressures are visible on the Vehicle page
 
 - `/vehicle` now shows a compact tyre-pressure card after the mode-specific telemetry
-  metrics in both driving/parked and charging layouts. The spatial 2 × 2 grid labels all
-  four wheel positions explicitly and keeps the Di+ source unit in kPa.
+  metrics in both driving/parked and charging layouts. The spatial 2 × 2 grid uses the
+  universal FL/FR/RL/RR wheel labels, centers each reading, and keeps the Di+ source unit
+  in kPa.
 - The card accepts finite readings above 100 kPa, shows an em dash for an unavailable
   individual tyre, hides when every reading is unavailable, and never renders from a
   stale snapshot. It deliberately does not apply warning colours or claim a universal

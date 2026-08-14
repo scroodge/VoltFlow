@@ -1135,22 +1135,22 @@ function TirePressureCard({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
   const tires = [
     {
       key: "frontLeft",
-      label: tx("vehicle.tirePressure.frontLeft"),
+      label: "FL",
       value: tirePressureKpa(snapshot.diplus?.tire_press_fl_kpa),
     },
     {
       key: "frontRight",
-      label: tx("vehicle.tirePressure.frontRight"),
+      label: "FR",
       value: tirePressureKpa(snapshot.diplus?.tire_press_fr_kpa),
     },
     {
       key: "rearLeft",
-      label: tx("vehicle.tirePressure.rearLeft"),
+      label: "RL",
       value: tirePressureKpa(snapshot.diplus?.tire_press_rl_kpa),
     },
     {
       key: "rearRight",
-      label: tx("vehicle.tirePressure.rearRight"),
+      label: "RR",
       value: tirePressureKpa(snapshot.diplus?.tire_press_rr_kpa),
     },
   ];
@@ -1170,7 +1170,7 @@ function TirePressureCard({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
           {tires.map((tire, index) => (
             <div
               key={tire.key}
-              className={`py-2 ${index % 2 === 0 ? "pr-3" : "border-l border-border/60 pl-3"} ${
+              className={`py-2 text-center ${index % 2 === 0 ? "pr-3" : "border-l border-border/60 pl-3"} ${
                 index < 2 ? "border-b border-border/60" : ""
               }`}
             >

@@ -703,10 +703,6 @@ export const dictionaries = {
       },
       tirePressure: {
         title: "Tyre pressure",
-        frontLeft: "Front left",
-        frontRight: "Front right",
-        rearLeft: "Rear left",
-        rearRight: "Rear right",
         guidance: "Check against the vehicle pressure label when the tyres are cold.",
       },
       trips: {
@@ -2025,10 +2021,6 @@ export const dictionaries = {
       },
       tirePressure: {
         title: "Ціск у шынах",
-        frontLeft: "Пярэдняя левая",
-        frontRight: "Пярэдняя правая",
-        rearLeft: "Задняя левая",
-        rearRight: "Задняя правая",
         guidance: "Звярайце з таблічкай ціску на аўто, калі шыны халодныя.",
       },
       trips: {
@@ -3347,10 +3339,6 @@ export const dictionaries = {
       },
       tirePressure: {
         title: "Давление в шинах",
-        frontLeft: "Передняя левая",
-        frontRight: "Передняя правая",
-        rearLeft: "Задняя левая",
-        rearRight: "Задняя правая",
         guidance: "Сверяйте с табличкой давления на автомобиле, когда шины холодные.",
       },
       trips: {
