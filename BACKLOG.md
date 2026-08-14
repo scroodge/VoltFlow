@@ -1571,3 +1571,107 @@ awaiting go-ahead if wanted.
 
 ---
 
+## 🟡 Live charge power can get stuck on a stale nonzero `charge_power_kw` after a real charge stops (gun still plugged)
+
+> **Status update 2026-08-14.** Option 3 (frozen-value + no-SOC-movement detection) is
+> **built for the auto-session part** — `AUTO_CHARGING_FROZEN_READING_STALE_MS` (10 min)
+> in `charging-auto-session-step.ts`, new `frozen_soc`/`frozen_charge_power_kw`/
+> `frozen_since_device_time` columns (migration `20260813120000_bydmate_auto_charging_frozen_state.sql`,
+> **written, not yet applied to prod**), regression tests added to `auto-session.test.mjs`
+> (10/10 passing incl. 3 new cases), `npx tsc --noEmit` and `npm run lint` clean on all
+> touched files. **The dashboard/live-status tile half is not built**: it turned out to
+> need telemetry-history threading (or a persisted per-snapshot "unchanged since" tracker)
+> beyond what a pure function over one live snapshot can do, since `deriveDashboardVehicleMode`
+> gates the tile on `isChargingTelemetry`/`isTelemetryCharging` independent of
+> `charging_sessions` status — one of the ~6 call sites flagged in CHANGELOG 2026-07-27 as
+> needing its own proposal. Left as a smaller follow-up below.
+
+### Goal
+
+Stop the dashboard/live-status power reading (and, more importantly, auto-session
+stop detection) from trusting a `charge_power_kw` value the Di+ dongle never refreshed
+after charging actually ended.
+
+### Finding
+
+Reported 2026-08-13: car `way`, AC charge finished and stopped (gun left plugged in), but
+the cloud dashboard kept showing ~5.7–5.8 kW live charge power.
+
+`isTelemetryCharging` / `isMateAutoSessionCharging`
+(`src/features/charging/_domain/telemetry-charging.ts:50-126`) treat any
+`charge_power_kw > 0.1 kW` as authoritative charging evidence, ranked **above** Di+ gun
+state by design — CHANGELOG 2026-07-27 found gun state reads "unplugged" (`1`) during a
+*majority* of `way`'s genuine charging samples, so it can't be trusted as a stop signal
+either. 5.7–5.8 kW is well inside the plausible AC range (`MAX_PLAUSIBLE_AC_CHARGER_KW =
+22`, `telemetry-sanitizer.ts` clamps to `0–250`), so nothing in the existing plausibility
+checks rejects it as a glitch — those only catch physically-impossible spikes, not a
+stale-but-plausible echo of the last real reading.
+
+`resolveDisplayChargePowerKw` / `isFreshLiveSnapshot`
+(`src/features/charging/_domain/charging-live.ts:60-63,126-145`) only check that the
+*network packet* (`received_at`) arrived within the last 90 s — they have no way to tell a
+sensor value that's genuinely current apart from one the dongle is just re-sending
+unchanged. The parked heartbeat cadence (30 s, per AGENTS.md) keeps delivering samples
+indefinitely, so a frozen value can look "fresh" forever.
+
+This is not purely cosmetic: the **same** `charge_power_kw` signal also drives
+`isMateAutoSessionCharging`'s auto-stop (2 consecutive non-charging samples,
+`docs/CHARGING_SESSIONS.md`). Because heartbeats keep arriving, `buildSilenceClosePatch`'s
+15-minute silence safety net (`charging-session-reconcile-logic.ts:48,244`) never fires —
+it only closes a session when samples **stop** arriving, not when they arrive with a
+frozen value. So a stuck reading could keep a `charging_sessions` row open until the next
+drive-away, not just mislead the display. (Not yet confirmed against this specific
+session's Postgres row whether it actually stayed open — worth checking before scoping the
+fix.)
+
+Precedent: CHANGELOG 2026-07-22 fixed this exact shape once, for auto-session open/close
+specifically, by moving the explicit-gun-state-unplug check ahead of the power check in
+`isMateAutoSessionCharging`. That ordering was later reverted for the *general* classifier
+(`isTelemetryCharging`) once gun state was found unreliable in the other direction too
+(2026-07-27) — leaving no single Di+ field that reliably says "this really turned off" for
+`way`. Any fix needs a signal derived from behavior over time, not one more field-priority
+reorder.
+
+### Options
+
+1. **Frozen-value detection.** If `charge_power_kw`/`is_charging` is materially unchanged
+   across several consecutive parked samples spanning a minimum duration (e.g. 3+ readings
+   over ≥5–10 min), treat it as a stale cached value rather than a live measurement.
+   *Con:* a genuinely flat, stable AC charge rate can also report the same integer kW for
+   a long stretch, so power-alone comparison risks false positives on real charges.
+2. **Cross-check against SOC trend.** If `charge_power_kw > threshold` but SOC hasn't
+   moved over a sufficiently long parked window (e.g. 10–15 min), infer the reading is
+   stale. Physically grounded — real charging at 5+ kW should move SOC measurably in that
+   window. *Con:* SOC's integer-step quantization and lag need tuning to avoid false
+   negatives on slow/trickle segments, and it needs a fallback for samples with no SOC.
+3. **Combine 1 and 2 (recommended).** Require *both* an unchanged power/charging reading
+   **and** no SOC movement over the same parked window before downgrading to
+   not-charging. Each signal alone has a plausible false-positive path; requiring both
+   closes them (a real flat-rate charge still shows SOC creeping up; a stale reading with
+   a coincidentally-moving SOC would still get caught on the next window).
+4. **Leave it.** No new false-negative risk (e.g. wrongly closing a real slow charge), but
+   the dashboard stays visibly wrong and a session can stay open however long the gun sits
+   plugged in after a real stop, until the car is driven away.
+
+### Recommendation
+
+Do 3, scoped to the case that actually caused the report: parked, gun connected,
+`charge_power_kw` repeating/near-unchanged with no SOC movement for ~10–15 minutes. Apply
+the downgrade to `isMateAutoSessionCharging` (lets the session auto-close in place instead
+of waiting for a drive) and to the live-status classifier feeding
+`resolveDisplayChargePowerKw` (clears the dashboard tile once the window elapses) — not to
+`isTelemetryCharging`'s other call sites (drive-away detection, vehicle-control guards,
+charge notifications) without separately verifying each, per CHANGELOG 2026-07-27's note
+that reordering this classifier needs its own proposal. Needs new regression fixtures
+replaying car `way`'s actual stuck-value sample sequence, following the existing
+`telemetry-charging.test.mjs` / `charging-auto-session.test.mjs` pattern, before shipping —
+this car's telemetry is the one place this exact failure has already recurred twice.
+
+### Data ownership and location
+
+No new data model. Behavior-only change to existing app-owned telemetry classification
+logic (`telemetry-charging.ts`, `charging-live.ts`) over already-stored
+`bydmate_telemetry_samples` / `bydmate_live_snapshots`; no new storage or schema.
+
+---
+

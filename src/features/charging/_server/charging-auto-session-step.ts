@@ -15,6 +15,15 @@ export const AUTO_CHARGING_DEFAULT_TARGET_PERCENT = 100;
  * have driven since, and a stale high SOC would under-count the session's energy.
  */
 export const AUTO_CHARGING_BACKDATE_MAX_IDLE_GAP_MS = 30 * 60_000;
+/**
+ * Di+ can keep echoing the last real `charge_power_kw`/SOC reading after a charge has
+ * genuinely ended while the gun stays plugged in (car `way`; see BACKLOG.md "Live charge
+ * power can get stuck on a stale nonzero charge_power_kw..."). If a charging sample's SOC
+ * and charge power are bit-identical to the last charging sample's for at least this long,
+ * treat it as a stale cached value rather than live measurement and let it drive auto-stop
+ * the same way an explicit unplug would.
+ */
+export const AUTO_CHARGING_FROZEN_READING_STALE_MS = 10 * 60_000;
 
 export type AutoChargingSessionState = {
   consecutiveChargingSamples: number;
@@ -26,7 +35,22 @@ export type AutoChargingSessionState = {
   /** SOC and time of the most recent non-charging sample — the pre-plug-in reading. */
   lastIdlePercent: number | null;
   lastIdleDeviceTime: string | null;
+  /**
+   * SOC/charge_power_kw of the most recent charging sample and the device time since both
+   * last changed — detects a Di+ reading stuck on a cached value (see
+   * AUTO_CHARGING_FROZEN_READING_STALE_MS). Only tracked while a session is open; null
+   * otherwise.
+   */
+  frozenSoc: number | null;
+  frozenChargePowerKw: number | null;
+  frozenSinceDeviceTime: string | null;
 };
+
+const NOT_FROZEN = {
+  frozenSoc: null,
+  frozenChargePowerKw: null,
+  frozenSinceDeviceTime: null,
+} as const;
 
 export type AutoChargingSessionAction =
   | { type: "none" }
@@ -80,6 +104,7 @@ export function nextAutoChargingSessionStep({
   speedKmh,
   hasActiveSession,
   chargerPowerKw,
+  rawChargePowerKw = null,
   deviceTime,
 }: {
   state: AutoChargingSessionState | null;
@@ -88,6 +113,13 @@ export function nextAutoChargingSessionStep({
   speedKmh: number | null;
   hasActiveSession: boolean;
   chargerPowerKw: number | null;
+  /**
+   * The sample's own `charge_power_kw`, undefaulted (unlike `chargerPowerKw`, which the
+   * caller may have substituted with the car's default power). Used only to detect a
+   * frozen/stale reading — a defaulted value would look "unchanged" on every sample that
+   * has no real power telemetry at all, which is a different and far more common case.
+   */
+  rawChargePowerKw?: number | null;
   deviceTime: string;
 }): { state: AutoChargingSessionState; action: AutoChargingSessionAction } {
   const prev: AutoChargingSessionState = state ?? {
@@ -98,6 +130,7 @@ export function nextAutoChargingSessionStep({
     streakStartDeviceTime: null,
     lastIdlePercent: null,
     lastIdleDeviceTime: null,
+    ...NOT_FROZEN,
   };
 
   const idle =
@@ -127,6 +160,7 @@ export function nextAutoChargingSessionStep({
             lastIsCharging: false,
             ...noStreak,
             ...idle,
+            ...NOT_FROZEN,
           },
           action: { type: "stop", currentPercent: soc },
         };
@@ -138,6 +172,65 @@ export function nextAutoChargingSessionStep({
           lastIsCharging: false,
           ...noStreak,
           ...idle,
+          ...NOT_FROZEN,
+        },
+        action: { type: "none" },
+      };
+    }
+
+    // Reported charging — but Di+ can keep echoing the last real charge_power_kw/SOC
+    // reading after a charge has genuinely ended while the gun stays plugged in. If both
+    // are bit-identical to the last charging sample's for AUTO_CHARGING_FROZEN_READING_STALE_MS,
+    // treat it as a stale cached value and route it through the same consecutive-unplug
+    // confirmation as an explicit unplug, rather than holding the session open forever.
+    const readingUnchanged =
+      soc != null &&
+      rawChargePowerKw != null &&
+      prev.frozenSoc === soc &&
+      prev.frozenChargePowerKw === rawChargePowerKw &&
+      prev.frozenSinceDeviceTime != null;
+
+    const frozenSinceDeviceTime = readingUnchanged
+      ? (prev.frozenSinceDeviceTime as string)
+      : deviceTime;
+    const frozenDurationMs = Date.parse(deviceTime) - Date.parse(frozenSinceDeviceTime);
+    const isStaleFrozenReading =
+      readingUnchanged &&
+      Number.isFinite(frozenDurationMs) &&
+      frozenDurationMs >= AUTO_CHARGING_FROZEN_READING_STALE_MS;
+
+    const frozenTracking = {
+      frozenSoc: soc,
+      frozenChargePowerKw: rawChargePowerKw,
+      frozenSinceDeviceTime,
+    };
+
+    if (isStaleFrozenReading) {
+      const consecutiveUnplugSamples = prev.consecutiveUnplugSamples + 1;
+      if (
+        consecutiveUnplugSamples >= AUTO_CHARGING_MIN_CONSECUTIVE_UNPLUG_SAMPLES &&
+        soc != null
+      ) {
+        return {
+          state: {
+            consecutiveChargingSamples: 0,
+            consecutiveUnplugSamples: 0,
+            lastIsCharging: false,
+            ...noStreak,
+            ...idle,
+            ...NOT_FROZEN,
+          },
+          action: { type: "stop", currentPercent: soc },
+        };
+      }
+      return {
+        state: {
+          consecutiveChargingSamples: 0,
+          consecutiveUnplugSamples,
+          lastIsCharging: true,
+          ...noStreak,
+          ...carriedIdle,
+          ...frozenTracking,
         },
         action: { type: "none" },
       };
@@ -150,6 +243,7 @@ export function nextAutoChargingSessionStep({
         lastIsCharging: true,
         ...noStreak,
         ...carriedIdle,
+        ...frozenTracking,
       },
       action: { type: "none" },
     };
@@ -164,6 +258,7 @@ export function nextAutoChargingSessionStep({
         lastIsCharging: false,
         ...noStreak,
         ...idle,
+        ...NOT_FROZEN,
       },
       action: { type: "none" },
     };
@@ -196,6 +291,7 @@ export function nextAutoChargingSessionStep({
         ...noStreak,
         lastIdlePercent: null,
         lastIdleDeviceTime: null,
+        ...NOT_FROZEN,
       },
       action: {
         type: "start",
@@ -213,6 +309,7 @@ export function nextAutoChargingSessionStep({
       lastIsCharging: true,
       ...streakStart,
       ...carriedIdle,
+      ...NOT_FROZEN,
     },
     action: { type: "none" },
   };

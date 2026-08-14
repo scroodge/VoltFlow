@@ -203,3 +203,72 @@ test("stops immediately on drive-away during an active session", () => {
   assert.equal(step.action.type, "stop");
   assert.equal(step.action.currentPercent, 68);
 });
+
+test("stops an active session when charge_power_kw/SOC are frozen for 10+ minutes", () => {
+  // Reproduces car `way`'s stuck-value glitch: charging genuinely ended, gun stays
+  // plugged in, but Di+ keeps echoing the exact same last SOC/charge_power_kw on every
+  // parked heartbeat (`is_charging` still reports charging throughout, since it too is
+  // stale). Without frozen-value detection this would hold the session open forever.
+  let state = null;
+  let action = { type: "none" };
+  for (let minute = 0; minute <= 11; minute += 1) {
+    const step = nextAutoChargingSessionStep({
+      state,
+      isCharging: true,
+      soc: 80,
+      speedKmh: 0,
+      hasActiveSession: true,
+      chargerPowerKw: 5.8,
+      rawChargePowerKw: 5.8,
+      deviceTime: at(minute),
+    });
+    state = step.state;
+    action = step.action;
+    if (minute < 11) assert.equal(action.type, "none", `minute ${minute}`);
+  }
+  assert.equal(action.type, "stop");
+  assert.equal(action.currentPercent, 80);
+});
+
+test("does not stop a genuinely stable charge whose SOC keeps advancing", () => {
+  // Same unchanging charge_power_kw for a long stretch, but SOC keeps climbing — a real
+  // flat-rate AC charge, not a stale reading. Must never be mistaken for frozen telemetry.
+  let state = null;
+  let action = { type: "none" };
+  for (let minute = 0; minute <= 14; minute += 1) {
+    const step = nextAutoChargingSessionStep({
+      state,
+      isCharging: true,
+      soc: 70 + minute,
+      speedKmh: 0,
+      hasActiveSession: true,
+      chargerPowerKw: 5.8,
+      rawChargePowerKw: 5.8,
+      deviceTime: at(minute),
+    });
+    state = step.state;
+    action = step.action;
+    assert.equal(action.type, "none", `minute ${minute}`);
+  }
+});
+
+test("frozen-value detection is skipped without a raw charge_power_kw reading", () => {
+  // Cars/firmware that never populate charge_power_kw rely on the is_charging boolean
+  // alone; that path is unaffected by this fix and must keep behaving as before.
+  let state = null;
+  let action = { type: "none" };
+  for (let minute = 0; minute <= 14; minute += 1) {
+    const step = nextAutoChargingSessionStep({
+      state,
+      isCharging: true,
+      soc: 80,
+      speedKmh: 0,
+      hasActiveSession: true,
+      chargerPowerKw: null,
+      deviceTime: at(minute),
+    });
+    state = step.state;
+    action = step.action;
+    assert.equal(action.type, "none", `minute ${minute}`);
+  }
+});

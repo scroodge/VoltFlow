@@ -35,7 +35,7 @@ export type { AutoChargingSessionState, AutoChargingSessionAction } from "./char
 export { nextAutoChargingSessionStep } from "./charging-auto-session-step";
 
 const AUTO_CHARGING_STATE_COLUMNS =
-  "user_id,vehicle_id,consecutive_charging_samples,consecutive_unplug_samples,last_is_charging,last_device_time,streak_start_percent,streak_start_device_time,last_idle_percent,last_idle_device_time";
+  "user_id,vehicle_id,consecutive_charging_samples,consecutive_unplug_samples,last_is_charging,last_device_time,streak_start_percent,streak_start_device_time,last_idle_percent,last_idle_device_time,frozen_soc,frozen_charge_power_kw,frozen_since_device_time";
 
 type AutoChargingStateRow = {
   user_id: string;
@@ -48,6 +48,9 @@ type AutoChargingStateRow = {
   streak_start_device_time: string | null;
   last_idle_percent: number | string | null;
   last_idle_device_time: string | null;
+  frozen_soc: number | string | null;
+  frozen_charge_power_kw: number | string | null;
+  frozen_since_device_time: string | null;
 };
 
 function numericOrNull(value: number | string | null | undefined): number | null {
@@ -65,6 +68,9 @@ function stateFromRow(row: AutoChargingStateRow): AutoChargingSessionState {
     streakStartDeviceTime: row.streak_start_device_time,
     lastIdlePercent: numericOrNull(row.last_idle_percent),
     lastIdleDeviceTime: row.last_idle_device_time,
+    frozenSoc: numericOrNull(row.frozen_soc),
+    frozenChargePowerKw: numericOrNull(row.frozen_charge_power_kw),
+    frozenSinceDeviceTime: row.frozen_since_device_time,
   };
 }
 
@@ -85,6 +91,9 @@ function stateToRow(
     streak_start_device_time: state.streakStartDeviceTime,
     last_idle_percent: state.lastIdlePercent,
     last_idle_device_time: state.lastIdleDeviceTime,
+    frozen_soc: state.frozenSoc,
+    frozen_charge_power_kw: state.frozenChargePowerKw,
+    frozen_since_device_time: state.frozenSinceDeviceTime,
   };
 }
 
@@ -360,6 +369,7 @@ export async function processBydmateAutoChargingSessions({
       speedKmh,
       hasActiveSession: activeByCarId.has(car.id),
       chargerPowerKw: chargePowerKw ?? car.default_charger_power_kw,
+      rawChargePowerKw: chargePowerKw,
       deviceTime: sample.device_time,
     });
 
