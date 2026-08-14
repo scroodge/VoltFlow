@@ -72,10 +72,11 @@ import {
   deriveChargingSessionLiveBundle,
   filterLiveSnapshotsForVehicle,
 } from "@/features/charging/domain";
-import { resolveDisplayChargePowerKw, snapshotSoc } from "@/features/charging/domain";
+import { resolveDisplayChargePowerKw, snapshotSoc, isFrozenLiveChargeReading } from "@/features/charging/domain";
 import { mapChargingTariffLocation } from "@/lib/db-map";
 import { isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { useAppPath } from "@/lib/dev/dev-path";
+import { useBydmateRecentChargeSamplesQuery } from "@/hooks/use-bydmate-recent-charge-samples-query";
 import { currencySymbols, formatCurrencyAmount, type Currency, type Locale, type TranslationKey } from "@/lib/i18n";
 import { parseDecimalInput } from "@/lib/number-input";
 import { PROVIDER_LABELS, resolveTariffPrice } from "@/lib/charging-tariffs";
@@ -639,6 +640,14 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
     hasActiveSession: Boolean(activeSession),
   });
 
+  // Raw telemetry says charging; may still be a frozen Di+ reading (see
+  // isChargingMode/chargingTileKw below, which fold in isFrozenLiveChargeReading).
+  const rawIsChargingMode = vehicleMode === "app_charging" || vehicleMode === "live_charging";
+  const { data: recentChargeSamples = [] } = useBydmateRecentChargeSamplesQuery(
+    scopedVehicleId,
+    rawIsChargingMode && !forceDevMockMode,
+  );
+
   const tripVehicleId = latestBydmateSnapshot?.vehicle_id ?? scopedVehicleId;
   const { data: latestTrips = [], isLoading: loadingTrips } = useLatestBydmateTripsQuery(
     tripVehicleId,
@@ -1031,9 +1040,12 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
       ? drivingStatsFromLive(latestBydmateSnapshot, latestTrip)
       : null;
 
-  const isChargingMode =
-    vehicleMode === "app_charging" || vehicleMode === "live_charging";
-  const chargingTileKw = dashboardChargePowerKw;
+  // A fresh network heartbeat can still carry a Di+ reading that never changed — don't
+  // show a charge power the car stopped actually measuring (see BACKLOG.md "Dashboard
+  // live-charging tile can still show a stale kW...").
+  const isChargeReadingFrozen = rawIsChargingMode && isFrozenLiveChargeReading(recentChargeSamples);
+  const isChargingMode = rawIsChargingMode && !isChargeReadingFrozen;
+  const chargingTileKw = isChargeReadingFrozen ? null : dashboardChargePowerKw;
 
   const isPageLoading = loadingCars || (loadingLive && !latestBydmateSnapshot);
 

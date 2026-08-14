@@ -4,6 +4,46 @@ Per the agent workflow in [AGENTS.md](AGENTS.md): **plan first, build only on ex
 go-ahead.** These are researched but **not built**. Shipped work lives in
 [CHANGELOG.md](CHANGELOG.md).
 
+## ✅ Restore live SOC after the Di+ 0.5.2 update (approved 2026-08-14)
+
+### Evidence
+
+Read-only production checks for `way` found that the fresh Mate 0.5.2 live snapshot and
+all 25 durable samples in its surrounding ten-minute window omit `telemetry.soc`,
+`diplus.soc`, reported range, and live-trip consumption. The Vehicle page renders both
+AI Range and Math Range as `—` by design when `telemetry.soc` is absent. The VoltFlow
+ingest has not dropped the field: it was absent on arrival. Mate's `DiParsClient` still
+maps SOC only from the Di+ `电量百分比` request, while the updated Di+ installation
+returns the other requested diagnostics but not that mapping.
+
+### Data boundary
+
+No user-facing model or storage change. This continues to send the existing
+**user-owned** live SOC telemetry to its existing **Postgres** storage; no value is
+persisted locally as a fallback and no stale cloud value is re-labelled as live.
+
+### Options and recommendation
+
+1. **Display the previous cloud SOC in the PWA.** Rejected: it would be stale while
+   appearing live and would violate live-SOC priority for charging and range.
+2. **Guess a replacement Di+ parameter label.** Deferred: no connected head unit is
+   available to verify the new Di+ response, so a guessed label would be another
+   version-specific breakage.
+3. **Use the existing validated autoservice SOC FID only when Di+ SOC is missing
+   (recommended, approved).** Keep Di+ as the preferred source. The app sender reads a
+   current autoservice battery snapshot while Di+ SOC is absent and emits its validated,
+   integer-rounded SOC; the independent car-off daemon applies the same fallback before
+   building its payload. This is read-only vehicle state already used by Mate and keeps
+   both sender paths consistent. Add focused payload/selection tests. No migration or
+   VoltFlow UI change is required.
+
+### Verification
+
+Run the focused Android unit tests covering source selection and cloud payload SOC, then
+build the debug APK. A connected-car verification remains required after installation:
+confirm fresh `bydmate_live_snapshots` and `bydmate_telemetry_samples` contain
+`telemetry.soc`, then refresh the Vehicle page and confirm both range cards render.
+
 ## 🔵 Consumption formula map — reference for the parts left as separate tools
 
 The "average consumption" discrepancy investigation (shipped 2026-08-04, see
@@ -1571,107 +1611,89 @@ awaiting go-ahead if wanted.
 
 ---
 
-## 🟡 Live charge power can get stuck on a stale nonzero `charge_power_kw` after a real charge stops (gun still plugged)
+## 🟡 Dashboard live-charging tile can still show a stale kW after a real stop, even though auto-stop is now fixed
 
-> **Status update 2026-08-14.** Option 3 (frozen-value + no-SOC-movement detection) is
-> **built for the auto-session part** — `AUTO_CHARGING_FROZEN_READING_STALE_MS` (10 min)
-> in `charging-auto-session-step.ts`, new `frozen_soc`/`frozen_charge_power_kw`/
-> `frozen_since_device_time` columns (migration `20260813120000_bydmate_auto_charging_frozen_state.sql`,
-> **written, not yet applied to prod**), regression tests added to `auto-session.test.mjs`
-> (10/10 passing incl. 3 new cases), `npx tsc --noEmit` and `npm run lint` clean on all
-> touched files. **The dashboard/live-status tile half is not built**: it turned out to
-> need telemetry-history threading (or a persisted per-snapshot "unchanged since" tracker)
-> beyond what a pure function over one live snapshot can do, since `deriveDashboardVehicleMode`
-> gates the tile on `isChargingTelemetry`/`isTelemetryCharging` independent of
-> `charging_sessions` status — one of the ~6 call sites flagged in CHANGELOG 2026-07-27 as
-> needing its own proposal. Left as a smaller follow-up below.
+Follow-up to the auto-session fix shipped 2026-08-14 (see CHANGELOG.md) for car `way`'s
+stuck `charge_power_kw`. That fix closed the actual data-integrity bug (a `charging_sessions`
+row could stay open indefinitely, and energy/cost keep accruing, past a real stop). This
+entry is the cosmetic half deliberately left out of that go-ahead.
 
 ### Goal
 
-Stop the dashboard/live-status power reading (and, more importantly, auto-session
-stop detection) from trusting a `charge_power_kw` value the Di+ dongle never refreshed
-after charging actually ended.
+Stop the dashboard's live-charging tile (and its ~5.7–5.8 kW-style power reading) from
+showing "still charging" off a Di+ reading that's stuck on a cached value, independent of
+whatever `charging_sessions` now correctly does.
 
 ### Finding
 
-Reported 2026-08-13: car `way`, AC charge finished and stopped (gun left plugged in), but
-the cloud dashboard kept showing ~5.7–5.8 kW live charge power.
+The tile's visibility gate — `vehicleMode === "app_charging" || "live_charging"`
+(`src/components/dashboard/dashboard-view.tsx:1035`) — comes from
+`deriveDashboardVehicleMode` (`src/lib/vehicle-live-mode.ts`), which calls
+`isChargingTelemetry` → `isTelemetryCharging` directly against the latest live snapshot.
+This is **independent of `charging_sessions.status`** by design (it's meant to show live
+truth even before/without an app-tracked session) — so even after the shipped fix closes
+the Postgres row, the tile can keep showing "Charging, 5.7 kW" for as long as Di+ keeps
+re-sending the frozen reading on each parked heartbeat. The displayed number itself,
+`resolveDisplayChargePowerKw` → `snapshotChargePowerKw`
+(`src/features/charging/_domain/charging-live.ts:60-63,110-124`), reads
+`latestBydmateSnapshot.telemetry.charge_power_kw` straight off the single current row with
+no staleness/"unchanged" check of its own.
 
-`isTelemetryCharging` / `isMateAutoSessionCharging`
-(`src/features/charging/_domain/telemetry-charging.ts:50-126`) treat any
-`charge_power_kw > 0.1 kW` as authoritative charging evidence, ranked **above** Di+ gun
-state by design — CHANGELOG 2026-07-27 found gun state reads "unplugged" (`1`) during a
-*majority* of `way`'s genuine charging samples, so it can't be trusted as a stop signal
-either. 5.7–5.8 kW is well inside the plausible AC range (`MAX_PLAUSIBLE_AC_CHARGER_KW =
-22`, `telemetry-sanitizer.ts` clamps to `0–250`), so nothing in the existing plausibility
-checks rejects it as a glitch — those only catch physically-impossible spikes, not a
-stale-but-plausible echo of the last real reading.
+The auto-session fix's frozen-detection logic isn't a straightforward port here. It lives
+in a stateful reducer (`nextAutoChargingSessionStep`) fed one authenticated ingest batch at
+a time, persisting its "unchanged since" tracking server-side per user/vehicle in
+`bydmate_auto_charging_session_state`. The dashboard tile, by contrast, is a client-rendered
+pure function over a single `BydmateLiveSnapshotRow` — the latest upserted row in
+`bydmate_live_snapshots`, which holds only current state, no history to diff against at
+read time.
 
-`resolveDisplayChargePowerKw` / `isFreshLiveSnapshot`
-(`src/features/charging/_domain/charging-live.ts:60-63,126-145`) only check that the
-*network packet* (`received_at`) arrived within the last 90 s — they have no way to tell a
-sensor value that's genuinely current apart from one the dongle is just re-sending
-unchanged. The parked heartbeat cadence (30 s, per AGENTS.md) keeps delivering samples
-indefinitely, so a frozen value can look "fresh" forever.
-
-This is not purely cosmetic: the **same** `charge_power_kw` signal also drives
-`isMateAutoSessionCharging`'s auto-stop (2 consecutive non-charging samples,
-`docs/CHARGING_SESSIONS.md`). Because heartbeats keep arriving, `buildSilenceClosePatch`'s
-15-minute silence safety net (`charging-session-reconcile-logic.ts:48,244`) never fires —
-it only closes a session when samples **stop** arriving, not when they arrive with a
-frozen value. So a stuck reading could keep a `charging_sessions` row open until the next
-drive-away, not just mislead the display. (Not yet confirmed against this specific
-session's Postgres row whether it actually stayed open — worth checking before scoping the
-fix.)
-
-Precedent: CHANGELOG 2026-07-22 fixed this exact shape once, for auto-session open/close
-specifically, by moving the explicit-gun-state-unplug check ahead of the power check in
-`isMateAutoSessionCharging`. That ordering was later reverted for the *general* classifier
-(`isTelemetryCharging`) once gun state was found unreliable in the other direction too
-(2026-07-27) — leaving no single Di+ field that reliably says "this really turned off" for
-`way`. Any fix needs a signal derived from behavior over time, not one more field-priority
-reorder.
+Also: `isTelemetryCharging` (which `isChargingTelemetry` wraps) has ~6 call sites —
+dashboard live mode, the Telegram widget (`live-widget.ts`), drive-away detection,
+vehicle-control guards, charge notifications, and reconciliation history — and CHANGELOG
+2026-07-27 already flagged that reordering/changing this classifier needs its own proposal
+because of that fan-out, not a fold-in to an unrelated fix.
 
 ### Options
 
-1. **Frozen-value detection.** If `charge_power_kw`/`is_charging` is materially unchanged
-   across several consecutive parked samples spanning a minimum duration (e.g. 3+ readings
-   over ≥5–10 min), treat it as a stale cached value rather than a live measurement.
-   *Con:* a genuinely flat, stable AC charge rate can also report the same integer kW for
-   a long stretch, so power-alone comparison risks false positives on real charges.
-2. **Cross-check against SOC trend.** If `charge_power_kw > threshold` but SOC hasn't
-   moved over a sufficiently long parked window (e.g. 10–15 min), infer the reading is
-   stale. Physically grounded — real charging at 5+ kW should move SOC measurably in that
-   window. *Con:* SOC's integer-step quantization and lag need tuning to avoid false
-   negatives on slow/trickle segments, and it needs a fallback for samples with no SOC.
-3. **Combine 1 and 2 (recommended).** Require *both* an unchanged power/charging reading
-   **and** no SOC movement over the same parked window before downgrading to
-   not-charging. Each signal alone has a plausible false-positive path; requiring both
-   closes them (a real flat-rate charge still shows SOC creeping up; a stale reading with
-   a coincidentally-moving SOC would still get caught on the next window).
-4. **Leave it.** No new false-negative risk (e.g. wrongly closing a real slow charge), but
-   the dashboard stays visibly wrong and a session can stay open however long the gun sits
-   plugged in after a real stop, until the car is driven away.
+1. **Persist "unchanged since" on `bydmate_live_snapshots` itself.** Add
+   `charge_reading_unchanged_since` (+ a tracked last-power value), updated by the ingest
+   RPC (`bydmate_apply_diplus_columns` or the live-snapshot upsert path) on every sample —
+   mirroring the columns just shipped on `bydmate_auto_charging_session_state`, but scoped
+   to the single always-current live row. Any downstream pure classifier
+   (`isTelemetryCharging` and all ~6 call sites) could then consult it without needing full
+   history. *Con:* touches the ingest RPC / snapshot upsert path — per AGENTS.md's own
+   hard-won "two senders" rule, the highest-blast-radius part of the stack, since both
+   `CloudTelemetrySender` and the `CommandDaemon` build their own payloads independently.
+2. **Query recent `bydmate_telemetry_samples` history server-side** when building the
+   dashboard page (last ~15 min for the active vehicle) and thread a computed "frozen"
+   flag/duration down as a prop. *Con:* an extra query per dashboard load/live-refresh for
+   a high-frequency table not indexed for this access pattern — cuts against the project's
+   documented egress/CPU cost sensitivity (`docs/archive/EGRESS_CPU_MASTER_PLAN.md`).
+3. **Reorder `isTelemetryCharging` to compare against the previous live snapshot.** Needs
+   every one of its ~6 call sites to pass two snapshots (current + previous) instead of
+   one, and per CHANGELOG 2026-07-27 needs a dedicated proposal given how many independent
+   behaviors (Telegram widget, push notifications, vehicle-control guards, etc.) would
+   change together.
+4. **Leave the tile as-is.** The severe part — stuck-open session, ongoing energy/cost
+   accrual — is already fixed. What's left is a cosmetic "still shows charging" tile for up
+   to ~10–12 minutes past a genuine stop, self-correcting the moment the car is driven or
+   Di+ sends a changed reading.
 
 ### Recommendation
 
-Do 3, scoped to the case that actually caused the report: parked, gun connected,
-`charge_power_kw` repeating/near-unchanged with no SOC movement for ~10–15 minutes. Apply
-the downgrade to `isMateAutoSessionCharging` (lets the session auto-close in place instead
-of waiting for a drive) and to the live-status classifier feeding
-`resolveDisplayChargePowerKw` (clears the dashboard tile once the window elapses) — not to
-`isTelemetryCharging`'s other call sites (drive-away detection, vehicle-control guards,
-charge notifications) without separately verifying each, per CHANGELOG 2026-07-27's note
-that reordering this classifier needs its own proposal. Needs new regression fixtures
-replaying car `way`'s actual stuck-value sample sequence, following the existing
-`telemetry-charging.test.mjs` / `charging-auto-session.test.mjs` pattern, before shipping —
-this car's telemetry is the one place this exact failure has already recurred twice.
+Option 1 is the "do it right" fix and is the only one that also covers the other 5
+`isTelemetryCharging` call sites, which share this exact exposure today just less visibly
+(e.g. the Telegram widget could show the same stale "charging" state). Given the acute bug
+is already resolved, treat this as deliberate follow-up rather than urgent, and do it
+together with — not before — actually explaining *why* `way`'s gun state and power
+readings both go stale in different ways (still an open question across the 2026-07-22,
+2026-07-27, and 2026-08-13 investigations); a single ingest-path pass can address both.
 
 ### Data ownership and location
 
-No new data model. Behavior-only change to existing app-owned telemetry classification
-logic (`telemetry-charging.ts`, `charging-live.ts`) over already-stored
-`bydmate_telemetry_samples` / `bydmate_live_snapshots`; no new storage or schema.
+App-owned telemetry either way (`bydmate_live_snapshots` or `bydmate_telemetry_samples`),
+already in Postgres — no new ownership question. Option 1 needs a migration on
+`bydmate_live_snapshots` plus an ingest-RPC change, applied to self-hosted prod via
+`psql -f` per AGENTS.md (the CLI can't reach the pooler over TLS).
 
 ---
-

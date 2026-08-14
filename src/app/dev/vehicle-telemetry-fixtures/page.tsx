@@ -206,6 +206,13 @@ function makeLiveSnapshot(point: BydmateTelemetryPointRow): BydmateLiveSnapshotR
       soh_percent: 99.1,
       kwh_charged: 11.42,
     },
+    diplus: {
+      ...point.diplus,
+      tire_press_fl_kpa: 250,
+      tire_press_fr_kpa: 248,
+      tire_press_rl_kpa: 247,
+      tire_press_rr_kpa: 249,
+    },
     updated_at: new Date().toISOString(),
   };
 }

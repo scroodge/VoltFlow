@@ -486,6 +486,7 @@ function VehicleLiveContent({
             rangeLabel={rangeLabel}
             mathRangeLabel={mathRangeLabel}
           />
+          {!isStale ? <TirePressureCard snapshot={snapshot} /> : null}
           {activeChargingSession ? (
             <ChargingDeltaCard
               session={activeChargingSession}
@@ -518,6 +519,7 @@ function VehicleLiveContent({
           ) : (
             <>
               <TelemetryGrid snapshot={snapshot} vehicleMode={vehicleMode} cabinTempC={cabinTempC} />
+              <TirePressureCard snapshot={snapshot} />
               <TripBrowser
                 showDateFilter={Boolean(fixturePoints)}
                 selectedDate={selectedDate}
@@ -1118,6 +1120,72 @@ function CellHealthCard({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
             <p className="mt-0.5 font-heading text-sm font-semibold tabular-nums">{item.value}</p>
           </div>
         ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function tirePressureKpa(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && value > 100 ? value : null;
+}
+
+function TirePressureCard({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
+  const { t } = useTranslation();
+  const tx = t as Translator;
+  const tires = [
+    {
+      key: "frontLeft",
+      label: tx("vehicle.tirePressure.frontLeft"),
+      value: tirePressureKpa(snapshot.diplus?.tire_press_fl_kpa),
+    },
+    {
+      key: "frontRight",
+      label: tx("vehicle.tirePressure.frontRight"),
+      value: tirePressureKpa(snapshot.diplus?.tire_press_fr_kpa),
+    },
+    {
+      key: "rearLeft",
+      label: tx("vehicle.tirePressure.rearLeft"),
+      value: tirePressureKpa(snapshot.diplus?.tire_press_rl_kpa),
+    },
+    {
+      key: "rearRight",
+      label: tx("vehicle.tirePressure.rearRight"),
+      value: tirePressureKpa(snapshot.diplus?.tire_press_rr_kpa),
+    },
+  ];
+
+  if (tires.every((tire) => tire.value == null)) return null;
+
+  return (
+    <Card size="sm">
+      <CardHeader className="px-3 pt-2 pb-1">
+        <CardTitle className="flex items-center gap-1.5 font-heading text-sm">
+          <Gauge className="size-4" aria-hidden />
+          {tx("vehicle.tirePressure.title")}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="px-3 pb-3 pt-0">
+        <div className="grid grid-cols-2" aria-label={tx("vehicle.tirePressure.title")}>
+          {tires.map((tire, index) => (
+            <div
+              key={tire.key}
+              className={`py-2 ${index % 2 === 0 ? "pr-3" : "border-l border-border/60 pl-3"} ${
+                index < 2 ? "border-b border-border/60" : ""
+              }`}
+            >
+              <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                {tire.label}
+              </p>
+              <p className="mt-0.5 font-heading text-base font-semibold tabular-nums text-foreground">
+                {tire.value == null ? "—" : `${fmt(tire.value, 0)} kPa`}
+              </p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-2 border-t border-border/60 pt-2 text-[11px] leading-4 text-muted-foreground">
+          {tx("vehicle.tirePressure.guidance")}
+        </p>
       </CardContent>
     </Card>
   );

@@ -9,6 +9,69 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-08-14
+
+### Live tyre pressures are visible on the Vehicle page
+
+- `/vehicle` now shows a compact tyre-pressure card after the mode-specific telemetry
+  metrics in both driving/parked and charging layouts. The spatial 2 × 2 grid labels all
+  four wheel positions explicitly and keeps the Di+ source unit in kPa.
+- The card accepts finite readings above 100 kPa, shows an em dash for an unavailable
+  individual tyre, hides when every reading is unavailable, and never renders from a
+  stale snapshot. It deliberately does not apply warning colours or claim a universal
+  safe-pressure threshold; localized guidance instead directs users to the vehicle
+  pressure label with cold tyres.
+- English, Belarusian, and Russian copy is included. The development vehicle fixture now
+  provides modes for four readings, one missing reading, and all readings missing.
+- Data ownership and storage are unchanged: tyre pressures remain **user-owned** live
+  telemetry in **Postgres**. No migration, preference, or `localStorage` state was added.
+- Verification: focused source review and `git diff --check` passed. Tests, lint, build,
+  and browser checks were not run, per the approved verification scope.
+
+---
+
+### Auto-charging sessions no longer stay open forever on a frozen Di+ reading
+
+- **Root cause:** car `way`'s Di+ dongle can keep echoing the exact same last
+  `charge_power_kw`/SOC reading on every parked heartbeat after a charge has genuinely
+  ended while the gun stays plugged in. `isMateAutoSessionCharging` deliberately trusts
+  `charge_power_kw > 0.1 kW` over Di+ gun state (gun state reads "unplugged" during a
+  *majority* of this car's real charging samples — CHANGELOG 2026-07-27), so a stuck
+  nonzero reading kept looking like ongoing charging. Reported 2026-08-13: dashboard showed
+  ~5.7–5.8 kW live power well after charging had actually stopped. The 15-minute silence
+  auto-close safety net (`buildSilenceClosePatch`) never caught this, since parked
+  heartbeats (30 s cadence) keep arriving — it only fires when samples stop entirely, not
+  when they arrive with a frozen value. An affected session could therefore stay open
+  (and keep accruing energy/cost) until the car was next driven away.
+- **Fix:** `nextAutoChargingSessionStep` (`src/features/charging/_server/charging-auto-session-step.ts`)
+  now tracks the SOC/`charge_power_kw` of each charging sample on an open session. If both
+  stay bit-identical for `AUTO_CHARGING_FROZEN_READING_STALE_MS` (10 minutes), the sample is
+  routed through the same 2-consecutive-sample confirmation as an explicit unplug and the
+  session auto-closes, instead of an unbounded wait for drive-away. Requires a real,
+  undefaulted `charge_power_kw` reading on both sides of the comparison (a car with no
+  power telemetry at all is unaffected — that's the existing, unrelated `is_charging`-only
+  path) and SOC to also be unmoved, so a genuinely stable flat-rate AC charge (same kW,
+  climbing SOC) is never mistaken for a stale reading.
+- **Schema:** migration `20260813120000_bydmate_auto_charging_frozen_state.sql` adds
+  `frozen_soc`, `frozen_charge_power_kw`, `frozen_since_device_time` to
+  `bydmate_auto_charging_session_state` (nullable, `IF NOT EXISTS`-idempotent). Applied to
+  self-hosted prod via `psql -f` (the CLI can't reach the pooler over TLS); verified live
+  via `\d` against the table.
+- **Not in scope here:** the dashboard's live-charging tile derives its "still charging"
+  state independently of `charging_sessions` (via `isTelemetryCharging`, one of ~6 call
+  sites flagged in CHANGELOG 2026-07-27 as needing its own proposal to reorder), so it can
+  still show a stale kW for a while even though the underlying session now correctly
+  closes. Tracked as a separate BACKLOG.md proposal.
+- **Verification:** new regression cases in `auto-session.test.mjs` reproduce the reported
+  stuck-value sequence (auto-stops after the 10-minute threshold + 2-sample confirmation),
+  confirm a real advancing-SOC flat-rate charge never false-triggers, and confirm cars
+  without `charge_power_kw` telemetry are unaffected — 10/10 in the focused file. Full
+  `npm run test`: 122/125 (3 pre-existing unrelated `vehicle-live-mode.test.mjs` failures,
+  same ones noted in the 2026-08-12 entry below). `npx tsc --noEmit` and `npm run lint`
+  clean on all touched files.
+
+---
+
 ## 2026-08-12
 
 ### Trip-distance stats no longer double-count `byd_energydata` twin trips

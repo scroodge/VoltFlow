@@ -28,4 +28,6 @@ export const queryKeys = {
   userServiceCategories: () => ["user-service-categories"] as const,
   chargingEfficiencySuggestions: (carId: string) =>
     ["charging-efficiency-suggestions", carId] as const,
+  bydmateRecentChargeSamples: (vehicleId: string | null) =>
+    ["bydmate-recent-charge-samples", vehicleId] as const,
 };

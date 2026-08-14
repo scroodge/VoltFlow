@@ -13,6 +13,47 @@ export const LIVE_CHARGING_STALE_MS = 90_000;
 export const CHARGING_DRIVE_SPEED_KMH = 5;
 
 /**
+ * Dashboard-only counterpart to the server's frozen-reading auto-stop
+ * (AUTO_CHARGING_FROZEN_READING_STALE_MS in charging-auto-session-step.ts): kept at the
+ * same 10-minute threshold by convention, not by shared code, since this is a read-side
+ * check over recent bydmate_telemetry_samples rather than the ingest reducer's persisted
+ * state.
+ */
+export const LIVE_CHARGE_FROZEN_STALE_MS = 10 * 60_000;
+
+export type ChargeReadingSample = {
+  deviceTimeMs: number;
+  soc: number | null;
+  chargePowerKw: number | null;
+};
+
+/**
+ * Di+ can keep echoing the same last SOC/charge_power_kw on every parked heartbeat after a
+ * charge has genuinely ended while the gun stays plugged in (car `way`; see BACKLOG.md
+ * "Dashboard live-charging tile can still show a stale kW..."). Given a chronologically
+ * ordered window of recent samples, returns true once the newest reading has been
+ * unchanged for at least `staleMs` — used to stop the dashboard tile from showing a stale
+ * "still charging" kW independent of whatever `charging_sessions` now correctly does.
+ */
+export function isFrozenLiveChargeReading(
+  samples: ChargeReadingSample[],
+  staleMs = LIVE_CHARGE_FROZEN_STALE_MS,
+): boolean {
+  if (samples.length === 0) return false;
+  const latest = samples[samples.length - 1];
+  if (latest.soc == null || latest.chargePowerKw == null) return false;
+
+  let anchorMs = latest.deviceTimeMs;
+  for (let i = samples.length - 1; i >= 0; i -= 1) {
+    const sample = samples[i];
+    if (sample.soc !== latest.soc || sample.chargePowerKw !== latest.chargePowerKw) break;
+    anchorMs = sample.deviceTimeMs;
+  }
+
+  return latest.deviceTimeMs - anchorMs >= staleMs;
+}
+
+/**
  * How often the foreground live-sync persists steady-state progress
  * (current_percent / energy / cost) back to `charging_sessions`, tiered by SOC.
  *

@@ -13,7 +13,7 @@ import { VehicleLiveFixtureView } from "@/components/vehicle/vehicle-live-view";
 import type { BydmateLiveSnapshotRow, BydmateTelemetryPointRow } from "@/types/database";
 
 const STALE_OFFSET_MS = 4 * 60 * 60 * 1000;
-const MODES = ["online", "charging", "stale"] as const;
+const MODES = ["online", "tyre-gap", "tyres-none", "charging", "stale"] as const;
 type FixtureMode = (typeof MODES)[number];
 
 export function VehicleFixtureModeSwitch({
@@ -30,6 +30,24 @@ export function VehicleFixtureModeSwitch({
   const [mode, setMode] = useState<FixtureMode>("online");
   const displayedSnapshot = useMemo(() => {
     if (mode === "online") return snapshot;
+    if (mode === "tyre-gap") {
+      return {
+        ...snapshot,
+        diplus: { ...snapshot.diplus, tire_press_fr_kpa: null },
+      };
+    }
+    if (mode === "tyres-none") {
+      return {
+        ...snapshot,
+        diplus: {
+          ...snapshot.diplus,
+          tire_press_fl_kpa: null,
+          tire_press_fr_kpa: null,
+          tire_press_rl_kpa: null,
+          tire_press_rr_kpa: null,
+        },
+      };
+    }
     if (mode === "charging") return buildChargingSnapshot(snapshot, chargingSample);
 
     const staleTimestamp = new Date(Date.parse(snapshot.received_at) - STALE_OFFSET_MS).toISOString();

@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 
 import {
   CHARGING_PERSIST_SLACK_MS,
+  LIVE_CHARGE_FROZEN_STALE_MS,
   chargingPersistIntervalMs,
   deriveChargePowerFromEnergyDeltaKw,
   deriveLiveChargingState,
+  isFrozenLiveChargeReading,
   latestSnapshotSocReading,
   resolveDisplayChargePowerKw,
   snapshotKwhCharged,
@@ -167,4 +169,46 @@ test("clampDerivedToSocCeiling allows completion when bridge reaches target (off
   const clamped = clampDerivedToSocCeiling(math, CLAMP_PARAMS, 96, 3600);
   assert.equal(clamped.currentPercent, 100);
   assert.equal(clamped.isComplete, true);
+});
+
+function sampleAt(minute, soc, chargePowerKw) {
+  return { deviceTimeMs: NOW + minute * 60_000, soc, chargePowerKw };
+}
+
+test("isFrozenLiveChargeReading is false with no samples", () => {
+  assert.equal(isFrozenLiveChargeReading([]), false);
+});
+
+test("isFrozenLiveChargeReading is false when soc/power are missing", () => {
+  assert.equal(isFrozenLiveChargeReading([sampleAt(0, null, 5.8)]), false);
+  assert.equal(isFrozenLiveChargeReading([sampleAt(0, 80, null)]), false);
+});
+
+test("isFrozenLiveChargeReading is false when the unchanged run is shorter than the threshold", () => {
+  const samples = [sampleAt(0, 80, 5.8), sampleAt(5, 80, 5.8), sampleAt(9, 80, 5.8)];
+  assert.equal(isFrozenLiveChargeReading(samples), false);
+});
+
+test("isFrozenLiveChargeReading is true once the unchanged run reaches the threshold", () => {
+  const samples = [sampleAt(0, 80, 5.8), sampleAt(5, 80, 5.8), sampleAt(10, 80, 5.8)];
+  assert.equal(
+    isFrozenLiveChargeReading(samples, LIVE_CHARGE_FROZEN_STALE_MS),
+    true,
+  );
+});
+
+test("isFrozenLiveChargeReading resets the window when SOC or power changes", () => {
+  // Frozen at 80%/5.8kW for 6 minutes, then a real change 5 minutes ago — not frozen.
+  const samples = [
+    sampleAt(0, 80, 5.8),
+    sampleAt(6, 80, 5.8),
+    sampleAt(7, 81, 5.8),
+    sampleAt(12, 81, 5.8),
+  ];
+  assert.equal(isFrozenLiveChargeReading(samples), false);
+});
+
+test("isFrozenLiveChargeReading never flags a genuinely advancing charge", () => {
+  const samples = Array.from({ length: 16 }, (_, minute) => sampleAt(minute, 70 + minute, 5.8));
+  assert.equal(isFrozenLiveChargeReading(samples), false);
 });
