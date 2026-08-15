@@ -11,6 +11,32 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-08-14
 
+### `diplus_soc` keeps the fractional SOC that di+ 2.0 reports
+
+- Di+ 2.0 reports SOC at 0.1 % resolution, and VoltFlow Mate `versionCode 340` sends it
+  unrounded — but only in `telemetry.soc`. The `diplus` object in the same payload still
+  carries the app's rounded `Int`, and `bydmate_apply_diplus_columns` flattens the column
+  from that object, so the decimal was lost on the way in. Measured on prod:
+  `telemetry->>'soc' = 66.2` beside `diplus->>'soc' = 66` and `diplus_soc = 66`; same on a
+  second car (`23.4 → 23`).
+- None of the suspected causes held: `diplus_soc` is an unconstrained `numeric` on both
+  `bydmate_telemetry_samples` and `bydmate_live_snapshots`, `bydmate_jsonb_numeric` does
+  not round, and `20260810120000_guard_diplus_soc_range.sql` only range-checks.
+- Migration `20260814180000_diplus_soc_precise.sql`: the RPC now uses `telemetry.soc` when
+  it agrees with the di+ value to within `0.5` — the app's own rounding step — and keeps
+  the di+ value otherwise. Provenance is unchanged: no di+ `soc` still means `NULL`, so an
+  autoservice-fallback SOC never leaks into the column, and the `-1` sentinel guard still
+  applies to whichever source won. Over the previous 7 days on prod, 3649 rows would have
+  gained a decimal and 0 rows disagreed by more than 0.5.
+- Fixed here rather than in the app so every car already on `340` is covered without an
+  APK release, and so the Edge Function ingest path gets it too.
+- Verification: the function was installed and exercised in a rolled-back transaction
+  against a temp copy of a real row first (refine, `-1` sentinel, no-telemetry-soc,
+  no-diplus-soc, divergent, and a sibling-column regression check for the renumbered
+  `$10` parameter). After applying to prod, car `way` wrote `diplus_soc = 66.2` at
+  17:24 UTC, matching `telemetry->>'soc'`. Existing rows were deliberately not
+  backfilled — the fractional value is still in the `telemetry` jsonb if it is ever wanted.
+
 ### Live tyre pressures are visible on the Vehicle page
 
 - `/vehicle` now shows a compact tyre-pressure card after the mode-specific telemetry
