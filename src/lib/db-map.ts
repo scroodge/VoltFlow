@@ -3,6 +3,7 @@ import {
   DEFAULT_AC_EFFICIENCY_PERCENT,
   DEFAULT_FAST_DC_EFFICIENCY_PERCENT,
 } from "@/lib/charging-efficiency";
+import { defaultPressureUnit, isPressureUnit } from "@/lib/pressure-units";
 import type {
   ChargingSessionRow,
   Car,
@@ -67,6 +68,9 @@ export function mapProfile(raw: Record<string, unknown>): Profile {
       "EUR",
     ),
     preferred_locale: enumValue(raw.preferred_locale, ["en", "be", "ru"], "en"),
+    preferred_pressure_unit: isPressureUnit(raw.preferred_pressure_unit)
+      ? raw.preferred_pressure_unit
+      : defaultPressureUnit,
     default_price_per_kwh: defaultPricePerKwh,
     home_price_per_kwh: num(raw.home_price_per_kwh, defaultPricePerKwh),
     commercial_ac_price_per_kwh: num(raw.commercial_ac_price_per_kwh, defaultPricePerKwh),

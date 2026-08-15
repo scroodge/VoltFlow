@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, Pencil } from "lucide-react";
+import { Bell, ChevronDown, Pencil } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
   ArrowUpCircle,
@@ -69,6 +69,12 @@ import {
 } from "@/lib/i18n";
 import { legalDocumentPath } from "@/lib/legal-region";
 import { parseDecimalInput } from "@/lib/number-input";
+import {
+  defaultPressureUnit,
+  isPressureUnit,
+  pressureUnits,
+  type PressureUnit,
+} from "@/lib/pressure-units";
 import { devFetch, isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { useAppPath } from "@/lib/dev/dev-path";
 import { mapChargingTariffLocation, mapUserProvider } from "@/lib/db-map";
@@ -86,6 +92,7 @@ import type {
   ChargingProviderType,
   ChargingTariffLocationRow,
   ChargingTariffType,
+  Profile,
 } from "@/types/database";
 
 type NotifyChannel = "web_push" | "telegram" | "both";
@@ -155,6 +162,8 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   const [telegramUsername, setTelegramUsername] = useState<string | null>(null);
   const [notifyChannel, setNotifyChannel] = useState<NotifyChannel>("web_push");
   const [liveStatusMode, setLiveStatusMode] = useState<LiveStatusMode>("charging");
+  const [pressureUnit, setPressureUnit] = useState<PressureUnit>(defaultPressureUnit);
+  const [pressureUnitSaving, setPressureUnitSaving] = useState(false);
   const [telegramInstructionsOpen, setTelegramInstructionsOpen] = useState(false);
   const [securityBusy, setSecurityBusy] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
@@ -240,6 +249,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
           profile?: {
             id?: string;
             preferred_currency?: string;
+            preferred_pressure_unit?: string;
             default_price_per_kwh?: number;
             home_price_per_kwh?: number;
             commercial_ac_price_per_kwh?: number;
@@ -272,6 +282,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         const preferredCurrency = payload.profile?.preferred_currency;
         if (typeof preferredCurrency === "string" && isCurrency(preferredCurrency)) {
           setCurrency(preferredCurrency);
+        }
+        if (isPressureUnit(payload.profile?.preferred_pressure_unit)) {
+          setPressureUnit(payload.profile.preferred_pressure_unit);
         }
 
         const homePrice = Number(
@@ -324,7 +337,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       const [{ data: profile, error }, { data: locationRows }] = await Promise.all([
         supabase
         .from("profiles")
-        .select("preferred_currency, default_price_per_kwh, home_price_per_kwh, commercial_ac_price_per_kwh, fast_dc_price_per_kwh, telegram_id, telegram_username, notify_channel, live_status_mode")
+        .select("preferred_currency, preferred_pressure_unit, default_price_per_kwh, home_price_per_kwh, commercial_ac_price_per_kwh, fast_dc_price_per_kwh, telegram_id, telegram_username, notify_channel, live_status_mode")
         .eq("id", user.id)
         .single(),
         supabase.from("charging_tariff_locations").select("*").eq("user_id", user.id),
@@ -346,6 +359,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       const preferredCurrency = profile?.preferred_currency;
       if (typeof preferredCurrency === "string" && isCurrency(preferredCurrency)) {
         setCurrency(preferredCurrency);
+      }
+      if (isPressureUnit(profile?.preferred_pressure_unit)) {
+        setPressureUnit(profile.preferred_pressure_unit);
       }
 
       const homePrice = Number(profile?.home_price_per_kwh ?? profile?.default_price_per_kwh);
@@ -744,6 +760,34 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       });
   };
 
+  const handlePressureUnitChange = (value: PressureUnit | null) => {
+    if (!value || !isPressureUnit(value) || !profileUserId) return;
+
+    const previous = pressureUnit;
+    setPressureUnit(value);
+    setPressureUnitSaving(true);
+    qc.setQueryData<Profile | null>(queryKeys.profile, (profile) =>
+      profile ? { ...profile, preferred_pressure_unit: value } : profile,
+    );
+
+    void createClient()
+      .from("profiles")
+      .update({ preferred_pressure_unit: value })
+      .eq("id", profileUserId)
+      .then(({ error }) => {
+        if (error) {
+          setPressureUnit(previous);
+          qc.setQueryData<Profile | null>(queryKeys.profile, (profile) =>
+            profile ? { ...profile, preferred_pressure_unit: previous } : profile,
+          );
+          toast.error(error.message);
+          return;
+        }
+        toast.success(t("settings.pressureUnit.saved") as string);
+      })
+      .finally(() => setPressureUnitSaving(false));
+  };
+
   const handleSignOut = async () => {
     if (isDevAppRoute()) {
       toast.message(t("settings.toasts.devSignOutDisabled") as string);
@@ -940,6 +984,52 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         <CardContent className="space-y-3">
           <LocaleSwitcher onLocaleChange={handleLocaleChange} />
           <p className="text-muted-foreground text-sm">{t("locale.helper")}</p>
+        </CardContent>
+      </Card>
+
+      <Card size="sm" className="border-white/[0.08]">
+        <CardHeader>
+          <CardTitle>{t("settings.pressureUnit.title")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <details className="group rounded-2xl border border-white/[0.08] bg-white/[0.03]">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium">
+              <span>{t("settings.pressureUnit.displayUnit")}</span>
+              <span className="flex items-center gap-2 text-muted-foreground">
+                {t(`settings.pressureUnit.units.${pressureUnit}` as TranslationKey)}
+                <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden />
+              </span>
+            </summary>
+            <div className="space-y-3 border-t border-white/[0.08] px-4 py-4">
+              <Label htmlFor="pref-pressure-unit">{t("settings.pressureUnit.displayUnit")}</Label>
+              <Select
+                value={pressureUnit}
+                onValueChange={handlePressureUnitChange}
+                items={pressureUnits.map((unit) => ({
+                  value: unit,
+                  label: t(`settings.pressureUnit.units.${unit}` as TranslationKey),
+                }))}
+              >
+                <SelectTrigger
+                  id="pref-pressure-unit"
+                  className="h-11 w-full rounded-2xl text-sm"
+                  disabled={!profileUserId || pressureUnitSaving}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {pressureUnits.map((unit) => (
+                    <SelectItem key={unit} value={unit}>
+                      {t(`settings.pressureUnit.units.${unit}` as TranslationKey)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-muted-foreground">
+                {t("settings.pressureUnit.help")}
+              </p>
+            </div>
+          </details>
         </CardContent>
       </Card>
 

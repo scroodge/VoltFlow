@@ -37,6 +37,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
+import { useProfileQuery } from "@/hooks/use-profile-query";
 import { useVehicleRangeEstimate } from "@/hooks/use-vehicle-range-estimate";
 import { useVehicleLastKnownLocation } from "@/hooks/use-vehicle-last-known-location";
 import {
@@ -49,6 +50,10 @@ import { useSessionsQuery } from "@/hooks/use-sessions-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
 import { useAppPath } from "@/lib/dev/dev-path";
+import {
+  formatPressureFromKpa,
+  isTyrePressureKpa,
+} from "@/lib/pressure-units";
 import { gearIsPark, readGear } from "@/lib/bydmate/gear";
 import { isTelemetryCharging } from "@/features/charging/domain";
 import {
@@ -1126,12 +1131,14 @@ function CellHealthCard({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
 }
 
 function tirePressureKpa(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) && value > 100 ? value : null;
+  return isTyrePressureKpa(value) ? value : null;
 }
 
 function TirePressureCard({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
   const { t } = useTranslation();
+  const { data: profile } = useProfileQuery();
   const tx = t as Translator;
+  const pressureUnit = profile?.preferred_pressure_unit ?? "kPa";
   const tires = [
     {
       key: "frontLeft",
@@ -1178,7 +1185,9 @@ function TirePressureCard({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
                 {tire.label}
               </p>
               <p className="mt-0.5 font-heading text-base font-semibold tabular-nums text-foreground">
-                {tire.value == null ? "—" : `${fmt(tire.value, 0)} kPa`}
+                {tire.value == null
+                  ? "—"
+                  : `${formatPressureFromKpa(tire.value, pressureUnit)} ${pressureUnit}`}
               </p>
             </div>
           ))}

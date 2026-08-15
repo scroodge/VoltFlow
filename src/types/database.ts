@@ -10,11 +10,14 @@ export type ChargingProviderType =
   | "user_provider"
   | "custom";
 
+import type { PressureUnit } from "@/lib/pressure-units";
+
 export type Profile = {
   id: string;
   email: string | null;
   preferred_currency: "EUR" | "USD" | "BYN" | "RUB";
   preferred_locale: "en" | "be" | "ru";
+  preferred_pressure_unit: PressureUnit;
   default_price_per_kwh: number;
   home_price_per_kwh: number;
   commercial_ac_price_per_kwh: number;

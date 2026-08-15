@@ -9,6 +9,31 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-08-15
+
+### Persistent tyre-pressure display units
+
+- Settings now has a compact, collapsed Tyre pressure setup where each user chooses
+  `kPa`, `psi`, or `bar`. The preference is user-owned durable data in their RLS-scoped
+  `profiles` row, so it follows them across signed-in devices. It is deliberately not
+  stored in browser `localStorage`.
+- Migration `20260815214000_profile_pressure_unit.sql` adds
+  `preferred_pressure_unit`, defaults it to `kPa`, and constrains values to `kPa`, `psi`,
+  or `bar`. It was applied to self-hosted production: the non-null default and check
+  constraint are present, and all 62 existing profile rows have the `kPa` default.
+- The Vehicle tyre card still receives, validates, and stores the car's raw kPa readings.
+  A pure display helper converts only at render time: kPa whole numbers, psi to one
+  decimal, and bar to two decimals. Missing-reading, stale-snapshot, and cold-tyre
+  guidance behavior is unchanged. English, Belarusian, and Russian Settings copy is
+  included.
+- Verification: the focused conversion/validation test passes (3 tests); focused lint
+  has no errors but reports 31 pre-existing warnings in the large Settings/Vehicle files;
+  tracked and new-file whitespace checks pass. The local Supabase instance was not
+  running, so local migration status could not be checked. No browser was available for
+  the planned visual interaction check, and no full build was run.
+
+---
+
 ## 2026-08-14
 
 ### `diplus_soc` keeps the fractional SOC that di+ 2.0 reports
