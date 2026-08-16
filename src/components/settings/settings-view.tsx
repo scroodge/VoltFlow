@@ -770,11 +770,13 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       profile ? { ...profile, preferred_pressure_unit: value } : profile,
     );
 
-    void createClient()
-      .from("profiles")
-      .update({ preferred_pressure_unit: value })
-      .eq("id", profileUserId)
-      .then(({ error }) => {
+    void (async () => {
+      try {
+        const { error } = await createClient()
+          .from("profiles")
+          .update({ preferred_pressure_unit: value })
+          .eq("id", profileUserId);
+
         if (error) {
           setPressureUnit(previous);
           qc.setQueryData<Profile | null>(queryKeys.profile, (profile) =>
@@ -784,8 +786,10 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
           return;
         }
         toast.success(t("settings.pressureUnit.saved") as string);
-      })
-      .finally(() => setPressureUnitSaving(false));
+      } finally {
+        setPressureUnitSaving(false);
+      }
+    })();
   };
 
   const handleSignOut = async () => {

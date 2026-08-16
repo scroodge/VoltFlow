@@ -11,6 +11,23 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-08-16
 
+### Production build restored after tyre-pressure preference persistence
+
+- **Bug:** the pressure-unit handler chained `.finally()` after a Supabase/PostgREST
+  builder's `.then()`. That builder is typed only as `PromiseLike`, so TypeScript correctly
+  rejected the call at `settings-view.tsx:788` and blocked production builds.
+- **Fix:** the handler now awaits the preference update in an async function and clears its
+  saving state in `finally`. The optimistic profile update, rollback on an API response
+  error, and success/error toasts are unchanged; the selector also recovers from an
+  unexpected rejection.
+- **Data boundary:** unchanged. The preference remains user-owned data in the existing
+  RLS-scoped Postgres `profiles.preferred_pressure_unit` field; no client storage or schema
+  change was introduced.
+- **Verification:** `npm run build` passed: compilation, TypeScript, page-data collection,
+  and 126 static pages completed. `git diff --check` also passed. The build warns that Next
+  inferred `/Users/way` as the workspace root because of an additional parent lockfile.
+  An authenticated browser interaction was not run.
+
 ### Mate and the Dashboard no longer revoke each other's pairing
 
 - **Bug:** pairing the VoltFlow Dashboard disconnected BYD Mate, and re-pairing Mate
