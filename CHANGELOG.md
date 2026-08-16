@@ -60,6 +60,24 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
   `bydmate_cloud_api_key_hash` set. The paired-device flow has not been exercised
   end-to-end against a running backend.
 
+### Dashboard cluster layout cloud backup — migration applied
+
+- Migration `20260816140000_dashboard_layouts.sql` applied to self-hosted prod via the
+  Supavisor pooler. Creates `public.dashboard_layouts` (one row per profile: `user_id`
+  PK/FK, `layout` jsonb, `layout_version`, `updated_at`), backing the cluster-layout
+  backup endpoint shipped in `feat(api): add cluster layout backup endpoint for VoltFlow
+  Dashboard` (31c7b79). RLS enabled with a single `select` policy scoping reads to
+  `user_id = auth.uid()`; no insert/update/delete policy — writes go through
+  `/api/bydmate/dashboard/layout` via `supabaseAdmin`, where the entitlement check,
+  payload size cap, and version stamp live.
+- The migration file's `create policy` was locally amended with a preceding
+  `drop policy if exists` before applying, for idempotency — the table did not yet exist
+  in prod (verified via `to_regclass`), so this was not an edit to an already-applied
+  migration.
+- Verification: `psql -f` ran clean (`CREATE TABLE`, `COMMENT` x2, `ALTER TABLE`,
+  `DROP POLICY`/`CREATE POLICY`); `\d public.dashboard_layouts` confirms the column
+  types/defaults, PK, FK to `profiles`, and the RLS policy.
+
 ### Postman collection covering all API endpoints
 
 - Added `postman/EvAcChargeTimer.postman_collection.json` (Postman v2.1) and
