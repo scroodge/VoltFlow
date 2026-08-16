@@ -1,7 +1,7 @@
-import { dedupeTripsBySource } from "./bydmate/hero-drive-metrics.ts";
-import { resolveLocalCalendarDayWindow } from "./bydmate/telemetry-ranges.ts";
-import { tripTractionEnergyKwh } from "./bydmate/trip-metrics.ts";
-import type { BydmateTripRow, ChargingSessionRow } from "@/types/database";
+import { dedupeTripsBySource } from "./voltflowmate/hero-drive-metrics.ts";
+import { resolveLocalCalendarDayWindow } from "./voltflowmate/telemetry-ranges.ts";
+import { tripTractionEnergyKwh } from "./voltflowmate/trip-metrics.ts";
+import type { VoltflowMateTripRow, ChargingSessionRow } from "@/types/database";
 
 const BALANCE_THRESHOLD_KWH = 0.5;
 
@@ -63,7 +63,7 @@ export function pickWalkBackSessionPrice(
     price_per_kwh: number;
   }[],
   trips: readonly Pick<
-    BydmateTripRow,
+    VoltflowMateTripRow,
     | "traction_energy_kwh"
     | "regen_energy_kwh"
     | "distance_km"
@@ -93,7 +93,7 @@ function verdictFromDelta(deltaKwh: number): HistoryDayVerdict {
 
 function aggregateHistorySummary(
   periodSessions: ChargingSessionRow[],
-  periodTrips: BydmateTripRow[],
+  periodTrips: VoltflowMateTripRow[],
 ): HistoryDaySummary {
   const dedupedTrips = dedupeTripsBySource(periodTrips);
   const finishedSessions = periodSessions.filter(
@@ -154,7 +154,7 @@ function aggregateHistorySummary(
 
 export function computeHistoryPeriodSummary(
   sessions: ChargingSessionRow[],
-  trips: BydmateTripRow[],
+  trips: VoltflowMateTripRow[],
   fromIso: string,
   toIso: string,
 ): HistoryDaySummary {
@@ -169,7 +169,7 @@ export function computeHistoryPeriodSummary(
 
 export function computeHistoryDaySummary(
   sessions: ChargingSessionRow[],
-  trips: BydmateTripRow[],
+  trips: VoltflowMateTripRow[],
   dateKey: string,
 ): HistoryDaySummary {
   const { from, to } = resolveLocalCalendarDayWindow(dateKey);

@@ -2,7 +2,7 @@ import { haversineDistanceM } from "@/lib/home-charger-geofence";
 import { matchNearestTariffLocation } from "@/lib/charging-tariffs";
 import { filterLiveSnapshotsForVehicle } from "@/features/charging/domain";
 import type {
-  BydmateLiveSnapshotRow,
+  VoltflowMateLiveSnapshotRow,
   ChargingTariffLocationRow,
 } from "@/types/database";
 
@@ -10,7 +10,7 @@ export type GpsCoordinates = { lat: number; lon: number };
 export type GpsLocationSource = "mate-live" | "browser";
 
 export function coordinatesFromLiveSnapshots(
-  snapshots: BydmateLiveSnapshotRow[],
+  snapshots: VoltflowMateLiveSnapshotRow[],
   vehicleId: string | null | undefined,
 ): GpsCoordinates | null {
   const scoped = filterLiveSnapshotsForVehicle(snapshots, vehicleId);

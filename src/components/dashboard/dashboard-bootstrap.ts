@@ -10,7 +10,7 @@ import {
 import { mapCar, mapChargingSession } from "@/lib/db-map";
 import { defaultLocale } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/server";
-import type { BydmateLiveSnapshotRow } from "@/types/database";
+import type { VoltflowMateLiveSnapshotRow } from "@/types/database";
 
 const SESSION_COLUMNS =
   "id,user_id,car_id,start_percent,current_percent,target_percent,battery_capacity_kwh,charger_power_kw,efficiency_percent,tariff_type,provider_type,user_provider_id,tariff_manual,tariff_selected_at,price_per_kwh,energy_overridden,energy_corrected_at,manual_entry,charged_energy_kwh,estimated_cost,status,started_at,stopped_at,end_max_cell_delta_v,end_delta_soc,created_at,updated_at" as const;
@@ -57,7 +57,7 @@ export async function loadDashboardBootstrap(): Promise<DashboardBootstrapData |
 
   return {
     cars,
-    liveSnapshots: (liveResult.data ?? []) as BydmateLiveSnapshotRow[],
+    liveSnapshots: (liveResult.data ?? []) as VoltflowMateLiveSnapshotRow[],
     sessions: (sessionsResult.data ?? []).map((row) =>
       mapChargingSession(row as Record<string, unknown>),
     ),

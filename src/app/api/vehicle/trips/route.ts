@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { attachTripEnergy } from "@/lib/bydmate/attach-trip-energy";
+import { attachTripEnergy } from "@/lib/voltflowmate/attach-trip-energy";
 import { devVehicleId, resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
-import type { BydmateTripRow } from "@/types/database";
+import type { VoltflowMateTripRow } from "@/types/database";
 
 export async function GET(request: NextRequest) {
   const access = await resolveVehicleApiAccess(request);
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to load trips" }, { status: 500 });
     }
 
-    const rawTrips = (data ?? []) as BydmateTripRow[];
+    const rawTrips = (data ?? []) as VoltflowMateTripRow[];
     const trips = lite
       ? rawTrips.slice(0, limit)
       : await attachTripEnergy({
@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
   const trips = await attachTripEnergy({
     supabase: access.supabase,
     userId: access.userId,
-    trips: (data ?? []) as BydmateTripRow[],
+    trips: (data ?? []) as VoltflowMateTripRow[],
     vehicleId: vehicleId ?? undefined,
   });
 

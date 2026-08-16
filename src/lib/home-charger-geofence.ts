@@ -1,4 +1,4 @@
-import type { BydmateLocation, Car } from "@/types/database";
+import type { VoltflowMateLocation, Car } from "@/types/database";
 
 const EARTH_RADIUS_M = 6_371_000;
 
@@ -30,7 +30,7 @@ export function carHasHomeGeofence(car: Pick<Car, "home_charger_lat" | "home_cha
 }
 
 export function isAtHomeCharger(
-  location: BydmateLocation | null | undefined,
+  location: VoltflowMateLocation | null | undefined,
   car: Pick<Car, "home_charger_lat" | "home_charger_lon" | "home_charger_radius_m">,
 ): boolean {
   if (!carHasHomeGeofence(car)) return false;

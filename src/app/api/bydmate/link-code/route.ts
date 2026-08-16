@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { createBydmateLinkCode } from "@/lib/bydmate/link-code";
+import { createVoltflowMateLinkCode } from "@/lib/voltflowmate/link-code";
 import { resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
 
 export const runtime = "nodejs";
@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { code, expiresAt } = await createBydmateLinkCode(access.userId);
+    const { code, expiresAt } = await createVoltflowMateLinkCode(access.userId);
     return NextResponse.json(
       { ok: true, code, expires_at: expiresAt },
       { headers: { "Cache-Control": "no-store, max-age=0" } },

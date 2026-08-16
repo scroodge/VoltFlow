@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { AcceptedTelemetry } from "@/lib/bydmate/telemetry-sanitizer";
-import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
-import { latestDeviceTimeByVehicle } from "@/lib/bydmate/latest-sample";
+import type { AcceptedTelemetry } from "@/lib/voltflowmate/telemetry-sanitizer";
+import type { TelemetryPayload } from "@/lib/voltflowmate/ingest-payload";
+import { latestDeviceTimeByVehicle } from "@/lib/voltflowmate/latest-sample";
 import { DEFAULT_SITE_URL } from "@/lib/site-url";
 import {
   finiteTelemetryNumber,
@@ -158,7 +158,7 @@ async function sendChargeNotificationToUser({
   return { sent };
 }
 
-export async function processBydmateChargeNotifications({
+export async function processVoltflowMateChargeNotifications({
   supabase,
   userId,
   samples,

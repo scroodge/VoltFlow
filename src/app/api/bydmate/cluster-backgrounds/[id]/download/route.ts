@@ -4,7 +4,7 @@ import {
   downloadClusterBackgroundBytes,
   getClusterBackgroundForDownload,
   resolveEntitledProfileId,
-} from "@/lib/bydmate/cluster-backgrounds";
+} from "@/lib/voltflowmate/cluster-backgrounds";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";

@@ -4,7 +4,7 @@ import {
   TELEMETRY_CHARGE_POWER_THRESHOLD_KW,
 } from "../_domain/telemetry-charging.ts";
 import { snapshotSoc } from "../_domain/charging-live.ts";
-import type { BydmateLiveSnapshotRow } from "@/types/database";
+import type { VoltflowMateLiveSnapshotRow } from "@/types/database";
 
 const CHARGE_POWER_THRESHOLD_KW = TELEMETRY_CHARGE_POWER_THRESHOLD_KW;
 
@@ -72,7 +72,7 @@ const STOP_CANDIDATE_FUTURE_SKEW_MS = 60_000;
  */
 export function liveSocWithinSessionWindow(
   session: { started_at: string | null; stopped_at: string | null; updated_at: string },
-  liveRow: BydmateLiveSnapshotRow | null,
+  liveRow: VoltflowMateLiveSnapshotRow | null,
 ): { soc: number; receivedMs: number } | null {
   if (!liveRow || !session.started_at) return null;
   const receivedMs = Date.parse(liveRow.received_at);

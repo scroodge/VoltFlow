@@ -157,7 +157,7 @@ export type PushSubscriptionRow = {
   updated_at: string;
 };
 
-export type BydmateTelemetry = {
+export type VoltflowMateTelemetry = {
   soc?: number | null;
   speed_kmh?: number | null;
   power_kw?: number | null;
@@ -183,7 +183,7 @@ export type BydmateTelemetry = {
   current_trip_consumption_kwh_100km?: number | null;
 };
 
-export type BydmateDiplus = {
+export type VoltflowMateDiplus = {
   soc?: number | null;
   speed_kmh?: number | null;
   mileage_km?: number | null;
@@ -263,14 +263,14 @@ export type VehicleCommandScheduleRow = {
   updated_at: string;
 };
 
-export type BydmateLocation = {
+export type VoltflowMateLocation = {
   lat?: number | null;
   lon?: number | null;
   accuracy_m?: number | null;
   bearing_deg?: number | null;
 };
 
-export type BydmateLiveSnapshotRow = {
+export type VoltflowMateLiveSnapshotRow = {
   id: string;
   vehicle_id: string;
   user_id: string;
@@ -278,9 +278,9 @@ export type BydmateLiveSnapshotRow = {
   schema_version: 1;
   device_time: string;
   received_at: string;
-  telemetry: BydmateTelemetry;
-  diplus?: BydmateDiplus;
-  location: BydmateLocation;
+  telemetry: VoltflowMateTelemetry;
+  diplus?: VoltflowMateDiplus;
+  location: VoltflowMateLocation;
   raw_payload: unknown;
   updated_at: string;
   diplus_min_cell_voltage_v?: number | null;
@@ -311,18 +311,18 @@ export type MateAppReleaseRow = {
   created_at: string;
 };
 
-export type BydmateTelemetryPointRow = Omit<BydmateLiveSnapshotRow, "updated_at"> & {
+export type VoltflowMateTelemetryPointRow = Omit<VoltflowMateLiveSnapshotRow, "updated_at"> & {
   id: string;
 };
 
-export type BydmateTelemetrySampleRow = {
+export type VoltflowMateTelemetrySampleRow = {
   id: string;
   vehicle_id: string;
   user_id: string;
   device_time: string;
   received_at: string;
-  telemetry: BydmateTelemetry;
-  diplus?: BydmateDiplus;
+  telemetry: VoltflowMateTelemetry;
+  diplus?: VoltflowMateDiplus;
   diplus_charge_gun_state?: string | number | null;
   diplus_min_cell_voltage_v?: number | null;
   diplus_max_cell_voltage_v?: number | null;
@@ -338,7 +338,7 @@ export type BydmateTelemetrySampleRow = {
   autoservice_lifetime_kwh?: number | null;
 };
 
-export type BydmateTripRow = {
+export type VoltflowMateTripRow = {
   id: string;
   user_id: string;
   vehicle_id: string;
@@ -361,7 +361,7 @@ export type BydmateTripRow = {
   fuel_kwh?: number | null;
 };
 
-export type BydmateTripTrackPointRow = {
+export type VoltflowMateTripTrackPointRow = {
   id?: string;
   trip_id?: string;
   user_id?: string;
@@ -375,7 +375,7 @@ export type BydmateTripTrackPointRow = {
   soc: number | null;
 };
 
-export type BydmateRouteLabelRow = {
+export type VoltflowMateRouteLabelRow = {
   user_id: string;
   vehicle_id: string;
   route_id: string;

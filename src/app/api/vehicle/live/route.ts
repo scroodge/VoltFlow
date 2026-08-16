@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { backfillLiveSnapshotsWithSoh } from "@/lib/bydmate/live-soh-backfill";
+import { backfillLiveSnapshotsWithSoh } from "@/lib/voltflowmate/live-soh-backfill";
 import { devVehicleId, resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
-import type { BydmateLiveSnapshotRow } from "@/types/database";
+import type { VoltflowMateLiveSnapshotRow } from "@/types/database";
 
 export async function GET(request: NextRequest) {
   const access = await resolveVehicleApiAccess(request);
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Failed to load live snapshot" }, { status: 500 });
   }
 
-  const rows = (data ?? []) as BydmateLiveSnapshotRow[];
+  const rows = (data ?? []) as VoltflowMateLiveSnapshotRow[];
   const enriched = await backfillLiveSnapshotsWithSoh(
     access.supabase,
     rows,

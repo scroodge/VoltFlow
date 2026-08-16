@@ -4,8 +4,8 @@ import { deriveSessionProgressFromSoc } from "@/features/charging/domain";
 import { efficiencyPercentForTariff } from "@/lib/charging-efficiency";
 import { mapChargingTariffLocation, mapUserProvider } from "@/lib/db-map";
 import { resolveSessionTariff, userProvidersFromRows } from "@/lib/charging-tariffs";
-import { captureSessionEndDelta } from "@/lib/bydmate/charge-end-delta";
-import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
+import { captureSessionEndDelta } from "@/lib/voltflowmate/charge-end-delta";
+import type { TelemetryPayload } from "@/lib/voltflowmate/ingest-payload";
 import {
   nextAutoChargingSessionStep,
   type AutoChargingSessionState,
@@ -17,7 +17,7 @@ import {
   telemetryChargingContext,
   telemetrySpeedKmh,
 } from "../_domain/telemetry-charging";
-import { latestDeviceTimeByVehicle } from "@/lib/bydmate/latest-sample";
+import { latestDeviceTimeByVehicle } from "@/lib/voltflowmate/latest-sample";
 
   /** Auto-start only from recent samples in a batch (avoids replaying old driving buffers). */
 const AUTO_START_MAX_SAMPLE_AGE_MS = 3 * 60_000;
@@ -257,7 +257,7 @@ async function stopSessionFromTelemetry({
   await captureSessionEndDelta(supabase, session.id);
 }
 
-export async function processBydmateAutoChargingSessions({
+export async function processVoltflowMateAutoChargingSessions({
   supabase,
   userId,
   samples,

@@ -3,7 +3,7 @@
 import { useState, type PointerEvent } from "react";
 
 import { chartTooltipTransform } from "@/components/vehicle/chart-interaction";
-import type { ChargeDeltaTrend, ChargeDeltaTrendPoint } from "@/lib/bydmate/charge-delta-trend";
+import type { ChargeDeltaTrend, ChargeDeltaTrendPoint } from "@/lib/voltflowmate/charge-delta-trend";
 import type { TranslationKey } from "@/lib/i18n";
 
 const VIEW_W = 340;

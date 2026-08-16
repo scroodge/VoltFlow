@@ -1,7 +1,7 @@
-import type { BydmateLiveSnapshotRow } from "@/types/database";
+import type { VoltflowMateLiveSnapshotRow } from "@/types/database";
 
 /** Minimal seed when dev dashboard has no live Mate row yet. */
-export function buildDevDashboardSeedSnapshot(): BydmateLiveSnapshotRow {
+export function buildDevDashboardSeedSnapshot(): VoltflowMateLiveSnapshotRow {
   const now = new Date().toISOString();
   return {
     id: "dev-dashboard-seed",
@@ -19,7 +19,7 @@ export function buildDevDashboardSeedSnapshot(): BydmateLiveSnapshotRow {
 }
 
 /** Fresh live snapshot for dev “driving” mode on the cockpit. */
-export function buildDrivingSnapshot(base: BydmateLiveSnapshotRow): BydmateLiveSnapshotRow {
+export function buildDrivingSnapshot(base: VoltflowMateLiveSnapshotRow): VoltflowMateLiveSnapshotRow {
   const now = new Date().toISOString();
   return {
     ...base,
@@ -66,7 +66,7 @@ export function buildDrivingSnapshot(base: BydmateLiveSnapshotRow): BydmateLiveS
 }
 
 /** Parked, not charging — for optional dev QA. */
-export function buildParkedSnapshot(base: BydmateLiveSnapshotRow): BydmateLiveSnapshotRow {
+export function buildParkedSnapshot(base: VoltflowMateLiveSnapshotRow): VoltflowMateLiveSnapshotRow {
   const now = new Date().toISOString();
   return {
     ...base,

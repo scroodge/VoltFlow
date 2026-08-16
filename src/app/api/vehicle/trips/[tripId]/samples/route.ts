@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { fetchTripSamples } from "@/lib/bydmate/telemetry-history";
+import { fetchTripSamples } from "@/lib/voltflowmate/telemetry-history";
 import { resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
 
 type RouteContext = {

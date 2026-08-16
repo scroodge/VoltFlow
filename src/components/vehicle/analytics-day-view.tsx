@@ -19,9 +19,9 @@ import {
   type ConsumptionBaseline,
   type DayInsight,
   type TripWithEnergy,
-} from "@/lib/bydmate/day-insights";
-import type { AnalyticsSummary } from "@/lib/bydmate/telemetry-buckets";
-import type { TelemetryHistoryPoint } from "@/lib/bydmate/telemetry-history";
+} from "@/lib/voltflowmate/day-insights";
+import type { AnalyticsSummary } from "@/lib/voltflowmate/telemetry-buckets";
+import type { TelemetryHistoryPoint } from "@/lib/voltflowmate/telemetry-history";
 import type { TranslationKey } from "@/lib/i18n";
 
 type Translator = (key: TranslationKey, values?: Record<string, string | number>) => string;

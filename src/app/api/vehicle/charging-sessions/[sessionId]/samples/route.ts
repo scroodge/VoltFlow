@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { fetchChargingSessionSamples } from "@/lib/bydmate/telemetry-history";
+import { fetchChargingSessionSamples } from "@/lib/voltflowmate/telemetry-history";
 import { resolveChargingSessionVehicleId } from "@/features/charging/server";
 import { createClient } from "@/lib/supabase/server";
 

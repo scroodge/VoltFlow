@@ -18,15 +18,15 @@ import {
   nearestIndexByX,
   nearestPointByTime,
 } from "@/components/vehicle/chart-interaction";
-import { formatHistoryRangeSubtitle } from "@/lib/bydmate/telemetry-buckets";
-import type { TelemetryHistoryRange } from "@/lib/bydmate/telemetry-ranges";
-import { MAX_TELEMETRY_CHART_POINTS, medianSampleGapSeconds } from "@/lib/bydmate/telemetry-ranges";
+import { formatHistoryRangeSubtitle } from "@/lib/voltflowmate/telemetry-buckets";
+import type { TelemetryHistoryRange } from "@/lib/voltflowmate/telemetry-ranges";
+import { MAX_TELEMETRY_CHART_POINTS, medianSampleGapSeconds } from "@/lib/voltflowmate/telemetry-ranges";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "@/hooks/use-translation";
-import { calculateRegenRecoverySegments, prepareRegenRecoveryBars } from "@/lib/bydmate/trip-energy";
+import { calculateRegenRecoverySegments, prepareRegenRecoveryBars } from "@/lib/voltflowmate/trip-energy";
 import type { Locale, TranslationKey } from "@/lib/i18n";
-import type { BydmateDiplus, BydmateLocation, BydmateTelemetry } from "@/types/database";
+import type { VoltflowMateDiplus, VoltflowMateLocation, VoltflowMateTelemetry } from "@/types/database";
 
 type Translator = (key: TranslationKey, values?: Record<string, string | number>) => string;
 
@@ -91,14 +91,14 @@ type DeltaBySocChartModel = {
 type TelemetryChartSource = {
   device_time: string;
   received_at?: string;
-  telemetry: BydmateTelemetry;
-  diplus?: BydmateDiplus;
+  telemetry: VoltflowMateTelemetry;
+  diplus?: VoltflowMateDiplus;
   diplus_min_cell_voltage_v?: number | null;
   diplus_max_cell_voltage_v?: number | null;
   diplus_cell_delta_v?: number | null;
   regen_kwh_sum?: number | null;
   traction_kwh_sum?: number | null;
-  location?: BydmateLocation;
+  location?: VoltflowMateLocation;
   hourly?: {
     soc_min: number | null;
     soc_max: number | null;

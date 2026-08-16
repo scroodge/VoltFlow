@@ -112,7 +112,7 @@ power is 7 kW, and electricity costs 0.50 per kWh:
 
 Owning sources: [`dashboard-view.tsx`](../src/components/dashboard/dashboard-view.tsx),
 [`charging-math.ts`](../src/features/charging/_domain/charging-math.ts),
-[`range-estimate.ts`](../src/lib/bydmate/range-estimate.ts), and
+[`range-estimate.ts`](../src/lib/voltflowmate/range-estimate.ts), and
 [`dashboard-deferred-summaries.tsx`](../src/components/dashboard/dashboard-deferred-summaries.tsx).
 
 ## Charging calculator (`/charging`)
@@ -231,8 +231,8 @@ Owning source: [`charging-math.ts`](../src/features/charging/_domain/charging-ma
 | Trip duration | `end time − start time` | Elapsed trip time. |
 | Current driving consumption | Raw current-trip consumption | Passed through from telemetry; not recalculated by the page. |
 
-Owning sources: [`hero-drive-metrics.ts`](../src/lib/bydmate/hero-drive-metrics.ts),
-[`range-estimate.ts`](../src/lib/bydmate/range-estimate.ts), and
+Owning sources: [`hero-drive-metrics.ts`](../src/lib/voltflowmate/hero-drive-metrics.ts),
+[`range-estimate.ts`](../src/lib/voltflowmate/range-estimate.ts), and
 [`vehicle-live-view.tsx`](../src/components/vehicle/vehicle-live-view.tsx).
 
 ## Vehicle trips
@@ -246,7 +246,7 @@ Owning sources: [`hero-drive-metrics.ts`](../src/lib/bydmate/hero-drive-metrics.
 | Average speed | Upstream trip-sample average | Calculated during ingestion and displayed by the web UI. |
 | Maximum speed | Maximum valid trip-sample speed | Calculated upstream and displayed by the web UI. |
 
-Owning source: [`trip-metrics.ts`](../src/lib/bydmate/trip-metrics.ts). See
+Owning source: [`trip-metrics.ts`](../src/lib/voltflowmate/trip-metrics.ts). See
 [Trips](TRIPS.md) for server-side trip lifecycle and distance rules.
 
 ## Vehicle analytics: day view
@@ -262,7 +262,7 @@ Owning source: [`trip-metrics.ts`](../src/lib/bydmate/trip-metrics.ts). See
 | High-vs-low regen comparison | Distance-weighted averages split at median regen share | Compares consumption between higher- and lower-regen trip groups. |
 | Trip norm badge | `(trip consumption − baseline) / baseline × 100` | Below norm at ≤−5%; above norm at ≥+5%. |
 
-Owning sources: [`day-insights.ts`](../src/lib/bydmate/day-insights.ts) and
+Owning sources: [`day-insights.ts`](../src/lib/voltflowmate/day-insights.ts) and
 [`analytics-day-view.tsx`](../src/components/vehicle/analytics-day-view.tsx).
 
 ## Vehicle analytics: period view
@@ -280,7 +280,7 @@ Owning sources: [`day-insights.ts`](../src/lib/bydmate/day-insights.ts) and
 | Temperature consumption bucket | `Σconsumption / trip count` in each 5°C bucket | Average consumption at similar outside temperatures. |
 
 Owning sources: [`vehicle-analytics.ts`](../src/lib/vehicle-analytics.ts) and
-[`telemetry-buckets.ts`](../src/lib/bydmate/telemetry-buckets.ts).
+[`telemetry-buckets.ts`](../src/lib/voltflowmate/telemetry-buckets.ts).
 
 ## Vehicle analytics: telemetry charts
 
@@ -293,7 +293,7 @@ Owning sources: [`vehicle-analytics.ts`](../src/lib/vehicle-analytics.ts) and
 | SOC minimum/maximum | Minimum and maximum valid SOC | Battery range observed in the bucket. |
 | Regeneration/traction energy | Sum of bucket energy values | Total energy in each direction. |
 
-Owning source: [`telemetry-buckets.ts`](../src/lib/bydmate/telemetry-buckets.ts).
+Owning source: [`telemetry-buckets.ts`](../src/lib/voltflowmate/telemetry-buckets.ts).
 
 ## Vehicle analytics: charging charts and cell-delta trend
 
@@ -310,7 +310,7 @@ Owning source: [`telemetry-buckets.ts`](../src/lib/bydmate/telemetry-buckets.ts)
 
 Owning sources: [`telemetry-analytics-charts.tsx`](../src/components/vehicle/telemetry-analytics-charts.tsx),
 [`vehicle-analytics-panels.tsx`](../src/components/vehicle/vehicle-analytics-panels.tsx), and
-[`charge-delta-trend.ts`](../src/lib/bydmate/charge-delta-trend.ts).
+[`charge-delta-trend.ts`](../src/lib/voltflowmate/charge-delta-trend.ts).
 
 ## Vehicle analytics: phantom drain
 
@@ -322,7 +322,7 @@ Owning sources: [`telemetry-analytics-charts.tsx`](../src/components/vehicle/tel
 | Daily idle time | Sum of qualifying interval hours | Combines qualifying durations. |
 
 Only continuous parked intervals of at least four hours qualify. Owning source:
-[`phantom-drain.ts`](../src/lib/bydmate/phantom-drain.ts).
+[`phantom-drain.ts`](../src/lib/voltflowmate/phantom-drain.ts).
 
 ## Vehicle analytics: route insights
 
@@ -335,7 +335,7 @@ Only continuous parked intervals of at least four hours qualify. Owning source:
 | Forecast without a match | Route median ±8% | Wider fallback without matching-temperature evidence. |
 | Average route temperatures | `Σtemperature / valid sample count` | Average outside and battery temperature for a trip. |
 
-Owning source: [`route-insights.ts`](../src/lib/bydmate/route-insights.ts).
+Owning source: [`route-insights.ts`](../src/lib/voltflowmate/route-insights.ts).
 
 ## Service (`/service`)
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createClient } from "@supabase/supabase-js";
-import { processBydmateVehicleStateNotifications } from "../src/lib/push/vehicle-state-notifications.ts";
+import { processVoltflowMateVehicleStateNotifications } from "../src/lib/push/vehicle-state-notifications.ts";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -20,7 +20,7 @@ await supabase
 console.log("State cleared");
 
 // Send a parked+charging sample
-const result = await processBydmateVehicleStateNotifications({
+const result = await processVoltflowMateVehicleStateNotifications({
   supabase,
   userId,
   samples: [{

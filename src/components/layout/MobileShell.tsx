@@ -15,7 +15,7 @@ import {
   OnboardingGate,
 } from "@/components/onboarding/onboarding-gate";
 import { touchUserActivity } from "@/actions/activity";
-import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
+import { useVoltflowMateLiveQuery } from "@/hooks/use-voltflowmate-live-query";
 import { usePageVisible } from "@/hooks/use-page-visible";
 import { isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { createClient } from "@/lib/supabase/client";
@@ -45,7 +45,7 @@ async function requestLiveFastStatus(vehicleId: string) {
 }
 
 function LiveStatusHost() {
-  const { data: bydmateLive = [] } = useBydmateLiveQuery();
+  const { data: voltflowMateLive = [] } = useVoltflowMateLiveQuery();
   const pageVisible = usePageVisible();
   const pathname = usePathname();
   const devRoute = isDevAppRoute();
@@ -57,10 +57,10 @@ function LiveStatusHost() {
     pathname === "/charging" ||
     pathname.startsWith("/charging/");
   const installedVersion =
-    bydmateLive.find((snapshot) => snapshot.mate_version)?.mate_version ?? null;
+    voltflowMateLive.find((snapshot) => snapshot.mate_version)?.mate_version ?? null;
   // This permanent shell is the single viewer-presence owner. Individual screens may read
   // the shared live query freely without creating duplicate profile writes.
-  const watchedVehicleId = bydmateLive[0]?.vehicle_id ?? null;
+  const watchedVehicleId = voltflowMateLive[0]?.vehicle_id ?? null;
 
   useEffect(() => {
     if (devRoute || !isLiveView || !pageVisible || !watchedVehicleId) return;

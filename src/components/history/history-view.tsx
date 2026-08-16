@@ -16,7 +16,7 @@ import {
   localCalendarDate,
   parseAnalyticsRange,
   type TelemetryHistoryRange,
-} from "@/lib/bydmate/telemetry-ranges";
+} from "@/lib/voltflowmate/telemetry-ranges";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDuration } from "@/features/charging/domain";
@@ -24,15 +24,15 @@ import { ManualSessionDialog } from "@/features/charging/ui";
 import { deleteManualChargingSession } from "@/features/charging/manual-actions";
 import { queryKeys } from "@/lib/query-keys";
 import { useAppPath } from "@/lib/dev/dev-path";
-import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
+import { useVoltflowMateLiveQuery } from "@/hooks/use-voltflowmate-live-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useSessionsQuery } from "@/hooks/use-sessions-query";
 import {
-  useBydmateTripRealtimeInvalidation,
-  useLatestBydmateTripsQuery,
-  useBydmateTripsQuery,
+  useVoltflowMateTripRealtimeInvalidation,
+  useLatestVoltflowMateTripsQuery,
+  useVoltflowMateTripsQuery,
   useTripMonthDatesQuery,
-} from "@/hooks/use-bydmate-trips-query";
+} from "@/hooks/use-voltflowmate-trips-query";
 import { useTranslation } from "@/hooks/use-translation";
 import { HistoryDaySummaryCard } from "@/components/history/history-day-summary-card";
 import { computeHistoryDaySummary } from "@/lib/history-day-summary";
@@ -40,10 +40,10 @@ import {
   tripEnergyPerKm,
   tripNetConsumptionKwh100,
   tripTractionEnergyKwh,
-} from "@/lib/bydmate/trip-metrics";
+} from "@/lib/voltflowmate/trip-metrics";
 import { type Currency, type Locale, type TranslationKey } from "@/lib/i18n";
 import { useAppPreferences } from "@/stores/use-app-preferences";
-import type { BydmateTripRow, ChargingSessionRow } from "@/types/database";
+import type { VoltflowMateTripRow, ChargingSessionRow } from "@/types/database";
 
 const VehicleAnalyticsPanels = dynamic(() =>
   import("@/components/vehicle/vehicle-analytics-panels").then(
@@ -124,27 +124,27 @@ function sessionDuration(session: ChargingSessionRow) {
   return formatDuration((ended.getTime() - started.getTime()) / 1000);
 }
 
-function tripDuration(trip: BydmateTripRow) {
+function tripDuration(trip: VoltflowMateTripRow) {
   const startMs = Date.parse(trip.started_at);
   const endMs = Date.parse(trip.ended_at ?? trip.last_device_time);
   return formatDuration((endMs - startMs) / 1000);
 }
 
-function tripTractionKwh(trip: BydmateTripRow) {
+function tripTractionKwh(trip: VoltflowMateTripRow) {
   return tripTractionEnergyKwh(trip);
 }
 
-function formatTripTractionKwh(trip: BydmateTripRow, digits = 2) {
+function formatTripTractionKwh(trip: VoltflowMateTripRow, digits = 2) {
   const kwh = tripTractionKwh(trip);
   return kwh != null ? `${fmt(kwh, digits)} kWh` : "—";
 }
 
-function formatTripEnergyPerKm(trip: BydmateTripRow) {
+function formatTripEnergyPerKm(trip: VoltflowMateTripRow) {
   const energyPerKm = tripEnergyPerKm(trip);
   return energyPerKm != null ? `${fmt(energyPerKm, 2)} kWh/km` : "—";
 }
 
-function formatTripNetConsumptionKwh100(trip: BydmateTripRow) {
+function formatTripNetConsumptionKwh100(trip: VoltflowMateTripRow) {
   const consumptionKwh100 = tripNetConsumptionKwh100(trip);
   return consumptionKwh100 != null ? `${fmt(consumptionKwh100, 1)} kWh/100 km` : "—";
 }
@@ -302,7 +302,7 @@ function pickInitialChargingDate(sessions: ChargingSessionRow[]) {
   return latest ? localDateKey(latest) : today;
 }
 
-function pickInitialTripDate(trips: BydmateTripRow[]) {
+function pickInitialTripDate(trips: VoltflowMateTripRow[]) {
   const today = localTodayKey();
   if (trips.some((t) => localDateKey(t.started_at) === today)) {
     return today;
@@ -696,7 +696,7 @@ function ChargingTab({
 
   const [latestSession, ...olderSessions] = filteredSessions;
 
-  const { data: dayTrips = [], isLoading: dayTripsLoading } = useBydmateTripsQuery(
+  const { data: dayTrips = [], isLoading: dayTripsLoading } = useVoltflowMateTripsQuery(
     selectedDate ?? "",
     vehicleId,
     Boolean(selectedDate && vehicleId),
@@ -788,7 +788,7 @@ function ChargingTab({
 
 // ─── Trips tab ────────────────────────────────────────────────────────────────
 
-function TripStatsGrid({ trip, tx }: { trip: BydmateTripRow; tx: HistoryTranslator }) {
+function TripStatsGrid({ trip, tx }: { trip: VoltflowMateTripRow; tx: HistoryTranslator }) {
   const hasFuel = typeof trip.fuel_kwh === "number" && trip.fuel_kwh > 0;
   return (
     <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 border-t border-border px-2.5 py-2.5 min-[360px]:grid-cols-3">
@@ -820,7 +820,7 @@ function TripCardHeader({
   expanded,
   onToggle,
 }: {
-  trip: BydmateTripRow;
+  trip: VoltflowMateTripRow;
   label: string;
   tx: HistoryTranslator;
   collapsible?: boolean;
@@ -883,7 +883,7 @@ function HistoryTripCard({
   expanded,
   onToggle,
 }: {
-  trip: BydmateTripRow;
+  trip: VoltflowMateTripRow;
   label: string;
   featured?: boolean;
   expanded?: boolean;
@@ -959,13 +959,13 @@ function TripsTab({ vehicleId }: { vehicleId: string | null }) {
   const now = new Date();
   const [calYear, setCalYear] = useState(now.getFullYear());
   const [calMonth, setCalMonth] = useState(now.getMonth());
-  const { data: latestTrips = [], isLoading: latestLoading } = useLatestBydmateTripsQuery(vehicleId, 100);
+  const { data: latestTrips = [], isLoading: latestLoading } = useLatestVoltflowMateTripsQuery(vehicleId, 100);
   const { data: monthDateList = [] } = useTripMonthDatesQuery(calYear, calMonth, vehicleId);
   const [selectedDate, setSelectedDate] = useState<string | null>(() =>
     pickInitialTripDate(latestTrips),
   );
   const [selectedTripId, setSelectedTripId] = useState<string | null | undefined>(undefined);
-  const { data: dayTrips = [], isLoading: dayLoading } = useBydmateTripsQuery(
+  const { data: dayTrips = [], isLoading: dayLoading } = useVoltflowMateTripsQuery(
     selectedDate ?? "",
     vehicleId,
     Boolean(selectedDate),
@@ -1099,11 +1099,11 @@ export function HistoryView() {
   const [tab, setTab] = useState<HistoryTab>(initialTab);
   const { t } = useTranslation();
   const tx = t as HistoryTranslator;
-  useBydmateTripRealtimeInvalidation();
+  useVoltflowMateTripRealtimeInvalidation();
   const { data: sessions = [], isLoading: sessionsLoading } = useSessionsQuery();
-  const { data: liveRows = [], isLoading: liveLoading } = useBydmateLiveQuery();
+  const { data: liveRows = [], isLoading: liveLoading } = useVoltflowMateLiveQuery();
   const tripVehicleId = liveRows[0]?.vehicle_id ?? null;
-  const { data: trips = [], isLoading: tripsLoading } = useLatestBydmateTripsQuery(tripVehicleId, 100);
+  const { data: trips = [], isLoading: tripsLoading } = useLatestVoltflowMateTripsQuery(tripVehicleId, 100);
 
   const vehicleId = useMemo(() => {
     if (tripVehicleId) return tripVehicleId;

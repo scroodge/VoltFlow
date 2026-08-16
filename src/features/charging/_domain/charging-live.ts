@@ -6,7 +6,7 @@ import {
   type ChargingParams,
   type DerivedChargingState,
 } from "./charging-math.ts";
-import type { BydmateLiveSnapshotRow } from "@/types/database";
+import type { VoltflowMateLiveSnapshotRow } from "@/types/database";
 
 export const LIVE_CHARGING_STALE_MS = 90_000;
 /** Speed above this (km/h) treats the vehicle as driving, not finishing a charge. */
@@ -88,17 +88,17 @@ function finiteNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-export function snapshotSoc(snapshot: BydmateLiveSnapshotRow | null | undefined) {
+export function snapshotSoc(snapshot: VoltflowMateLiveSnapshotRow | null | undefined) {
   const soc = finiteNumber(snapshot?.telemetry?.soc) ?? finiteNumber(snapshot?.diplus?.soc);
   return soc != null && soc >= 0 && soc <= 100 ? soc : null;
 }
 
-export function snapshotSpeedKmh(snapshot: BydmateLiveSnapshotRow | null | undefined) {
+export function snapshotSpeedKmh(snapshot: VoltflowMateLiveSnapshotRow | null | undefined) {
   const speed = finiteNumber(snapshot?.telemetry?.speed_kmh);
   return speed != null && speed >= 0 ? speed : null;
 }
 
-export function snapshotChargePowerKw(snapshot: BydmateLiveSnapshotRow | null | undefined) {
+export function snapshotChargePowerKw(snapshot: VoltflowMateLiveSnapshotRow | null | undefined) {
   const power = finiteNumber(snapshot?.telemetry?.charge_power_kw);
   return power != null && power > 0 ? power : null;
 }
@@ -111,7 +111,7 @@ export function snapshotChargePowerKw(snapshot: BydmateLiveSnapshotRow | null | 
  * sending with autoservice on (≈10% of samples), so callers must fall back. Returns
  * null when absent or ≤ 0 (≤ 0 means "nothing measured yet" → prefer the estimate).
  */
-export function snapshotKwhCharged(snapshot: BydmateLiveSnapshotRow | null | undefined) {
+export function snapshotKwhCharged(snapshot: VoltflowMateLiveSnapshotRow | null | undefined) {
   const kwh = finiteNumber(snapshot?.telemetry?.kwh_charged);
   return kwh != null && kwh > 0 ? kwh : null;
 }
@@ -153,7 +153,7 @@ export function resolveDisplayChargePowerKw({
   sessionChargerPowerKw,
   defaultChargerPowerKw,
 }: {
-  snapshot?: BydmateLiveSnapshotRow | null;
+  snapshot?: VoltflowMateLiveSnapshotRow | null;
   sessionChargerPowerKw?: number | null;
   defaultChargerPowerKw?: number | null;
 }): number | null {
@@ -165,7 +165,7 @@ export function resolveDisplayChargePowerKw({
 }
 
 export function isFreshChargingSnapshot(
-  snapshot: BydmateLiveSnapshotRow | null | undefined,
+  snapshot: VoltflowMateLiveSnapshotRow | null | undefined,
   nowMs: number,
   staleMs = LIVE_CHARGING_STALE_MS,
 ) {
@@ -176,7 +176,7 @@ export function isFreshChargingSnapshot(
 }
 
 export function isFreshLiveSnapshot(
-  snapshot: BydmateLiveSnapshotRow | null | undefined,
+  snapshot: VoltflowMateLiveSnapshotRow | null | undefined,
   nowMs: number,
   staleMs = LIVE_CHARGING_STALE_MS,
 ) {
@@ -186,14 +186,14 @@ export function isFreshLiveSnapshot(
 }
 
 export function findFreshChargingSnapshot(
-  snapshots: BydmateLiveSnapshotRow[],
+  snapshots: VoltflowMateLiveSnapshotRow[],
   nowMs: number,
 ) {
   return snapshots.find((snapshot) => isFreshChargingSnapshot(snapshot, nowMs)) ?? null;
 }
 
 export function findFreshSocSnapshot(
-  snapshots: BydmateLiveSnapshotRow[],
+  snapshots: VoltflowMateLiveSnapshotRow[],
   nowMs: number,
 ) {
   return snapshots.find(
@@ -208,7 +208,7 @@ export function findFreshSocSnapshot(
  * bridge. Returns null when no snapshot has a SOC.
  */
 export function latestSnapshotSocReading(
-  snapshots: BydmateLiveSnapshotRow[],
+  snapshots: VoltflowMateLiveSnapshotRow[],
 ): { soc: number; receivedMs: number } | null {
   let best: { soc: number; receivedMs: number } | null = null;
   for (const snapshot of snapshots) {
@@ -227,7 +227,7 @@ export function deriveLiveChargingState({
   nowMs,
   requireCharging = true,
 }: {
-  snapshot: BydmateLiveSnapshotRow | null | undefined;
+  snapshot: VoltflowMateLiveSnapshotRow | null | undefined;
   params: ChargingParams;
   startedAtMs: number;
   nowMs: number;
@@ -277,7 +277,7 @@ export function deriveLiveChargingState({
 }
 
 export function isFreshSnapshotDriving(
-  snapshot: BydmateLiveSnapshotRow | null | undefined,
+  snapshot: VoltflowMateLiveSnapshotRow | null | undefined,
   nowMs: number,
   speedThresholdKmh = CHARGING_DRIVE_SPEED_KMH,
 ) {
@@ -288,7 +288,7 @@ export function isFreshSnapshotDriving(
 
 /** Block live-based auto-complete when the car is moving or no longer on the charger. */
 export function shouldBlockAutoComplete(
-  snapshot: BydmateLiveSnapshotRow | null | undefined,
+  snapshot: VoltflowMateLiveSnapshotRow | null | undefined,
   nowMs: number,
 ) {
   if (!isFreshLiveSnapshot(snapshot, nowMs)) return true;
@@ -298,7 +298,7 @@ export function shouldBlockAutoComplete(
 
 /** Allow math-based auto-complete only while Mate live SOC is stale (>90s) or absent. */
 export function shouldAllowMathAutoComplete(
-  snapshot: BydmateLiveSnapshotRow | null | undefined,
+  snapshot: VoltflowMateLiveSnapshotRow | null | undefined,
   nowMs: number,
 ) {
   return !isFreshLiveSnapshot(snapshot, nowMs);
@@ -306,7 +306,7 @@ export function shouldAllowMathAutoComplete(
 
 /** Auto-stop when fresh telemetry shows the vehicle left the charger while driving. */
 export function shouldAutoStopOnDriveAway(
-  snapshot: BydmateLiveSnapshotRow | null | undefined,
+  snapshot: VoltflowMateLiveSnapshotRow | null | undefined,
   nowMs: number,
 ) {
   return isFreshSnapshotDriving(snapshot, nowMs);

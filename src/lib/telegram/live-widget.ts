@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
-import { isDriveTelemetry, isParkStateTelemetry } from "@/lib/bydmate/gear";
-import { latestSampleByVehicle } from "@/lib/bydmate/latest-sample";
+import type { TelemetryPayload } from "@/lib/voltflowmate/ingest-payload";
+import { isDriveTelemetry, isParkStateTelemetry } from "@/lib/voltflowmate/gear";
+import { latestSampleByVehicle } from "@/lib/voltflowmate/latest-sample";
 import { finiteTelemetryNumber } from "@/features/charging/domain";
 import { siteUrl as canonicalSiteUrl } from "@/lib/site-url";
 import { editTelegramMessageText, sendTelegramMessage } from "@/lib/telegram/bot-send";

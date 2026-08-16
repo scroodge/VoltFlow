@@ -9,9 +9,9 @@ import {
   summarizeSessionTelemetry,
   type TelemetrySampleRow,
 } from "./charging-session-reconcile-logic";
-import { captureSessionEndDelta } from "@/lib/bydmate/charge-end-delta";
+import { captureSessionEndDelta } from "@/lib/voltflowmate/charge-end-delta";
 import { isFreshLiveSnapshot, snapshotSoc } from "@/features/charging/domain";
-import type { BydmateLiveSnapshotRow, Car, ChargingSessionRow } from "@/types/database";
+import type { VoltflowMateLiveSnapshotRow, Car, ChargingSessionRow } from "@/types/database";
 
 export type ChargingSessionReconcileResult = {
   reconciled: number;
@@ -91,7 +91,7 @@ async function reconcileOneSession({
   ]);
 
   const summary = summarizeSessionTelemetry(samples, session);
-  const liveRow = liveResult.data as BydmateLiveSnapshotRow | null;
+  const liveRow = liveResult.data as VoltflowMateLiveSnapshotRow | null;
   const liveSocFresh = liveRow != null && isFreshLiveSnapshot(liveRow, nowMs);
   const liveSoc = liveSocFresh ? snapshotSoc(liveRow) : null;
 

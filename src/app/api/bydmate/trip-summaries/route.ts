@@ -1,5 +1,5 @@
-import { parseTripSummaryBatch } from "@/lib/bydmate/trip-summary-payload";
-import { resolveBydmateApiKeyProfile } from "@/lib/bydmate/api-auth";
+import { parseTripSummaryBatch } from "@/lib/voltflowmate/trip-summary-payload";
+import { resolveVoltflowMateApiKeyProfile } from "@/lib/voltflowmate/api-auth";
 import { createServiceClient } from "@/lib/supabase/service";
 import {
   readBodyWithLimit,
@@ -21,10 +21,10 @@ export async function POST(request: Request) {
   }
 
   let supabase: ReturnType<typeof createServiceClient>;
-  let profile: Awaited<ReturnType<typeof resolveBydmateApiKeyProfile>>;
+  let profile: Awaited<ReturnType<typeof resolveVoltflowMateApiKeyProfile>>;
   try {
     supabase = createServiceClient();
-    profile = await resolveBydmateApiKeyProfile(supabase, apiKey);
+    profile = await resolveVoltflowMateApiKeyProfile(supabase, apiKey);
   } catch {
     return Response.json({ ok: false, error: "Key lookup failed" }, { status: 500 });
   }

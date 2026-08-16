@@ -1196,7 +1196,7 @@ export const dictionaries = {
           "Open VoltFlow Mate, grant location and storage permissions, and in DiLink turn off background restriction: Settings → General → Disable background Apps → VoltFlow Mate = OFF.",
         ],
         downloadApk: "Download APK (GitHub)",
-        linkBydmate: "Link VoltFlow Mate",
+        linkVoltflowMate: "Link VoltFlow Mate",
         linkCodeHint: "Enter this 6-digit code in VoltFlow Mate → VoltFlow sync, then tap Connect.",
         linkCodeExpires: "Code expires in {time}",
         linkCodeExpired: "Code expired — generate a new one.",
@@ -2525,7 +2525,7 @@ export const dictionaries = {
           "Запусціце VoltFlow Mate і дайце дазволы на геалакацыю і сховішча. У меню DiLink адключіце фонавую працу: Settings → General → Disable background Apps → VoltFlow Mate = OFF.",
         ],
         downloadApk: "Спампаваць APK (GitHub)",
-        linkBydmate: "Злучыць VoltFlow Mate",
+        linkVoltflowMate: "Злучыць VoltFlow Mate",
         linkCodeHint:
           "Увядзіце гэты 6-значны код у VoltFlow Mate → сінхранізацыя VoltFlow і націсніце «Злучыць».",
         linkCodeExpires: "Код састанецца праз {time}",
@@ -3854,7 +3854,7 @@ export const dictionaries = {
           "Запустите VoltFlow Mate и выдайте разрешения на геолокацию и хранилище. В меню DiLink отключите фоновую работу: Settings → General → Disable background Apps → VoltFlow Mate = OFF.",
         ],
         downloadApk: "Скачать APK (GitHub)",
-        linkBydmate: "Подключить VoltFlow Mate",
+        linkVoltflowMate: "Подключить VoltFlow Mate",
         linkCodeHint:
           "Введите этот 6-значный код в VoltFlow Mate → синхронизация VoltFlow и нажмите «Подключить».",
         linkCodeExpires: "Код истекает через {time}",

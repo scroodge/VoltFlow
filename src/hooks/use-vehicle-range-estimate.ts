@@ -2,13 +2,13 @@
 
 import { useMemo } from "react";
 
-import { useLatestBydmateTripsQuery } from "@/hooks/use-bydmate-trips-query";
+import { useLatestVoltflowMateTripsQuery } from "@/hooks/use-voltflowmate-trips-query";
 import {
   estimateRangeFromSoc,
   estimateVehicleRangeKm,
   type RangeEstimate,
-} from "@/lib/bydmate/range-estimate";
-import type { BydmateLiveSnapshotRow, BydmateTripRow } from "@/types/database";
+} from "@/lib/voltflowmate/range-estimate";
+import type { VoltflowMateLiveSnapshotRow, VoltflowMateTripRow } from "@/types/database";
 
 export function useVehicleRangeEstimate({
   baseSnapshot,
@@ -18,15 +18,15 @@ export function useVehicleRangeEstimate({
   enabled = true,
   fallbackSoc,
 }: {
-  baseSnapshot: BydmateLiveSnapshotRow | null;
+  baseSnapshot: VoltflowMateLiveSnapshotRow | null;
   scopedVehicleId: string | null;
   batteryCapacityKwh?: number | null;
-  recentTripsOverride?: BydmateTripRow[] | null;
+  recentTripsOverride?: VoltflowMateTripRow[] | null;
   enabled?: boolean;
   fallbackSoc?: number | null;
 }): RangeEstimate {
   const tripVehicleId = baseSnapshot?.vehicle_id ?? scopedVehicleId;
-  const { data: latestTrips = [] } = useLatestBydmateTripsQuery(
+  const { data: latestTrips = [] } = useLatestVoltflowMateTripsQuery(
     tripVehicleId,
     1,
     enabled && Boolean(tripVehicleId) && recentTripsOverride === undefined,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { resolveDashboardSession } from "@/lib/bydmate/dashboard-entitlement";
+import { resolveDashboardSession } from "@/lib/voltflowmate/dashboard-entitlement";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";

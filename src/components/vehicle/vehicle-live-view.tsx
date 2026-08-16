@@ -36,15 +36,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
+import { useVoltflowMateLiveQuery } from "@/hooks/use-voltflowmate-live-query";
 import { useProfileQuery } from "@/hooks/use-profile-query";
 import { useVehicleRangeEstimate } from "@/hooks/use-vehicle-range-estimate";
 import { useVehicleLastKnownLocation } from "@/hooks/use-vehicle-last-known-location";
 import {
-  useBydmateTripRealtimeInvalidation,
-  useBydmateTripsQuery,
-  useLatestBydmateTripsQuery,
-} from "@/hooks/use-bydmate-trips-query";
+  useVoltflowMateTripRealtimeInvalidation,
+  useVoltflowMateTripsQuery,
+  useLatestVoltflowMateTripsQuery,
+} from "@/hooks/use-voltflowmate-trips-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useSessionsQuery } from "@/hooks/use-sessions-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
@@ -54,22 +54,22 @@ import {
   formatPressureFromKpa,
   isTyrePressureKpa,
 } from "@/lib/pressure-units";
-import { gearIsPark, readGear } from "@/lib/bydmate/gear";
+import { gearIsPark, readGear } from "@/lib/voltflowmate/gear";
 import { isTelemetryCharging } from "@/features/charging/domain";
 import {
   computeHeroDriveMetrics,
   formatHeroDistanceKm,
   formatKmPerPercent,
-} from "@/lib/bydmate/hero-drive-metrics";
-import { calculateTripEnergy } from "@/lib/bydmate/trip-energy";
+} from "@/lib/voltflowmate/hero-drive-metrics";
+import { calculateTripEnergy } from "@/lib/voltflowmate/trip-energy";
 import {
   tripEnergyPerKm,
   tripNetConsumptionKwh100,
   tripTractionEnergyKwh,
   weightedAvgConsumptionKwh100,
-} from "@/lib/bydmate/trip-metrics";
-import { isRouteTrackDisplayable } from "@/lib/bydmate/route-insights";
-import { resolvePreferredTripDistanceKm, trackPathDistanceKm } from "@/lib/bydmate/trip-distance";
+} from "@/lib/voltflowmate/trip-metrics";
+import { isRouteTrackDisplayable } from "@/lib/voltflowmate/route-insights";
+import { resolvePreferredTripDistanceKm, trackPathDistanceKm } from "@/lib/voltflowmate/trip-distance";
 import type { Currency, Locale, TranslationKey } from "@/lib/i18n";
 import { formatTimeAgo } from "@/lib/time-ago";
 import { vehicleReadyDurationBucket } from "@/lib/vehicle-ready-metrics";
@@ -83,13 +83,13 @@ import {
 } from "@/lib/vehicle-live-mode";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import type {
-  BydmateLiveSnapshotRow,
-  BydmateDiplus,
-  BydmateLocation,
-  BydmateTelemetry,
-  BydmateTelemetryPointRow,
-  BydmateTripRow,
-  BydmateTripTrackPointRow,
+  VoltflowMateLiveSnapshotRow,
+  VoltflowMateDiplus,
+  VoltflowMateLocation,
+  VoltflowMateTelemetry,
+  VoltflowMateTelemetryPointRow,
+  VoltflowMateTripRow,
+  VoltflowMateTripTrackPointRow,
   ChargingSessionRow,
 } from "@/types/database";
 import { ChargingDeltaCard } from "@/features/charging/ui";
@@ -140,7 +140,7 @@ function finiteKm(value: unknown) {
 }
 
 function readAuxVoltageV(
-  snapshot: Pick<BydmateLiveSnapshotRow, "telemetry" | "diplus" | "diplus_voltage_12v">,
+  snapshot: Pick<VoltflowMateLiveSnapshotRow, "telemetry" | "diplus" | "diplus_voltage_12v">,
 ) {
   const fromTelemetry = finiteMetric(snapshot.telemetry.aux_voltage_v);
   if (fromTelemetry != null) return fromTelemetry;
@@ -154,7 +154,7 @@ function readAuxVoltageV(
   return null;
 }
 
-function heroCoreMetrics(snapshot: BydmateLiveSnapshotRow, t: Translator, locale: Locale) {
+function heroCoreMetrics(snapshot: VoltflowMateLiveSnapshotRow, t: Translator, locale: Locale) {
   return [
     {
       key: "auxBattery",
@@ -172,7 +172,7 @@ function heroCoreMetrics(snapshot: BydmateLiveSnapshotRow, t: Translator, locale
 }
 
 function readOdometerKm(
-  snapshot: Pick<BydmateLiveSnapshotRow, "telemetry" | "diplus" | "diplus_mileage_km">,
+  snapshot: Pick<VoltflowMateLiveSnapshotRow, "telemetry" | "diplus" | "diplus_mileage_km">,
 ) {
   const fromTelemetry = finiteKm(snapshot.telemetry.odometer_km);
   if (fromTelemetry != null) return fromTelemetry;
@@ -218,7 +218,7 @@ export function VehicleLiveView({ isAdmin = false }: { isAdmin?: boolean }) {
   const tx = t as Translator;
   const searchParams = useSearchParams();
   const initialTripId = searchParams.get("trip");
-  const { data, isLoading, error } = useBydmateLiveQuery();
+  const { data, isLoading, error } = useVoltflowMateLiveQuery();
   const { data: carsResult } = useCarsQuery();
   const selectedCarId = useAppPreferences((state) => state.selectedCarId);
   const vehicleReadyReported = useRef(false);
@@ -235,7 +235,7 @@ export function VehicleLiveView({ isAdmin = false }: { isAdmin?: boolean }) {
   );
   const snapshot = useVehicleDevSnapshotOverride(baseSnapshot);
   const hasMounted = useClientMounted();
-  useBydmateTripRealtimeInvalidation();
+  useVoltflowMateTripRealtimeInvalidation();
 
   useEffect(() => {
     if (vehicleReadyReported.current || isLoading || !snapshot) return;
@@ -305,8 +305,8 @@ export function VehicleLiveFixtureView({
   snapshot,
   points,
 }: {
-  snapshot: BydmateLiveSnapshotRow;
-  points: BydmateTelemetryPointRow[];
+  snapshot: VoltflowMateLiveSnapshotRow;
+  points: VoltflowMateTelemetryPointRow[];
 }) {
   const nowMs = useTickingClock(true);
 
@@ -332,11 +332,11 @@ function VehicleLiveContent({
   hasMounted = true,
   isAdmin = false,
 }: {
-  snapshot: BydmateLiveSnapshotRow;
-  rangeBaseSnapshot: BydmateLiveSnapshotRow | null;
+  snapshot: VoltflowMateLiveSnapshotRow;
+  rangeBaseSnapshot: VoltflowMateLiveSnapshotRow | null;
   scopedVehicleId: string | null;
   nowMs: number;
-  fixturePoints?: BydmateTelemetryPointRow[];
+  fixturePoints?: VoltflowMateTelemetryPointRow[];
   initialTripId?: string | null;
   hasMounted?: boolean;
   isAdmin?: boolean;
@@ -393,13 +393,13 @@ function VehicleLiveContent({
     data: apiTrips = [],
     isLoading: isTripsLoading,
     error: tripsError,
-  } = useBydmateTripsQuery(selectedDate, snapshot.vehicle_id, !fixturePoints && !isCharging && !isStale);
+  } = useVoltflowMateTripsQuery(selectedDate, snapshot.vehicle_id, !fixturePoints && !isCharging && !isStale);
   const { data: sessions = [] } = useSessionsQuery();
   // Not gated by isCharging: Math Range (kmPerPercentSoc × SOC) needs the last drive's
   // efficiency, which the live snapshot can't supply while charging (the daemon doesn't
   // send current-trip consumption). Without these trips Math Range falls back to live
   // consumption — null during charge — and shows "—".
-  const { data: recentTrips = [] } = useLatestBydmateTripsQuery(
+  const { data: recentTrips = [] } = useLatestVoltflowMateTripsQuery(
     snapshot.vehicle_id,
     50,
     !fixturePoints && Boolean(snapshot.vehicle_id),
@@ -602,7 +602,7 @@ function Hero({
   kmPerPercentSoc,
   parkedRecentEnergyKwh,
 }: {
-  snapshot: BydmateLiveSnapshotRow;
+  snapshot: VoltflowMateLiveSnapshotRow;
   nowMs: number;
   vehicleMode: DashboardVehicleMode;
   isStale: boolean;
@@ -807,7 +807,7 @@ function ChargingModeCard({
   nowMs,
   cabinTempC,
 }: {
-  snapshot: BydmateLiveSnapshotRow;
+  snapshot: VoltflowMateLiveSnapshotRow;
   session: ChargingSessionRow | null;
   nowMs: number;
   cabinTempC: number | null;
@@ -908,7 +908,7 @@ function RestMetricsCard({
   rangeLabel,
   mathRangeLabel,
 }: {
-  snapshot: BydmateLiveSnapshotRow;
+  snapshot: VoltflowMateLiveSnapshotRow;
   rangeLabel: string;
   mathRangeLabel: string;
 }) {
@@ -956,7 +956,7 @@ function TelemetryGrid({
   vehicleMode,
   cabinTempC,
 }: {
-  snapshot: BydmateLiveSnapshotRow;
+  snapshot: VoltflowMateLiveSnapshotRow;
   vehicleMode: DashboardVehicleMode;
   cabinTempC: number | null;
 }) {
@@ -1051,10 +1051,10 @@ function TelemetryGrid({
 type CellDeltaStatus = "good" | "warning" | "critical" | "unknown";
 
 function diplusNumber(
-  snapshot: BydmateLiveSnapshotRow,
+  snapshot: VoltflowMateLiveSnapshotRow,
   columnKey: "diplus_min_cell_voltage_v" | "diplus_max_cell_voltage_v" | "diplus_cell_delta_v",
   rawKey: "min_cell_voltage_v" | "max_cell_voltage_v" | "cell_delta_v",
-  telemetryKeys: Array<keyof BydmateTelemetry> = [],
+  telemetryKeys: Array<keyof VoltflowMateTelemetry> = [],
 ) {
   const columnValue = snapshot[columnKey];
   if (typeof columnValue === "number" && Number.isFinite(columnValue)) return columnValue;
@@ -1082,7 +1082,7 @@ function cellStatusClasses(status: CellDeltaStatus) {
   return "border-border bg-white/[0.03] text-muted-foreground";
 }
 
-function CellHealthCard({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
+function CellHealthCard({ snapshot }: { snapshot: VoltflowMateLiveSnapshotRow }) {
   const { t } = useTranslation();
   const tx = t as Translator;
   const minCellVoltage = diplusNumber(snapshot, "diplus_min_cell_voltage_v", "min_cell_voltage_v", [
@@ -1134,7 +1134,7 @@ function tirePressureKpa(value: unknown) {
   return isTyrePressureKpa(value) ? value : null;
 }
 
-function TirePressureCard({ snapshot }: { snapshot: BydmateLiveSnapshotRow }) {
+function TirePressureCard({ snapshot }: { snapshot: VoltflowMateLiveSnapshotRow }) {
   const { t } = useTranslation();
   const { data: profile } = useProfileQuery();
   const tx = t as Translator;
@@ -1225,7 +1225,7 @@ type RouteLayer = "route" | "power" | "speed" | "soc";
 
 type TripSegment = {
   id: string;
-  points: BydmateTelemetryPointRow[];
+  points: VoltflowMateTelemetryPointRow[];
   startMs: number;
   endMs: number;
   durationMs: number;
@@ -1298,7 +1298,7 @@ function formatDuration(ms: number) {
   return rest ? `${hours}h ${rest}m` : `${hours}h`;
 }
 
-function buildTrips(points: BydmateTelemetryPointRow[]): TripSegment[] {
+function buildTrips(points: VoltflowMateTelemetryPointRow[]): TripSegment[] {
   const sorted = [...points]
     .filter(
       (point) =>
@@ -1308,7 +1308,7 @@ function buildTrips(points: BydmateTelemetryPointRow[]): TripSegment[] {
     )
     .sort((a, b) => pointTimeMs(a) - pointTimeMs(b));
 
-  const groups: BydmateTelemetryPointRow[][] = [];
+  const groups: VoltflowMateTelemetryPointRow[][] = [];
   for (const point of sorted) {
     const lastGroup = groups.at(-1);
     const previous = lastGroup?.at(-1);
@@ -1384,7 +1384,7 @@ function buildTrips(points: BydmateTelemetryPointRow[]): TripSegment[] {
   }).reverse();
 }
 
-function tripRowFromFixture(trip: TripSegment, vehicleId: string): BydmateTripRow {
+function tripRowFromFixture(trip: TripSegment, vehicleId: string): VoltflowMateTripRow {
   return {
     id: trip.id,
     user_id: "fixture",
@@ -1406,7 +1406,7 @@ function tripRowFromFixture(trip: TripSegment, vehicleId: string): BydmateTripRo
 }
 
 function formatTripCostStr(
-  trip: BydmateTripRow,
+  trip: VoltflowMateTripRow,
   currency: Currency,
   pricePerKwh: number,
   locale: Locale,
@@ -1426,22 +1426,22 @@ function formatTripCostStr(
   ) : null;
 }
 
-function formatTripEnergyPerKm(trip: BydmateTripRow) {
+function formatTripEnergyPerKm(trip: VoltflowMateTripRow) {
   const energyPerKm = tripEnergyPerKm(trip);
   return energyPerKm != null ? `${fmt(energyPerKm, 2)} kWh/km` : "—";
 }
 
-function formatTripTractionEnergyKwh(trip: BydmateTripRow) {
+function formatTripTractionEnergyKwh(trip: VoltflowMateTripRow) {
   const tractionKwh = tripTractionEnergyKwh(trip);
   return tractionKwh != null ? `${fmt(tractionKwh, 2)} kWh` : "—";
 }
 
-function formatTripNetConsumptionKwh100(trip: BydmateTripRow) {
+function formatTripNetConsumptionKwh100(trip: VoltflowMateTripRow) {
   const consumptionKwh100 = tripNetConsumptionKwh100(trip);
   return consumptionKwh100 != null ? `${fmt(consumptionKwh100, 1)} kWh/100 km` : "—";
 }
 
-function TripNetConsumptionMetric({ trip, label }: { trip: BydmateTripRow; label: string }) {
+function TripNetConsumptionMetric({ trip, label }: { trip: VoltflowMateTripRow; label: string }) {
   return (
     <div className="mt-3 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.06] px-3 py-2.5">
       <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
@@ -1468,7 +1468,7 @@ function TripBrowser({
   selectedDate?: string;
   availableDateKeys?: string[];
   onDateChange?: (value: string) => void;
-  trips: BydmateTripRow[];
+  trips: VoltflowMateTripRow[];
   selectedTripId: string | null;
   onSelectTrip: (id: string) => void;
   isLoading: boolean;
@@ -1614,7 +1614,7 @@ function TripListItem({
   expanded,
   onSelect,
 }: {
-  trip: BydmateTripRow;
+  trip: VoltflowMateTripRow;
   tripLabel: string;
   expanded: boolean;
   onSelect: () => void;
@@ -1758,7 +1758,7 @@ function DeferredLocationCard({
   snapshot,
   hasMounted = true,
 }: {
-  snapshot: BydmateLiveSnapshotRow;
+  snapshot: VoltflowMateLiveSnapshotRow;
   hasMounted?: boolean;
 }) {
   const [isNearViewport, setIsNearViewport] = useState(false);
@@ -1791,7 +1791,7 @@ function LocationCard({
   snapshot,
   hasMounted = true,
 }: {
-  snapshot: BydmateLiveSnapshotRow;
+  snapshot: VoltflowMateLiveSnapshotRow;
   hasMounted?: boolean;
 }) {
   const { locale, t } = useTranslation();
@@ -1880,7 +1880,7 @@ function LastTripCard({
   const { t } = useTranslation();
   const appPath = useAppPath();
   const tx = t as Translator;
-  const { data: trips = [], isLoading } = useLatestBydmateTripsQuery(vehicleId, 1);
+  const { data: trips = [], isLoading } = useLatestVoltflowMateTripsQuery(vehicleId, 1);
   const trip = trips[0] ?? null;
 
   return (
@@ -1921,7 +1921,7 @@ function LastTripDetail({
   trip,
   hasMounted = true,
 }: {
-  trip: BydmateTripRow;
+  trip: VoltflowMateTripRow;
   hasMounted?: boolean;
 }) {
   const { t } = useTranslation();

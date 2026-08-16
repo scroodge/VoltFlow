@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { fetchTelemetryHistory } from "@/lib/bydmate/telemetry-history";
-import { parseTelemetryRange } from "@/lib/bydmate/telemetry-ranges";
+import { fetchTelemetryHistory } from "@/lib/voltflowmate/telemetry-history";
+import { parseTelemetryRange } from "@/lib/voltflowmate/telemetry-ranges";
 import { resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
 
 export async function GET(request: NextRequest) {

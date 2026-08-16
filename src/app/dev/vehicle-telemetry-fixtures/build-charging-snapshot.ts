@@ -1,16 +1,16 @@
-import type { BydmateLiveSnapshotRow, BydmateTelemetry } from "@/types/database";
+import type { VoltflowMateLiveSnapshotRow, VoltflowMateTelemetry } from "@/types/database";
 
 export type ChargingSampleRef = {
   device_time: string;
   received_at: string;
-  telemetry: BydmateTelemetry;
-  diplus?: BydmateLiveSnapshotRow["diplus"];
+  telemetry: VoltflowMateTelemetry;
+  diplus?: VoltflowMateLiveSnapshotRow["diplus"];
   diplus_min_cell_voltage_v?: number | null;
   diplus_max_cell_voltage_v?: number | null;
   diplus_cell_delta_v?: number | null;
 };
 
-function chargePowerKw(telemetry: BydmateTelemetry) {
+function chargePowerKw(telemetry: VoltflowMateTelemetry) {
   const kw = telemetry.charge_power_kw ?? telemetry.power_kw;
   if (typeof kw === "number" && Number.isFinite(kw) && Math.abs(kw) > 0.1) {
     return Math.abs(kw);
@@ -20,9 +20,9 @@ function chargePowerKw(telemetry: BydmateTelemetry) {
 
 /** Fresh live snapshot for dev “charging” mode — prefers a real charging sample when present. */
 export function buildChargingSnapshot(
-  base: BydmateLiveSnapshotRow,
+  base: VoltflowMateLiveSnapshotRow,
   sample: ChargingSampleRef | null,
-): BydmateLiveSnapshotRow {
+): VoltflowMateLiveSnapshotRow {
   const now = new Date().toISOString();
 
   if (sample) {

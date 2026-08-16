@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 function DashboardHydration({ data }: { data: DashboardBootstrapData }) {
   const queryClient = new QueryClient();
   queryClient.setQueryData(queryKeys.cars, { cars: data.cars, preferredCarId: null });
-  queryClient.setQueryData(queryKeys.bydmateLive, data.liveSnapshots);
+  queryClient.setQueryData(queryKeys.voltflowMateLive, data.liveSnapshots);
   queryClient.setQueryData(queryKeys.sessions, data.sessions);
 
   return (

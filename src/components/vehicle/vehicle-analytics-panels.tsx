@@ -21,13 +21,13 @@ import { TelemetryHistoryCharts } from "@/components/vehicle/vehicle-telemetry-v
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
-import { useBydmateSohHistoryQuery } from "@/hooks/use-bydmate-soh-history-query";
-import { useBydmateTelemetryHistoryQuery } from "@/hooks/use-bydmate-telemetry-history-query";
-import type { TelemetryHistoryPoint } from "@/lib/bydmate/telemetry-history";
+import { useVoltflowMateLiveQuery } from "@/hooks/use-voltflowmate-live-query";
+import { useVoltflowMateSohHistoryQuery } from "@/hooks/use-voltflowmate-soh-history-query";
+import { useVoltflowMateTelemetryHistoryQuery } from "@/hooks/use-voltflowmate-telemetry-history-query";
+import type { TelemetryHistoryPoint } from "@/lib/voltflowmate/telemetry-history";
 import { useTranslation } from "@/hooks/use-translation";
-import { buildChargeDeltaTrend } from "@/lib/bydmate/charge-delta-trend";
-import { buildAnalyticsSummary, consumptionByOutsideTemp } from "@/lib/bydmate/telemetry-buckets";
+import { buildChargeDeltaTrend } from "@/lib/voltflowmate/charge-delta-trend";
+import { buildAnalyticsSummary, consumptionByOutsideTemp } from "@/lib/voltflowmate/telemetry-buckets";
 import { computeHistoryPeriodSummary } from "@/lib/history-day-summary";
 import {
   analyticsRangeAnchorForCurrentDate,
@@ -43,18 +43,18 @@ import {
   yearValueFromDate,
   yearValueToAnchorDate,
   type TelemetryHistoryRange,
-} from "@/lib/bydmate/telemetry-ranges";
-import type { RouteInsightsResult } from "@/lib/bydmate/route-insights";
+} from "@/lib/voltflowmate/telemetry-ranges";
+import type { RouteInsightsResult } from "@/lib/voltflowmate/route-insights";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import { devFetch, isDevAppRoute, withDevApiParams } from "@/lib/dev/dev-fetch";
 import { formatCurrencyAmount, type Locale, type TranslationKey } from "@/lib/i18n";
-import type { BydmateTripRow, BydmateTripTrackPointRow, ChargingSessionRow } from "@/types/database";
+import type { VoltflowMateTripRow, VoltflowMateTripTrackPointRow, ChargingSessionRow } from "@/types/database";
 
 const HISTORY_RANGES: TelemetryHistoryRange[] = ["day", "week", "month", "quarter", "year"];
 
 type Translator = (key: TranslationKey, values?: Record<string, string | number>) => string;
 
-type PeriodTripRow = BydmateTripRow & { outside_temp_avg?: number | null };
+type PeriodTripRow = VoltflowMateTripRow & { outside_temp_avg?: number | null };
 
 const EMPTY_PERIOD_TRIPS: PeriodTripRow[] = [];
 const EMPTY_PERIOD_SESSIONS: ChargingSessionRow[] = [];
@@ -328,11 +328,11 @@ export function VehicleAnalyticsPanels({
     [onAnalyticsStateChange],
   );
 
-  const { data: liveRows = [] } = useBydmateLiveQuery();
+  const { data: liveRows = [] } = useVoltflowMateLiveQuery();
   const currentOutsideTemp =
     liveRows.find((row) => row.vehicle_id === vehicleId)?.telemetry.outside_temp_c ?? null;
 
-  const historyQuery = useBydmateTelemetryHistoryQuery({
+  const historyQuery = useVoltflowMateTelemetryHistoryQuery({
     range: historyRange,
     anchorDate,
     vehicleId,
@@ -396,7 +396,7 @@ export function VehicleAnalyticsPanels({
     return periodSummary.chargingCost / periodSummary.distanceKm;
   }, [periodSummary]);
 
-  const sohQuery = useBydmateSohHistoryQuery({
+  const sohQuery = useVoltflowMateSohHistoryQuery({
     anchorDate,
     vehicleId,
   });
@@ -426,7 +426,7 @@ export function VehicleAnalyticsPanels({
   const mapQuery = useQuery({
     queryKey: ["vehicle-analytics", "lifetime-map", vehicleId],
     queryFn: () =>
-      fetchAnalytics<{ points: BydmateTripTrackPointRow[] }>(
+      fetchAnalytics<{ points: VoltflowMateTripTrackPointRow[] }>(
         `/api/vehicle/lifetime-map?vehicle_id=${encodeURIComponent(vehicleId)}`,
       ),
   });

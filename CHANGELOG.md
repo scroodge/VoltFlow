@@ -9,6 +9,58 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-08-16
+
+### Mate and the Dashboard no longer revoke each other's pairing
+
+- **Bug:** pairing the VoltFlow Dashboard disconnected BYD Mate, and re-pairing Mate
+  disconnected the Dashboard. Both clients authenticate through
+  `resolveBydmateApiKeyProfile`, which read the single `profiles.bydmate_cloud_api_key_hash`
+  column, and `redeemBydmateLinkCode` **overwrote** that column on every redeem. The last
+  client to redeem a code won and silently evicted the other.
+- New `public.bydmate_devices` table (migration `20260816120000_bydmate_devices.sql`):
+  one row per paired client, `(user_id, kind)` unique with `kind in ('mate','dashboard')`,
+  `api_key_hash` globally unique. The migration backfills every currently paired car as
+  `kind = 'mate'`.
+- `POST /api/bydmate/link-code/redeem` accepts an optional `client` field. `"dashboard"`
+  pairs the head unit; absent/anything else means Mate, which is what every Mate build
+  shipped before this field existed — so old clients keep working unchanged.
+- `resolveBydmateApiKeyProfile` resolves devices first via an embedded `profiles!inner`
+  select, keeping the ~6 s command-poll hot path at one round trip and one indexed read.
+  Profile-column and legacy-plaintext lookups remain as fallbacks and now adopt the car
+  into `bydmate_devices` on first authenticated request. Mate's key is still mirrored onto
+  the profile column, which continues to mark an account as having a car attached.
+- Deliberately no `last_seen_at` column: stamping it would turn every auth into a write.
+- Dashboard side (Voltflow-Dashboard repo): `VoltflowLinkClient` sends
+  `"client": "dashboard"` on redeem; a revoked key (`invalid_api_key`) now clears the
+  stored credential and routes to `LinkActivity` instead of stranding the user on
+  `BlockedActivity`, which has no re-link path.
+- Verification: `npx tsc --noEmit` clean for the changed files (one pre-existing,
+  unrelated error in `settings-view.tsx:788`); Dashboard `assembleDebug` succeeds. The
+  migration has **not** been applied to prod yet, and the paired-device flow has not been
+  exercised end-to-end against a running backend.
+
+### Postman collection covering all API endpoints
+
+- Added `postman/EvAcChargeTimer.postman_collection.json` (Postman v2.1) and
+  `postman/README.md`, covering all 40 route files under `src/app/api/**` (49 requests
+  once every exported HTTP method per file is counted), plus the legacy Supabase Edge
+  Function telemetry passthrough (`supabase/functions/bydmate-telemetry`).
+- Requests are grouped into folders matching the `src/app/api/<group>/...` layout
+  (`admin`, `bydmate`, `cluster-backgrounds`, `cron`, `dev-wb`, `knowledge`, `push`,
+  `telegram`, `vehicle`, `edge-function`). Auth is applied per-request via collection
+  variables (`{{base_url}}`, `{{supabase_cookie}}`, `{{bydmate_api_key}}`,
+  `{{vehicle_id}}`, `{{cron_secret}}`, `{{telegram_webhook_secret}}`) rather than
+  hardcoded secrets, so the file is safe to commit; no real credentials are in the repo.
+- Bodies/query params are best-effort placeholders read from each route's
+  `request.json()`/`searchParams` usage, not full schema validation — see
+  `postman/README.md` for the auth-family breakdown and caveats.
+- Verification: generated via a scratch Node script, `JSON.parse` validated, and a
+  structural walk confirmed 10 folders / 49 requests before the file was copied into
+  the repo. No live import into Postman was performed.
+
+---
+
 ## 2026-08-15
 
 ### Persistent tyre-pressure display units

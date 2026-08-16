@@ -18,7 +18,7 @@ import {
   buildParkedSnapshot,
 } from "@/lib/dev/build-driving-snapshot";
 import { getDevPathPrefix } from "@/lib/dev/dev-path";
-import type { BydmateLiveSnapshotRow } from "@/types/database";
+import type { VoltflowMateLiveSnapshotRow } from "@/types/database";
 
 export type DashboardDevSnapshotMode =
   | "live"
@@ -33,7 +33,7 @@ const STALE_FIXTURE_AGE_MS = 47 * 60_000;
 type DashboardDevSnapshotContextValue = {
   mode: DashboardDevSnapshotMode;
   setMode: (mode: DashboardDevSnapshotMode) => void;
-  resolveOverride: (base: BydmateLiveSnapshotRow | null) => BydmateLiveSnapshotRow | null;
+  resolveOverride: (base: VoltflowMateLiveSnapshotRow | null) => VoltflowMateLiveSnapshotRow | null;
 };
 
 const DashboardDevSnapshotContext = createContext<DashboardDevSnapshotContextValue | null>(
@@ -69,7 +69,7 @@ export function DashboardDevSnapshotProvider({ children }: { children: ReactNode
   }, []);
 
   const resolveOverride = useCallback(
-    (base: BydmateLiveSnapshotRow | null): BydmateLiveSnapshotRow | null => {
+    (base: VoltflowMateLiveSnapshotRow | null): VoltflowMateLiveSnapshotRow | null => {
       if (!devRoute) return null;
       const seed = base ?? buildDevDashboardSeedSnapshot();
       if (mode === "charge") {
@@ -126,8 +126,8 @@ export function useDashboardDevSnapshot() {
 }
 
 export function useDashboardDevSnapshotOverride(
-  base: BydmateLiveSnapshotRow | null,
-): BydmateLiveSnapshotRow | null {
+  base: VoltflowMateLiveSnapshotRow | null,
+): VoltflowMateLiveSnapshotRow | null {
   const ctx = useDashboardDevSnapshot();
   const hasMounted = useSyncExternalStore(
     () => () => {},

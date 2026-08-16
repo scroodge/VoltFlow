@@ -11,7 +11,7 @@ import {
   type GpsCoordinates,
 } from "@/lib/charging-gps-location";
 import { queryKeys } from "@/lib/query-keys";
-import type { BydmateLiveSnapshotRow, ChargingSessionRow } from "@/types/database";
+import type { VoltflowMateLiveSnapshotRow, ChargingSessionRow } from "@/types/database";
 
 const GPS_TARIFF_SYNC_MIN_INTERVAL_MS = 15_000;
 
@@ -24,7 +24,7 @@ export function useChargingSessionAutoTariff({
 }: {
   session: ChargingSessionRow | null | undefined;
   sessionId: string | null;
-  liveSnapshots: BydmateLiveSnapshotRow[];
+  liveSnapshots: VoltflowMateLiveSnapshotRow[];
   vehicleId?: string | null;
   enabled?: boolean;
 }) {

@@ -1,25 +1,25 @@
-import { gearIsPark, readGear } from "@/lib/bydmate/gear";
+import { gearIsPark, readGear } from "@/lib/voltflowmate/gear";
 import { isTelemetryCharging } from "@/features/charging/domain";
-import type { BydmateLiveSnapshotRow } from "@/types/database";
+import type { VoltflowMateLiveSnapshotRow } from "@/types/database";
 
 export { gearIsPark, readGear };
 
 export const VEHICLE_CONTROL_STALE_MS = 90_000;
 export const VEHICLE_CONTROL_LOW_AUX_V = 11.8;
 
-export function isTelemetryFresh(snapshot: BydmateLiveSnapshotRow | undefined) {
+export function isTelemetryFresh(snapshot: VoltflowMateLiveSnapshotRow | undefined) {
   if (!snapshot) return false;
   const receivedAt = new Date(snapshot.received_at).getTime();
   return !Number.isNaN(receivedAt) && Date.now() - receivedAt <= VEHICLE_CONTROL_STALE_MS;
 }
 
-export function readSentryProvider(snapshot: BydmateLiveSnapshotRow | undefined) {
+export function readSentryProvider(snapshot: VoltflowMateLiveSnapshotRow | undefined) {
   const diplus = snapshot?.diplus as Record<string, unknown> | undefined;
   const provider = diplus?.sentry_provider;
   return typeof provider === "string" ? provider : "diplus";
 }
 
-export function isSentryReady(snapshot: BydmateLiveSnapshotRow | undefined) {
+export function isSentryReady(snapshot: VoltflowMateLiveSnapshotRow | undefined) {
   const diplus = snapshot?.diplus as Record<string, unknown> | undefined;
   if (!diplus) return false;
   const provider = readSentryProvider(snapshot);
@@ -30,25 +30,25 @@ export function isSentryReady(snapshot: BydmateLiveSnapshotRow | undefined) {
   return stall != null && stall !== "关闭" && stall !== "";
 }
 
-export function readSpeed(snapshot: BydmateLiveSnapshotRow | undefined) {
+export function readSpeed(snapshot: VoltflowMateLiveSnapshotRow | undefined) {
   const fromDiplus = snapshot?.diplus?.speed_kmh;
   const fromTelemetry = snapshot?.telemetry?.speed_kmh;
   return Number(fromDiplus ?? fromTelemetry ?? 0);
 }
 
-export function readAuxVoltage(snapshot: BydmateLiveSnapshotRow | undefined) {
+export function readAuxVoltage(snapshot: VoltflowMateLiveSnapshotRow | undefined) {
   return snapshot?.diplus?.voltage_12v ?? snapshot?.telemetry?.aux_voltage_v ?? null;
 }
 
 /** Parked (P) or plugged in and stationary — windows/climate OK while charging. */
-export function isStationaryForRemoteControl(snapshot: BydmateLiveSnapshotRow | undefined) {
+export function isStationaryForRemoteControl(snapshot: VoltflowMateLiveSnapshotRow | undefined) {
   if (!snapshot) return false;
   if (readSpeed(snapshot) > 0) return false;
   if (gearIsPark(readGear(snapshot))) return true;
   return isTelemetryCharging(snapshot.telemetry, snapshot);
 }
 
-export function isControlAllowed(snapshot: BydmateLiveSnapshotRow | undefined) {
+export function isControlAllowed(snapshot: VoltflowMateLiveSnapshotRow | undefined) {
   if (!snapshot) return false;
   const receivedAt = new Date(snapshot.received_at).getTime();
   if (Number.isNaN(receivedAt) || Date.now() - receivedAt > VEHICLE_CONTROL_STALE_MS) {
@@ -60,7 +60,7 @@ export function isControlAllowed(snapshot: BydmateLiveSnapshotRow | undefined) {
   return true;
 }
 
-export function isRemoteReady(snapshot: BydmateLiveSnapshotRow | undefined) {
+export function isRemoteReady(snapshot: VoltflowMateLiveSnapshotRow | undefined) {
   if (!isTelemetryFresh(snapshot)) return false;
   if (!isStationaryForRemoteControl(snapshot)) return false;
   const aux = readAuxVoltage(snapshot);

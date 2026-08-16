@@ -1,5 +1,5 @@
-import { resolveBydmateApiKeyProfile } from "@/lib/bydmate/api-auth";
-import { liveFastSecondsFor } from "@/lib/bydmate/live-fast";
+import { resolveVoltflowMateApiKeyProfile } from "@/lib/voltflowmate/api-auth";
+import { liveFastSecondsFor } from "@/lib/voltflowmate/live-fast";
 import { createServiceClient } from "@/lib/supabase/service";
 
 export const runtime = "nodejs";
@@ -70,7 +70,7 @@ export async function GET(request: Request) {
 
   try {
     const supabase = createServiceClient();
-    const profile = await resolveBydmateApiKeyProfile(supabase, apiKey);
+    const profile = await resolveVoltflowMateApiKeyProfile(supabase, apiKey);
     if (!profile) {
       return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }

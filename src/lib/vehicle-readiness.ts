@@ -1,5 +1,5 @@
 import { isFreshLiveSnapshot } from "./vehicle-live-mode.ts";
-import type { BydmateLiveSnapshotRow } from "@/types/database";
+import type { VoltflowMateLiveSnapshotRow } from "@/types/database";
 
 export type VehiclePrimaryReadiness =
   | "loading"
@@ -24,7 +24,7 @@ export function deriveVehiclePrimaryReadiness({
   hasMatchedCar: boolean;
   liveLoading: boolean;
   liveError: boolean;
-  snapshot: BydmateLiveSnapshotRow | null | undefined;
+  snapshot: VoltflowMateLiveSnapshotRow | null | undefined;
   nowMs: number;
 }): VehiclePrimaryReadiness {
   if (liveError) return "error";

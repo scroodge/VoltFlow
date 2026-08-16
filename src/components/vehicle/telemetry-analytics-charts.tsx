@@ -21,11 +21,11 @@ import {
   type AnalyticsSummary,
   type TelemetryBucket,
   type TempConsumptionBucket,
-} from "@/lib/bydmate/telemetry-buckets";
-import { weightedAvgConsumptionKwh100 } from "@/lib/bydmate/trip-metrics";
-import type { TelemetryHistoryPoint } from "@/lib/bydmate/telemetry-history";
+} from "@/lib/voltflowmate/telemetry-buckets";
+import { weightedAvgConsumptionKwh100 } from "@/lib/voltflowmate/trip-metrics";
+import type { TelemetryHistoryPoint } from "@/lib/voltflowmate/telemetry-history";
 import type { ChargingSessionRow } from "@/types/database";
-import type { TelemetryHistoryRange } from "@/lib/bydmate/telemetry-ranges";
+import type { TelemetryHistoryRange } from "@/lib/voltflowmate/telemetry-ranges";
 
 type Translator = (key: TranslationKey, values?: Record<string, string | number>) => string;
 

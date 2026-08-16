@@ -1,5 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
-import { resolveBydmateApiKeyProfile } from "@/lib/bydmate/api-auth";
+import { resolveVoltflowMateApiKeyProfile } from "@/lib/voltflowmate/api-auth";
 import { readBodyWithLimit, RequestBodyTooLargeError } from "@/lib/api/read-body";
 
 export const runtime = "nodejs";
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
 
   try {
     const supabase = createServiceClient();
-    const profile = await resolveBydmateApiKeyProfile(supabase, apiKey);
+    const profile = await resolveVoltflowMateApiKeyProfile(supabase, apiKey);
     if (!profile) {
       return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }

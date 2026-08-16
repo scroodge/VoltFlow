@@ -7,14 +7,14 @@ import { MapPin, Maximize2, Minimize2, Minus, Plus } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "@/hooks/use-translation";
-import { isRouteTrackDisplayable } from "@/lib/bydmate/route-insights";
+import { isRouteTrackDisplayable } from "@/lib/voltflowmate/route-insights";
 import type { TranslationKey } from "@/lib/i18n";
 import type {
-  BydmateLocation,
-  BydmateLiveSnapshotRow,
-  BydmateTelemetry,
-  BydmateTelemetryPointRow,
-  BydmateTripTrackPointRow,
+  VoltflowMateLocation,
+  VoltflowMateLiveSnapshotRow,
+  VoltflowMateTelemetry,
+  VoltflowMateTelemetryPointRow,
+  VoltflowMateTripTrackPointRow,
 } from "@/types/database";
 
 type Translator = (key: TranslationKey, values?: Record<string, string | number>) => string;
@@ -101,7 +101,7 @@ function downsamplePoints<T>(points: T[], maxPoints: number) {
   return sampled;
 }
 
-function prepareRouteFromTrack(points: BydmateTripTrackPointRow[]) {
+function prepareRouteFromTrack(points: VoltflowMateTripTrackPointRow[]) {
   const routePoints: RoutePoint[] = [];
   let minLat = 0;
   let maxLat = 1;
@@ -147,7 +147,7 @@ function prepareRouteFromTrack(points: BydmateTripTrackPointRow[]) {
   };
 }
 
-function prepareRoute(points: BydmateTelemetryPointRow[]) {
+function prepareRoute(points: VoltflowMateTelemetryPointRow[]) {
   const routePoints: RoutePoint[] = [];
   let minLat = 0;
   let maxLat = 1;
@@ -194,9 +194,9 @@ function prepareRoute(points: BydmateTelemetryPointRow[]) {
 }
 
 function prepareLiveLocationRoute(
-  location: BydmateLocation,
+  location: VoltflowMateLocation,
   deviceTimeMs: number,
-  telemetry: BydmateLiveSnapshotRow["telemetry"],
+  telemetry: VoltflowMateLiveSnapshotRow["telemetry"],
 ): ReturnType<typeof prepareRoute> {
   const lat = validNumber(location.lat);
   const lon = validNumber(location.lon);
@@ -619,8 +619,8 @@ export function RouteMap({
   embedded = false,
   headingMode = "route",
 }: {
-  points?: BydmateTelemetryPointRow[];
-  trackPoints?: BydmateTripTrackPointRow[];
+  points?: VoltflowMateTelemetryPointRow[];
+  trackPoints?: VoltflowMateTripTrackPointRow[];
   isLoading?: boolean;
   hasError?: boolean;
   embedded?: boolean;
@@ -764,7 +764,7 @@ export function RouteMapPreview({
   odometerDistanceKm = null,
   className = "h-40",
 }: {
-  trackPoints: BydmateTripTrackPointRow[];
+  trackPoints: VoltflowMateTripTrackPointRow[];
   odometerDistanceKm?: number | null;
   className?: string;
 }) {
@@ -1178,9 +1178,9 @@ export function LiveLocationMap({
   deviceTimeMs,
   telemetry,
 }: {
-  location: BydmateLocation;
+  location: VoltflowMateLocation;
   deviceTimeMs: number;
-  telemetry: BydmateTelemetry;
+  telemetry: VoltflowMateTelemetry;
 }) {
   const { t } = useTranslation();
   const tx = t as Translator;

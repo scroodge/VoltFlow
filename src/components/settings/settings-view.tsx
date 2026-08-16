@@ -44,7 +44,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
+import { useVoltflowMateLiveQuery } from "@/hooks/use-voltflowmate-live-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useMateReleaseQuery } from "@/hooks/use-mate-release-query";
 import { useUserProvidersQuery } from "@/hooks/use-user-providers-query";
@@ -933,7 +933,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
     return `${min}:${String(sec).padStart(2, "0")}`;
   };
 
-  const handleCreateBydmateLinkCode = () => {
+  const handleCreateVoltflowMateLinkCode = () => {
     if (!profileUserId && !isDevAppRoute()) {
       toast.error(t("settings.toasts.signInForLink") as string);
       return;
@@ -1394,11 +1394,11 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                 variant="outline"
                 size="lg"
                 className="h-11 w-full rounded-full text-sm"
-                onClick={handleCreateBydmateLinkCode}
+                onClick={handleCreateVoltflowMateLinkCode}
                 disabled={linkCreating}
               >
                 <RefreshCw className="mr-2 size-4" aria-hidden />
-                {t("settings.cloud.linkBydmate")}
+                {t("settings.cloud.linkVoltflowMate")}
               </Button>
             </div>
           ) : linkCode && linkCountdownSec === 0 ? (
@@ -1409,13 +1409,13 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                 variant="secondary"
                 size="lg"
                 className="h-11 w-full rounded-full text-sm"
-                onClick={handleCreateBydmateLinkCode}
+                onClick={handleCreateVoltflowMateLinkCode}
                 disabled={linkCreating}
               >
                 <RefreshCw className="mr-2 size-4" aria-hidden />
                 {linkCreating
                   ? t("settings.cloud.linkCodeCreating")
-                  : t("settings.cloud.linkBydmate")}
+                  : t("settings.cloud.linkVoltflowMate")}
               </Button>
             </div>
           ) : (
@@ -1424,13 +1424,13 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
               variant="secondary"
               size="lg"
               className="h-11 w-full rounded-full text-sm"
-              onClick={handleCreateBydmateLinkCode}
+              onClick={handleCreateVoltflowMateLinkCode}
               disabled={linkCreating}
             >
               <RefreshCw className="mr-2 size-4" aria-hidden />
               {linkCreating
                 ? t("settings.cloud.linkCodeCreating")
-                : t("settings.cloud.linkBydmate")}
+                : t("settings.cloud.linkVoltflowMate")}
             </Button>
           )}
 
@@ -1947,12 +1947,12 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
  */
 function MateVersionPanel() {
   const { t } = useTranslation();
-  const { data: bydmateLive = [] } = useBydmateLiveQuery();
+  const { data: voltflowMateLive = [] } = useVoltflowMateLiveQuery();
   const { data: release } = useMateReleaseQuery();
 
   // Snapshots come back newest-first; take the most recent one that reports a version.
   const installedVersion =
-    bydmateLive.find((snapshot) => snapshot.mate_version)?.mate_version ?? null;
+    voltflowMateLive.find((snapshot) => snapshot.mate_version)?.mate_version ?? null;
   const latestVersion = release?.version ?? null;
   const updateAvailable = isMateUpdateAvailable(installedVersion, latestVersion);
   const installedNewerThanLatest =

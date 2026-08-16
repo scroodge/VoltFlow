@@ -3,7 +3,7 @@
 How driving trips are created, extended, closed, and filtered. Companion to
 [CHARGING_SESSIONS.md](CHARGING_SESSIONS.md). Server logic lives in the
 `bydmate_ingest_telemetry` SQL function; the client-side display filter lives in
-`src/lib/bydmate/trip-filter.ts`.
+`src/lib/voltflowmate/trip-filter.ts`.
 
 ## Lifecycle
 
@@ -91,7 +91,7 @@ where (distance_km<=0.1 and max_speed_kmh<=3)
 
 (A historical cleanup removed phantom records after the discard rules were introduced.)
 
-## Client display filter (`src/lib/bydmate/trip-filter.ts`)
+## Client display filter (`src/lib/voltflowmate/trip-filter.ts`)
 
 `isJunkTrip()` hides junk in the trip browser / analytics UI. ⚠️ **It is currently NOT in sync
 with the server filter** — it only catches stationary-charging-like and `< 3`-sample trips

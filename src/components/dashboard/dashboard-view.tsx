@@ -40,11 +40,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
+import { useVoltflowMateLiveQuery } from "@/hooks/use-voltflowmate-live-query";
 import {
-  useBydmateTripRealtimeInvalidation,
-  useLatestBydmateTripsQuery,
-} from "@/hooks/use-bydmate-trips-query";
+  useVoltflowMateTripRealtimeInvalidation,
+  useLatestVoltflowMateTripsQuery,
+} from "@/hooks/use-voltflowmate-trips-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useUserProvidersQuery, useUserProviderMap } from "@/hooks/use-user-providers-query";
 import { usePageVisible } from "@/hooks/use-page-visible";
@@ -76,7 +76,7 @@ import { resolveDisplayChargePowerKw, snapshotSoc, isFrozenLiveChargeReading } f
 import { mapChargingTariffLocation } from "@/lib/db-map";
 import { isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { useAppPath } from "@/lib/dev/dev-path";
-import { useBydmateRecentChargeSamplesQuery } from "@/hooks/use-bydmate-recent-charge-samples-query";
+import { useVoltflowMateRecentChargeSamplesQuery } from "@/hooks/use-voltflowmate-recent-charge-samples-query";
 import { currencySymbols, formatCurrencyAmount, type Currency, type Locale, type TranslationKey } from "@/lib/i18n";
 import { parseDecimalInput } from "@/lib/number-input";
 import { PROVIDER_LABELS, resolveTariffPrice } from "@/lib/charging-tariffs";
@@ -99,8 +99,8 @@ import {
 } from "@/lib/vehicle-live-mode";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import type {
-  BydmateLiveSnapshotRow,
-  BydmateTripRow,
+  VoltflowMateLiveSnapshotRow,
+  VoltflowMateTripRow,
   ChargingProviderType,
   ChargingSessionRow,
   ChargingTariffType,
@@ -201,7 +201,7 @@ function chargingSecondsToFull({
   return seconds;
 }
 
-function liveStartPercent(snapshot: BydmateLiveSnapshotRow | null | undefined) {
+function liveStartPercent(snapshot: VoltflowMateLiveSnapshotRow | null | undefined) {
   const soc = snapshotSoc(snapshot);
   if (soc == null || soc >= 100) return null;
   return String(Math.round(soc));
@@ -212,8 +212,8 @@ function fmt(value: number | null | undefined, digits = 0) {
 }
 
 function drivingStatsFromLive(
-  snapshot: BydmateLiveSnapshotRow | null,
-  trip: BydmateTripRow | null,
+  snapshot: VoltflowMateLiveSnapshotRow | null,
+  trip: VoltflowMateTripRow | null,
 ) {
   const telemetry = snapshot?.telemetry;
   const ongoingTrip = trip && !trip.ended_at ? trip : null;
@@ -526,7 +526,7 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   const qc = useQueryClient();
   const pageVisible = usePageVisible();
   const heroReadyReported = useRef(false);
-  useBydmateTripRealtimeInvalidation();
+  useVoltflowMateTripRealtimeInvalidation();
   const [showDeferredDetails, setShowDeferredDetails] = useState(false);
   const {
     data: carsResult,
@@ -558,7 +558,7 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
     }
     return { providerType: (value as ChargingProviderType) ?? "custom", userProviderId: null };
   }
-  const { data: bydmateLive = [], isLoading: loadingLive } = useBydmateLiveQuery(
+  const { data: voltflowMateLive = [], isLoading: loadingLive } = useVoltflowMateLiveQuery(
     initialData?.liveSnapshots,
   );
   const persistedSelectedCarId = useAppPreferences((s) => s.selectedCarId);
@@ -613,12 +613,12 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
     : null;
   const scopedVehicleId = selectedCar?.vehicle_alias ?? null;
 
-  const baseBydmateSnapshot = useMemo(
-    () => (scopedVehicleId ? resolveLiveSnapshotForVehicle(bydmateLive, scopedVehicleId) : null),
-    [bydmateLive, scopedVehicleId],
+  const baseVoltflowMateSnapshot = useMemo(
+    () => (scopedVehicleId ? resolveLiveSnapshotForVehicle(voltflowMateLive, scopedVehicleId) : null),
+    [voltflowMateLive, scopedVehicleId],
   );
   const dashboardDevSnapshot = useDashboardDevSnapshot();
-  const latestBydmateSnapshot = useDashboardDevSnapshotOverride(baseBydmateSnapshot);
+  const latestVoltflowMateSnapshot = useDashboardDevSnapshotOverride(baseVoltflowMateSnapshot);
   const forceDevMockMode = Boolean(dashboardDevSnapshot);
   const forceDevParkMode = dashboardDevSnapshot?.mode === "park";
 
@@ -635,7 +635,7 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   const nowMs = useTickingClock(Boolean(activeSession) || pageVisible);
 
   const vehicleMode = deriveDashboardVehicleMode({
-    snapshot: latestBydmateSnapshot,
+    snapshot: latestVoltflowMateSnapshot,
     nowMs,
     hasActiveSession: Boolean(activeSession),
   });
@@ -643,13 +643,13 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   // Raw telemetry says charging; may still be a frozen Di+ reading (see
   // isChargingMode/chargingTileKw below, which fold in isFrozenLiveChargeReading).
   const rawIsChargingMode = vehicleMode === "app_charging" || vehicleMode === "live_charging";
-  const { data: recentChargeSamples = [] } = useBydmateRecentChargeSamplesQuery(
+  const { data: recentChargeSamples = [] } = useVoltflowMateRecentChargeSamplesQuery(
     scopedVehicleId,
     rawIsChargingMode && !forceDevMockMode,
   );
 
-  const tripVehicleId = latestBydmateSnapshot?.vehicle_id ?? scopedVehicleId;
-  const { data: latestTrips = [], isLoading: loadingTrips } = useLatestBydmateTripsQuery(
+  const tripVehicleId = latestVoltflowMateSnapshot?.vehicle_id ?? scopedVehicleId;
+  const { data: latestTrips = [], isLoading: loadingTrips } = useLatestVoltflowMateTripsQuery(
     tripVehicleId,
     1,
     Boolean(tripVehicleId) && !forceDevMockMode,
@@ -661,7 +661,7 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   // maps app. Hidden while driving (nonsensical) or with no location at all.
   const { location: walkToCarLocation } = useVehicleLastKnownLocation(
     scopedVehicleId,
-    latestBydmateSnapshot,
+    latestVoltflowMateSnapshot,
   );
   const walkToCarIsIos = useSyncExternalStore(noopSubscribe, isIos, () => false);
   const walkToCarHref = walkToCarLocation
@@ -708,8 +708,8 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   }, [cars, preferredCarId, selectedCarId, setSelectedCarId]);
 
   const scopedLiveSnapshots = useMemo(
-    () => filterLiveSnapshotsForVehicle(bydmateLive, scopedVehicleId),
-    [bydmateLive, scopedVehicleId],
+    () => filterLiveSnapshotsForVehicle(voltflowMateLive, scopedVehicleId),
+    [voltflowMateLive, scopedVehicleId],
   );
 
   const liveActive = useMemo(() => {
@@ -787,8 +787,8 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
     () => false,
   );
 
-  const latestBydmateSoc = snapshotSoc(latestBydmateSnapshot);
-  const liveStartPct = liveStartPercent(latestBydmateSnapshot);
+  const latestVoltflowMateSoc = snapshotSoc(latestVoltflowMateSnapshot);
+  const liveStartPct = liveStartPercent(latestVoltflowMateSnapshot);
 
   const statusLabel = String(t(dashboardVehicleStatusLabelKey(vehicleMode)));
 
@@ -797,15 +797,15 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   // line there is noise.
   const lastSeenLabel =
     (vehicleMode === "parked" || vehicleMode === "stale") &&
-    latestBydmateSnapshot?.received_at
-      ? formatTimeAgo(latestBydmateSnapshot.received_at, nowMs, (key, values) =>
+    latestVoltflowMateSnapshot?.received_at
+      ? formatTimeAgo(latestVoltflowMateSnapshot.received_at, nowMs, (key, values) =>
           String(t(key, values)),
         )
       : null;
 
   const hasLiveChargingData =
-    isChargingTelemetry(latestBydmateSnapshot) &&
-    isFreshLiveSnapshot(latestBydmateSnapshot, nowMs);
+    isChargingTelemetry(latestVoltflowMateSnapshot) &&
+    isFreshLiveSnapshot(latestVoltflowMateSnapshot, nowMs);
 
   const actionButtonStatus =
     vehicleMode === "app_charging"
@@ -824,10 +824,10 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   // "—" beats falling back to the manual start-percent input, which used to render a
   // confident-looking number the car never sent.
   const currentPercent: number | null = forceDevParkMode
-    ? (latestBydmateSoc ?? 64)
+    ? (latestVoltflowMateSoc ?? 64)
     : liveActive?.currentPercent ??
       activeSession?.current_percent ??
-      latestBydmateSoc ??
+      latestVoltflowMateSoc ??
       latestSession?.current_percent ??
       null;
 
@@ -849,14 +849,14 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
       : (t("dashboard.ringTogglePercent") as string);
 
   const displayChargePowerKw = resolveDisplayChargePowerKw({
-    snapshot: latestBydmateSnapshot,
+    snapshot: latestVoltflowMateSnapshot,
     sessionChargerPowerKw: activeSession?.charger_power_kw,
     defaultChargerPowerKw: selectedCar?.default_charger_power_kw,
   });
-  const freshLiveChargePowerKw = isFreshLiveSnapshot(latestBydmateSnapshot, nowMs)
-    ? snapshotChargePowerKw(latestBydmateSnapshot)
+  const freshLiveChargePowerKw = isFreshLiveSnapshot(latestVoltflowMateSnapshot, nowMs)
+    ? snapshotChargePowerKw(latestVoltflowMateSnapshot)
     : null;
-  const liveChargeType = latestBydmateSnapshot?.telemetry?.charge_type?.toUpperCase();
+  const liveChargeType = latestVoltflowMateSnapshot?.telemetry?.charge_type?.toUpperCase();
   const dashboardChargePowerKw =
     activeSession && liveActive
       ? resolveChargingEtaPowerKw({
@@ -870,7 +870,7 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
       : displayChargePowerKw;
 
   const rangeEstimate = useVehicleRangeEstimate({
-    baseSnapshot: forceDevMockMode ? latestBydmateSnapshot : baseBydmateSnapshot,
+    baseSnapshot: forceDevMockMode ? latestVoltflowMateSnapshot : baseVoltflowMateSnapshot,
     scopedVehicleId,
     batteryCapacityKwh: selectedCar?.battery_capacity_kwh,
     fallbackSoc: currentPercent,
@@ -882,10 +882,10 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
       : null;
 
   const estimateLocation = useMemo(() => {
-    const lat = latestBydmateSnapshot?.location?.lat;
-    const lon = latestBydmateSnapshot?.location?.lon;
+    const lat = latestVoltflowMateSnapshot?.location?.lat;
+    const lon = latestVoltflowMateSnapshot?.location?.lon;
     return typeof lat === "number" && typeof lon === "number" ? { lat, lon } : null;
-  }, [latestBydmateSnapshot?.location?.lat, latestBydmateSnapshot?.location?.lon]);
+  }, [latestVoltflowMateSnapshot?.location?.lat, latestVoltflowMateSnapshot?.location?.lon]);
 
   const estimateTariffLocationMatch = useMemo(
     () => resolveTariffLocationMatch(estimateLocation, tariffLocations),
@@ -1037,7 +1037,7 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
 
   const drivingStats =
     vehicleMode === "driving"
-      ? drivingStatsFromLive(latestBydmateSnapshot, latestTrip)
+      ? drivingStatsFromLive(latestVoltflowMateSnapshot, latestTrip)
       : null;
 
   // A fresh network heartbeat can still carry a Di+ reading that never changed — don't
@@ -1047,7 +1047,7 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   const isChargingMode = rawIsChargingMode && !isChargeReadingFrozen;
   const chargingTileKw = isChargeReadingFrozen ? null : dashboardChargePowerKw;
 
-  const isPageLoading = loadingCars || (loadingLive && !latestBydmateSnapshot);
+  const isPageLoading = loadingCars || (loadingLive && !latestVoltflowMateSnapshot);
 
   useEffect(() => {
     if (heroReadyReported.current || isPageLoading || !selectedCar) return;

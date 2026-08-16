@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   fetchPeriodTripsEnriched,
   fetchRouteInsights,
-} from "@/lib/bydmate/route-insights";
+} from "@/lib/voltflowmate/route-insights";
 import {
   estimateNoChargeDayPrice,
   fetchConsumptionBaseline,

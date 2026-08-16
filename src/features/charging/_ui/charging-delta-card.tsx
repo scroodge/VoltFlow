@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { chartTooltipTransform } from "@/components/vehicle/chart-interaction";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useBydmateChargingSessionSamplesQuery, type ChargingSessionTelemetrySample } from "@/hooks/use-bydmate-charging-session-samples-query";
+import { useVoltflowMateChargingSessionSamplesQuery, type ChargingSessionTelemetrySample } from "@/hooks/use-voltflowmate-charging-session-samples-query";
 import type { ChargingSessionRow } from "@/types/database";
 
 type DeltaPoint = {
@@ -104,7 +104,7 @@ export function ChargingDeltaCard({
   vehicleId?: string | null;
 }) {
   const resolvedVehicleId = vehicleId?.trim() || null;
-  const { data = [], isLoading, error } = useBydmateChargingSessionSamplesQuery(
+  const { data = [], isLoading, error } = useVoltflowMateChargingSessionSamplesQuery(
     session.id,
     resolvedVehicleId,
     session.status,

@@ -19,7 +19,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
+import { useVoltflowMateLiveQuery } from "@/hooks/use-voltflowmate-live-query";
 import {
   useSendVehicleCommand,
   useVehicleCommandsQuery,
@@ -40,7 +40,7 @@ import {
   VEHICLE_CONTROL_STALE_MS,
 } from "@/lib/vehicle/vehicle-control-guards";
 import { cn } from "@/lib/utils";
-import type { BydmateLiveSnapshotRow, VehicleCommandRow, VehicleCommandScheduleRow } from "@/types/database";
+import type { VoltflowMateLiveSnapshotRow, VehicleCommandRow, VehicleCommandScheduleRow } from "@/types/database";
 
 function statusLabel(status: VehicleCommandRow["status"]) {
   switch (status) {
@@ -178,7 +178,7 @@ export function VehicleComfortControls({
   collapsible = false,
   defaultExpanded = false,
 }: VehicleComfortControlsProps) {
-  const { data: liveRows } = useBydmateLiveQuery();
+  const { data: liveRows } = useVoltflowMateLiveQuery();
   const [expanded, setExpanded] = useState(defaultExpanded);
   const { data: commands } = useVehicleCommandsQuery(vehicleId, {
     enabled: !collapsible || expanded,
@@ -402,7 +402,7 @@ function StatusRow({
   remoteReady,
   aux,
 }: {
-  snapshot: BydmateLiveSnapshotRow | undefined;
+  snapshot: VoltflowMateLiveSnapshotRow | undefined;
   remoteReady: boolean;
   aux: number | null | undefined;
 }) {
@@ -426,7 +426,7 @@ function LiveSnapshotRow({
   snapshot,
   aux,
 }: {
-  snapshot: BydmateLiveSnapshotRow;
+  snapshot: VoltflowMateLiveSnapshotRow;
   aux: number | null | undefined;
 }) {
   return (

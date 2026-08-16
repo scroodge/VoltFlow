@@ -3,20 +3,20 @@ export const queryKeys = {
   sessions: ["sessions"] as const,
   session: (id: string) => ["session", id] as const,
   profile: ["profile"] as const,
-  bydmateLive: ["bydmate-live"] as const,
-  bydmateLatestTrips: (vehicleId: string | null, limit: number, lite = false) =>
+  voltflowMateLive: ["bydmate-live"] as const,
+  voltflowMateLatestTrips: (vehicleId: string | null, limit: number, lite = false) =>
     ["bydmate-latest-trips", vehicleId, limit, lite] as const,
-  bydmateTrips: (date: string, vehicleId: string | null) =>
+  voltflowMateTrips: (date: string, vehicleId: string | null) =>
     ["bydmate-trips", date, vehicleId] as const,
-  bydmateTripMonthDates: (year: number, month: number, vehicleId: string | null) =>
+  voltflowMateTripMonthDates: (year: number, month: number, vehicleId: string | null) =>
     ["bydmate-trip-month-dates", year, month, vehicleId] as const,
-  bydmateTripSamples: (tripId: string) => ["bydmate-trip-samples", tripId] as const,
-  bydmateChargingSessionSamples: (sessionId: string, vehicleId: string) =>
+  voltflowMateTripSamples: (tripId: string) => ["bydmate-trip-samples", tripId] as const,
+  voltflowMateChargingSessionSamples: (sessionId: string, vehicleId: string) =>
     ["bydmate-charging-session-samples", sessionId, vehicleId] as const,
-  bydmateTripTrack: (tripId: string) => ["bydmate-trip-track", tripId] as const,
-  bydmateTelemetryHistory: (range: string, date: string, vehicleId: string | null) =>
+  voltflowMateTripTrack: (tripId: string) => ["bydmate-trip-track", tripId] as const,
+  voltflowMateTelemetryHistory: (range: string, date: string, vehicleId: string | null) =>
     ["bydmate-telemetry-history", range, date, vehicleId] as const,
-  bydmateSohHistory: (date: string, vehicleId: string | null) =>
+  voltflowMateSohHistory: (date: string, vehicleId: string | null) =>
     ["bydmate-soh-history", date, vehicleId] as const,
   vehicleCommands: (vehicleId: string | null) => ["vehicle-commands", vehicleId] as const,
   mateLatestRelease: ["mate-latest-release"] as const,
@@ -28,6 +28,6 @@ export const queryKeys = {
   userServiceCategories: () => ["user-service-categories"] as const,
   chargingEfficiencySuggestions: (carId: string) =>
     ["charging-efficiency-suggestions", carId] as const,
-  bydmateRecentChargeSamples: (vehicleId: string | null) =>
+  voltflowMateRecentChargeSamples: (vehicleId: string | null) =>
     ["bydmate-recent-charge-samples", vehicleId] as const,
 };

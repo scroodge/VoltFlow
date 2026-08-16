@@ -52,7 +52,7 @@ import { useChargingSessionAutoTariff } from "../_client/use-charging-session-au
 import { useUserProvidersQuery, useUserProviderMap } from "@/hooks/use-user-providers-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useSessionQuery } from "@/hooks/use-session-query";
-import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
+import { useVoltflowMateLiveQuery } from "@/hooks/use-voltflowmate-live-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
 import {
@@ -106,7 +106,7 @@ export function ChargingSessionScreen({
   const { data: carsResult } = useCarsQuery();
   const { data: userProviderRows = [] } = useUserProvidersQuery();
   const userProviderMap = useUserProviderMap();
-  const { data: bydmateLive = [] } = useBydmateLiveQuery();
+  const { data: voltflowMateLive = [] } = useVoltflowMateLiveQuery();
   const devSource = useChargingDevSource();
   const devOverrideActive = devSource?.isOverrideActive ?? false;
   const sessionVehicleId = useMemo(
@@ -140,7 +140,7 @@ export function ChargingSessionScreen({
 
   const clockActive = session?.status === "charging";
   const nowMs = useTickingClock(clockActive);
-  const effectiveBydmateLive = useChargingDevLiveOverride(bydmateLive, session, nowMs);
+  const effectiveVoltflowMateLive = useChargingDevLiveOverride(voltflowMateLive, session, nowMs);
   const onLiveDerived = useCallback(
     (derived: ReturnType<typeof staticDerivedFromSession> | null) => {
       setLiveDerived(derived);
@@ -151,7 +151,7 @@ export function ChargingSessionScreen({
   useChargingSessionLiveSync({
     session,
     sessionId,
-    liveSnapshots: bydmateLive,
+    liveSnapshots: voltflowMateLive,
     enabled: Boolean(session),
     skipPersist: true,
     resolveLiveSnapshots: devSource?.resolveLiveSnapshots,
@@ -180,7 +180,7 @@ export function ChargingSessionScreen({
   const autoTariffGps = useChargingSessionAutoTariff({
     session,
     sessionId,
-    liveSnapshots: bydmateLive,
+    liveSnapshots: voltflowMateLive,
     vehicleId: sessionVehicleId,
     enabled: Boolean(session) && !isDevMockChargingSessionId(sessionId),
   });
@@ -227,14 +227,14 @@ export function ChargingSessionScreen({
     if (session.status === "charging" && session.started_at) {
       const startedAtMs = Date.parse(session.started_at);
       return deriveChargingSessionLiveBundle({
-        snapshots: effectiveBydmateLive,
+        snapshots: effectiveVoltflowMateLive,
         params: toParams(session),
         startedAtMs,
         nowMs,
       }).display;
     }
     return staticDerivedFromSession(session);
-  }, [session, liveDerived, nowMs, effectiveBydmateLive]);
+  }, [session, liveDerived, nowMs, effectiveVoltflowMateLive]);
 
   const displayUsesLiveSoc = useMemo(() => {
     if (!session || session.status !== "charging" || !session.started_at) return false;
@@ -242,17 +242,17 @@ export function ChargingSessionScreen({
     const startedAtMs = Date.parse(session.started_at);
     return (
       deriveLiveChargingState({
-        snapshot: findFreshChargingSnapshot(effectiveBydmateLive, nowMs),
+        snapshot: findFreshChargingSnapshot(effectiveVoltflowMateLive, nowMs),
         params,
         startedAtMs,
         nowMs,
       }) != null
     );
-  }, [session, effectiveBydmateLive, nowMs]);
+  }, [session, effectiveVoltflowMateLive, nowMs]);
 
   const freshChargingSnapshot = useMemo(
-    () => findFreshChargingSnapshot(effectiveBydmateLive, nowMs),
-    [effectiveBydmateLive, nowMs],
+    () => findFreshChargingSnapshot(effectiveVoltflowMateLive, nowMs),
+    [effectiveVoltflowMateLive, nowMs],
   );
   const liveChargePowerKw = useMemo(
     () => snapshotChargePowerKw(freshChargingSnapshot),
@@ -289,8 +289,8 @@ export function ChargingSessionScreen({
     const params = toParams(session);
     const startedAtMs = Date.parse(session.started_at);
     const liveSnapshots = devSource?.resolveLiveSnapshots
-      ? devSource.resolveLiveSnapshots(bydmateLive, session, now)
-      : bydmateLive;
+      ? devSource.resolveLiveSnapshots(voltflowMateLive, session, now)
+      : voltflowMateLive;
     const d =
       deriveLiveChargingState({
         snapshot: findFreshChargingSnapshot(liveSnapshots, now),
@@ -325,7 +325,7 @@ export function ChargingSessionScreen({
     });
     qc.invalidateQueries({ queryKey: queryKeys.sessions });
     toast.message(t("charging.saved") as string);
-  }, [bydmateLive, devSource, qc, session, sessionId, supabase, t]);
+  }, [voltflowMateLive, devSource, qc, session, sessionId, supabase, t]);
 
   const saveTariff = useCallback(async () => {
     if (!session) return;

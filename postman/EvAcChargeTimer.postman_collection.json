@@ -1,0 +1,1993 @@
+{
+  "info": {
+    "name": "EvAcChargeTimer (VoltFlow) API",
+    "description": "All HTTP API endpoints under src/app/api/**, plus the legacy Supabase Edge Function passthrough. Generated from route source inspection on 2026-08-16. See postman/README.md for variable setup.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "supabase_cookie",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "bydmate_api_key",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "vehicle_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cron_secret",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "telegram_webhook_secret",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "admin",
+      "item": [
+        {
+          "name": "Reindex knowledge base",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/knowledge/reindex",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "knowledge",
+                "reindex"
+              ]
+            },
+            "description": "Session cookie + admin_users membership required (requireAdmin).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"force\": false,\n  \"concurrency\": 4\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke admin role",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/users/:id/admin",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users",
+                ":id",
+                "admin"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "example-user-id"
+                }
+              ]
+            },
+            "description": "Session cookie + admin required."
+          },
+          "response": []
+        },
+        {
+          "name": "Set premium status",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/users/:id/premium",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users",
+                ":id",
+                "premium"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "example-user-id"
+                }
+              ]
+            },
+            "description": "Session cookie + admin required.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"premiumUntil\": null,\n  \"isPremium\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/users?page=1&pageSize=50&search=&telemetry=7d&premium=all&lastSeen=any&registeredSince=&registeredBefore=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": true
+                },
+                {
+                  "key": "pageSize",
+                  "value": "50",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "telemetry",
+                  "value": "7d",
+                  "disabled": true
+                },
+                {
+                  "key": "premium",
+                  "value": "all",
+                  "disabled": true
+                },
+                {
+                  "key": "lastSeen",
+                  "value": "any",
+                  "disabled": true
+                },
+                {
+                  "key": "registeredSince",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "registeredBefore",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Session cookie + admin required."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "bydmate",
+      "item": [
+        {
+          "name": "Download cluster background",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{bydmate_api_key}}",
+                "description": "Device/car API key (hashed & looked up against a profile's stored key).",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bydmate/cluster-backgrounds/:id/download",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bydmate",
+                "cluster-backgrounds",
+                ":id",
+                "download"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "example-background-id"
+                }
+              ]
+            },
+            "description": "Device API key + dashboard entitlement. Returns raw PNG bytes."
+          },
+          "response": []
+        },
+        {
+          "name": "List cluster backgrounds",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{bydmate_api_key}}",
+                "description": "Device/car API key (hashed & looked up against a profile's stored key).",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bydmate/cluster-backgrounds",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bydmate",
+                "cluster-backgrounds"
+              ]
+            },
+            "description": "Device API key + dashboard entitlement."
+          },
+          "response": []
+        },
+        {
+          "name": "Ack commands",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{bydmate_api_key}}",
+                "description": "Device/car API key (hashed & looked up against a profile's stored key).",
+                "disabled": false
+              },
+              {
+                "key": "x-vehicle-id",
+                "value": "{{vehicle_id}}",
+                "description": "Required alongside x-api-key for this endpoint.",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bydmate/commands/ack",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bydmate",
+                "commands",
+                "ack"
+              ]
+            },
+            "description": "Max 50 acks per call. status: done | failed | rejected.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"acks\": [\n    {\n      \"id\": \"example-command-id\",\n      \"status\": \"done\",\n      \"result\": {}\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Poll commands",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{bydmate_api_key}}",
+                "description": "Device/car API key (hashed & looked up against a profile's stored key).",
+                "disabled": false
+              },
+              {
+                "key": "x-vehicle-id",
+                "value": "{{vehicle_id}}",
+                "description": "Required alongside x-api-key for this endpoint.",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bydmate/commands",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bydmate",
+                "commands"
+              ]
+            },
+            "description": "Currently hardcoded disabled server-side (REMOTE_COMMANDS_DISABLED) — always returns an empty commands array."
+          },
+          "response": []
+        },
+        {
+          "name": "Dashboard session",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{bydmate_api_key}}",
+                "description": "Device/car API key (hashed & looked up against a profile's stored key).",
+                "disabled": false
+              },
+              {
+                "key": "x-dashboard-build",
+                "value": "debug",
+                "description": "Only honored when ALLOW_DEBUG_DASHBOARD env is set.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bydmate/dashboard/session",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bydmate",
+                "dashboard",
+                "session"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Latest release",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/bydmate/latest-release",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bydmate",
+                "latest-release"
+              ]
+            },
+            "description": "Public. Proxies GitHub releases API, cached s-maxage=300."
+          },
+          "response": []
+        },
+        {
+          "name": "Redeem link code",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/bydmate/link-code/redeem",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bydmate",
+                "link-code",
+                "redeem"
+              ]
+            },
+            "description": "Public, IP rate-limited. Returns { api_key, endpoint_url } for the car.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"ABC123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Generate link code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bydmate/link-code",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bydmate",
+                "link-code"
+              ]
+            },
+            "description": "Session cookie. Generates a short code to be redeemed via link-code/redeem."
+          },
+          "response": []
+        },
+        {
+          "name": "Ingest telemetry",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{bydmate_api_key}}",
+                "description": "Device/car API key (hashed & looked up against a profile's stored key).",
+                "disabled": false
+              },
+              {
+                "key": "x-vehicle-id",
+                "value": "{{vehicle_id}}",
+                "description": "Required alongside x-api-key for this endpoint.",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bydmate/telemetry",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bydmate",
+                "telemetry"
+              ]
+            },
+            "description": "Primary telemetry ingest, max 2MB body. Shape is best-effort from normalizePayloads — see src/app/api/bydmate/telemetry/route.ts for full validation.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"samples\": [\n    {\n      \"device_time\": \"2026-08-16T12:00:00.000Z\",\n      \"telemetry\": {\n        \"soc\": 72.5,\n        \"speed_kmh\": 0,\n        \"power_kw\": 3.2,\n        \"charge_power_kw\": 3.2,\n        \"is_charging\": true,\n        \"odometer_km\": 12345.6\n      },\n      \"diplus\": {\n        \"soc\": 72.5,\n        \"gun_state\": 1\n      },\n      \"location\": {\n        \"lat\": 52.229676,\n        \"lng\": 21.012229\n      }\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Ingest trip summaries",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{bydmate_api_key}}",
+                "description": "Device/car API key (hashed & looked up against a profile's stored key).",
+                "disabled": false
+              },
+              {
+                "key": "x-vehicle-id",
+                "value": "{{vehicle_id}}",
+                "description": "Required alongside x-api-key for this endpoint.",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bydmate/trip-summaries",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bydmate",
+                "trip-summaries"
+              ]
+            },
+            "description": "Max 1MB body. Shape is best-effort from parseTripSummaryBatch.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"trips\": [\n    {\n      \"trip_id\": \"example-trip-id\",\n      \"started_at\": \"2026-08-16T08:00:00.000Z\",\n      \"ended_at\": \"2026-08-16T08:30:00.000Z\",\n      \"distance_km\": 12.3\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "cluster-backgrounds",
+      "item": [
+        {
+          "name": "List cluster backgrounds (user)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/cluster-backgrounds",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "cluster-backgrounds"
+              ]
+            },
+            "description": "Session cookie + dashboard entitlement, RLS-scoped."
+          },
+          "response": []
+        },
+        {
+          "name": "Upload cluster background",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/cluster-backgrounds",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "cluster-backgrounds"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "description": "Session cookie + dashboard entitlement. multipart/form-data, image, max 5MB."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "cron",
+      "item": [
+        {
+          "name": "Inactivity check",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-cron-secret",
+                "value": "{{cron_secret}}",
+                "description": "Must equal the server's CRON_SECRET env var.",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/cron/inactivity-check",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "cron",
+                "inactivity-check"
+              ]
+            },
+            "description": "Cron-only. No body."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "dev-wb (dev-only)",
+      "item": [
+        {
+          "name": "Check product availability",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/dev/wb/products/availability",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "dev",
+                "wb",
+                "products",
+                "availability"
+              ]
+            },
+            "description": "Dev-only (NODE_ENV !== production). Proxies to NEXT_PUBLIC_API_URL backend."
+          },
+          "response": []
+        },
+        {
+          "name": "Check product exists",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/dev/wb/products/check?wb_id=12345",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "dev",
+                "wb",
+                "products",
+                "check"
+              ],
+              "query": [
+                {
+                  "key": "wb_id",
+                  "value": "12345",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "Dev-only. wb_id required."
+          },
+          "response": []
+        },
+        {
+          "name": "List saved products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/dev/wb/products",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "dev",
+                "wb",
+                "products"
+              ]
+            },
+            "description": "Dev-only."
+          },
+          "response": []
+        },
+        {
+          "name": "Save product",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/dev/wb/products",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "dev",
+                "wb",
+                "products"
+              ]
+            },
+            "description": "Dev-only.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"wb_id\": 12345,\n  \"query\": \"example\",\n  \"name\": \"Example product\",\n  \"price\": 999,\n  \"url\": \"https://example.com/product\",\n  \"image\": \"https://example.com/image.jpg\",\n  \"brand\": \"Example\",\n  \"rating\": 4.5,\n  \"availability\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Search products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/dev/wb/search?query=example",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "dev",
+                "wb",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "query",
+                  "value": "example",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "Dev-only. query required."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "knowledge",
+      "item": [
+        {
+          "name": "Search knowledge base",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/knowledge/search",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "knowledge",
+                "search"
+              ]
+            },
+            "description": "Public. query must be >= 2 chars.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"charging\",\n  \"category\": null,\n  \"generation\": null,\n  \"sourceTypes\": [],\n  \"limit\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "push",
+      "item": [
+        {
+          "name": "Get VAPID public key",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/push/vapid-public-key",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "push",
+                "vapid-public-key"
+              ]
+            },
+            "description": "Fully public. 404 if not configured."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "telegram",
+      "item": [
+        {
+          "name": "Authenticate via Telegram initData",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/telegram/auth",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "telegram",
+                "auth"
+              ]
+            },
+            "description": "Public entry point; verifies Telegram initData HMAC server-side using TELEGRAM_BOT_TOKEN, then mints a Supabase session.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"initData\": \"<telegram-webapp-initdata-string>\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Link Telegram to account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{supabase_access_token}}",
+                "description": "Alternative to the session cookie.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/telegram/link",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "telegram",
+                "link"
+              ]
+            },
+            "description": "Session cookie OR Authorization: Bearer <access_token>, plus initData HMAC verification.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"initData\": \"<telegram-webapp-initdata-string>\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Telegram bot webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-telegram-bot-api-secret-token",
+                "value": "{{telegram_webhook_secret}}",
+                "description": "Must equal the server's TELEGRAM_WEBHOOK_SECRET env var.",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/telegram/webhook",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "telegram",
+                "webhook"
+              ]
+            },
+            "description": "Telegram webhook. Always responds 200 { ok: true } per Telegram convention.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"update_id\": 123456789,\n  \"message\": {\n    \"message_id\": 1,\n    \"date\": 1755340800,\n    \"chat\": {\n      \"id\": 111111111,\n      \"type\": \"private\"\n    },\n    \"text\": \"/start\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "vehicle",
+      "item": [
+        {
+          "name": "Analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/vehicle/analytics?type=monthly&vehicle_id={{vehicle_id}}&month=2026-08&days=30&from=2026-07-01&to=2026-08-01&overlap=&estimateNoCharge=&outside_temp=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "vehicle",
+                "analytics"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "monthly",
+                  "disabled": false
+                },
+                {
+                  "key": "vehicle_id",
+                  "value": "{{vehicle_id}}",
+                  "disabled": false
+                },
+                {
+                  "key": "month",
+                  "value": "2026-08",
+                  "disabled": true
+                },
+                {
+                  "key": "days",
+                  "value": "30",
+                  "disabled": true
+                },
+                {
+                  "key": "from",
+                  "value": "2026-07-01",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "2026-08-01",
+                  "disabled": true
+                },
+                {
+                  "key": "overlap",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "estimateNoCharge",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "outside_temp",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "type: monthly|phantom|cost-per-km|period-trips|period-sessions|period-overview|baseline|route-insights. Response shape varies by type."
+          },
+          "response": []
+        },
+        {
+          "name": "List cars",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/vehicle/cars",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "vehicle",
+                "cars"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Charging session samples",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/vehicle/charging-sessions/:sessionId/samples?vehicle_id={{vehicle_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "vehicle",
+                "charging-sessions",
+                ":sessionId",
+                "samples"
+              ],
+              "query": [
+                {
+                  "key": "vehicle_id",
+                  "value": "{{vehicle_id}}",
+                  "disabled": true
+                }
+              ],
+              "variable": [
+                {
+                  "key": "sessionId",
+                  "value": "example-session-id"
+                }
+              ]
+            },
+            "description": "Uses plain createClient() session check, not resolveVehicleApiAccess (no dev bypass)."
+          },
+          "response": []
+        },
+        {
+          "name": "List command schedules",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/vehicle/command-schedules?vehicle_id={{vehicle_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "vehicle",
+                "command-schedules"
+              ],
+              "query": [
+                {
+                  "key": "vehicle_id",
+                  "value": "{{vehicle_id}}",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Create command schedule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/vehicle/command-schedules",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "vehicle",
+                "command-schedules"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicle_id\": \"{{vehicle_id}}\",\n  \"type\": \"charge_start\",\n  \"params\": {},\n  \"run_time\": \"07:00\",\n  \"days_of_week\": [\n    1,\n    2,\n    3,\n    4,\n    5\n  ],\n  \"time_zone\": \"Europe/Warsaw\",\n  \"enabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete command schedule",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/vehicle/command-schedules?id=example-schedule-id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "vehicle",
+                "command-schedules"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "example-schedule-id",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "List commands",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/vehicle/commands?vehicle_id={{vehicle_id}}&limit=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "vehicle",
+                "commands"
+              ],
+              "query": [
+                {
+                  "key": "vehicle_id",
+                  "value": "{{vehicle_id}}",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Send command",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/vehicle/commands",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "vehicle",
+                "commands"
+              ]
+            },
+            "description": "Rate-limited: 10 per 5 minutes per user.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicle_id\": \"{{vehicle_id}}\",\n  \"type\": \"lock\",\n  \"params\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Export data",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/vehicle/export?format=csv&from=2026-07-01&to=2026-08-01&vehicle_id={{vehicle_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "vehicle",
+                "export"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "csv",
+                  "disabled": false
+                },
+                {
+                  "key": "from",
+                  "value": "2026-07-01",
+                  "disabled": false
+                },
+                {
+                  "key": "to",
+                  "value": "2026-08-01",
+                  "disabled": false
+                },
+                {
+                  "key": "vehicle_id",
+                  "value": "{{vehicle_id}}",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "format: csv|json. Max 366-day range. Returns file attachment."
+          },
+          "response": []
+        },
+        {
+          "name": "Lifetime map",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/vehicle/lifetime-map?vehicle_id={{vehicle_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "vehicle",
+                "lifetime-map"
+              ],
+              "query": [
+                {
+                  "key": "vehicle_id",
+                  "value": "{{vehicle_id}}",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Live snapshot",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/vehicle/live",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "vehicle",
+                "live"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/vehicle/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "vehicle",
+                "profile"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Retention status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/vehicle/retention-status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "vehicle",
+                "retention-status"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update route label",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/vehicle/route-labels",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "vehicle",
+                "route-labels"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicle_id\": \"{{vehicle_id}}\",\n  \"route_id\": \"example-route-id\",\n  \"name\": \"Home\",\n  \"is_park\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get charging session",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/vehicle/session/:sessionId",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "vehicle",
+                "session",
+                ":sessionId"
+              ],
+              "variable": [
+                {
+                  "key": "sessionId",
+                  "value": "example-session-id"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "List charging sessions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/vehicle/sessions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "vehicle",
+                "sessions"
+              ]
+            },
+            "description": "Also triggers reconciliation side-effect."
+          },
+          "response": []
+        },
+        {
+          "name": "Telemetry points",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/vehicle/telemetry?range=day&date=2026-08-16&vehicle_id={{vehicle_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "vehicle",
+                "telemetry"
+              ],
+              "query": [
+                {
+                  "key": "range",
+                  "value": "day",
+                  "disabled": true
+                },
+                {
+                  "key": "date",
+                  "value": "2026-08-16",
+                  "disabled": false
+                },
+                {
+                  "key": "vehicle_id",
+                  "value": "{{vehicle_id}}",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "State of health points",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/vehicle/telemetry/soh?date=2026-08-16&vehicle_id={{vehicle_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "vehicle",
+                "telemetry",
+                "soh"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2026-08-16",
+                  "disabled": false
+                },
+                {
+                  "key": "vehicle_id",
+                  "value": "{{vehicle_id}}",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Trip samples",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/vehicle/trips/:tripId/samples",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "vehicle",
+                "trips",
+                ":tripId",
+                "samples"
+              ],
+              "variable": [
+                {
+                  "key": "tripId",
+                  "value": "example-trip-id"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Trip track",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/vehicle/trips/:tripId/track",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "vehicle",
+                "trips",
+                ":tripId",
+                "track"
+              ],
+              "variable": [
+                {
+                  "key": "tripId",
+                  "value": "example-trip-id"
+                }
+              ]
+            },
+            "description": "404 if trip not owned by session user."
+          },
+          "response": []
+        },
+        {
+          "name": "List trips",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "{{supabase_cookie}}",
+                "description": "Full Supabase session cookie string copied from browser devtools (sb-<project>-auth-token, etc.).",
+                "disabled": false
+              },
+              {
+                "key": "x-voltflow-dev-auth-bypass",
+                "value": "1",
+                "description": "Non-production only. Bypasses the session check and impersonates the fixed dev user/vehicle. Leave disabled against prod.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/vehicle/trips?date=2026-08-16&month=2026-08&vehicle_id={{vehicle_id}}&limit=10&lite=0",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "vehicle",
+                "trips"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2026-08-16",
+                  "disabled": true
+                },
+                {
+                  "key": "month",
+                  "value": "2026-08",
+                  "disabled": true
+                },
+                {
+                  "key": "vehicle_id",
+                  "value": "{{vehicle_id}}",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true
+                },
+                {
+                  "key": "lite",
+                  "value": "0",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "One of month/date/none selects the response mode."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "edge-function (legacy)",
+      "item": [
+        {
+          "name": "Telemetry passthrough (Supabase Edge Function)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{bydmate_api_key}}",
+                "description": "Device/car API key (hashed & looked up against a profile's stored key)."
+              },
+              {
+                "key": "x-vehicle-id",
+                "value": "{{vehicle_id}}",
+                "description": "Required alongside x-api-key for this endpoint."
+              },
+              {
+                "key": "",
+                "value": "",
+                "description": "This function has no auth of its own: it forwards headers/body verbatim to the canonical /api/bydmate/telemetry route, which enforces x-api-key + x-vehicle-id.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{supabase_functions_url}}/bydmate-telemetry",
+              "host": [
+                "{{supabase_functions_url}}"
+              ],
+              "path": [
+                "bydmate-telemetry"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"samples\": [\n    {\n      \"device_time\": \"2026-08-16T12:00:00.000Z\",\n      \"telemetry\": {\n        \"soc\": 72.5,\n        \"is_charging\": true\n      }\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Deno Edge Function kept only for legacy clients pointed at the old Supabase Functions URL. Set {{supabase_functions_url}} to your project's functions base, e.g. https://<project-ref>.supabase.co/functions/v1."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

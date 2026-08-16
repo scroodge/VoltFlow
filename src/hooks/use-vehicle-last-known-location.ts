@@ -1,8 +1,8 @@
 "use client";
 
-import { useBydmateTripTrackQuery } from "@/hooks/use-bydmate-trip-track-query";
-import { useLatestBydmateTripsQuery } from "@/hooks/use-bydmate-trips-query";
-import type { BydmateLiveSnapshotRow, BydmateTelemetry } from "@/types/database";
+import { useVoltflowMateTripTrackQuery } from "@/hooks/use-voltflowmate-trip-track-query";
+import { useLatestVoltflowMateTripsQuery } from "@/hooks/use-voltflowmate-trips-query";
+import type { VoltflowMateLiveSnapshotRow, VoltflowMateTelemetry } from "@/types/database";
 
 function validNumber(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -23,7 +23,7 @@ export type VehicleLastKnownLocation =
       lon: number;
       accuracyM: number | null;
       deviceTimeIso: string;
-      telemetry: BydmateTelemetry;
+      telemetry: VoltflowMateTelemetry;
     };
 
 /**
@@ -35,20 +35,20 @@ export type VehicleLastKnownLocation =
  */
 export function useVehicleLastKnownLocation(
   vehicleId: string | null,
-  snapshot: BydmateLiveSnapshotRow | null,
+  snapshot: VoltflowMateLiveSnapshotRow | null,
 ): { location: VehicleLastKnownLocation | null; isLoading: boolean } {
   const liveLat = validNumber(snapshot?.location?.lat);
   const liveLon = validNumber(snapshot?.location?.lon);
   const hasLiveLocation = liveLat != null && liveLon != null;
 
-  const { data: latestTrips = [] } = useLatestBydmateTripsQuery(
+  const { data: latestTrips = [] } = useLatestVoltflowMateTripsQuery(
     vehicleId,
     1,
     !hasLiveLocation && Boolean(vehicleId),
   );
   const lastTripId = hasLiveLocation ? null : (latestTrips[0]?.id ?? null);
   const { data: trackPoints = [], isLoading: isTrackLoading } =
-    useBydmateTripTrackQuery(lastTripId);
+    useVoltflowMateTripTrackQuery(lastTripId);
   const lastTrackPoint = trackPoints[trackPoints.length - 1] ?? null;
   const tripLat = validNumber(lastTrackPoint?.lat);
   const tripLon = validNumber(lastTrackPoint?.lon);

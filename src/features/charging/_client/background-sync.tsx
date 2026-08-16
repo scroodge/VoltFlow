@@ -8,7 +8,7 @@ import { isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { useChargingSessionLiveSync } from "./use-charging-session-live-sync";
 import { useChargingSessionAutoTariff } from "./use-charging-session-auto-tariff";
 import { useChargingTariffLocationAutosave } from "@/hooks/use-charging-tariff-location-autosave";
-import { useBydmateLiveQuery } from "@/hooks/use-bydmate-live-query";
+import { useVoltflowMateLiveQuery } from "@/hooks/use-voltflowmate-live-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { chargingSessionsRefetchInterval, fetchSessions } from "@/hooks/use-sessions-query";
 import { usePageVisible } from "@/hooks/use-page-visible";
@@ -22,7 +22,7 @@ import type { ChargingSessionRow } from "@/types/database";
 export function ChargingSessionBackgroundSync() {
   const pageVisible = usePageVisible();
   const devRoute = isDevAppRoute();
-  const { data: bydmateLive = [] } = useBydmateLiveQuery();
+  const { data: voltflowMateLive = [] } = useVoltflowMateLiveQuery();
   const { data: carsResult } = useCarsQuery();
   const cars = carsResult?.cars;
   const selectedCarId = useAppPreferences((s) => s.selectedCarId);
@@ -55,7 +55,7 @@ export function ChargingSessionBackgroundSync() {
   useChargingSessionLiveSync({
     session: activeSession,
     sessionId: activeSession?.id ?? null,
-    liveSnapshots: bydmateLive,
+    liveSnapshots: voltflowMateLive,
     vehicleId: scopedVehicleId,
     enabled: Boolean(activeSession) && !devRoute,
   });
@@ -63,7 +63,7 @@ export function ChargingSessionBackgroundSync() {
   useChargingSessionAutoTariff({
     session: activeSession,
     sessionId: activeSession?.id ?? null,
-    liveSnapshots: bydmateLive,
+    liveSnapshots: voltflowMateLive,
     vehicleId: scopedVehicleId,
     enabled: Boolean(activeSession) && !devRoute,
   });

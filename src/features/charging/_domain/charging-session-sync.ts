@@ -14,7 +14,7 @@ import {
   findFreshSocSnapshot,
   latestSnapshotSocReading,
 } from "./charging-live.ts";
-import type { BydmateLiveSnapshotRow, ChargingSessionRow } from "@/types/database";
+import type { VoltflowMateLiveSnapshotRow, ChargingSessionRow } from "@/types/database";
 
 export function chargingParamsFromSession(row: ChargingSessionRow): ChargingParams {
   return {
@@ -28,9 +28,9 @@ export function chargingParamsFromSession(row: ChargingSessionRow): ChargingPara
 }
 
 export function filterLiveSnapshotsForVehicle(
-  snapshots: BydmateLiveSnapshotRow[],
+  snapshots: VoltflowMateLiveSnapshotRow[],
   vehicleId: string | null | undefined,
-): BydmateLiveSnapshotRow[] {
+): VoltflowMateLiveSnapshotRow[] {
   if (!vehicleId) return snapshots;
   const scoped = snapshots.filter((row) => row.vehicle_id === vehicleId);
   return scoped.length > 0 ? scoped : snapshots;
@@ -57,7 +57,7 @@ export function deriveChargingSessionLiveBundle({
   startedAtMs,
   nowMs,
 }: {
-  snapshots: BydmateLiveSnapshotRow[];
+  snapshots: VoltflowMateLiveSnapshotRow[];
   params: ChargingParams;
   startedAtMs: number;
   nowMs: number;

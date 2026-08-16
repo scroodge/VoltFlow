@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   listClusterBackgrounds,
   resolveEntitledProfileId,
-} from "@/lib/bydmate/cluster-backgrounds";
+} from "@/lib/voltflowmate/cluster-backgrounds";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";

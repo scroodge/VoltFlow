@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { filterDisplayTripTrackPoints } from "@/lib/bydmate/telemetry-sanitizer";
+import { filterDisplayTripTrackPoints } from "@/lib/voltflowmate/telemetry-sanitizer";
 import { resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
 
 type RouteContext = {

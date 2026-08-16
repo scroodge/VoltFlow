@@ -20,7 +20,7 @@ Recurrent): чистый базовый набор для всех, свёрну
 - **Analytics** (`VehicleAnalyticsPanels`):
   - History range (day…year) → **day**: line-charts + `DayInsightCards`; **week+**: 7 bar-графиков
     (`buildBarCharts`): SOC-band, Regen, Speed-max, Power-avg, Temperatures, Mileage, Efficiency.
-  - **SoH** — одно число (последний %), хотя `useBydmateSohHistoryQuery` уже грузит историю.
+  - **SoH** — одно число (последний %), хотя `useVoltflowMateSohHistoryQuery` уже грузит историю.
   - **Monthly** — отдельный month-picker + 6 плиток.
   - **Phantom drain** — bar (саморазряд %/день).
   - **Consumption vs Temp** — bar (расход по корзинам уличной t°).
@@ -125,7 +125,7 @@ type ChartDescriptor = {
 
 ### Фаза 3 — SoH-тренд + единый период
 **Файлы:** `vehicle-analytics-panels.tsx`, `telemetry-analytics-charts.tsx`.
-- **SoH из числа → трендовая линия** SoH % по времени (данные уже есть в `useBydmateSohHistoryQuery`).
+- **SoH из числа → трендовая линия** SoH % по времени (данные уже есть в `useVoltflowMateSohHistoryQuery`).
 - Схлопнуть Monthly + Cost-per-km в общий период-селектор (плитки сводки, включая €/км).
 - Распространить `DayInsightCards` (regen-доля, лучшая/худшая поездка, vs baseline) на все периоды.
 

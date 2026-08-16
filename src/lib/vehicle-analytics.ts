@@ -1,17 +1,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { enrichTripsWithEnergy } from "@/lib/bydmate/attach-trip-energy";
-import { dedupeTripsBySource } from "@/lib/bydmate/hero-drive-metrics";
+import { enrichTripsWithEnergy } from "@/lib/voltflowmate/attach-trip-energy";
+import { dedupeTripsBySource } from "@/lib/voltflowmate/hero-drive-metrics";
 import {
   calculatePhantomDrainDays,
   type PhantomDrainDay,
   type PhantomDrainSample,
-} from "@/lib/bydmate/phantom-drain";
+} from "@/lib/voltflowmate/phantom-drain";
 import { chargingSessionAnalyticsScope } from "@/features/charging/domain";
-import { collectPagedRows } from "@/lib/bydmate/paged-query";
-import { weightedAvgConsumptionKwh100 } from "@/lib/bydmate/trip-metrics";
+import { collectPagedRows } from "@/lib/voltflowmate/paged-query";
+import { weightedAvgConsumptionKwh100 } from "@/lib/voltflowmate/trip-metrics";
 import { pickWalkBackSessionPrice } from "@/lib/history-day-summary";
-import type { BydmateTelemetry, ChargingSessionRow, BydmateTripRow } from "@/types/database";
+import type { VoltflowMateTelemetry, ChargingSessionRow, VoltflowMateTripRow } from "@/types/database";
 
 /** How many recent finished sessions to walk back through when estimating a
  * no-charge day's cost. Bounded by battery capacity vs. daily consumption in
@@ -30,7 +30,7 @@ export type MonthlyStats = {
   avgConsumptionKwh100: number | null;
 };
 
-export type { PhantomDrainDay } from "@/lib/bydmate/phantom-drain";
+export type { PhantomDrainDay } from "@/lib/voltflowmate/phantom-drain";
 
 export type CostPerKmSummary = {
   from: string;
@@ -113,7 +113,7 @@ export async function fetchMonthlyStats({
           .in("status", ["completed", "stopped"]),
   ]);
 
-  let tripRows = dedupeTripsBySource((trips ?? []) as BydmateTripRow[]);
+  let tripRows = dedupeTripsBySource((trips ?? []) as VoltflowMateTripRow[]);
   const sessionRows = (sessions ?? []) as ChargingSessionRow[];
 
   if (tripRows.length > 0) {
@@ -246,7 +246,7 @@ export async function estimateNoChargeDayPrice({
 
   if (tripsError) throw tripsError;
   const trips = (tripRows ?? []) as Pick<
-    BydmateTripRow,
+    VoltflowMateTripRow,
     "distance_km" | "traction_energy_kwh" | "avg_consumption_kwh_100km" | "started_at"
   >[];
 
@@ -321,7 +321,7 @@ async function fetchPhantomDrainFallback({
 }): Promise<PhantomDrainDay[]> {
   type Sample = {
     device_time: string;
-    telemetry: BydmateTelemetry;
+    telemetry: VoltflowMateTelemetry;
     diplus_charge_gun_state?: string | null;
   };
 
@@ -397,7 +397,7 @@ export async function fetchCostPerKm({
           .in("status", ["completed", "stopped"]),
   ]);
 
-  const distanceKm = ((trips ?? []) as Pick<BydmateTripRow, "distance_km">[]).reduce(
+  const distanceKm = ((trips ?? []) as Pick<VoltflowMateTripRow, "distance_km">[]).reduce(
     (sum, trip) => sum + (trip.distance_km ?? 0),
     0,
   );
@@ -480,7 +480,7 @@ export async function fetchConsumptionBaseline({
 
   if (error) throw error;
 
-  const consumptions = ((data ?? []) as Pick<BydmateTripRow, "avg_consumption_kwh_100km" | "distance_km">[])
+  const consumptions = ((data ?? []) as Pick<VoltflowMateTripRow, "avg_consumption_kwh_100km" | "distance_km">[])
     .filter(
       (trip) =>
         (trip.distance_km ?? 0) >= 2 &&

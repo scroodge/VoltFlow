@@ -14,7 +14,7 @@ import { usePathname } from "next/navigation";
 import { buildChargingSnapshot } from "@/app/dev/vehicle-telemetry-fixtures/build-charging-snapshot";
 import { percentPerSecond, type ChargingParams } from "@/features/charging/domain";
 import { getDevPathPrefix } from "@/lib/dev/dev-path";
-import type { BydmateLiveSnapshotRow, ChargingSessionRow } from "@/types/database";
+import type { VoltflowMateLiveSnapshotRow, ChargingSessionRow } from "@/types/database";
 
 export type ChargingDevSourceMode = "math" | "live";
 
@@ -23,10 +23,10 @@ type ChargingDevSourceContextValue = {
   setMode: (mode: ChargingDevSourceMode) => void;
   isOverrideActive: boolean;
   resolveLiveSnapshots: (
-    base: BydmateLiveSnapshotRow[],
+    base: VoltflowMateLiveSnapshotRow[],
     session: ChargingSessionRow | null | undefined,
     nowMs: number,
-  ) => BydmateLiveSnapshotRow[];
+  ) => VoltflowMateLiveSnapshotRow[];
 };
 
 const ChargingDevSourceContext = createContext<ChargingDevSourceContextValue | null>(
@@ -84,10 +84,10 @@ export function ChargingDevSourceProvider({ children }: { children: ReactNode })
 
   const resolveLiveSnapshots = useCallback(
     (
-      base: BydmateLiveSnapshotRow[],
+      base: VoltflowMateLiveSnapshotRow[],
       session: ChargingSessionRow | null | undefined,
       nowMs: number,
-    ): BydmateLiveSnapshotRow[] => {
+    ): VoltflowMateLiveSnapshotRow[] => {
       if (!devRoute) return base;
       if (mode === "math") return [];
       const snapshot = base[0];
@@ -134,10 +134,10 @@ export function useChargingDevSource() {
 }
 
 export function useChargingDevLiveOverride(
-  base: BydmateLiveSnapshotRow[],
+  base: VoltflowMateLiveSnapshotRow[],
   session: ChargingSessionRow | null | undefined,
   nowMs: number,
-): BydmateLiveSnapshotRow[] {
+): VoltflowMateLiveSnapshotRow[] {
   const ctx = useChargingDevSource();
   const hasMounted = useSyncExternalStore(
     () => () => {},

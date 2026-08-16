@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
-import { captureSessionEndDelta } from "@/lib/bydmate/charge-end-delta";
+import { captureSessionEndDelta } from "@/lib/voltflowmate/charge-end-delta";
 import { costFromGridEnergy, deriveChargingState } from "@/features/charging/domain";
 import { efficiencyPercentForTariff } from "@/lib/charging-efficiency";
 import { mapChargingTariffLocation, mapUserProvider } from "@/lib/db-map";

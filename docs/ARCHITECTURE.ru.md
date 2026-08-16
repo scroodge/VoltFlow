@@ -168,10 +168,10 @@ Telegram Mini App (`/telegram`) сейчас является публичной
 
 | Подсистема | Что делает | Канонический документ | Ключевой код |
 | --- | --- | --- | --- |
-| **Telemetry ingest** | Валидирует и сохраняет данные авто; запускает сессии, widget и уведомления; принимает retries/offline-батчи | [supabase/TELEMETRY.md](../supabase/TELEMETRY.md), [VoltFlow Mate API](../supabase/VOLTFLOW_MATE_API.md) | `src/app/api/bydmate/telemetry/route.ts`, `src/lib/bydmate/*` |
+| **Telemetry ingest** | Валидирует и сохраняет данные авто; запускает сессии, widget и уведомления; принимает retries/offline-батчи | [supabase/TELEMETRY.md](../supabase/TELEMETRY.md), [VoltFlow Mate API](../supabase/VOLTFLOW_MATE_API.md) | `src/app/api/bydmate/telemetry/route.ts`, `src/lib/voltflowmate/*` |
 | **Сессии зарядки** | Start/stop, ~1 Hz progress, авто-сессии, reconcile, тарифы | [CHARGING_SESSIONS.md](CHARGING_SESSIONS.md) | `src/features/charging/` (публичные entry points и приватная domain/server/client/UI-реализация) |
-| **Поездки** | Серверный вывод поездок, фильтр мусора, дельты дистанции, GPS-треки | [TRIPS.md](TRIPS.md) | `bydmate_ingest_telemetry` (SQL), `src/lib/bydmate/trip-*` |
-| **Аналитика и графики** | History→Analytics, графики поездок, карты маршрутов, route insights | [TRIPS.md](TRIPS.md) | `src/components/vehicle/*`, `src/lib/bydmate/telemetry-*` |
+| **Поездки** | Серверный вывод поездок, фильтр мусора, дельты дистанции, GPS-треки | [TRIPS.md](TRIPS.md) | `bydmate_ingest_telemetry` (SQL), `src/lib/voltflowmate/trip-*` |
+| **Аналитика и графики** | History→Analytics, графики поездок, карты маршрутов, route insights | [TRIPS.md](TRIPS.md) | `src/components/vehicle/*`, `src/lib/voltflowmate/telemetry-*` |
 | **Уведомления** | Web push (пороги заряда) + Telegram-виджет живого статуса (одно сообщение, редактируется на месте) | [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | `src/lib/push/*`, `src/lib/telegram/*` |
 | **Telegram-бот** | Вход/линковка Mini App (Next.js) + захват групповых сообщений, LLM-классификация и создание черновиков маркетплейса (**отдельный Python edge-сервер**, не этот Next.js-app) | DATABASE_SCHEMA.md §Community marketplace | `src/app/api/telegram/{auth,link}/route.ts`; реальный зарегистрированный webhook держит `scripts/telegram-miniapp-server.py` — `src/app/api/telegram/webhook/route.ts` только отправляет deep-link на PWA и не является живым путём групповых событий |
 | **Удалённые команды** | Абстрактные команды PWA → Mate poller или shell daemon при выключенном авто (lock, SOC limit, …) | [VoltFlow Mate API](../supabase/VOLTFLOW_MATE_API.md) | `src/app/api/bydmate/commands/*`, `vehicle_commands` |

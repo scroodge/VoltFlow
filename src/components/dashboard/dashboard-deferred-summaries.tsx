@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 
 import { formatDuration } from "@/features/charging/domain";
 import type { Locale, TranslationKey } from "@/lib/i18n";
-import type { BydmateTripRow, ChargingSessionRow } from "@/types/database";
+import type { VoltflowMateTripRow, ChargingSessionRow } from "@/types/database";
 
 type Translate = (key: TranslationKey, values?: Record<string, string | number>) => string;
 
@@ -34,7 +34,7 @@ function durationBetween(startIso: string | null, endIso: string | null) {
   return formatDuration(Math.max(0, Math.round((Date.parse(endIso) - Date.parse(startIso)) / 1000)));
 }
 
-function tripSoc(trip: BydmateTripRow) {
+function tripSoc(trip: VoltflowMateTripRow) {
   if (typeof trip.soc_start !== "number" || typeof trip.soc_end !== "number") return "—";
   return `${fmt(trip.soc_start)}% -> ${fmt(trip.soc_end)}%`;
 }
@@ -86,7 +86,7 @@ export function DashboardDeferredSummaries({
 }: {
   appPath: (path: string) => string;
   latestSession: ChargingSessionRow | null;
-  latestTrip: BydmateTripRow | null;
+  latestTrip: VoltflowMateTripRow | null;
   loadingTrips: boolean;
   locale: Locale;
   t: Translate;

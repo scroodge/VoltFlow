@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
-import { DRIVING_SPEED_THRESHOLD_KMH, gearIsDrive } from "../bydmate/gear.ts";
+import type { TelemetryPayload } from "@/lib/voltflowmate/ingest-payload";
+import { DRIVING_SPEED_THRESHOLD_KMH, gearIsDrive } from "../voltflowmate/gear.ts";
 import {
   finiteTelemetryNumber,
   isTelemetryCharging,
@@ -301,7 +301,7 @@ const androidEndpointFilter = {
   endpointFilter: (endpoint: string) => !isAppleWebPushEndpoint(endpoint),
 };
 
-export async function processBydmateLiveStatusNotifications({
+export async function processVoltflowMateLiveStatusNotifications({
   supabase,
   userId,
   samples,

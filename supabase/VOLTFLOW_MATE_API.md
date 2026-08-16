@@ -27,8 +27,14 @@ redeems it once and stores the returned endpoint and paired-client key.
 POST https://<host>/api/bydmate/link-code/redeem
 Content-Type: application/json
 
-{ "code": "123456" }
+{ "code": "123456", "client": "dashboard" }
 ```
+
+`client` is optional and identifies which app is pairing: `"dashboard"` for the VoltFlow
+Dashboard head unit, anything else (including omitting the field) for Mate. Each client
+kind holds its **own** key in `bydmate_devices`, so pairing one never revokes the other —
+before that table existed a profile had a single key column, and the second app to redeem
+silently evicted the first. Re-pairing the same kind replaces only that kind's key.
 
 Successful responses contain a client key and telemetry endpoint. Pairing codes are
 single-use and expire quickly. Client keys must be kept only in the paired client’s secure

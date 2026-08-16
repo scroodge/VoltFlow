@@ -2,10 +2,10 @@ import {
   DRIVING_SPEED_THRESHOLD_KMH,
   isDriveTelemetry,
   isParkStateTelemetry,
-} from "./bydmate/gear.ts";
+} from "./voltflowmate/gear.ts";
 import { isTelemetryCharging } from "../features/charging/domain.ts";
 import type { TranslationKey } from "@/lib/i18n";
-import type { BydmateLiveSnapshotRow } from "@/types/database";
+import type { VoltflowMateLiveSnapshotRow } from "@/types/database";
 
 export { DRIVING_SPEED_THRESHOLD_KMH };
 
@@ -36,7 +36,7 @@ export type DashboardVehicleMode =
   | "stale";
 
 export function isFreshLiveSnapshot(
-  snapshot: BydmateLiveSnapshotRow | null | undefined,
+  snapshot: VoltflowMateLiveSnapshotRow | null | undefined,
   nowMs: number,
   staleMs = LIVE_SNAPSHOT_STALE_MS,
 ) {
@@ -50,7 +50,7 @@ export function isFreshLiveSnapshot(
  * `device_time`: the question the UI answers is "when did contact last happen", and a batch flushed
  * late carries old device times but is still real contact at flush time.
  */
-export function lastContactAtMs(snapshot: BydmateLiveSnapshotRow | null | undefined): number | null {
+export function lastContactAtMs(snapshot: VoltflowMateLiveSnapshotRow | null | undefined): number | null {
   if (!snapshot) return null;
   const receivedMs = Date.parse(snapshot.received_at);
   return Number.isFinite(receivedMs) ? receivedMs : null;
@@ -62,7 +62,7 @@ export function lastContactAtMs(snapshot: BydmateLiveSnapshotRow | null | undefi
  * evidence of contact, just not usable as a live reading.
  */
 export function isAsleepLiveSnapshot(
-  snapshot: BydmateLiveSnapshotRow | null | undefined,
+  snapshot: VoltflowMateLiveSnapshotRow | null | undefined,
   nowMs: number,
   asleepMs = LIVE_SNAPSHOT_ASLEEP_MS,
 ) {
@@ -72,12 +72,12 @@ export function isAsleepLiveSnapshot(
 }
 
 /** @deprecated Use isDriveTelemetry from bydmate/gear */
-export function isRawDrivingTelemetry(snapshot: BydmateLiveSnapshotRow | null | undefined) {
+export function isRawDrivingTelemetry(snapshot: VoltflowMateLiveSnapshotRow | null | undefined) {
   return isDriveTelemetry(snapshot);
 }
 
 function chargingCheckSpeedKmh(
-  snapshot: Pick<BydmateLiveSnapshotRow, "telemetry" | "diplus">,
+  snapshot: Pick<VoltflowMateLiveSnapshotRow, "telemetry" | "diplus">,
 ): number | null {
   const fromTelemetry = finiteNumber(snapshot.telemetry.speed_kmh);
   if (fromTelemetry != null) return fromTelemetry;
@@ -93,7 +93,7 @@ function chargingCheckSpeedKmh(
  * a stray charge_power_kw reading must not turn a moving car into "charging".
  */
 export function isChargingTelemetry(
-  snapshot: Pick<BydmateLiveSnapshotRow, "telemetry" | "diplus"> | null | undefined,
+  snapshot: Pick<VoltflowMateLiveSnapshotRow, "telemetry" | "diplus"> | null | undefined,
 ) {
   if (!snapshot) return false;
   const speedKmh = chargingCheckSpeedKmh(snapshot);
@@ -101,12 +101,12 @@ export function isChargingTelemetry(
   return isTelemetryCharging(snapshot.telemetry, snapshot);
 }
 
-export function isParkedTelemetry(snapshot: BydmateLiveSnapshotRow | null | undefined) {
+export function isParkedTelemetry(snapshot: VoltflowMateLiveSnapshotRow | null | undefined) {
   if (!snapshot || isChargingTelemetry(snapshot)) return false;
   return isParkStateTelemetry(snapshot);
 }
 
-export function isDrivingTelemetry(snapshot: BydmateLiveSnapshotRow | null | undefined) {
+export function isDrivingTelemetry(snapshot: VoltflowMateLiveSnapshotRow | null | undefined) {
   if (!snapshot || isChargingTelemetry(snapshot)) return false;
   return isDriveTelemetry(snapshot);
 }
@@ -118,7 +118,7 @@ export function deriveDashboardVehicleMode({
   staleMs = LIVE_SNAPSHOT_STALE_MS,
   asleepMs = LIVE_SNAPSHOT_ASLEEP_MS,
 }: {
-  snapshot: BydmateLiveSnapshotRow | null | undefined;
+  snapshot: VoltflowMateLiveSnapshotRow | null | undefined;
   nowMs: number;
   hasActiveSession: boolean;
   staleMs?: number;
@@ -203,7 +203,7 @@ function finiteNumber(value: unknown): number | null {
 }
 
 export function snapshotSpeedDetail(
-  snapshot: BydmateLiveSnapshotRow | null | undefined,
+  snapshot: VoltflowMateLiveSnapshotRow | null | undefined,
 ): string | null {
   const speedKmh = finiteNumber(snapshot?.telemetry.speed_kmh);
   if (speedKmh == null) return null;
@@ -211,9 +211,9 @@ export function snapshotSpeedDetail(
 }
 
 export function resolveLiveSnapshotForVehicle(
-  snapshots: BydmateLiveSnapshotRow[],
+  snapshots: VoltflowMateLiveSnapshotRow[],
   vehicleId: string | null | undefined,
-): BydmateLiveSnapshotRow | null {
+): VoltflowMateLiveSnapshotRow | null {
   if (!snapshots.length) return null;
   if (!vehicleId) return snapshots[0] ?? null;
   return snapshots.find((row) => row.vehicle_id === vehicleId) ?? snapshots[0] ?? null;

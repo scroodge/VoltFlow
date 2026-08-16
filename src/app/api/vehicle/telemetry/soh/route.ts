@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { fetchSohTelemetryHistory } from "@/lib/bydmate/telemetry-history";
+import { fetchSohTelemetryHistory } from "@/lib/voltflowmate/telemetry-history";
 import { resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
 
 export async function GET(request: NextRequest) {

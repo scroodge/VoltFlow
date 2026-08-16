@@ -3,10 +3,10 @@ import { notFound } from "next/navigation";
 import { RouteMap } from "@/components/vehicle/vehicle-route-map";
 import { TelemetryHistoryCharts } from "@/components/vehicle/vehicle-telemetry-visualizations";
 import type {
-  BydmateLiveSnapshotRow,
-  BydmateLocation,
-  BydmateTelemetry,
-  BydmateTelemetryPointRow,
+  VoltflowMateLiveSnapshotRow,
+  VoltflowMateLocation,
+  VoltflowMateTelemetry,
+  VoltflowMateTelemetryPointRow,
 } from "@/types/database";
 import { VehicleFixtureModeSwitch } from "./VehicleFixtureModeSwitch";
 
@@ -122,7 +122,7 @@ function FixtureSection({
 }: {
   title: string;
   description: string;
-  points: BydmateTelemetryPointRow[];
+  points: VoltflowMateTelemetryPointRow[];
 }) {
   return (
     <section className="grid gap-4">
@@ -146,12 +146,12 @@ function makeTelemetryPoints(
     intervalMs: number;
     gps: "normal" | "missing";
   },
-): BydmateTelemetryPointRow[] {
+): VoltflowMateTelemetryPointRow[] {
   return Array.from({ length: count }, (_, index) => {
     const timestampMs = options.startMs + index * options.intervalMs;
     const wave = Math.sin(index / 22);
     const fastWave = Math.sin(index / 7);
-    const telemetry: BydmateTelemetry = {
+    const telemetry: VoltflowMateTelemetry = {
       soc: clamp(82 - index * 0.015 + wave * 0.4, 10, 100),
       speed_kmh: Math.max(0, 54 + wave * 22 + fastWave * 8),
       power_kw: -18 - wave * 11 + fastWave * 4,
@@ -190,7 +190,7 @@ function makeTelemetryPoints(
   });
 }
 
-function makeLiveSnapshot(point: BydmateTelemetryPointRow): BydmateLiveSnapshotRow {
+function makeLiveSnapshot(point: VoltflowMateTelemetryPointRow): VoltflowMateLiveSnapshotRow {
   return {
     ...point,
     id: "fixture-live-snapshot",
@@ -217,7 +217,7 @@ function makeLiveSnapshot(point: BydmateTelemetryPointRow): BydmateLiveSnapshotR
   };
 }
 
-function makeLocation(index: number, gps: "normal" | "missing"): BydmateLocation {
+function makeLocation(index: number, gps: "normal" | "missing"): VoltflowMateLocation {
   if (gps === "missing") return {};
 
   return {

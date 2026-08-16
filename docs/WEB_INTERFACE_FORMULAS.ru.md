@@ -113,7 +113,7 @@
 
 Источники-владельцы: [`dashboard-view.tsx`](../src/components/dashboard/dashboard-view.tsx),
 [`charging-math.ts`](../src/features/charging/_domain/charging-math.ts),
-[`range-estimate.ts`](../src/lib/bydmate/range-estimate.ts) и
+[`range-estimate.ts`](../src/lib/voltflowmate/range-estimate.ts) и
 [`dashboard-deferred-summaries.tsx`](../src/components/dashboard/dashboard-deferred-summaries.tsx).
 
 ## Калькулятор зарядки (`/charging`)
@@ -232,8 +232,8 @@ SOC, энергия и стоимость используют канониче�
 | Длительность поездки | `end time − start time` | Прошедшее время поездки. |
 | Текущий расход движения | Сырой расход текущей поездки | Передаётся из телеметрии без пересчёта страницей. |
 
-Источники-владельцы: [`hero-drive-metrics.ts`](../src/lib/bydmate/hero-drive-metrics.ts),
-[`range-estimate.ts`](../src/lib/bydmate/range-estimate.ts) и
+Источники-владельцы: [`hero-drive-metrics.ts`](../src/lib/voltflowmate/hero-drive-metrics.ts),
+[`range-estimate.ts`](../src/lib/voltflowmate/range-estimate.ts) и
 [`vehicle-live-view.tsx`](../src/components/vehicle/vehicle-live-view.tsx).
 
 ## Поездки автомобиля
@@ -247,7 +247,7 @@ SOC, энергия и стоимость используют канониче�
 | Средняя скорость | Среднее по образцам поездки, рассчитанное выше | Рассчитывается при ingest и отображается веб-интерфейсом. |
 | Максимальная скорость | Максимальная допустимая скорость по образцам поездки | Рассчитывается выше и отображается веб-интерфейсом. |
 
-Источник-владелец: [`trip-metrics.ts`](../src/lib/bydmate/trip-metrics.ts). Правила
+Источник-владелец: [`trip-metrics.ts`](../src/lib/voltflowmate/trip-metrics.ts). Правила
 жизненного цикла и расстояния описаны в [документе о поездках](TRIPS.md).
 
 ## Аналитика автомобиля: вид дня
@@ -263,7 +263,7 @@ SOC, энергия и стоимость используют канониче�
 | Сравнение высокой и низкой рекуперации | Средние с учётом расстояния, разделённые по медиане доли рекуперации | Сравнивает расход групп поездок с большей и меньшей рекуперацией. |
 | Бейдж нормы поездки | `(trip consumption − baseline) / baseline × 100` | Ниже нормы при ≤−5%; выше нормы при ≥+5%. |
 
-Источники-владельцы: [`day-insights.ts`](../src/lib/bydmate/day-insights.ts) и
+Источники-владельцы: [`day-insights.ts`](../src/lib/voltflowmate/day-insights.ts) и
 [`analytics-day-view.tsx`](../src/components/vehicle/analytics-day-view.tsx).
 
 ## Аналитика автомобиля: вид периода
@@ -281,7 +281,7 @@ SOC, энергия и стоимость используют канониче�
 | Температурная корзина расхода | `Σconsumption / trip count` в каждой корзине 5°C | Средний расход при близкой температуре снаружи. |
 
 Источники-владельцы: [`vehicle-analytics.ts`](../src/lib/vehicle-analytics.ts) и
-[`telemetry-buckets.ts`](../src/lib/bydmate/telemetry-buckets.ts).
+[`telemetry-buckets.ts`](../src/lib/voltflowmate/telemetry-buckets.ts).
 
 ## Аналитика автомобиля: графики телеметрии
 
@@ -294,7 +294,7 @@ SOC, энергия и стоимость используют канониче�
 | Минимальный/максимальный SOC | Минимальный и максимальный допустимый SOC | Наблюдавшийся диапазон батареи в корзине. |
 | Энергия рекуперации/тяги | Сумма энергетических значений корзины | Общая энергия в каждом направлении. |
 
-Источник-владелец: [`telemetry-buckets.ts`](../src/lib/bydmate/telemetry-buckets.ts).
+Источник-владелец: [`telemetry-buckets.ts`](../src/lib/voltflowmate/telemetry-buckets.ts).
 
 ## Аналитика автомобиля: графики зарядки и тренд дельты ячеек
 
@@ -311,7 +311,7 @@ SOC, энергия и стоимость используют канониче�
 
 Источники-владельцы: [`telemetry-analytics-charts.tsx`](../src/components/vehicle/telemetry-analytics-charts.tsx),
 [`vehicle-analytics-panels.tsx`](../src/components/vehicle/vehicle-analytics-panels.tsx) и
-[`charge-delta-trend.ts`](../src/lib/bydmate/charge-delta-trend.ts).
+[`charge-delta-trend.ts`](../src/lib/voltflowmate/charge-delta-trend.ts).
 
 ## Аналитика автомобиля: phantom drain
 
@@ -323,7 +323,7 @@ SOC, энергия и стоимость используют канониче�
 | Суточное время простоя | Сумма часов подходящих интервалов | Объединяет подходящие длительности. |
 
 Учитываются только непрерывные припаркованные интервалы не короче четырёх часов. Источник-владелец:
-[`phantom-drain.ts`](../src/lib/bydmate/phantom-drain.ts).
+[`phantom-drain.ts`](../src/lib/voltflowmate/phantom-drain.ts).
 
 ## Аналитика автомобиля: подсказки маршрутов
 
@@ -336,7 +336,7 @@ SOC, энергия и стоимость используют канониче�
 | Прогноз без совпадения | Медиана маршрута ±8% | Более широкий fallback без подходящей температуры. |
 | Средние температуры маршрута | `Σtemperature / valid sample count` | Средние температуры снаружи и батареи за поездку. |
 
-Источник-владелец: [`route-insights.ts`](../src/lib/bydmate/route-insights.ts).
+Источник-владелец: [`route-insights.ts`](../src/lib/voltflowmate/route-insights.ts).
 
 ## Сервис (`/service`)
 

@@ -27,20 +27,20 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { queryKeys } from "@/lib/query-keys";
 import type { DerivedChargingState } from "@/features/charging/domain";
-import type { BydmateLiveSnapshotRow, ChargingSessionRow } from "@/types/database";
+import type { VoltflowMateLiveSnapshotRow, ChargingSessionRow } from "@/types/database";
 
 type UseChargingSessionLiveSyncOptions = {
   session: ChargingSessionRow | null | undefined;
   sessionId: string | null;
-  liveSnapshots: BydmateLiveSnapshotRow[];
+  liveSnapshots: VoltflowMateLiveSnapshotRow[];
   vehicleId?: string | null;
   enabled?: boolean;
   skipPersist?: boolean;
   resolveLiveSnapshots?: (
-    snapshots: BydmateLiveSnapshotRow[],
+    snapshots: VoltflowMateLiveSnapshotRow[],
     session: ChargingSessionRow,
     nowMs: number,
-  ) => BydmateLiveSnapshotRow[];
+  ) => VoltflowMateLiveSnapshotRow[];
   onDerived?: (derived: DerivedChargingState | null) => void;
 };
 

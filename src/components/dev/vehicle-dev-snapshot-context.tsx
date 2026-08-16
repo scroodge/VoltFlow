@@ -13,7 +13,7 @@ import { usePathname } from "next/navigation";
 
 import { buildChargingSnapshot } from "@/app/dev/vehicle-telemetry-fixtures/build-charging-snapshot";
 import { getDevPathPrefix } from "@/lib/dev/dev-path";
-import type { BydmateLiveSnapshotRow } from "@/types/database";
+import type { VoltflowMateLiveSnapshotRow } from "@/types/database";
 
 export type VehicleDevSnapshotMode = "online" | "charging" | "stale";
 
@@ -22,7 +22,7 @@ const STALE_OFFSET_MS = 4 * 60 * 60 * 1000;
 type VehicleDevSnapshotContextValue = {
   mode: VehicleDevSnapshotMode;
   setMode: (mode: VehicleDevSnapshotMode) => void;
-  resolveOverride: (base: BydmateLiveSnapshotRow | null) => BydmateLiveSnapshotRow | null;
+  resolveOverride: (base: VoltflowMateLiveSnapshotRow | null) => VoltflowMateLiveSnapshotRow | null;
 };
 
 const VehicleDevSnapshotContext = createContext<VehicleDevSnapshotContextValue | null>(null);
@@ -53,7 +53,7 @@ export function VehicleDevSnapshotProvider({ children }: { children: ReactNode }
   }, []);
 
   const resolveOverride = useCallback(
-    (base: BydmateLiveSnapshotRow | null): BydmateLiveSnapshotRow | null => {
+    (base: VoltflowMateLiveSnapshotRow | null): VoltflowMateLiveSnapshotRow | null => {
       if (!devRoute || !base) return null;
 
       if (mode === "charging") {
@@ -100,8 +100,8 @@ export function useVehicleDevSnapshot() {
 }
 
 export function useVehicleDevSnapshotOverride(
-  base: BydmateLiveSnapshotRow | null,
-): BydmateLiveSnapshotRow | null {
+  base: VoltflowMateLiveSnapshotRow | null,
+): VoltflowMateLiveSnapshotRow | null {
   const ctx = useVehicleDevSnapshot();
   const hasMounted = useSyncExternalStore(
     () => () => {},

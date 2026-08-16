@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { saveRoutePreference } from "@/lib/bydmate/route-insights";
+import { saveRoutePreference } from "@/lib/voltflowmate/route-insights";
 import { devVehicleId, resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
 
 export async function PUT(request: NextRequest) {

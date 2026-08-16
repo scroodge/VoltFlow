@@ -1,4 +1,4 @@
-import type { BydmateDiplus, BydmateTelemetry } from "@/types/database";
+import type { VoltflowMateDiplus, VoltflowMateTelemetry } from "@/types/database";
 
 export const TELEMETRY_CHARGE_POWER_THRESHOLD_KW = 0.1;
 /** BYD Mate / Di+: gun connected (AC or DC), not unplugged (1). */
@@ -16,7 +16,7 @@ export function finiteTelemetryNumber(value: unknown): number | null {
 }
 
 export type TelemetryChargingDiplusContext = {
-  diplus?: Pick<BydmateDiplus, "charge_gun_state"> | null;
+  diplus?: Pick<VoltflowMateDiplus, "charge_gun_state"> | null;
   diplus_charge_gun_state?: string | number | null;
 };
 
@@ -48,7 +48,7 @@ export function telemetryChargingContext(
  * gun-state logic.
  */
 export function isTelemetryCharging(
-  telemetry: Pick<BydmateTelemetry, "is_charging" | "charge_power_kw">,
+  telemetry: Pick<VoltflowMateTelemetry, "is_charging" | "charge_power_kw">,
   context?: TelemetryChargingDiplusContext | null,
 ) {
   // Real charge power wins regardless of gun state: car `way`'s Di+ gun state reads 1
@@ -78,7 +78,7 @@ export function isTelemetryCharging(
  * (see `isTelemetryCharging`); the unplug state is only a fallback for stale readings.
  */
 export function isTelemetryHistoryCharging(
-  telemetry: Pick<BydmateTelemetry, "is_charging" | "charge_power_kw">,
+  telemetry: Pick<VoltflowMateTelemetry, "is_charging" | "charge_power_kw">,
   context?: TelemetryChargingDiplusContext | null,
 ) {
   const chargePowerKw = finiteTelemetryNumber(telemetry.charge_power_kw);
@@ -102,7 +102,7 @@ export function isVehicleParkedForCharging(speedKmh: number | null | undefined) 
  * Excludes 100% SOC balance tail (is_charging + ~0 kW).
  */
 export function isMateAutoSessionCharging(
-  telemetry: Pick<BydmateTelemetry, "is_charging" | "charge_power_kw" | "soc">,
+  telemetry: Pick<VoltflowMateTelemetry, "is_charging" | "charge_power_kw" | "soc">,
   speedKmh: number | null | undefined,
   context?: TelemetryChargingDiplusContext | null,
 ) {
@@ -127,7 +127,7 @@ export function isMateAutoSessionCharging(
 
 /** @deprecated Use isMateAutoSessionCharging — kept so call sites can migrate. */
 export function isAcWallboxCharging(
-  telemetry: Pick<BydmateTelemetry, "is_charging" | "charge_power_kw" | "soc" | "power_kw">,
+  telemetry: Pick<VoltflowMateTelemetry, "is_charging" | "charge_power_kw" | "soc" | "power_kw">,
   speedKmh?: number | null,
 ) {
   return isMateAutoSessionCharging(telemetry, speedKmh ?? null);
@@ -171,7 +171,7 @@ export function sanitizeChargerPowerKw(
   return FALLBACK_AC_CHARGER_KW;
 }
 
-export function telemetrySpeedKmh(telemetry: Pick<BydmateTelemetry, "speed_kmh">) {
+export function telemetrySpeedKmh(telemetry: Pick<VoltflowMateTelemetry, "speed_kmh">) {
   const speed = finiteTelemetryNumber(telemetry.speed_kmh);
   return speed != null && speed >= 0 ? speed : null;
 }

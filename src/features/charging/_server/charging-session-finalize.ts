@@ -4,7 +4,7 @@ import { deriveChargingState, deriveSessionProgressFromSoc } from "@/features/ch
 import { chargingParamsFromSession } from "@/features/charging/domain";
 import { isFreshLiveSnapshot, snapshotSoc } from "@/features/charging/domain";
 import { finiteTelemetryNumber } from "@/features/charging/domain";
-import type { BydmateLiveSnapshotRow, ChargingSessionRow } from "@/types/database";
+import type { VoltflowMateLiveSnapshotRow, ChargingSessionRow } from "@/types/database";
 
 export type StopSessionProgressSource = "live" | "telemetry" | "math";
 
@@ -49,7 +49,7 @@ export async function resolveStopProgressForSession(
     .eq("vehicle_id", vehicleId)
     .maybeSingle();
 
-  const liveRow = live as BydmateLiveSnapshotRow | null;
+  const liveRow = live as VoltflowMateLiveSnapshotRow | null;
   if (liveRow && isFreshLiveSnapshot(liveRow, nowMs)) {
     const liveSoc = snapshotSoc(liveRow);
     if (liveSoc != null) {

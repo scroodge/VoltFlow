@@ -10,7 +10,7 @@ import {
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { VehicleAnalyticsPanels } from "@/components/vehicle/vehicle-analytics-panels";
 import { VehicleLiveFixtureView } from "@/components/vehicle/vehicle-live-view";
-import type { BydmateLiveSnapshotRow, BydmateTelemetryPointRow } from "@/types/database";
+import type { VoltflowMateLiveSnapshotRow, VoltflowMateTelemetryPointRow } from "@/types/database";
 
 const STALE_OFFSET_MS = 4 * 60 * 60 * 1000;
 const MODES = ["online", "tyre-gap", "tyres-none", "charging", "stale"] as const;
@@ -22,8 +22,8 @@ export function VehicleFixtureModeSwitch({
   vehicleId,
   chargingSample = null,
 }: {
-  snapshot: BydmateLiveSnapshotRow;
-  points: BydmateTelemetryPointRow[];
+  snapshot: VoltflowMateLiveSnapshotRow;
+  points: VoltflowMateTelemetryPointRow[];
   vehicleId: string;
   chargingSample?: ChargingSampleRef | null;
 }) {

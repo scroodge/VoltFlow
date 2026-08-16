@@ -16,10 +16,10 @@ import {
   type ParkedRouteInsight,
   type RouteInsight,
   type RouteInsightsResult,
-} from "@/lib/bydmate/route-insights";
+} from "@/lib/voltflowmate/route-insights";
 import { devFetch, isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { cn } from "@/lib/utils";
-import type { BydmateTripTrackPointRow } from "@/types/database";
+import type { VoltflowMateTripTrackPointRow } from "@/types/database";
 
 const RouteMapPreview = dynamic(
   () => import("@/components/vehicle/vehicle-route-map").then((module) => module.RouteMapPreview),
@@ -221,7 +221,7 @@ function RouteInsightCard({
         <div className="mt-3 grid gap-3">
           {showMap ? (
             <RouteMapPreview
-              trackPoints={route.trackPoints as BydmateTripTrackPointRow[]}
+              trackPoints={route.trackPoints as VoltflowMateTripTrackPointRow[]}
               className="h-44"
             />
           ) : null}

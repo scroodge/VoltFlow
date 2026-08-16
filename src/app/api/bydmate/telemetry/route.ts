@@ -1,9 +1,9 @@
-import { processBydmateAutoChargingSessions, reconcileChargingSessionsForUser } from "@/features/charging/server";
-import { normalizePayloads, type HourlyBlock, type TripBlock } from "@/lib/bydmate/ingest-payload";
-import { batchHasChargingSignal, planTelemetryIngestDelivery } from "@/lib/bydmate/ingest-delivery";
-import { parseIngestStats } from "@/lib/bydmate/ingest-stats";
-import { processBydmateChargeNotifications } from "@/lib/push/charge-notifications";
-import { processBydmateLiveStatusNotifications } from "@/lib/push/live-status-notifications";
+import { processVoltflowMateAutoChargingSessions, reconcileChargingSessionsForUser } from "@/features/charging/server";
+import { normalizePayloads, type HourlyBlock, type TripBlock } from "@/lib/voltflowmate/ingest-payload";
+import { batchHasChargingSignal, planTelemetryIngestDelivery } from "@/lib/voltflowmate/ingest-delivery";
+import { parseIngestStats } from "@/lib/voltflowmate/ingest-stats";
+import { processVoltflowMateChargeNotifications } from "@/lib/push/charge-notifications";
+import { processVoltflowMateLiveStatusNotifications } from "@/lib/push/live-status-notifications";
 import { updateTelegramLiveWidgets } from "@/lib/telegram/live-widget";
 import {
   acceptedLocationFromSnapshot,
@@ -12,15 +12,15 @@ import {
   sanitizePayloadTelemetry,
   type AcceptedLocation,
   type AcceptedTelemetry,
-} from "@/lib/bydmate/telemetry-sanitizer";
+} from "@/lib/voltflowmate/telemetry-sanitizer";
 import { createServiceClient } from "@/lib/supabase/service";
-import { resolveBydmateApiKeyProfile } from "@/lib/bydmate/api-auth";
-import { liveFastSecondsFor } from "@/lib/bydmate/live-fast";
+import { resolveVoltflowMateApiKeyProfile } from "@/lib/voltflowmate/api-auth";
+import { liveFastSecondsFor } from "@/lib/voltflowmate/live-fast";
 import {
   readBodyWithLimit,
   RequestBodyTooLargeError,
 } from "@/lib/api/read-body";
-import type { TelemetryPayload } from "@/lib/bydmate/ingest-payload";
+import type { TelemetryPayload } from "@/lib/voltflowmate/ingest-payload";
 
 export const runtime = "nodejs";
 const MAX_INGEST_BODY_BYTES = 2_000_000;
@@ -143,10 +143,10 @@ export async function POST(request: Request) {
   }
 
   let supabase: ReturnType<typeof createServiceClient>;
-  let profile: Awaited<ReturnType<typeof resolveBydmateApiKeyProfile>>;
+  let profile: Awaited<ReturnType<typeof resolveVoltflowMateApiKeyProfile>>;
   try {
     supabase = createServiceClient();
-    profile = await resolveBydmateApiKeyProfile(supabase, apiKey);
+    profile = await resolveVoltflowMateApiKeyProfile(supabase, apiKey);
   } catch {
     return Response.json({ ok: false, error: "Key lookup failed" }, { status: 500 });
   }
@@ -333,7 +333,7 @@ export async function POST(request: Request) {
     }
 
     const chargeNotificationsPromise = deliveryPlan.runChargeNotifications
-      ? processBydmateChargeNotifications({
+      ? processVoltflowMateChargeNotifications({
           supabase,
           userId: profile.id,
           samples,
@@ -342,7 +342,7 @@ export async function POST(request: Request) {
       : Promise.resolve({ sent: 0, thresholds: [] as number[] });
 
     const liveStatusNotificationsPromise = deliveryPlan.runLiveStatusNotifications
-      ? processBydmateLiveStatusNotifications({
+      ? processVoltflowMateLiveStatusNotifications({
           supabase,
           userId: profile.id,
           samples,
@@ -358,7 +358,7 @@ export async function POST(request: Request) {
     }).catch(() => ({ updated: 0 }));
 
     const autoChargingSessionsPromise = deliveryPlan.runAutoChargingSessions
-      ? processBydmateAutoChargingSessions({
+      ? processVoltflowMateAutoChargingSessions({
           supabase,
           userId: profile.id,
           samples,

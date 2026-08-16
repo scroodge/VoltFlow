@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { isDashboardEntitled } from "@/lib/bydmate/dashboard-entitlement";
-import { BUCKET } from "@/lib/bydmate/cluster-backgrounds";
+import { isDashboardEntitled } from "@/lib/voltflowmate/dashboard-entitlement";
+import { BUCKET } from "@/lib/voltflowmate/cluster-backgrounds";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
