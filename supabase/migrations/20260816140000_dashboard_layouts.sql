@@ -36,6 +36,7 @@ alter table public.dashboard_layouts enable row level security;
 
 -- Reads are allowed directly to the owning account so a future web layout editor on
 -- voltflow.life can render the saved cluster without needing a new endpoint.
+drop policy if exists "Users read own dashboard layout" on public.dashboard_layouts;
 create policy "Users read own dashboard layout"
 on public.dashboard_layouts for select
 to authenticated
