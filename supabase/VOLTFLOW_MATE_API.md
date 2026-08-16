@@ -220,6 +220,47 @@ X-Vehicle-Id: <vehicle-id>
 This optional path provides completed trip history only. It must not be used alongside an
 equivalent live telemetry source for the same drive.
 
+## Cluster layout backup
+
+The VoltFlow Dashboard keeps its cluster layout in device storage with no export path, so a
+wipe or a replacement head unit loses it. This endpoint is that backup. It is not a sync
+channel: one dashboard device exists per account (`bydmate_devices_user_kind_unique`), and
+the cluster never pulls without the driver asking.
+
+```http
+GET https://<host>/api/bydmate/dashboard/layout
+X-API-Key: <paired-client-key>
+```
+
+```json
+{ "ok": true, "layout": { "version": 1, "widgets": [] }, "layout_version": 1, "updated_at": "2026-08-16T12:00:00.000Z" }
+```
+
+An account that has never backed up returns `ok: true` with `layout`, `layout_version`, and
+`updated_at` all `null`. That is a normal state, not an error.
+
+```http
+PUT https://<host>/api/bydmate/dashboard/layout
+X-API-Key: <paired-client-key>
+Content-Type: application/json
+
+{ "layout": { "version": 1, "widgets": [] }, "layout_version": 1 }
+```
+
+```json
+{ "ok": true, "updated_at": "2026-08-16T12:00:00.000Z" }
+```
+
+`layout` is stored verbatim as `jsonb` and is never interpreted server-side — the schema
+belongs to the client's `DashboardLayoutConfig`. `layout_version` is that config's version
+stamp, kept as a column so a client can refuse to restore a layout written by a newer app
+than the one installed.
+
+Both methods require a premium or admin entitlement, re-checked on every call rather than
+trusted from the client's own six-hour cache. Errors follow the usual vocabulary:
+`missing_api_key` (401), `invalid_api_key` (401), `not_entitled` (403), `invalid_payload`
+and `invalid_layout_version` (400), and `payload_too_large` (413) above 256 KB.
+
 ## Privacy and compatibility
 
 - Omit GPS by sending `location: {}`.
