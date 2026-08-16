@@ -36,9 +36,12 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
   stored credential and routes to `LinkActivity` instead of stranding the user on
   `BlockedActivity`, which has no re-link path.
 - Verification: `npx tsc --noEmit` clean for the changed files (one pre-existing,
-  unrelated error in `settings-view.tsx:788`); Dashboard `assembleDebug` succeeds. The
-  migration has **not** been applied to prod yet, and the paired-device flow has not been
-  exercised end-to-end against a running backend.
+  unrelated error in `settings-view.tsx:788`); Dashboard `assembleDebug` succeeds. Migration
+  `20260816120000_bydmate_devices.sql` applied to self-hosted prod via the Supavisor pooler
+  (`psql "$(cat supabase/.temp/pooler-url)" -f ...`): `bydmate_devices` created, backfilled
+  12 `kind='mate'` rows, verified to exactly match the 12 `profiles` rows that had
+  `bydmate_cloud_api_key_hash` set. The paired-device flow has not been exercised
+  end-to-end against a running backend.
 
 ### Postman collection covering all API endpoints
 
