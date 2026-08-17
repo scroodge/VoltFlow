@@ -9,6 +9,20 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-08-17
+
+### Self-hosted production is the explicit migration target
+
+- `AGENTS.md` now states that VoltFlow's database target is self-hosted production, not a
+  presumed local Supabase instance. A local database may be used only when explicitly
+  requested and confirmed running.
+- Before database or migration work, agents must recall
+  `voltflow-selfhosted-supabase-pooler` through AgentMemory and then follow the private
+  `docs/OPS_LOCAL.md` runbook. The agent file contains neither credentials nor
+  infrastructure endpoints.
+- The direct `psql` procedure remains the production migration path; the Supabase CLI is
+  unsuitable because this self-hosted pooler does not support the TLS it forces.
+
 ## 2026-08-16
 
 ### Production build restored after tyre-pressure preference persistence
