@@ -156,6 +156,9 @@ export async function redeemVoltflowMateLinkCode(
   // Older Mate builds send no client field, and Mate is the only thing that ever paired
   // before the Dashboard existed — so an unstated kind is 'mate'.
   deviceKind: VoltflowMateDeviceKind = "mate",
+  // Recorded here so a freshly paired device shows a version immediately, rather than
+  // reading "unknown" until its first session call. Older clients send nothing.
+  appVersion?: { version: string | null; versionCode: number | null },
 ): Promise<
   | { ok: true; apiKey: string; endpointUrl: string }
   | { ok: false; error: string; rateLimited?: boolean }
@@ -206,12 +209,20 @@ export async function redeemVoltflowMateLinkCode(
   // This writes only the redeeming client's own device row. Overwriting a single
   // per-profile key here is what used to make pairing the Dashboard revoke Mate, and
   // pairing Mate revoke the Dashboard.
+  const reportedVersion = appVersion?.version ?? null;
+  const reportedVersionCode = appVersion?.versionCode ?? null;
   const { error: deviceError } = await supabase.from("bydmate_devices").upsert(
     {
       user_id: row.user_id as string,
       kind: deviceKind,
       api_key_hash: hashVoltflowMateApiKey(apiKey),
       api_key_fingerprint: voltflowMateApiKeyFingerprint(apiKey),
+      // Re-pairing replaces the row, so these are always written: leaving a stale
+      // version behind would be worse than showing none.
+      app_version: reportedVersion,
+      version_code: reportedVersionCode,
+      app_version_seen_at:
+        reportedVersion || reportedVersionCode != null ? nowIso : null,
     },
     { onConflict: "user_id,kind" },
   );

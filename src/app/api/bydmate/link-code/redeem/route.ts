@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import type { VoltflowMateDeviceKind } from "@/lib/voltflowmate/api-auth";
+import { normalizeReportedAppVersion } from "@/lib/voltflowmate/dashboard-entitlement";
 import {
   clientIpFromRequest,
   hashClientIp,
@@ -19,9 +20,14 @@ function deviceKindFromBody(client: unknown): VoltflowMateDeviceKind {
 }
 
 export async function POST(request: NextRequest) {
-  let body: { code?: unknown; client?: unknown };
+  let body: {
+    code?: unknown;
+    client?: unknown;
+    app_version?: unknown;
+    version_code?: unknown;
+  };
   try {
-    body = (await request.json()) as { code?: unknown; client?: unknown };
+    body = (await request.json()) as typeof body;
   } catch {
     return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
   }
@@ -30,7 +36,12 @@ export async function POST(request: NextRequest) {
   const ipHash = hashClientIp(clientIpFromRequest(request));
 
   try {
-    const result = await redeemVoltflowMateLinkCode(rawCode, ipHash, deviceKindFromBody(body.client));
+    const result = await redeemVoltflowMateLinkCode(
+      rawCode,
+      ipHash,
+      deviceKindFromBody(body.client),
+      normalizeReportedAppVersion(body.app_version, body.version_code),
+    );
     if (!result.ok) {
       const status = result.rateLimited ? 429 : 401;
       return NextResponse.json({ ok: false, error: result.error }, { status });

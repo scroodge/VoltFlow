@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { resolveDashboardSession } from "@/lib/voltflowmate/dashboard-entitlement";
+import {
+  parseDashboardVersionHeaders,
+  recordDashboardAppVersion,
+  resolveDashboardSession,
+} from "@/lib/voltflowmate/dashboard-entitlement";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -21,6 +25,18 @@ export async function GET(request: NextRequest) {
     if (!result.ok) {
       return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
     }
+
+    // Only after the key is known good, so an unauthenticated caller cannot write here.
+    // Awaited rather than fired and forgotten: this runtime may freeze the function once
+    // the response is returned, which would drop the write silently.
+    await recordDashboardAppVersion(
+      supabaseAdmin,
+      apiKey,
+      parseDashboardVersionHeaders(
+        request.headers.get("x-dashboard-version"),
+        request.headers.get("x-dashboard-version-code"),
+      ),
+    );
 
     return NextResponse.json({
       ok: true,

@@ -27,7 +27,7 @@ redeems it once and stores the returned endpoint and paired-client key.
 POST https://<host>/api/bydmate/link-code/redeem
 Content-Type: application/json
 
-{ "code": "123456", "client": "dashboard" }
+{ "code": "123456", "client": "dashboard", "app_version": "0.2.0", "version_code": 6 }
 ```
 
 `client` is optional and identifies which app is pairing: `"dashboard"` for the VoltFlow
@@ -35,6 +35,11 @@ Dashboard head unit, anything else (including omitting the field) for Mate. Each
 kind holds its **own** key in `bydmate_devices`, so pairing one never revokes the other —
 before that table existed a profile had a single key column, and the second app to redeem
 silently evicted the first. Re-pairing the same kind replaces only that kind's key.
+
+`app_version` and `version_code` are optional and describe the build being paired. They
+are stored on the device row and shown in VoltFlow Settings; they are display values, never
+an authorization input, and a malformed value is dropped rather than stored. Because
+re-pairing replaces the row, omitting them clears whatever was recorded before.
 
 Successful responses contain a client key and telemetry endpoint. Pairing codes are
 single-use and expire quickly. Client keys must be kept only in the paired client’s secure
@@ -219,6 +224,26 @@ X-Vehicle-Id: <vehicle-id>
 
 This optional path provides completed trip history only. It must not be used alongside an
 equivalent live telemetry source for the same drive.
+
+## Reported client build
+
+The Dashboard sends its build on the session request, and the server records it on the
+device row so VoltFlow Settings can show which APK the head unit is running.
+
+```http
+GET https://<host>/api/bydmate/dashboard/session
+X-API-Key: <paired-client-key>
+X-Dashboard-Version: 0.2.0
+X-Dashboard-Version-Code: 6
+```
+
+Both headers are optional; a value that is not a dotted number or a positive integer is
+ignored. The server writes only when the reported build differs from the stored one. That
+is deliberate and load-bearing: authentication is the ~6 s command-poll hot path shared
+with Mate, and `bydmate_devices` has no `last_seen_at` for exactly that reason. Do not
+extend this into a heartbeat.
+
+Mate does not use these headers — it already reports `mate_version` through telemetry.
 
 ## Cluster layout backup
 

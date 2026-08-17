@@ -2,7 +2,10 @@ import { createHash, randomBytes } from "crypto";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { resolveVoltflowMateApiKeyProfile } from "@/lib/voltflowmate/api-auth";
+import {
+  hashVoltflowMateApiKey,
+  resolveVoltflowMateApiKeyProfile,
+} from "@/lib/voltflowmate/api-auth";
 import { isPremiumFromUntil } from "@/lib/premium-entitlement";
 
 const CLUSTER_CMD_KEY = "cluster_projection_cmd";
@@ -151,4 +154,95 @@ export async function resolveDashboardSession(
     closeCommand: encryptedClose,
     closeNonce,
   };
+}
+
+export type DashboardAppVersion = {
+  version: string | null;
+  versionCode: number | null;
+};
+
+/**
+ * Normalizes a client-reported build, from a header or a pairing body.
+ *
+ * Both values are client-supplied and therefore untrusted: this is a display value,
+ * never an authorization input. Anything that is not a plain dotted number or a
+ * positive integer is dropped rather than stored.
+ */
+export function normalizeReportedAppVersion(
+  version: unknown,
+  versionCode: unknown,
+): DashboardAppVersion {
+  const rawVersion = typeof version === "string" ? version.trim() : "";
+  const normalizedVersion =
+    rawVersion.length > 0 && rawVersion.length <= 32 && /^\d+(?:\.\d+)*$/.test(rawVersion)
+      ? rawVersion
+      : null;
+
+  const rawCode =
+    typeof versionCode === "number"
+      ? versionCode
+      : Number.parseInt(typeof versionCode === "string" ? versionCode.trim() : "", 10);
+  const normalizedCode = Number.isSafeInteger(rawCode) && rawCode > 0 ? rawCode : null;
+
+  return { version: normalizedVersion, versionCode: normalizedCode };
+}
+
+/** Reads `X-Dashboard-Version` / `X-Dashboard-Version-Code` off a session request. */
+export function parseDashboardVersionHeaders(
+  versionHeader: string | null,
+  versionCodeHeader: string | null,
+): DashboardAppVersion {
+  return normalizeReportedAppVersion(versionHeader, versionCodeHeader);
+}
+
+/**
+ * Persists the build the head unit is running, for display in settings.
+ *
+ * Write-on-change by design. The `last_seen_at` note on 20260816120000 explains why the
+ * credential row must not take a write per request; this stays cheap because it compares
+ * first and only writes when the reported build actually differs. Call it from the
+ * Dashboard's session route only — that call is cached for 6 h on the head unit — and
+ * never from `resolveVoltflowMateApiKeyProfile`, which Mate's ~6 s command poll shares.
+ *
+ * Never throws: a failure to record a version must not cost an entitled user their
+ * cluster. It logs instead, which is the signal that this stopped working.
+ */
+export async function recordDashboardAppVersion(
+  supabase: SupabaseClient,
+  apiKey: string,
+  reported: DashboardAppVersion,
+): Promise<void> {
+  if (!reported.version && reported.versionCode == null) return;
+
+  try {
+    const keyHash = hashVoltflowMateApiKey(apiKey.trim());
+    const { data: device, error: readError } = await supabase
+      .from("bydmate_devices")
+      .select("id, app_version, version_code")
+      .eq("api_key_hash", keyHash)
+      .eq("kind", "dashboard")
+      .maybeSingle();
+
+    if (readError || !device?.id) return;
+
+    const unchanged =
+      (device.app_version ?? null) === reported.version &&
+      (device.version_code ?? null) === reported.versionCode;
+    if (unchanged) return;
+
+    const { error: writeError } = await supabase
+      .from("bydmate_devices")
+      .update({
+        app_version: reported.version,
+        version_code: reported.versionCode,
+        app_version_seen_at: new Date().toISOString(),
+      })
+      .eq("id", device.id as string);
+
+    if (writeError) {
+      console.error("Dashboard version record failed:", writeError.message);
+    }
+  } catch (error) {
+    console.error("Dashboard version record failed:", error);
+  }
 }

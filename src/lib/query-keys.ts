@@ -20,6 +20,7 @@ export const queryKeys = {
     ["bydmate-soh-history", date, vehicleId] as const,
   vehicleCommands: (vehicleId: string | null) => ["vehicle-commands", vehicleId] as const,
   mateLatestRelease: ["mate-latest-release"] as const,
+  pairedDevices: ["bydmate-paired-devices"] as const,
   tariffLocations: ["tariff-locations"] as const,
   userProviders: ["user-providers"] as const,
   serviceRecords: (carId: string) => ["service-records", carId] as const,
