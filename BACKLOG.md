@@ -44,6 +44,91 @@ build the debug APK. A connected-car verification remains required after install
 confirm fresh `bydmate_live_snapshots` and `bydmate_telemetry_samples` contain
 `telemetry.soc`, then refresh the Vehicle page and confirm both range cards render.
 
+## 🟡 Display SOC with decimal precision (0.1%) throughout the PWA
+
+### Evidence
+
+`charging_sessions.start_percent` / `current_percent` / `target_percent` are Postgres
+`numeric` (unconstrained precision) since the init migration `20250511000000`.
+
+Di+ 2.0 reports SOC at 0.1% resolution. VoltFlow Mate app versionCode ≥340 puts the
+unrounded value into `telemetry.soc`, but the `diplus` object in the same payload still
+carries the app's own rounded integer (`DiParsData.soc` is a Kotlin `Int`). Migration
+`20260814180000_diplus_soc_precise.sql` (2026-08-14, 4 days old) already fixed the
+ingest RPC `bydmate_apply_diplus_columns` to prefer the finer `telemetry.soc` over
+`diplus.soc` when the two agree within 0.5 (the app's own rounding step), storing the
+decimal into the `diplus_soc` column. Measured on prod at the time: `telemetry->>'soc' =
+66.2` alongside `diplus->>'soc' = 66`, 3649 rows gained a decimal in 7 days, 0 disagreed
+by more than 0.5. So **decimal SOC already reaches Postgres** for any car running Mate
+≥340, and `charging-live.ts:92` (live derivation) already reads
+`snapshot.telemetry.soc ?? snapshot.diplus.soc`, so live-status calculations already
+pick up the decimal.
+
+What still discards it:
+- `BatteryRing.tsx:66` `{known ? Math.round(value) : "—"}` — the big center number in
+  the animated circular gauge, shared by **both** the dashboard tile
+  (`dashboard-view.tsx:1287`) and the charging session screen
+  (`charging-session-screen.tsx:607`). The ring's fill *animation* (line 131,
+  `strokeDashoffset`) already uses the unrounded `value` — only the printed number in
+  the middle is rounded, so the arc already sweeps to the precise angle while the label
+  in the center lies about it.
+- `charging-auto-session-step.ts:61` `clampStartPercent()` does `Math.round(soc)` —
+  an auto-started session's `start_percent` is forced to a whole number even when the
+  backdated/confirming sample was fractional.
+- `dashboard-view.tsx:207` `String(Math.round(soc))` (`liveStartPercent`) — secondary
+  "charging from X%" caption. Note `dashboard-view.tsx:210` already has a reusable
+  `fmt(value, digits = 0)` helper (`.toFixed(digits)`) other call sites in this file can
+  pass `1` into instead of hand-rolling new formatting.
+- `charging-session-screen.tsx:610,617` `.toFixed(0)` — session start/target/
+  remaining-to-target labels.
+- `charging-delta-card.tsx:295,296,343,368,370,375` — chart axis labels, hover
+  tooltip, delta stat, min/max SOC.
+- `charge-delta-trend-chart.tsx:220` `.toFixed(0)`.
+- `analytics-day-view.tsx:54,59` `Math.round(insight.deltaPercent)`.
+- `manual-session-dialog.tsx:217` `.toFixed(0)` — manual entry preview; likely fine to
+  leave whole-number since the user types a whole-percent target.
+
+Historical false lead, now stale: `20260630150000_repair_math_overshoot_sessions.sql`
+treated a fractional `current_percent` as the fingerprint of a since-fixed math-
+projection bug ("real SOC is always an integer percent"). That was true before Di+
+2.0/Mate 340 landed; any future repair/validation logic must not reintroduce a
+"fractional == corrupted" heuristic.
+
+### Data boundary
+
+No new user-facing data model. SOC is existing app-owned vehicle telemetry already
+stored server-side in Postgres (already-unconstrained `numeric` columns) — this is a
+display/formatting change plus removing one server-side rounding step, not a new field
+or a new storage location.
+
+### Options and recommendation
+
+1. **Dashboard/live tile only** — format just the live SOC number to one decimal
+   (`66.2%`), leave session history and chart labels as whole percent. Smallest blast
+   radius, fastest to ship, but leaves the app showing two different precisions for the
+   "same" number depending on screen.
+2. **(Recommended) One decimal everywhere SOC currently renders** — including the
+   `BatteryRing` circular gauge's center number (dashboard tile and charging session
+   screen both use it), the session screen's other labels, delta card, trend chart, and
+   analytics day view. Also stop rounding in `clampStartPercent` so a session's own
+   start/current/target stay internally consistent for delta math, and audit the
+   ≥98%/`=== 100` threshold comparisons in the auto-session/auto-stop logic to confirm
+   they already use `>=`/`>` and not strict equality now that SOC can genuinely sit at
+   e.g. `99.7`.
+3. **Add a display-precision user setting.** Rejected as premature — no signal a user
+   wants this configurable, and it would add scope (a new per-user preference,
+   client-side per this repo's data-ownership default) with no upstream ask.
+
+### Verification
+
+For each touched display site: `npm run build` / `npm run lint`, then use the dev
+server to confirm a car running Mate ≥340 shows one decimal on the dashboard tile and
+session screen, and that a car on an older Mate version (integer-only telemetry) still
+renders cleanly (`66.0%`, not a broken/missing value). Run
+`auto-session.test.mjs` (excluded from the default `npm run test` glob — run explicitly
+per AGENTS.md) after removing the `Math.round` in `clampStartPercent` to confirm no
+existing session-boundary test assumed whole-number start percent.
+
 ## 🔵 Consumption formula map — reference for the parts left as separate tools
 
 The "average consumption" discrepancy investigation (shipped 2026-08-04, see
@@ -762,7 +847,7 @@ post-install telemetry verification).
 Remaining items are optional and none block anything:
 
 - **Serve `/api/bydmate/*` directly on the old host.** Today every telemetry sample is a
-  `308` + a re-issued POST. Flipping `volt-flow-beige.vercel.app` to *Connect to an
+  `308` + a re-issued POST. Flipping the legacy Vercel origin to *Connect to an
   environment → Production* and moving the redirect into `src/proxy.ts` with a path
   exemption would halve the request count. Efficiency, not correctness.
 - **Vercel Attack Challenge Mode is intermittently ON** (`x-vercel-mitigated: challenge`),

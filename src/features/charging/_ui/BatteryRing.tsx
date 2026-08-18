@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 
+import { formatSocPercent } from "@/lib/format-soc-percent";
 import { cn } from "@/lib/utils";
 
 function formatEnergyKwh(value: number | null | undefined) {
@@ -60,13 +61,13 @@ export function BatteryRing({
         <p
           className={cn(
             "font-heading font-bold leading-none tracking-normal text-foreground tabular-nums",
-            compact ? "text-4xl" : "text-6xl",
+            compact ? "text-3xl" : "text-5xl",
           )}
         >
-          {known ? Math.round(value) : "—"}
+          {known ? formatSocPercent(value) : "—"}
           {known ? (
             <span
-              className={cn("text-muted-foreground", compact ? "text-base" : "text-2xl")}
+              className={cn("text-muted-foreground", compact ? "text-sm" : "text-xl")}
             >
               %
             </span>
