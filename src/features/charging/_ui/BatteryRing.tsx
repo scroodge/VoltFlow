@@ -63,7 +63,7 @@ export function BatteryRing({
             compact ? "text-4xl" : "text-6xl",
           )}
         >
-          {known ? Math.round(value) : "—"}
+          {known ? value.toFixed(1) : "—"}
           {known ? (
             <span
               className={cn("text-muted-foreground", compact ? "text-base" : "text-2xl")}
