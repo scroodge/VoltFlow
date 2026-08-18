@@ -64,6 +64,7 @@ import {
 import { deriveLiveChargingState, findFreshChargingSnapshot, snapshotChargePowerKw } from "../domain";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import { useAppPath } from "@/lib/dev/dev-path";
+import { formatSocPercent } from "@/lib/format-soc-percent";
 import { useChargingUi } from "../_client/use-charging-ui";
 import type {
   ChargingProviderType,
@@ -607,14 +608,14 @@ export function ChargingSessionScreen({
         <BatteryRing
           size="compact"
           percent={pctForBar}
-          status={`${session.start_percent.toFixed(0)}% → ${session.target_percent.toFixed(0)}%`}
+          status={`${formatSocPercent(session.start_percent)}% → ${formatSocPercent(session.target_percent)}%`}
           charging={charging && !historyMode}
           className="mx-auto max-w-[132px]"
         />
 
         <p className="mt-1 text-center text-[11px] text-muted-foreground tabular-nums">
           {t("charging.remainingToTarget", {
-            pct: remainingToTargetPercent.toFixed(0),
+            pct: formatSocPercent(remainingToTargetPercent),
           })}
         </p>
       </section>

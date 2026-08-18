@@ -71,6 +71,7 @@ import {
 import { isRouteTrackDisplayable } from "@/lib/voltflowmate/route-insights";
 import { resolvePreferredTripDistanceKm, trackPathDistanceKm } from "@/lib/voltflowmate/trip-distance";
 import type { Currency, Locale, TranslationKey } from "@/lib/i18n";
+import { formatSocPercent } from "@/lib/format-soc-percent";
 import { formatTimeAgo } from "@/lib/time-ago";
 import { vehicleReadyDurationBucket } from "@/lib/vehicle-ready-metrics";
 import { readDiPlusCabinTemperature } from "@/lib/vehicle-cabin-temperature";
@@ -662,7 +663,7 @@ function Hero({
             {vehicleLabel}
           </p>
           <h1 className="mt-1.5 font-heading text-4xl font-bold tracking-normal tabular-nums">
-            {fmt(telemetry.soc)}
+            {formatSocPercent(telemetry.soc)}
             <span className="text-xl text-muted-foreground">%</span>
           </h1>
           <p className="mt-1 text-xs text-muted-foreground" suppressHydrationWarning>
@@ -1687,7 +1688,7 @@ function TripListItem({
           value={formatTripTractionEnergyKwh(trip)}
         />
         <MiniStat label={tx("vehicle.trips.energyPerKm")} value={formatTripEnergyPerKm(trip)} />
-        <MiniStat label="SOC" value={`${fmt(trip.soc_start)}% -> ${fmt(trip.soc_end)}%`} />
+        <MiniStat label="SOC" value={`${formatSocPercent(trip.soc_start)}% -> ${formatSocPercent(trip.soc_end)}%`} />
         <MiniStat label={tx("vehicle.trips.maxSpeed")} value={`${fmt(trip.max_speed_kmh)} km/h`} />
         <MiniStat label={tx("vehicle.trips.avgSpeed")} value={`${fmt(trip.avg_speed_kmh)} km/h`} />
         {costStr != null ? (
@@ -1960,7 +1961,7 @@ function LastTripDetail({
             value={formatTripTractionEnergyKwh(trip)}
           />
           <MiniStat label={tx("vehicle.trips.energyPerKm")} value={formatTripEnergyPerKm(trip)} />
-          <MiniStat label="SOC" value={`${fmt(trip.soc_start)}% → ${fmt(trip.soc_end)}%`} />
+          <MiniStat label="SOC" value={`${formatSocPercent(trip.soc_start)}% → ${formatSocPercent(trip.soc_end)}%`} />
           <MiniStat label={tx("vehicle.trips.maxSpeed")} value={`${fmt(trip.max_speed_kmh)} km/h`} />
           <MiniStat label={tx("vehicle.trips.avgSpeed")} value={`${fmt(trip.avg_speed_kmh)} km/h`} />
         </div>

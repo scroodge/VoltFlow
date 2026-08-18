@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { chartTooltipTransform } from "@/components/vehicle/chart-interaction";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatSocPercent } from "@/lib/format-soc-percent";
 import { useVoltflowMateChargingSessionSamplesQuery, type ChargingSessionTelemetrySample } from "@/hooks/use-voltflowmate-charging-session-samples-query";
 import type { ChargingSessionRow } from "@/types/database";
 
@@ -292,8 +293,8 @@ function DeltaPlot({
           <text x="296" y="132" textAnchor="end" className="fill-muted-foreground text-[10px]">{formatPlotTime(maxTime)}</text>
           <text x="30" y="14" className="fill-muted-foreground text-[10px]">{maxDelta.toFixed(3)} V</text>
           <text x="30" y="106" className="fill-muted-foreground text-[10px]">{minDelta.toFixed(3)} V</text>
-          <text x="296" y="14" textAnchor="end" className="fill-primary text-[10px]">{maxSoc.toFixed(0)}% SOC</text>
-          <text x="296" y="106" textAnchor="end" className="fill-primary text-[10px]">{minSoc.toFixed(0)}% SOC</text>
+          <text x="296" y="14" textAnchor="end" className="fill-primary text-[10px]">{formatSocPercent(maxSoc)}% SOC</text>
+          <text x="296" y="106" textAnchor="end" className="fill-primary text-[10px]">{formatSocPercent(minSoc)}% SOC</text>
           <g clipPath={`url(#${clipId})`}>
             {plotPoints.length > 1 ? (
               <path d={socPath} fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.78" strokeDasharray="3 5" />
@@ -340,7 +341,7 @@ function DeltaPlot({
             }}
           >
             <p className="font-heading text-sm font-semibold tabular-nums">
-              {hoveredPoint.soc.toFixed(0)}% SOC
+              {formatSocPercent(hoveredPoint.soc)}% SOC
             </p>
             <p className="mt-1 text-muted-foreground">{formatPlotTime(hoveredPoint.time)}</p>
             <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
@@ -365,14 +366,14 @@ function DeltaPlot({
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-border/70 pt-3 text-xs sm:grid-cols-4">
-        <DeltaStat label="SOC" value={`${minSoc.toFixed(0)}-${maxSoc.toFixed(0)}%`} />
+        <DeltaStat label="SOC" value={`${formatSocPercent(minSoc)}-${formatSocPercent(maxSoc)}%`} />
         <DeltaStat label="Delta" value={`${minDelta.toFixed(3)}-${maxDelta.toFixed(3)} V`} />
-        <DeltaStat label="Latest" value={latest ? `${latest.soc.toFixed(0)}% / ${latest.delta.toFixed(3)} V` : "—"} />
+        <DeltaStat label="Latest" value={latest ? `${formatSocPercent(latest.soc)}% / ${latest.delta.toFixed(3)} V` : "—"} />
         <DeltaStat
           label="Peak max cell"
           value={
             peakMaxCellPoint
-              ? `${fmtNumber(peakMaxCellPoint.maxCellVoltage, 3)} V · ${peakMaxCellPoint.soc.toFixed(0)}%`
+              ? `${fmtNumber(peakMaxCellPoint.maxCellVoltage, 3)} V · ${formatSocPercent(peakMaxCellPoint.soc)}%`
               : "—"
           }
         />

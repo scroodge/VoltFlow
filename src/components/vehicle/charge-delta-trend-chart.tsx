@@ -3,6 +3,7 @@
 import { useState, type PointerEvent } from "react";
 
 import { chartTooltipTransform } from "@/components/vehicle/chart-interaction";
+import { formatSocPercent } from "@/lib/format-soc-percent";
 import type { ChargeDeltaTrend, ChargeDeltaTrendPoint } from "@/lib/voltflowmate/charge-delta-trend";
 import type { TranslationKey } from "@/lib/i18n";
 
@@ -217,7 +218,7 @@ export function ChargeDeltaTrendChart({
           </p>
           <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
             <dt className="text-muted-foreground">SOC</dt>
-            <dd className="text-right font-mono">{hovered.deltaSoc.toFixed(0)}%</dd>
+            <dd className="text-right font-mono">{formatSocPercent(hovered.deltaSoc)}%</dd>
             {hovered.sohPercent != null ? (
               <>
                 <dt className="text-muted-foreground">SOH</dt>

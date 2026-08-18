@@ -88,6 +88,7 @@ import { isIos, noopSubscribe } from "@/lib/pwa";
 import { buildWalkingDirectionsUrl } from "@/lib/vehicle-navigation-link";
 import { vehicleReadyDurationBucket } from "@/lib/vehicle-ready-metrics";
 import { cn } from "@/lib/utils";
+import { formatSocPercent } from "@/lib/format-soc-percent";
 import {
   canStartChargingSession,
   dashboardVehicleStatusLabelKey,
@@ -204,7 +205,7 @@ function chargingSecondsToFull({
 function liveStartPercent(snapshot: VoltflowMateLiveSnapshotRow | null | undefined) {
   const soc = snapshotSoc(snapshot);
   if (soc == null || soc >= 100) return null;
-  return String(Math.round(soc));
+  return formatSocPercent(soc);
 }
 
 function fmt(value: number | null | undefined, digits = 0) {
