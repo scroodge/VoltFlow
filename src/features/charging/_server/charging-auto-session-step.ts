@@ -58,7 +58,7 @@ export type AutoChargingSessionAction =
   | { type: "stop"; currentPercent: number };
 
 function clampStartPercent(soc: number) {
-  return Math.min(99, Math.max(0, Math.round(soc)));
+  return Math.min(99.9, Math.max(0, soc));
 }
 
 /**

@@ -836,33 +836,6 @@ Should I build any of the three remaining items, or leave this alone for now?
 
 ---
 
-## 🟡 Documentation cleanup — legacy Vercel domain references
-
-### Evidence
-
-A 2026-08-18 audit found **no** `volt-flow-beige.vercel.app` reference under `docs/`.
-The only remaining Markdown references are in this backlog's active domain-migration
-compatibility proposal and the dated historical record in `CHANGELOG.md`. The canonical
-production origin is already `https://voltflow.life` in the active API documentation.
-
-### Options and recommendation
-
-1. **Delete every remaining reference.** Rejected: it would erase the migration record
-   and a load-bearing compatibility constraint. Older installed Mate builds retain the
-   legacy telemetry URL, which must keep redirecting until those clients no longer exist.
-2. **Rewrite the historical changelog.** Rejected: changelog entries describe what was
-   true when shipped; changing them would make the release record inaccurate.
-3. **Keep the historical and operational references; remove only obsolete active
-   documentation if found (recommended).** No such active `docs/` reference exists in
-   this audit, so no documentation edit is currently required. Future user-facing
-   documentation must name `https://voltflow.life` as Production.
-
-Should I build this? The recommendation needs no further edit; if you instead want the
-legacy-host compatibility/history removed from `BACKLOG.md` or `CHANGELOG.md`, confirm
-that narrower scope explicitly.
-
----
-
 ## 🟠 Domain migration → voltflow.life — leftovers (optional, not blocking)
 
 Phases 0–3 **shipped** (canonical domain, frontend URLs, backend infra, and the Mate
@@ -874,7 +847,7 @@ post-install telemetry verification).
 Remaining items are optional and none block anything:
 
 - **Serve `/api/bydmate/*` directly on the old host.** Today every telemetry sample is a
-  `308` + a re-issued POST. Flipping `volt-flow-beige.vercel.app` to *Connect to an
+  `308` + a re-issued POST. Flipping the legacy Vercel origin to *Connect to an
   environment → Production* and moving the redirect into `src/proxy.ts` with a path
   exemption would halve the request count. Efficiency, not correctness.
 - **Vercel Attack Challenge Mode is intermittently ON** (`x-vercel-mitigated: challenge`),
