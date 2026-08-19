@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { JsonLd, organizationSchema, websiteSchema } from "@/lib/seo/json-ld";
 import { openGraph } from "@/lib/seo/open-graph";
 
 import { LandingPage } from "./landing-page";
@@ -32,5 +33,11 @@ export const metadata: Metadata = {
 };
 
 export default function Page() {
-  return <LandingPage />;
+  return (
+    <>
+      <JsonLd data={organizationSchema()} />
+      <JsonLd data={websiteSchema()} />
+      <LandingPage />
+    </>
+  );
 }

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { ArticleRenderer } from "@/components/telegram/ArticleRenderer";
 import { ArticleViewTracker } from "@/components/telegram/ArticleViewTracker";
+import { JsonLd, articleSchema, breadcrumbSchema } from "@/lib/seo/json-ld";
 import { openGraph } from "@/lib/seo/open-graph";
 import { getTelegramKnowledgeDataWithFallback } from "@/lib/supabase/knowledge";
 import {
@@ -69,6 +70,18 @@ export default async function TelegramArticlePage({ params }: PageProps) {
     <main className="relative isolate min-h-dvh overflow-hidden bg-background text-foreground">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_-8%,rgba(0,209,255,0.24),transparent_26rem),radial-gradient(circle_at_8%_18%,rgba(0,230,118,0.14),transparent_20rem),linear-gradient(180deg,rgba(18,21,28,0)_0%,#12151C_78%)]" />
       <div className="mobile-page relative min-h-dvh px-4 pb-[calc(env(safe-area-inset-bottom)+2rem)] pt-[calc(env(safe-area-inset-top)+1rem)]">
+        <JsonLd data={articleSchema(article, `/telegram/article/${slug}`)} />
+        <JsonLd
+          data={breadcrumbSchema([
+            { name: "Главная", path: "/" },
+            { name: "База знаний", path: "/telegram" },
+            {
+              name: article.category,
+              path: `/telegram/category/${article.categorySlug}`,
+            },
+            { name: article.title, path: `/telegram/article/${slug}` },
+          ])}
+        />
         <ArticleViewTracker slug={article.slug} />
         <ArticleRenderer article={article} relatedArticles={relatedArticles} />
       </div>

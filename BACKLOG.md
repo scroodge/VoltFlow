@@ -779,7 +779,9 @@ Remaining items are optional and none block anything:
 
 ## 🟠 SEO remediation — the site is technically unindexable (approved 2026-08-19)
 
-**Status: approved, Phase 1 in progress.** Full plan lives at
+**Status: Phases 1, 2, 4-partial and 5 built and verified against a production
+build 2026-08-19 (uncommitted). Remaining: the `/knowledge/*` move (Phase 3) and
+ISR (`revalidate`) on the KB routes.** Full plan lives at
 `~/.claude/plans/how-to-improve-seo-sorted-gem.md` (local, not in the repo).
 
 Verified against the live site on 2026-08-19. This is not an "optimize the copy" item —

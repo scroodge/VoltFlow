@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
+import { KnowledgeIndex } from "@/components/telegram/KnowledgeIndex";
 import { TelegramEntryGate } from "@/components/telegram/TelegramEntryGate";
 import { TelegramShell } from "@/components/telegram/TelegramShell";
+import { JsonLd, collectionPageSchema } from "@/lib/seo/json-ld";
 import { openGraph } from "@/lib/seo/open-graph";
 import { getTelegramKnowledgeDataWithFallback } from "@/lib/supabase/knowledge";
 import { staticTelegramKnowledgeData } from "@/lib/telegram/knowledge";
@@ -41,8 +43,28 @@ export default async function TelegramPage() {
   return (
     <Suspense fallback={null}>
       <script dangerouslySetInnerHTML={{ __html: KB_PREPAINT_GUARD }} />
+      <JsonLd
+        data={collectionPageSchema({
+          name: "База знаний BYD YUAN UP",
+          description:
+            "Гайды по зарядке, обслуживанию и аксессуарам для владельцев BYD YUAN UP.",
+          path: "/telegram",
+          items: data.articles.map((article) => ({
+            title: article.title,
+            path: `/telegram/article/${article.slug}`,
+          })),
+        })}
+      />
+      {/*
+        KnowledgeIndex sits inside #tg-kb-root so the Telegram pre-paint guard
+        keeps hiding and revealing the whole KB as one unit — but outside the
+        shell's Suspense boundary, so its links survive static rendering.
+      */}
       <div id="tg-kb-root">
         <TelegramShell data={data} />
+        <div className="mobile-page px-4 pb-[calc(env(safe-area-inset-bottom)+2rem)]">
+          <KnowledgeIndex data={data} />
+        </div>
       </div>
       <TelegramEntryGate />
     </Suspense>
