@@ -65,9 +65,14 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
   internally consistent with the displayed number.
 - **Deliberately unchanged:** `manual-session-dialog.tsx` stays whole-number, because the
   user types a whole-percent target there.
-- **Known residual:** `src/components/vehicle/analytics-day-view.tsx` still does
-  `Math.abs(Math.round(insight.deltaPercent))` at two call sites. It was in the plan's
-  scope and was not converted.
+- **Not a SOC site, despite the plan listing it as one:**
+  `src/components/vehicle/analytics-day-view.tsx:54,59` rounds `insight.deltaPercent`,
+  which `src/lib/voltflowmate/day-insights.ts:99` derives as
+  `((dayKwh100 - baseline.medianKwh100) / baseline.medianKwh100) * 100` — a consumption
+  delta against a baseline median, not a state of charge. It correctly stays whole-number.
+  `formatSocPercent` must **never** be applied there: the helper collapses anything at or
+  above 100 to `100`, so a day that consumed 130 % of baseline would silently display as
+  100 %. Verified 2026-08-19; no change made.
 - Future repair or validation logic must **not** reintroduce a "fractional SOC ==
   corrupted" heuristic. `20260630150000_repair_math_overshoot_sessions.sql` used exactly
   that fingerprint, which held before Di+ 2.0 / Mate 340 and is now wrong.
