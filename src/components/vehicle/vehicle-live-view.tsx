@@ -15,6 +15,7 @@ import {
   Clock3,
   Gauge,
   HeartPulse,
+  Info,
   Maximize2,
   Minimize2,
   Minus,
@@ -32,6 +33,7 @@ import { CurrencyAmount } from "@/components/currency-amount";
 import { useVehicleDevSnapshotOverride } from "@/components/dev/vehicle-dev-snapshot-context";
 import { VehicleAnalyticsTeaser } from "@/components/vehicle/vehicle-analytics-teaser";
 import { VehicleControlPanel } from "@/components/vehicle/vehicle-control-panel";
+import { MetricExplainerSheet } from "@/components/vehicle/metric-explainer-sheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -49,6 +51,7 @@ import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useSessionsQuery } from "@/hooks/use-sessions-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
+import { useLongPress } from "@/hooks/use-long-press";
 import { useAppPath } from "@/lib/dev/dev-path";
 import {
   formatPressureFromKpa,
@@ -58,9 +61,19 @@ import { gearIsPark, readGear } from "@/lib/voltflowmate/gear";
 import { isTelemetryCharging } from "@/features/charging/domain";
 import {
   computeHeroDriveMetrics,
+  dedupeTripsBySource,
+  findLastFinishedChargeSession,
   formatHeroDistanceKm,
   formatKmPerPercent,
 } from "@/lib/voltflowmate/hero-drive-metrics";
+import {
+  explainAiRange,
+  explainDistanceSinceCharge,
+  explainKmPerPercent,
+  explainMathRange,
+  explainRecentEnergy,
+  type MetricExplanation,
+} from "@/lib/voltflowmate/metric-explain";
 import { calculateTripEnergy } from "@/lib/voltflowmate/trip-energy";
 import {
   tripEnergyPerKm,
@@ -478,6 +491,12 @@ function VehicleLiveContent({
         distanceSinceChargeKm={heroDriveMetrics.distanceSinceChargeKm}
         kmPerPercentSoc={heroDriveMetrics.kmPerPercentSoc}
         parkedRecentEnergyKwh={parkedRecentEnergyKwh}
+        heroDriveMetrics={heroDriveMetrics}
+        rangeEstimate={rangeEstimate}
+        batteryCapacityKwh={batteryCapacityKwh}
+        tripWindow={fixtureTrips ?? heroDriveMetrics.rangeEstimateTrips}
+        allTrips={fixtureTrips ?? recentTrips}
+        lastSession={findLastFinishedChargeSession(sessions, matchedCar?.id ?? null)}
       />
       {isCharging ? (
         <>
@@ -602,6 +621,12 @@ function Hero({
   distanceSinceChargeKm,
   kmPerPercentSoc,
   parkedRecentEnergyKwh,
+  heroDriveMetrics,
+  rangeEstimate,
+  batteryCapacityKwh,
+  tripWindow,
+  allTrips,
+  lastSession,
 }: {
   snapshot: VoltflowMateLiveSnapshotRow;
   nowMs: number;
@@ -615,18 +640,39 @@ function Hero({
   distanceSinceChargeKm: number | null;
   kmPerPercentSoc: number | null;
   parkedRecentEnergyKwh: number | null;
+  heroDriveMetrics: ReturnType<typeof computeHeroDriveMetrics>;
+  rangeEstimate: { estimatedRangeKm: number | null; consumptionKwh100Km: number | null };
+  batteryCapacityKwh: number | null;
+  tripWindow: VoltflowMateTripRow[];
+  allTrips: VoltflowMateTripRow[];
+  lastSession: ChargingSessionRow | null;
 }) {
   const { locale, t: translate } = useTranslation();
   const t = translate as Translator;
   const telemetry = snapshot.telemetry;
   const coreMetrics = heroCoreMetrics(snapshot, t, locale);
-  const primaryMetrics: { key: string; icon: typeof Gauge; label: string; value: ReactNode; hint?: string }[] = [
+  const dedupedTrips = useMemo(() => dedupeTripsBySource(allTrips), [allTrips]);
+  const explanations = useMemo(() => {
+    const liveDistanceKm = snapshot.telemetry.current_trip_distance_km;
+    const anchorStoppedAt = lastSession?.stopped_at ?? lastSession?.started_at ?? null;
+    return {
+      aiRange: explainAiRange({ snapshot, recentTrips: tripWindow, batteryCapacityKwh, estimate: rangeEstimate }),
+      mathRange: explainMathRange({ soc: snapshot.telemetry.soc, kmPerPercentSoc: heroDriveMetrics.kmPerPercentSoc, trips: tripWindow, batteryCapacityKwh, sourceAt: snapshot.received_at }),
+      kmPerPercent: explainKmPerPercent({ trips: dedupedTrips, liveSoc: snapshot.telemetry.soc, liveDistanceKm, batteryCapacityKwh, consumptionKwh100: snapshot.telemetry.current_trip_consumption_kwh_100km, sourceAt: snapshot.received_at }),
+      sinceCharge: explainDistanceSinceCharge({ trips: dedupedTrips, anchorStoppedAt, liveDistanceKm, lastSession, sourceAt: snapshot.received_at }),
+      recentEnergy: explainRecentEnergy({ trips: tripWindow, avgConsumptionKwh100: parkedRecentEnergyKwh != null ? parkedRecentEnergyKwh * 2 : null, sourceAt: snapshot.received_at }),
+    } satisfies Record<string, MetricExplanation>;
+  }, [snapshot, tripWindow, batteryCapacityKwh, rangeEstimate, heroDriveMetrics.kmPerPercentSoc, dedupedTrips, lastSession, parkedRecentEnergyKwh]);
+  const [openMetric, setOpenMetric] = useState<string | null>(null);
+  const activeExplanation = openMetric ? explanations[openMetric as keyof typeof explanations] ?? null : null;
+  const primaryMetrics: { key: string; icon: typeof Gauge; label: string; value: ReactNode; hint?: string; explanation?: MetricExplanation }[] = [
     {
       key: "aiRange",
       icon: Route,
       label: t("vehicle.metrics.aiRange"),
       value: rangeLabel,
       hint: t("vehicle.metrics.aiRangeHint"),
+      explanation: explanations.aiRange,
     },
     {
       key: "mathRange",
@@ -634,6 +680,7 @@ function Hero({
       label: t("vehicle.metrics.mathRange"),
       value: mathRangeLabel,
       hint: t("vehicle.metrics.mathRangeHint"),
+      explanation: explanations.mathRange,
     },
     coreMetrics[0],
     ...coreMetrics.slice(1),
@@ -646,12 +693,14 @@ function Hero({
       icon: Activity,
       label: t("vehicle.metrics.kmPerPercent"),
       value: kmPerPercentValue,
+      explanation: explanations.kmPerPercent,
     },
     {
       key: "sinceCharge",
       icon: Navigation,
       label: t("vehicle.metrics.sinceLastCharge"),
       value: sinceChargeValue,
+      explanation: explanations.sinceCharge,
     },
   ];
 
@@ -696,6 +745,8 @@ function Hero({
                 label={metric.label}
                 value={metric.value}
                 hint={metric.hint}
+                explanation={metric.explanation}
+                onExplain={() => setOpenMetric(metric.key)}
               />
             ))}
           </div>
@@ -708,6 +759,7 @@ function Hero({
               value: string;
               supportingText?: string;
               valueCentered?: boolean;
+              explanation?: MetricExplanation;
             }[] = [];
 
             if (isStale) {
@@ -722,6 +774,7 @@ function Hero({
                   value: `~${fmt(parkedRecentEnergyKwh, 1)} kWh`,
                   supportingText: t("vehicle.metrics.recentEnergyContext"),
                   valueCentered: true,
+                  explanation: explanations.recentEnergy,
                 },
               );
             } else {
@@ -736,7 +789,7 @@ function Hero({
               );
             }
 
-            const visibleModeMetrics = modeMetrics.filter((metric) => !isMissingMetricValue(metric.value));
+            const visibleModeMetrics = modeMetrics.filter((metric) => metric.explanation || !isMissingMetricValue(metric.value));
             if (visibleModeMetrics.length === 0) return null;
 
             return (
@@ -749,6 +802,8 @@ function Hero({
                     value={metric.value}
                     supportingText={metric.supportingText}
                     valueCentered={metric.valueCentered}
+                    explanation={metric.explanation}
+                    onExplain={() => setOpenMetric(metric.key)}
                   />
                 ))}
               </div>
@@ -756,6 +811,12 @@ function Hero({
           })()}
         </>
       ) : null}
+      <MetricExplainerSheet
+        open={openMetric != null}
+        onOpenChange={(open) => { if (!open) setOpenMetric(null); }}
+        explanation={activeExplanation ?? explanations.aiRange}
+        nowMs={nowMs}
+      />
     </section>
   );
 }
@@ -767,6 +828,8 @@ function HeroMetric({
   supportingText,
   hint,
   valueCentered = false,
+  explanation,
+  onExplain,
 }: {
   icon: typeof Gauge;
   label: string;
@@ -774,32 +837,21 @@ function HeroMetric({
   supportingText?: string;
   hint?: string;
   valueCentered?: boolean;
+  explanation?: MetricExplanation;
+  onExplain?: () => void;
 }) {
-  return (
-    <div
-      className={`rounded-xl border border-border bg-white/[0.03] p-2.5 ${
-        valueCentered ? "relative min-h-[5.25rem]" : ""
-      }`}
-      title={hint}
-    >
+  const longPressProps = useLongPress(onExplain ?? (() => {}));
+  const content = <>
       <Icon className="mb-1 size-3.5 text-primary" aria-hidden />
+      {explanation ? <Info className="absolute right-2.5 top-2.5 size-3.5 opacity-35" aria-hidden /> : null}
       <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
-      <p
-        className={
-          valueCentered
-            ? "absolute inset-x-2.5 top-1/2 -translate-y-[5px] font-heading text-base font-semibold tabular-nums"
-            : "mt-0.5 font-heading text-base font-semibold tabular-nums"
-        }
-      >
-        {value}
-      </p>
-      {valueCentered && supportingText ? (
-        <p className="absolute inset-x-2.5 bottom-2.5 text-[10px] font-medium text-muted-foreground">
-          {supportingText}
-        </p>
-      ) : null}
-    </div>
-  );
+      <p className={valueCentered ? "absolute inset-x-2.5 top-1/2 -translate-y-[5px] font-heading text-base font-semibold tabular-nums" : "mt-0.5 font-heading text-base font-semibold tabular-nums"}>{value}</p>
+      {valueCentered && supportingText ? <p className="absolute inset-x-2.5 bottom-2.5 text-[10px] font-medium text-muted-foreground">{supportingText}</p> : null}
+    </>;
+  const className = `w-full rounded-xl border border-border bg-white/[0.03] p-2.5 text-left ${explanation ? "relative cursor-pointer" : ""} ${
+        valueCentered ? "relative min-h-[5.25rem]" : ""
+      }`;
+  return explanation ? <button type="button" className={className} title={hint} {...longPressProps}>{content}</button> : <div className={className} title={hint}>{content}</div>;
 }
 
 function ChargingModeCard({
