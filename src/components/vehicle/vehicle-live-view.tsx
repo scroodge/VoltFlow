@@ -72,18 +72,23 @@ import {
   explainKmPerPercent,
   explainMathRange,
   explainRecentEnergy,
+  explainTripCost,
+  explainTripEnergyPerKm,
+  explainTripNetConsumption,
+  explainTripTractionEnergy,
   type MetricExplanation,
 } from "@/lib/voltflowmate/metric-explain";
 import { calculateTripEnergy } from "@/lib/voltflowmate/trip-energy";
 import {
   tripEnergyPerKm,
+  tripCost,
   tripNetConsumptionKwh100,
   tripTractionEnergyKwh,
   weightedAvgConsumptionKwh100,
 } from "@/lib/voltflowmate/trip-metrics";
 import { isRouteTrackDisplayable } from "@/lib/voltflowmate/route-insights";
 import { resolvePreferredTripDistanceKm, trackPathDistanceKm } from "@/lib/voltflowmate/trip-distance";
-import type { Currency, Locale, TranslationKey } from "@/lib/i18n";
+import { currencySymbols, formatCurrencyAmount, type Currency, type Locale, type TranslationKey } from "@/lib/i18n";
 import { formatSocPercent } from "@/lib/format-soc-percent";
 import { formatTimeAgo } from "@/lib/time-ago";
 import { vehicleReadyDurationBucket } from "@/lib/vehicle-ready-metrics";
@@ -1464,9 +1469,7 @@ function formatTripCostStr(
   pricePerKwh: number,
   locale: Locale,
 ): ReactNode | null {
-  const energyKwh = tripTractionEnergyKwh(trip);
-  const costValue =
-    energyKwh != null && pricePerKwh > 0 ? energyKwh * pricePerKwh : null;
+  const costValue = tripCost(trip, pricePerKwh);
 
   return costValue != null ? (
     <CurrencyAmount
@@ -1494,14 +1497,48 @@ function formatTripNetConsumptionKwh100(trip: VoltflowMateTripRow) {
   return consumptionKwh100 != null ? `${fmt(consumptionKwh100, 1)} kWh/100 km` : "—";
 }
 
-function TripNetConsumptionMetric({ trip, label }: { trip: VoltflowMateTripRow; label: string }) {
+function withResultDisplay(explanation: MetricExplanation, displayValue: string): MetricExplanation {
+  return {
+    ...explanation,
+    rows: explanation.rows.map((item) => item.kind === "result" ? { ...item, displayValue } : item),
+  };
+}
+
+function ExplainableTripMetric({ label, value, explanation, className = "" }: {
+  label: string;
+  value: ReactNode;
+  explanation: MetricExplanation;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const nowMs = useTickingClock(open);
+  const press = useLongPress(() => setOpen(true));
   return (
-    <div className="mt-3 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.06] px-3 py-2.5">
-      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
-      <p className="mt-1 font-heading text-lg font-semibold tabular-nums text-emerald-100">
-        {formatTripNetConsumptionKwh100(trip)}
-      </p>
-    </div>
+    <>
+      <button
+        type="button"
+        className={`relative min-h-11 w-full rounded-lg text-left outline-none transition hover:bg-white/[0.03] focus-visible:ring-2 focus-visible:ring-ring ${className}`}
+        aria-label={`${label}: ${typeof value === "string" ? value : ""}`}
+        {...press}
+      >
+        <Info className="absolute right-0 top-0 size-3.5 text-muted-foreground opacity-60" aria-hidden />
+        <p className="pr-5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
+        <p className="mt-1 font-heading text-base font-semibold tabular-nums">{value}</p>
+      </button>
+      <MetricExplainerSheet open={open} onOpenChange={setOpen} explanation={explanation} nowMs={nowMs} />
+    </>
+  );
+}
+
+function TripNetConsumptionMetric({ trip, label }: { trip: VoltflowMateTripRow; label: string }) {
+  const displayValue = formatTripNetConsumptionKwh100(trip);
+  return (
+    <ExplainableTripMetric
+      label={label}
+      value={displayValue}
+      explanation={withResultDisplay(explainTripNetConsumption(trip), displayValue)}
+      className="mt-3 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.06] px-3 py-2.5 text-emerald-100"
+    />
   );
 }
 
@@ -1680,6 +1717,10 @@ function TripListItem({
   const currency = useAppPreferences((s) => s.currency) as Currency;
   const pricePerKwh = useAppPreferences((s) => s.defaultPricePerKwh);
   const costStr = formatTripCostStr(trip, currency, pricePerKwh, locale as Locale);
+  const tractionDisplay = formatTripTractionEnergyKwh(trip);
+  const energyPerKmDisplay = formatTripEnergyPerKm(trip);
+  const costValue = tripCost(trip, pricePerKwh);
+  const costDisplay = costValue == null ? null : formatCurrencyAmount(currency, costValue, locale as Locale);
 
   if (!expanded) {
     return (
@@ -1710,13 +1751,8 @@ function TripListItem({
   }
 
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-expanded
-      className="rounded-2xl border border-primary bg-primary/10 p-4 text-left transition"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="rounded-2xl border border-primary bg-primary/10 p-4 text-left transition">
+      <button type="button" onClick={onSelect} aria-expanded className="flex w-full flex-wrap items-start justify-between gap-3 text-left">
         <div className="flex min-w-0 gap-3">
           <ChevronDown className="mt-1 size-4 shrink-0 text-primary" aria-hidden />
           <div>
@@ -1731,24 +1767,33 @@ function TripListItem({
         <span className="rounded-full border border-border bg-background/40 px-3 py-1 text-xs uppercase tracking-[0.18em] text-muted-foreground">
           {tx("vehicle.trips.pointShort", { value: trip.sample_count })}
         </span>
-      </div>
+      </button>
       <div className="mt-4 grid grid-cols-2 gap-3 min-[430px]:grid-cols-[repeat(auto-fit,minmax(6.5rem,1fr))]">
         <MiniStat label={tx("vehicle.trips.distance")} value={`${fmt(trip.distance_km, 1)} km`} />
         <MiniStat label={tx("vehicle.trips.regen")} value={`${fmt(trip.regen_energy_kwh, 2)} kWh`} />
-        <MiniStat
+        <ExplainableTripMetric
           label={tx("vehicle.trips.traction")}
-          value={formatTripTractionEnergyKwh(trip)}
+          value={tractionDisplay}
+          explanation={withResultDisplay(explainTripTractionEnergy(trip), tractionDisplay)}
         />
-        <MiniStat label={tx("vehicle.trips.energyPerKm")} value={formatTripEnergyPerKm(trip)} />
+        <ExplainableTripMetric
+          label={tx("vehicle.trips.energyPerKm")}
+          value={energyPerKmDisplay}
+          explanation={withResultDisplay(explainTripEnergyPerKm(trip), energyPerKmDisplay)}
+        />
         <MiniStat label="SOC" value={`${formatSocPercent(trip.soc_start)}% -> ${formatSocPercent(trip.soc_end)}%`} />
         <MiniStat label={tx("vehicle.trips.maxSpeed")} value={`${fmt(trip.max_speed_kmh)} km/h`} />
         <MiniStat label={tx("vehicle.trips.avgSpeed")} value={`${fmt(trip.avg_speed_kmh)} km/h`} />
-        {costStr != null ? (
-          <MiniStat label={tx("vehicle.trips.cost")} value={costStr} />
+        {costStr != null && costDisplay != null ? (
+          <ExplainableTripMetric
+            label={tx("vehicle.trips.cost")}
+            value={costStr}
+            explanation={withResultDisplay(explainTripCost({ trip, pricePerKwh, currencyUnit: currencySymbols[currency] }), costDisplay)}
+          />
         ) : null}
       </div>
       <TripNetConsumptionMetric trip={trip} label={tx("vehicle.trips.netConsumption")} />
-    </button>
+    </div>
   );
 }
 

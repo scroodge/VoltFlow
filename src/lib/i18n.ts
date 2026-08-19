@@ -649,6 +649,18 @@ export const dictionaries = {
       newIntro:
         "Capacities and AC limits seed the charging model — tweak later anytime from settings.",
     },
+    tripExplain: {
+      metrics: {
+        traction: { title: "Traction energy", formula: "Reported traction energy, or distance × reported consumption ÷ 100" },
+        energyPerKm: { title: "Energy per kilometre", formula: "Traction energy ÷ distance" },
+        netConsumption: { title: "Net consumption", formula: "(traction energy − recovered energy) ÷ distance × 100" },
+        cost: { title: "Trip cost", formula: "Traction energy × electricity price" },
+      },
+      rows: {
+        reportedTraction: "Reported traction energy", reportedConsumption: "Reported consumption", distance: "Distance",
+        tractionEnergy: "Traction energy", regenEnergy: "Recovered energy", pricePerKwh: "Price per kWh",
+      },
+    },
     vehicle: {
       badge: "VoltFlow Mate live",
       tab: {
@@ -2019,6 +2031,18 @@ export const dictionaries = {
         "Ёмістасць і ліміты AC задаюць мадэль зарадкі — потым можна змяніць у наладах у любы час.",
       newHeading: "Дадаць профіль электрамабіля",
     },
+    tripExplain: {
+      metrics: {
+        traction: { title: "Энергія руху", formula: "Перададзеная энергія руху або адлегласць × расход ÷ 100" },
+        energyPerKm: { title: "Энергія на кіламетр", formula: "Энергія руху ÷ адлегласць" },
+        netConsumption: { title: "Чысты расход", formula: "(энергія руху − вернутая энергія) ÷ адлегласць × 100" },
+        cost: { title: "Кошт паездкі", formula: "Энергія руху × цана электраэнергіі" },
+      },
+      rows: {
+        reportedTraction: "Перададзеная энергія руху", reportedConsumption: "Перададзены расход", distance: "Адлегласць",
+        tractionEnergy: "Энергія руху", regenEnergy: "Вернутая энергія", pricePerKwh: "Цана за кВт·г",
+      },
+    },
     vehicle: {
       badge: "VoltFlow Mate live",
       tab: {
@@ -3388,6 +3412,18 @@ export const dictionaries = {
       newHeading: "Добавить профиль электромобиля",
       newIntro:
         "Ёмкость и лимиты AC задают модель зарядки — потом можно изменить в настройках в любое время.",
+    },
+    tripExplain: {
+      metrics: {
+        traction: { title: "Энергия движения", formula: "Переданная энергия движения или расстояние × расход ÷ 100" },
+        energyPerKm: { title: "Энергия на километр", formula: "Энергия движения ÷ расстояние" },
+        netConsumption: { title: "Чистый расход", formula: "(энергия движения − возвращённая энергия) ÷ расстояние × 100" },
+        cost: { title: "Стоимость поездки", formula: "Энергия движения × цена электроэнергии" },
+      },
+      rows: {
+        reportedTraction: "Переданная энергия движения", reportedConsumption: "Переданный расход", distance: "Расстояние",
+        tractionEnergy: "Энергия движения", regenEnergy: "Возвращённая энергия", pricePerKwh: "Цена за кВт·ч",
+      },
     },
     vehicle: {
       badge: "VoltFlow Mate live",

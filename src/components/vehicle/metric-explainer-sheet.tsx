@@ -26,6 +26,10 @@ function formattedResult(explanation: MetricExplanation, unavailable: string) {
     case "parkChargeTime": case "activeChargeTime": return `${value.toFixed(0)} s`;
     case "parkChargeEnergy": case "activeChargeEnergy": return `${value.toFixed(2)} kWh`;
     case "parkChargeCost": case "activeChargeCost": return value.toFixed(2);
+    case "tripTractionEnergy": return `${value.toFixed(2)} kWh`;
+    case "tripEnergyPerKm": return `${value.toFixed(2)} kWh/km`;
+    case "tripNetConsumption": return `${value.toFixed(1)} kWh/100 km`;
+    case "tripCost": return value.toFixed(2);
   }
 }
 

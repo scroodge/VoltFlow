@@ -11,6 +11,21 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-08-19
 
+### Trip metric explainers
+
+#### Shipped
+
+Calculated trip values in the expanded Vehicle trip card now open the shared formula lower-third by tap, hold, or keyboard activation: traction energy, energy per kilometre, net consumption after regeneration, and trip cost. The collapsed row remains one expand target; the expanded header is now the collapse control and the metric body contains independent accessible controls. Trip cost now comes from the canonical `tripCost` helper shared by its display and explanation.
+
+#### Design decision
+
+The explainer controls belong to individual values rather than the trip row. This avoids conflicting with expand/collapse and avoids invalid nested buttons. Every explanation calls the same pure trip-metrics helper that produces its displayed result.
+
+#### Verification
+
+TypeScript is clean; focused metric-explainer tests pass 6/6; the full suite remains at its known 125/128 baseline; lint remains at 13 errors / 55 warnings. The mobile fixture confirms the expanded header and four metrics are separate controls while collapsed rows remain single controls, with no browser errors.
+
+
 ### Dashboard range window and metric explainers
 
 #### Shipped
