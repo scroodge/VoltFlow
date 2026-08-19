@@ -11,6 +11,41 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-08-19
 
+### Dashboard range window and metric explainers
+
+#### Shipped
+
+Make the dashboard use the same rolling ~50 km trip window as the Vehicle page for its
+range estimate, then make the dashboard's calculated range, charge-time, energy, and cost
+values inspectable through the existing Metric Explainer sheet. **The range-window change
+changes a number users already see:** the dashboard estimate may move because it will no
+longer be anchored to one potentially short or unrepresentative latest trip.
+- Every explainable dashboard surface now carries the same visible `Info` affordance as
+  Vehicle metrics. Full tiles keep it in the top-right corner; the compact centred range
+  pill places it inline after the value so it cannot collide with or reflow the number.
+
+#### Design decision
+
+1. **Keep the dashboard's single-trip estimate.** No code change, but the Dashboard and
+   Vehicle pages continue to disagree for the same car and telemetry.
+2. **Reimplement the 50 km selection in the dashboard.** Fixes the visible discrepancy,
+   but creates another range-window implementation that can drift.
+3. **Reuse `computeHeroDriveMetrics` and the shipped explainer system (recommended,
+   approved).** Fetch enough recent trips for the canonical helper to select its rolling
+   window, pass that exact window into the existing range estimator, and add pure dashboard
+   explanation builders that call the same charging-domain helpers as the displayed tiles.
+   This changes the dashboard estimate intentionally while keeping both pages and their
+   explanations aligned.
+
+#### Verification
+
+For the current `way` snapshot, the dashboard moved from **≈218 km** (latest trip only)
+to **≈194 km** (five trips / 54.9 km), matching the Vehicle page input window. TypeScript
+is clean; focused range/explainer tests pass 6/6; the full suite remains at its known
+125/128 baseline; lint remains at 13 errors / 55 warnings. All new keys resolve in RU,
+BY, and EN.
+
+
 ### Metric Explainer for vehicle hero metrics
 
 #### Shipped
