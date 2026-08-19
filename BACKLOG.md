@@ -772,8 +772,100 @@ Remaining items are optional and none block anything:
 - **Push subscriptions are origin-scoped.** A user who reinstalls the PWA from the new
   origin gets a *second* subscription → possible duplicate charge notifications until the
   old one expires. Worth a dedupe pass.
-- **No `sitemap.ts` / `robots.ts`** — the marketing + knowledge pages have no canonical host
-  declared for SEO.
+- **No `sitemap.ts` / `robots.ts`** — folded into the SEO remediation section below
+  (approved 2026-08-19).
+
+---
+
+## 🟠 SEO remediation — the site is technically unindexable (approved 2026-08-19)
+
+**Status: approved, Phase 1 in progress.** Full plan lives at
+`~/.claude/plans/how-to-improve-seo-sorted-gem.md` (local, not in the repo).
+
+Verified against the live site on 2026-08-19. This is not an "optimize the copy" item —
+several independent blockers each make the site unindexable on their own:
+
+| Probe | Result |
+|---|---|
+| `GET /robots.txt`, `GET /sitemap.xml` | **307 → `/login`** — neither file exists, and the `src/proxy.ts` matcher would redirect them if they did |
+| `GET /` HTML | `<title>VoltFlow</title>`, no `og:*`, no `twitter:*`, no canonical, no JSON-LD anywhere in the repo |
+| `<html lang>` | `en` — while the server-rendered body is Russian (215 words) |
+| `GET /telegram/article/<garbage>` | **HTTP 200** with a "не найдена" card — a soft 404 |
+| Links in `/telegram` SSR HTML | 4 article URLs, **0 category URLs** — ~35 articles and all 11 categories orphaned |
+| KB article headers | `private, no-cache, no-store`, `x-vercel-cache: MISS` on every request |
+| `www` / `http` / trailing slash | 308 → apex — **already correct**, no work needed |
+
+### Decisions taken with the owner
+
+1. **Move the public KB `/telegram/*` → `/knowledge/*`** with 308s. The `telegram` segment
+   is the most prominent token in the SERP URL line and tells Google the page is about
+   Telegram, not battery care. Zero pages are indexed today, so the move is free now and
+   gets more expensive every month.
+2. **Russian is the single indexable language.** `knowledge_articles` has no `locale`
+   column, so locale-prefixed routes would serve a Russian body under English chrome —
+   hreflang without translated content is a net negative. Fix `<html lang>` to `ru`; the
+   EN/BY switcher stays client-side only.
+3. **Technical scope only** this pass. Content depth and the landing bundle are recorded
+   below, not built.
+
+### Phases
+
+- **0 (ops, blocking)** — Vercel Attack Challenge Mode (see the domain-migration section
+  above) must stay off or gain a verified-crawler bypass; while on it serves crawlers a JS
+  challenge and silently voids everything below. Also decide whether `/support` is public:
+  it is prerendered and reads as a public donations page, but is not in `PUBLIC_PATHS`, so
+  crawlers get 307'd to `/login`.
+- **1** — `robots.ts`, `sitemap.ts`, real 404s, `noindex` on auth/search/admin, and a
+  matcher exclusion so the two metadata routes stop being redirected to `/login`.
+- **2** — `metadataBase`, per-route canonicals, default OG/Twitter, a static OG image,
+  `<html lang="ru">`, and the `"use client"` split on the landing page (it currently cannot
+  export metadata at all, which is why the homepage title is the bare default).
+- **3** — the `/knowledge/*` move + 308s. **Device-test the Telegram Mini App first:**
+  `KB_PREPAINT_GUARD` reads `location.hash` for `tgWebAppData`, and a regression there means
+  the KB flashes before the gate hides it.
+- **4** — a cookie-free anon Supabase client for public reads so the KB can go ISR, a
+  server-rendered crawlable link index, and `images.remotePatterns`.
+- **5** — JSON-LD (`Organization`/`WebSite`, `TechArticle`, `BreadcrumbList`,
+  `CollectionPage`, `Product`).
+- **6** — Google Search Console **and Yandex Webmaster** registration.
+
+### Two traps found during research — do not skip
+
+- **`useSearchParams` inside `<Suspense fallback={null}>`.** `TelegramShell` (via
+  `src/app/telegram/page.tsx`) and `TelegramCategoryView` (via `category/[slug]/page.tsx`)
+  both call `useSearchParams()` inside a `fallback={null}` boundary. Under *dynamic*
+  rendering it resolves during SSR, so the HTML has content. Under *static* rendering Next
+  prerenders the fallback and defers the subtree to the client — so enabling ISR without
+  first adding the server-rendered link index would ship the hub and all 11 category pages
+  as **empty HTML shells**, strictly worse than today. Article pages are safe
+  (`ArticleRenderer` uses only `useRouter`/`useState`), so do articles first.
+- **`next/og` and Cyrillic.** Satori's bundled fallback fonts do not reliably cover
+  Cyrillic and the whole corpus is Russian; Space Grotesk is Latin-only. Per-article
+  `ImageResponse` OG images would render tofu boxes in every social preview. Use a static
+  PNG until a Cyrillic woff2 is bundled and passed via `fonts:`.
+
+### CSP note for whoever hardens the policy later
+
+JSON-LD needs **no** nonce today: the *enforced* CSP in `next.config.ts` has no `script-src`
+and no `default-src`, and the report-only policy carries `unsafe-inline`. But
+`application/ld+json` *is* governed by `script-src` under CSP3 — the day the report-only
+policy is promoted to enforced and `unsafe-inline` is dropped (the whole point of promoting
+it), every JSON-LD block breaks silently. Thread a nonce from `src/proxy.ts` or use
+`sha256-` hashes at that point.
+
+### Out of scope this pass — but these decide whether any of it earns traffic
+
+- Articles average ~97 words (`battery-care` renders 97). Phases 1–5 get pages indexed;
+  they do not get them ranked.
+- The landing `<h1>` is the literal string "VoltFlow" — a brand word carrying no topical
+  signal.
+- 449 KB gzipped JS across 20 chunks on the landing. The prime suspect is measurable, not
+  speculative: `src/lib/i18n.ts` is 227 KB of source holding all three dictionaries in one
+  module and `useTranslation` is a client hook, so every locale ships to every client on
+  every page. Also `createClient` at module scope in the landing (needed only for the
+  `/?code=` OAuth edge case) and a first-paint `ipapi.co` round trip. TTFB is already 0.20s
+  with a CDN HIT, so this is purely JS weight.
+- The two content gaps in the next section are the cheapest wins once content is in scope.
 
 ---
 

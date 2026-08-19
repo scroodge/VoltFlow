@@ -989,6 +989,10 @@ export function toTelegramArticle(
     warnings: article.warnings,
     relatedIds: article.related_article_ids,
     updatedAt: article.updated_at?.slice(0, 10),
+    // Full-precision timestamps for sitemap lastmod and OG article times. The
+    // date-only `updatedAt` above stays as-is because ArticleRenderer renders it.
+    updatedAtIso: article.updated_at ?? undefined,
+    publishedAtIso: article.published_at ?? undefined,
     sourceLabel: article.source_label ?? undefined,
   };
 }

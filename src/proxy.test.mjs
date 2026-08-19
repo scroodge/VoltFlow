@@ -9,7 +9,7 @@ const { unstable_doesMiddlewareMatch: doesProxyMatch } = proxyTesting;
 // proxy.ts directly outside Next's resolver. Keep this test synchronized with it.
 const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|apple-icon|icon|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|robots\\.txt|sitemap.*\\.xml|apple-icon|icon|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
 
@@ -30,6 +30,11 @@ test("proxy only matches application page requests", () => {
     "/apple-icon",
     "/icon",
     "/icons/icon-192.png",
+    // SEO metadata routes. If the proxy matches these it redirects anonymous
+    // requests to /login, which is exactly what made the site uncrawlable.
+    "/robots.txt",
+    "/sitemap.xml",
+    "/sitemap/0.xml",
   ]) {
     assert.equal(doesProxyMatch({ config, nextConfig, url }), false, url);
   }

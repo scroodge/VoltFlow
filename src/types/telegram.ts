@@ -24,7 +24,17 @@ export type KnowledgeArticle = {
   tips?: string[];
   warnings?: string[];
   relatedIds?: string[];
+  /** Date-only (YYYY-MM-DD) slice rendered in article UI. Not precise enough for SEO. */
   updatedAt?: string;
+  /**
+   * Full `knowledge_articles.updated_at` timestamp. Sitemap `lastmod` and OG
+   * `article:modified_time`. Absent for static-fallback articles, which carry no
+   * timestamps — emit no lastmod for those rather than `new Date()`, since a
+   * lastmod that changes every build teaches crawlers to distrust it.
+   */
+  updatedAtIso?: string;
+  /** Full `knowledge_articles.published_at`. OG `article:published_time`. */
+  publishedAtIso?: string;
   sourceLabel?: string;
   /** From knowledge_article_views. Absent (static fallback) or 0 = never opened. */
   viewCount?: number;

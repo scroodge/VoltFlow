@@ -6,6 +6,8 @@ import "@fontsource/space-grotesk/600.css";
 import "@fontsource/space-grotesk/700.css";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { defaultLocale } from "@/lib/i18n";
+import { siteOrigin } from "@/lib/site-url";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -16,12 +18,48 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+const DESCRIPTION =
+  "Трекер зарядки электромобиля в реальном времени: живые кВт·ч, стоимость сессии, " +
+  "история зарядок и база знаний по BYD.";
+
 export const metadata: Metadata = {
+  // Without metadataBase every relative canonical and every opengraph-image
+  // file-convention URL resolves against localhost:3000 at build time (or the
+  // raw VERCEL_URL deploy host in prod), and Next warns about it on build.
+  metadataBase: new URL(siteOrigin()),
   title: {
-    default: "VoltFlow",
+    default: "VoltFlow — трекер зарядки электромобиля",
     template: "%s · VoltFlow",
   },
-  description: "Real-time EV charging tracker and calculator",
+  description: DESCRIPTION,
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    siteName: "VoltFlow",
+    // Server-rendered content is Russian throughout; see the <html lang> note below.
+    locale: "ru_RU",
+    url: siteOrigin(),
+    title: "VoltFlow — трекер зарядки электромобиля",
+    description: DESCRIPTION,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "VoltFlow — трекер зарядки электромобиля",
+    description: DESCRIPTION,
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
   applicationName: "VoltFlow",
   appleWebApp: {
     capable: true,
@@ -48,8 +86,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
+    // `useTranslation` falls back to `defaultLocale` on the server, so every
+    // server-rendered page ships Russian text. It was hardcoded to "en", which
+    // contradicted the body content for crawlers. Do NOT read the stored locale
+    // here — it lives in localStorage, is unavailable server-side, and
+    // suppressHydrationWarning would hide the mismatch rather than fix the
+    // crawled HTML. `Providers` updates document.documentElement.lang on switch.
     <html
-      lang="en"
+      lang={defaultLocale}
       suppressHydrationWarning
       className="dark"
     >

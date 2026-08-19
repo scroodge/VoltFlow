@@ -27,6 +27,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: content.title,
     description: `VoltFlow ${document} policy (${region})`,
+    // Always the `world` variant: `/legal/:doc/belarus` redirects there, so both
+    // regions must consolidate onto the single URL that actually resolves.
+    alternates: { canonical: `/legal/${document}/world` },
   };
 }
 

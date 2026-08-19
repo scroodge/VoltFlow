@@ -3,6 +3,7 @@ import { Suspense } from "react";
 
 import { TelegramEntryGate } from "@/components/telegram/TelegramEntryGate";
 import { TelegramShell } from "@/components/telegram/TelegramShell";
+import { openGraph } from "@/lib/seo/open-graph";
 import { getTelegramKnowledgeDataWithFallback } from "@/lib/supabase/knowledge";
 import { staticTelegramKnowledgeData } from "@/lib/telegram/knowledge";
 
@@ -10,12 +11,16 @@ export const metadata: Metadata = {
   title: "База знаний BYD YUAN UP",
   description:
     "Русская база знаний VoltFlow для BYD YUAN UP: зарядка, обслуживание, аксессуары, калькуляторы и опыт эксплуатации.",
-  openGraph: {
+  // TelegramShell.changeTab pushes ?tab=guides|faq|buy|more into the URL, which
+  // otherwise yields four indexable copies of this page.
+  alternates: { canonical: "/telegram" },
+  openGraph: openGraph({
+    url: "/telegram",
     title: "VoltFlow: база знаний BYD YUAN UP",
     description:
       "Русская база знаний мини-приложения Telegram для владельцев BYD YUAN UP.",
     type: "website",
-  },
+  }),
 };
 
 // Pre-paint guard: hides the KB BEFORE the browser paints it when opened inside

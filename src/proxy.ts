@@ -12,6 +12,7 @@ const PUBLIC_PATHS = new Set([
   "/telegram",
   "/knowledge",
   "/knowledge/search",
+  "/support",
 ]);
 const DEV_AUTH_PREFIXES = [
   "/admin",
@@ -168,6 +169,13 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|apple-icon|icon|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // `robots.txt` and `sitemap*.xml` are excluded here rather than added to
+    // PUBLIC_PATHS: the proxy then never runs for them at all (no Supabase
+    // getUser() round trip), it matches how every other Next metadata-route
+    // output above is handled, and `sitemap.*\.xml` also covers generateSitemaps
+    // output (`/sitemap/0.xml`) that an exact-match PUBLIC_PATHS entry could not.
+    // Without this both 307 to /login and the site cannot be crawled at all.
+    // Keep src/proxy.test.mjs synchronized with this literal.
+    "/((?!api|_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|robots\\.txt|sitemap.*\\.xml|apple-icon|icon|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

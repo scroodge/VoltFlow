@@ -26,7 +26,15 @@ type IpLocation = {
   timezone?: string;
 };
 
-export default function LandingPage() {
+/**
+ * The landing page body. This stays a client component — it needs
+ * useTranslation, useRouter, supabase.auth.onAuthStateChange and the IP
+ * geolocation fetch — which is exactly why it cannot export `metadata`.
+ * `./page.tsx` is a thin server wrapper that carries the metadata and renders
+ * this. Before that split the homepage had no title, description, canonical or
+ * OG tags at all.
+ */
+export function LandingPage() {
   const { locale, t } = useTranslation();
   const [location, setLocation] = useState<IpLocation | null>(null);
   const [locationStatus, setLocationStatus] = useState<"loading" | "ready" | "error">(

@@ -1,3 +1,12 @@
+import type { Metadata } from "next";
+
+// Covers /login, /forgot-password and /reset-password in one place. robots.txt
+// disallows them too, but Disallow only stops crawling — a linked URL can still
+// be indexed URL-only, so the directive has to be here as well.
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
+
 export default function AuthLayout({
   children,
 }: {
