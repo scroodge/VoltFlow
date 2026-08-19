@@ -8,18 +8,24 @@ import type { MetricExplanation, ExplainRow } from "@/lib/voltflowmate/metric-ex
 
 function formatRow(row: ExplainRow, unavailable: string) {
   if (row.value == null || !Number.isFinite(row.value)) return unavailable;
+  if (row.displayValue) return row.displayValue;
   if (row.unit === "date") return new Date(row.value).toLocaleString();
   return `${row.value.toFixed(row.digits ?? 1)}${row.unit ? ` ${row.unit}` : ""}`;
 }
 
 function formattedResult(explanation: MetricExplanation, unavailable: string) {
-  const value = explanation.rows.find((item) => item.kind === "result")?.value;
+  const resultRow = explanation.rows.find((item) => item.kind === "result");
+  const value = resultRow?.value;
   if (value == null || !Number.isFinite(value)) return unavailable;
+  if (resultRow?.displayValue) return resultRow.displayValue;
   switch (explanation.metricKey) {
     case "aiRange": case "mathRange": return `≈ ${value.toFixed(0)} km`;
     case "kmPerPercent": return `${value.toFixed(1)} km/%`;
     case "sinceCharge": return `${value.toFixed(1)} km`;
     case "recentEnergy": return `~${value.toFixed(1)} kWh`;
+    case "parkChargeTime": case "activeChargeTime": return `${value.toFixed(0)} s`;
+    case "parkChargeEnergy": case "activeChargeEnergy": return `${value.toFixed(2)} kWh`;
+    case "parkChargeCost": case "activeChargeCost": return value.toFixed(2);
   }
 }
 

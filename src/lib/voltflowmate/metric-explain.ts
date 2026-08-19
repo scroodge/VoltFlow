@@ -1,5 +1,14 @@
 import type { TranslationKey } from "@/lib/i18n";
-import type { ChargingSessionRow, VoltflowMateLiveSnapshotRow, VoltflowMateTripRow } from "@/types/database";
+import type { ChargingSessionRow, ChargingTariffType, VoltflowMateLiveSnapshotRow, VoltflowMateTripRow } from "@/types/database";
+import {
+  activeChargingTimeLeftSeconds,
+  cappedPositivePowerKw,
+  chargingSecondsToFull,
+  costFromGridEnergy,
+  energyFromGridKwh,
+  energyNeededKwh,
+  formatDuration,
+} from "../../features/charging/_domain/charging-math.ts";
 import {
   environmentConsumptionFactor,
   estimateConsumptionKwh100Km,
@@ -24,9 +33,10 @@ export type ExplainRow = {
   digits?: number;
   kind: ExplainRowKind;
   noteKey?: TranslationKey;
+  displayValue?: string;
 };
 export type MetricExplanation = {
-  metricKey: "aiRange" | "mathRange" | "kmPerPercent" | "sinceCharge" | "recentEnergy";
+  metricKey: "aiRange" | "mathRange" | "kmPerPercent" | "sinceCharge" | "recentEnergy" | "parkChargeTime" | "parkChargeEnergy" | "parkChargeCost" | "activeChargeTime" | "activeChargeEnergy" | "activeChargeCost";
   titleKey: TranslationKey;
   formulaKey: TranslationKey;
   rows: ExplainRow[];
@@ -123,4 +133,88 @@ export function explainRecentEnergy({ trips, avgConsumptionKwh100, sourceAt }: {
   const result = consumption != null ? consumption / 2 : null;
   return { metricKey: "recentEnergy", titleKey: "vehicle.explain.metrics.recentEnergy.title", formulaKey: "vehicle.explain.metrics.recentEnergy.formula", sourceAt,
     rows: [row("vehicle.explain.rows.tripWindowDistance", distance || null, "km", "input"), row("vehicle.explain.rows.consumption", consumption, "kWh/100km", "input"), row("vehicle.explain.rows.result", result, "kWh", "result") ] };
+}
+
+type ChargeEstimateInputs = {
+  batteryCapacityKwh: number | null | undefined;
+  fromPercent: number | null | undefined;
+  efficiencyPercent: number | null | undefined;
+};
+
+function chargeGridEnergy(input: ChargeEstimateInputs, toPercent = 100) {
+  const capacity = finite(input.batteryCapacityKwh);
+  const from = finite(input.fromPercent);
+  const efficiency = finite(input.efficiencyPercent);
+  if (capacity == null || capacity <= 0 || from == null || efficiency == null || efficiency <= 0) return null;
+  return energyFromGridKwh(energyNeededKwh(capacity, from, toPercent), efficiency);
+}
+
+export function explainParkChargeTime(input: ChargeEstimateInputs & {
+  powerKw: number | null | undefined;
+  tariffType: ChargingTariffType;
+  sourceAt?: string | null;
+}): MetricExplanation {
+  const capacity = finite(input.batteryCapacityKwh);
+  const soc = finite(input.fromPercent);
+  const efficiency = finite(input.efficiencyPercent);
+  const power = finite(input.powerKw);
+  const result = capacity != null && capacity > 0 && soc != null && efficiency != null && efficiency > 0 && power != null && power > 0
+    ? chargingSecondsToFull({ batteryCapacityKwh: capacity, currentPercent: soc, efficiencyPercent: efficiency, powerKw: power, tariffType: input.tariffType })
+    : null;
+  const rows = [
+    row("vehicle.explain.rows.batteryCapacity", capacity, "kWh", "input"),
+    row("vehicle.explain.rows.soc", soc, "%", "input"),
+    row("dashboard.explain.rows.efficiency", efficiency, "%", "input"),
+    row("dashboard.explain.rows.chargePower", power, "kW", "input"),
+  ];
+  if (input.tariffType === "fast_dc") {
+    rows.push(
+      row("dashboard.explain.rows.dcBand70", power, "kW", "derived"),
+      row("dashboard.explain.rows.dcBand90", power == null ? null : cappedPositivePowerKw(power, 45), "kW", "derived"),
+      row("dashboard.explain.rows.dcBand95", power == null ? null : cappedPositivePowerKw(power, 25), "kW", "derived"),
+      row("dashboard.explain.rows.dcBand100", power == null ? null : cappedPositivePowerKw(power, 15), "kW", "derived"),
+    );
+  }
+  const resultRow = row("vehicle.explain.rows.result", result, "s", "result", 0);
+  resultRow.displayValue = result == null ? undefined : formatDuration(Math.round(result));
+  rows.push(resultRow);
+  return { metricKey: "parkChargeTime", titleKey: "dashboard.explain.metrics.parkChargeTime.title", formulaKey: "dashboard.explain.metrics.parkChargeTime.formula", sourceAt: input.sourceAt, rows };
+}
+
+export function explainParkChargeEnergy(input: ChargeEstimateInputs & { sourceAt?: string | null }): MetricExplanation {
+  const result = chargeGridEnergy(input);
+  return { metricKey: "parkChargeEnergy", titleKey: "dashboard.explain.metrics.parkChargeEnergy.title", formulaKey: "dashboard.explain.metrics.parkChargeEnergy.formula", sourceAt: input.sourceAt,
+    rows: [row("vehicle.explain.rows.batteryCapacity", finite(input.batteryCapacityKwh), "kWh", "input"), row("vehicle.explain.rows.soc", finite(input.fromPercent), "%", "input"), row("dashboard.explain.rows.efficiency", finite(input.efficiencyPercent), "%", "input"), row("vehicle.explain.rows.result", result, "kWh", "result")], };
+}
+
+export function explainParkChargeCost(input: ChargeEstimateInputs & { pricePerKwh: number | null | undefined; currencyUnit?: string; sourceAt?: string | null }): MetricExplanation {
+  const energy = chargeGridEnergy(input);
+  const price = finite(input.pricePerKwh);
+  const result = energy != null && price != null ? costFromGridEnergy(energy, price) : null;
+  return { metricKey: "parkChargeCost", titleKey: "dashboard.explain.metrics.parkChargeCost.title", formulaKey: "dashboard.explain.metrics.parkChargeCost.formula", sourceAt: input.sourceAt,
+    rows: [row("dashboard.explain.rows.gridEnergy", energy, "kWh", "derived"), row("dashboard.explain.rows.pricePerKwh", price, `${input.currencyUnit ?? ""}/kWh`, "input", 2), row("vehicle.explain.rows.result", result, input.currencyUnit ?? "", "result", 2)], };
+}
+
+export function explainActiveChargeTime(input: ChargeEstimateInputs & { powerKw: number | null | undefined; fallbackSeconds: number | null | undefined; sourceAt?: string | null }): MetricExplanation {
+  const capacity = finite(input.batteryCapacityKwh); const soc = finite(input.fromPercent); const efficiency = finite(input.efficiencyPercent); const power = finite(input.powerKw); const fallback = finite(input.fallbackSeconds);
+  const result = capacity != null && capacity > 0 && soc != null && efficiency != null && efficiency > 0 && fallback != null
+    ? activeChargingTimeLeftSeconds({ batteryCapacityKwh: capacity, currentPercent: soc, efficiencyPercent: efficiency, powerKw: power != null && power > 0 ? power : null, fallbackSeconds: fallback }) : null;
+  const resultRow = row("vehicle.explain.rows.result", result, "s", "result", 0); resultRow.displayValue = result == null ? undefined : formatDuration(Math.round(result));
+  return { metricKey: "activeChargeTime", titleKey: "dashboard.explain.metrics.activeChargeTime.title", formulaKey: power != null && power > 0 ? "dashboard.explain.metrics.activeChargeTime.formula" : "dashboard.explain.metrics.activeChargeTime.fallbackFormula", sourceAt: input.sourceAt,
+    rows: [row("dashboard.explain.rows.remainingGridEnergy", chargeGridEnergy(input), "kWh", "derived"), row("dashboard.explain.rows.chargePower", power, "kW", "input"), resultRow], };
+}
+
+export function explainActiveChargeEnergy(input: ChargeEstimateInputs & { currentPercent: number | null | undefined; sourceAt?: string | null }): MetricExplanation {
+  const current = finite(input.currentPercent);
+  const result = current == null ? null : chargeGridEnergy(input, current);
+  return { metricKey: "activeChargeEnergy", titleKey: "dashboard.explain.metrics.activeChargeEnergy.title", formulaKey: "dashboard.explain.metrics.activeChargeEnergy.formula", sourceAt: input.sourceAt,
+    rows: [row("vehicle.explain.rows.batteryCapacity", finite(input.batteryCapacityKwh), "kWh", "input"), row("dashboard.explain.rows.startSoc", finite(input.fromPercent), "%", "input"), row("vehicle.explain.rows.soc", current, "%", "input"), row("dashboard.explain.rows.efficiency", finite(input.efficiencyPercent), "%", "input"), row("vehicle.explain.rows.result", result, "kWh", "result", 2)], };
+}
+
+export function explainActiveChargeCost(input: ChargeEstimateInputs & { pricePerKwh: number | null | undefined; currencyUnit?: string; sourceAt?: string | null }): MetricExplanation {
+  const energy = chargeGridEnergy(input);
+  const price = finite(input.pricePerKwh);
+  const result = energy != null && price != null && price > 0 ? costFromGridEnergy(energy, price) : null;
+  return { metricKey: "activeChargeCost", titleKey: "dashboard.explain.metrics.activeChargeCost.title", formulaKey: "dashboard.explain.metrics.activeChargeCost.formula", sourceAt: input.sourceAt,
+    rows: [row("dashboard.explain.rows.gridEnergy", energy, "kWh", "derived"), row("dashboard.explain.rows.pricePerKwh", price, `${input.currencyUnit ?? ""}/kWh`, "input", 2), row("vehicle.explain.rows.result", result, input.currencyUnit ?? "", "result", 2)], };
 }

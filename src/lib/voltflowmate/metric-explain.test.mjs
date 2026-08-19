@@ -7,7 +7,14 @@ import {
   explainKmPerPercent,
   explainMathRange,
   explainRecentEnergy,
+  explainParkChargeTime,
+  explainParkChargeEnergy,
+  explainParkChargeCost,
+  explainActiveChargeTime,
+  explainActiveChargeEnergy,
+  explainActiveChargeCost,
 } from "./metric-explain.ts";
+import { activeChargingTimeLeftSeconds, chargingSecondsToFull, costFromGridEnergy, energyFromGridKwh, energyNeededKwh } from "../../features/charging/_domain/charging-math.ts";
 import { estimateVehicleRangeKm } from "./range-estimate.ts";
 import { resolveKmPerPercentSoc, sumDistanceSinceCharge } from "./hero-drive-metrics.ts";
 import { weightedAvgConsumptionKwh100 } from "./trip-metrics.ts";
@@ -49,6 +56,37 @@ test("missing telemetry still yields inspectable null rows without throwing", ()
   ];
   for (const explanation of explanations) {
     assert.ok(explanation.rows.length > 0);
+    assert.equal(result(explanation), null);
+    assert.ok(explanation.rows.some((row) => row.value === null));
+  }
+});
+
+test("dashboard charge explanations match their canonical calculations", () => {
+  const common = { batteryCapacityKwh: 60, fromPercent: 42, efficiencyPercent: 90 };
+  const gridEnergy = energyFromGridKwh(energyNeededKwh(60, 42, 100), 90);
+  const price = 0.31;
+
+  assert.equal(result(explainParkChargeTime({ ...common, powerKw: 65, tariffType: "fast_dc" })), chargingSecondsToFull({ batteryCapacityKwh: 60, currentPercent: 42, efficiencyPercent: 90, powerKw: 65, tariffType: "fast_dc" }));
+  assert.equal(result(explainParkChargeEnergy(common)), gridEnergy);
+  assert.equal(result(explainParkChargeCost({ ...common, pricePerKwh: price })), costFromGridEnergy(gridEnergy, price));
+
+  const activeSeconds = activeChargingTimeLeftSeconds({ batteryCapacityKwh: 60, currentPercent: 68, efficiencyPercent: 90, powerKw: 44, fallbackSeconds: 9999 });
+  assert.equal(result(explainActiveChargeTime({ ...common, fromPercent: 68, powerKw: 44, fallbackSeconds: 9999 })), activeSeconds);
+  assert.equal(result(explainActiveChargeEnergy({ ...common, currentPercent: 68 })), energyFromGridKwh(energyNeededKwh(60, 42, 68), 90));
+  assert.equal(result(explainActiveChargeCost({ ...common, pricePerKwh: price })), costFromGridEnergy(gridEnergy, price));
+});
+
+test("dashboard charge explanations preserve missing inputs as null rows", () => {
+  const missing = { batteryCapacityKwh: null, fromPercent: null, efficiencyPercent: null };
+  const explanations = [
+    explainParkChargeTime({ ...missing, powerKw: null, tariffType: "home" }),
+    explainParkChargeEnergy(missing),
+    explainParkChargeCost({ ...missing, pricePerKwh: null }),
+    explainActiveChargeTime({ ...missing, powerKw: null, fallbackSeconds: null }),
+    explainActiveChargeEnergy({ ...missing, currentPercent: null }),
+    explainActiveChargeCost({ ...missing, pricePerKwh: null }),
+  ];
+  for (const explanation of explanations) {
     assert.equal(result(explanation), null);
     assert.ok(explanation.rows.some((row) => row.value === null));
   }

@@ -843,7 +843,7 @@ function HeroMetric({
   const longPressProps = useLongPress(onExplain ?? (() => {}));
   const content = <>
       <Icon className="mb-1 size-3.5 text-primary" aria-hidden />
-      {explanation ? <Info className="absolute right-2.5 top-2.5 size-3.5 opacity-35" aria-hidden /> : null}
+      {explanation ? <Info className="absolute right-2.5 top-2.5 size-3.5 opacity-60" aria-hidden /> : null}
       <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
       <p className={valueCentered ? "absolute inset-x-2.5 top-1/2 -translate-y-[5px] font-heading text-base font-semibold tabular-nums" : "mt-0.5 font-heading text-base font-semibold tabular-nums"}>{value}</p>
       {valueCentered && supportingText ? <p className="absolute inset-x-2.5 bottom-2.5 text-[10px] font-medium text-muted-foreground">{supportingText}</p> : null}
