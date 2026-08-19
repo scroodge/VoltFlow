@@ -23,7 +23,7 @@ import {
   sumDistanceSinceCharge,
   tripDistanceKm,
 } from "./hero-drive-metrics.ts";
-import { weightedAvgConsumptionKwh100 } from "./trip-metrics.ts";
+import { tripCost, tripEnergyPerKm, tripNetConsumptionKwh100, tripTractionEnergyKwh, weightedAvgConsumptionKwh100 } from "./trip-metrics.ts";
 
 export type ExplainRowKind = "input" | "derived" | "result";
 export type ExplainRow = {
@@ -36,7 +36,7 @@ export type ExplainRow = {
   displayValue?: string;
 };
 export type MetricExplanation = {
-  metricKey: "aiRange" | "mathRange" | "kmPerPercent" | "sinceCharge" | "recentEnergy" | "parkChargeTime" | "parkChargeEnergy" | "parkChargeCost" | "activeChargeTime" | "activeChargeEnergy" | "activeChargeCost";
+  metricKey: "aiRange" | "mathRange" | "kmPerPercent" | "sinceCharge" | "recentEnergy" | "parkChargeTime" | "parkChargeEnergy" | "parkChargeCost" | "activeChargeTime" | "activeChargeEnergy" | "activeChargeCost" | "tripTractionEnergy" | "tripEnergyPerKm" | "tripNetConsumption" | "tripCost";
   titleKey: TranslationKey;
   formulaKey: TranslationKey;
   rows: ExplainRow[];
@@ -217,4 +217,32 @@ export function explainActiveChargeCost(input: ChargeEstimateInputs & { pricePer
   const result = energy != null && price != null && price > 0 ? costFromGridEnergy(energy, price) : null;
   return { metricKey: "activeChargeCost", titleKey: "dashboard.explain.metrics.activeChargeCost.title", formulaKey: "dashboard.explain.metrics.activeChargeCost.formula", sourceAt: input.sourceAt,
     rows: [row("dashboard.explain.rows.gridEnergy", energy, "kWh", "derived"), row("dashboard.explain.rows.pricePerKwh", price, `${input.currencyUnit ?? ""}/kWh`, "input", 2), row("vehicle.explain.rows.result", result, input.currencyUnit ?? "", "result", 2)], };
+}
+
+function tripEnergyRows(trip: VoltflowMateTripRow) {
+  return [
+    row("tripExplain.rows.reportedTraction", finite(trip.traction_energy_kwh), "kWh", "input", 2),
+    row("tripExplain.rows.reportedConsumption", finite(trip.avg_consumption_kwh_100km), "kWh/100km", "input", 1),
+    row("tripExplain.rows.distance", finite(trip.distance_km), "km", "input", 1),
+  ];
+}
+
+export function explainTripTractionEnergy(trip: VoltflowMateTripRow): MetricExplanation {
+  return { metricKey: "tripTractionEnergy", titleKey: "tripExplain.metrics.traction.title", formulaKey: "tripExplain.metrics.traction.formula", sourceAt: trip.last_device_time ?? trip.ended_at,
+    rows: [...tripEnergyRows(trip), row("vehicle.explain.rows.result", tripTractionEnergyKwh(trip), "kWh", "result", 2)] };
+}
+
+export function explainTripEnergyPerKm(trip: VoltflowMateTripRow): MetricExplanation {
+  return { metricKey: "tripEnergyPerKm", titleKey: "tripExplain.metrics.energyPerKm.title", formulaKey: "tripExplain.metrics.energyPerKm.formula", sourceAt: trip.last_device_time ?? trip.ended_at,
+    rows: [row("tripExplain.rows.tractionEnergy", tripTractionEnergyKwh(trip), "kWh", "derived", 2), row("tripExplain.rows.distance", finite(trip.distance_km), "km", "input", 1), row("vehicle.explain.rows.result", tripEnergyPerKm(trip), "kWh/km", "result", 2)] };
+}
+
+export function explainTripNetConsumption(trip: VoltflowMateTripRow): MetricExplanation {
+  return { metricKey: "tripNetConsumption", titleKey: "tripExplain.metrics.netConsumption.title", formulaKey: "tripExplain.metrics.netConsumption.formula", sourceAt: trip.last_device_time ?? trip.ended_at,
+    rows: [row("tripExplain.rows.tractionEnergy", tripTractionEnergyKwh(trip), "kWh", "derived", 2), row("tripExplain.rows.regenEnergy", finite(trip.regen_energy_kwh), "kWh", "input", 2), row("tripExplain.rows.distance", finite(trip.distance_km), "km", "input", 1), row("vehicle.explain.rows.result", tripNetConsumptionKwh100(trip), "kWh/100 km", "result", 1)] };
+}
+
+export function explainTripCost({ trip, pricePerKwh, currencyUnit }: { trip: VoltflowMateTripRow; pricePerKwh: number | null | undefined; currencyUnit?: string }): MetricExplanation {
+  return { metricKey: "tripCost", titleKey: "tripExplain.metrics.cost.title", formulaKey: "tripExplain.metrics.cost.formula", sourceAt: trip.last_device_time ?? trip.ended_at,
+    rows: [row("tripExplain.rows.tractionEnergy", tripTractionEnergyKwh(trip), "kWh", "derived", 2), row("tripExplain.rows.pricePerKwh", finite(pricePerKwh), `${currencyUnit ?? ""}/kWh`, "input", 2), row("vehicle.explain.rows.result", tripCost(trip, pricePerKwh), currencyUnit ?? "", "result", 2)] };
 }

@@ -13,11 +13,15 @@ import {
   explainActiveChargeTime,
   explainActiveChargeEnergy,
   explainActiveChargeCost,
+  explainTripTractionEnergy,
+  explainTripEnergyPerKm,
+  explainTripNetConsumption,
+  explainTripCost,
 } from "./metric-explain.ts";
 import { activeChargingTimeLeftSeconds, chargingSecondsToFull, costFromGridEnergy, energyFromGridKwh, energyNeededKwh } from "../../features/charging/_domain/charging-math.ts";
 import { estimateVehicleRangeKm } from "./range-estimate.ts";
 import { resolveKmPerPercentSoc, sumDistanceSinceCharge } from "./hero-drive-metrics.ts";
-import { weightedAvgConsumptionKwh100 } from "./trip-metrics.ts";
+import { tripCost, tripEnergyPerKm, tripNetConsumptionKwh100, tripTractionEnergyKwh, weightedAvgConsumptionKwh100 } from "./trip-metrics.ts";
 
 const snapshot = {
   id: "live", vehicle_id: "car", user_id: "user", source: "BYDMate", schema_version: 1,
@@ -85,6 +89,28 @@ test("dashboard charge explanations preserve missing inputs as null rows", () =>
     explainActiveChargeTime({ ...missing, powerKw: null, fallbackSeconds: null }),
     explainActiveChargeEnergy({ ...missing, currentPercent: null }),
     explainActiveChargeCost({ ...missing, pricePerKwh: null }),
+  ];
+  for (const explanation of explanations) {
+    assert.equal(result(explanation), null);
+    assert.ok(explanation.rows.some((row) => row.value === null));
+  }
+});
+
+test("trip explanations match their canonical calculations", () => {
+  const trip = trips[0];
+  assert.equal(result(explainTripTractionEnergy(trip)), tripTractionEnergyKwh(trip));
+  assert.equal(result(explainTripEnergyPerKm(trip)), tripEnergyPerKm(trip));
+  assert.equal(result(explainTripNetConsumption(trip)), tripNetConsumptionKwh100(trip));
+  assert.equal(result(explainTripCost({ trip, pricePerKwh: 0.31 })), tripCost(trip, 0.31));
+});
+
+test("trip explanations preserve missing inputs as null rows", () => {
+  const trip = { ...trips[0], distance_km: null, avg_consumption_kwh_100km: null, traction_energy_kwh: null, regen_energy_kwh: null };
+  const explanations = [
+    explainTripTractionEnergy(trip),
+    explainTripEnergyPerKm(trip),
+    explainTripNetConsumption(trip),
+    explainTripCost({ trip, pricePerKwh: null }),
   ];
   for (const explanation of explanations) {
     assert.equal(result(explanation), null);

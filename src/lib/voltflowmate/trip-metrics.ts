@@ -99,3 +99,15 @@ export function tripNetConsumptionKwh100(trip: TripEnergyFields): number | null 
 
   return ((tractionKwh - trip.regen_energy_kwh) / trip.distance_km) * 100;
 }
+
+/** Trip traction cost at a caller-supplied energy price. */
+export function tripCost(
+  trip: TripEnergyFields,
+  pricePerKwh: number | null | undefined,
+): number | null {
+  const tractionKwh = tripTractionEnergyKwh(trip);
+  if (!isFiniteNumber(tractionKwh) || !isFiniteNumber(pricePerKwh) || pricePerKwh <= 0) {
+    return null;
+  }
+  return tractionKwh * pricePerKwh;
+}
