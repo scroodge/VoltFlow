@@ -9,7 +9,7 @@ const { unstable_doesMiddlewareMatch: doesProxyMatch } = proxyTesting;
 // proxy.ts directly outside Next's resolver. Keep this test synchronized with it.
 const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|robots\\.txt|sitemap.*\\.xml|apple-icon|icon|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|robots\\.txt|sitemap.*\\.xml|google[0-9a-f]+\\.html|yandex_[0-9a-f]+\\.html|apple-icon|icon|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
 
@@ -35,6 +35,10 @@ test("proxy only matches application page requests", () => {
     "/robots.txt",
     "/sitemap.xml",
     "/sitemap/0.xml",
+    // Search-console ownership tokens served from public/. If the proxy matches
+    // these it 307s them to /login and site verification fails.
+    "/google5b3c992f8d75e883.html",
+    "/yandex_1234abcd5678ef90.html",
   ]) {
     assert.equal(doesProxyMatch({ config, nextConfig, url }), false, url);
   }

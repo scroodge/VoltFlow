@@ -176,6 +176,9 @@ export const config = {
     // output (`/sitemap/0.xml`) that an exact-match PUBLIC_PATHS entry could not.
     // Without this both 307 to /login and the site cannot be crawled at all.
     // Keep src/proxy.test.mjs synchronized with this literal.
-    "/((?!api|_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|robots\\.txt|sitemap.*\\.xml|apple-icon|icon|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // `google<hash>.html` / `yandex_<hash>.html` are search-console ownership
+    // tokens served from public/. Without this they 307 to /login and
+    // verification fails with "token not found" — the same trap robots.txt hit.
+    "/((?!api|_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|robots\\.txt|sitemap.*\\.xml|google[0-9a-f]+\\.html|yandex_[0-9a-f]+\\.html|apple-icon|icon|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
