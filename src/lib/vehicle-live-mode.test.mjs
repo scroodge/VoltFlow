@@ -7,6 +7,7 @@ import {
   isChargingTelemetry,
   isDrivingTelemetry,
   isParkedTelemetry,
+  LIVE_SNAPSHOT_ASLEEP_MS,
   vehicleStatusLabelKey,
 } from "./vehicle-live-mode.ts";
 
@@ -74,7 +75,7 @@ test("gear P fresh charging → live_charging", () => {
   );
 });
 
-test("gear P stale → stale", () => {
+test("gear P past live threshold → asleep", () => {
   const mode = deriveDashboardVehicleMode({
     snapshot: snapshot({
       diplus: { gear: 1 },
@@ -84,7 +85,17 @@ test("gear P stale → stale", () => {
     nowMs: NOW,
     hasActiveSession: false,
   });
-  assert.equal(mode, "stale");
+  assert.equal(mode, "asleep");
+  const staleMode = deriveDashboardVehicleMode({
+    snapshot: snapshot({
+      diplus: { gear: 1 },
+      received_at: new Date(NOW - LIVE_SNAPSHOT_ASLEEP_MS - 1).toISOString(),
+      telemetry: { soc: 60, speed_kmh: 0, is_charging: false },
+    }),
+    nowMs: NOW,
+    hasActiveSession: false,
+  });
+  assert.equal(staleMode, "stale");
 });
 
 test("gear D at zero speed → driving", () => {
@@ -129,7 +140,7 @@ test("no gear speed 0 charging → live_charging", () => {
   assert.equal(canStartChargingSession(mode), true);
 });
 
-test("gear D stale → stale", () => {
+test("gear D past live threshold → asleep", () => {
   const mode = deriveDashboardVehicleMode({
     snapshot: snapshot({
       diplus: { gear: 4 },
@@ -139,10 +150,20 @@ test("gear D stale → stale", () => {
     nowMs: NOW,
     hasActiveSession: false,
   });
-  assert.equal(mode, "stale");
+  assert.equal(mode, "asleep");
+  const staleMode = deriveDashboardVehicleMode({
+    snapshot: snapshot({
+      diplus: { gear: 4 },
+      received_at: new Date(NOW - LIVE_SNAPSHOT_ASLEEP_MS - 1).toISOString(),
+      telemetry: { soc: 50, speed_kmh: 0, is_charging: false },
+    }),
+    nowMs: NOW,
+    hasActiveSession: false,
+  });
+  assert.equal(staleMode, "stale");
 });
 
-test("stale driving speed → stale", () => {
+test("driving speed past live threshold → asleep", () => {
   const mode = deriveDashboardVehicleMode({
     snapshot: snapshot({
       received_at: new Date(NOW - 120_000).toISOString(),
@@ -151,8 +172,18 @@ test("stale driving speed → stale", () => {
     nowMs: NOW,
     hasActiveSession: false,
   });
-  assert.equal(mode, "stale");
+  assert.equal(mode, "asleep");
   assert.equal(canStartChargingSession(mode), true);
+  const staleMode = deriveDashboardVehicleMode({
+    snapshot: snapshot({
+      received_at: new Date(NOW - LIVE_SNAPSHOT_ASLEEP_MS - 1).toISOString(),
+      telemetry: { soc: 50, speed_kmh: 50, is_charging: false },
+    }),
+    nowMs: NOW,
+    hasActiveSession: false,
+  });
+  assert.equal(staleMode, "stale");
+  assert.equal(canStartChargingSession(staleMode), true);
 });
 
 test("fresh driving telemetry wins over open app session", () => {
