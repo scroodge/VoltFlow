@@ -29,7 +29,7 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function resolveUsableBatteryKwh(
+export function resolveUsableBatteryKwh(
   batteryCapacityKwh: number | null | undefined,
   sohPercent: number | null | undefined,
 ): number | null {
@@ -132,7 +132,7 @@ export function estimateRangeFromSoc({
   };
 }
 
-function estimateConsumptionKwh100Km(
+export function estimateConsumptionKwh100Km(
   snapshot: VoltflowMateLiveSnapshotRow,
   recentTrips: VoltflowMateTripRow[],
   options: VehicleRangeEstimateOptions = {},
@@ -225,7 +225,7 @@ function estimateConsumptionKwh100Km(
   );
 }
 
-function environmentConsumptionFactor(snapshot: VoltflowMateLiveSnapshotRow) {
+export function environmentConsumptionFactor(snapshot: VoltflowMateLiveSnapshotRow) {
   const telemetry = snapshot.telemetry;
   let factor = 1;
 

@@ -11,6 +11,35 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-08-19
 
+### Metric Explainer for vehicle hero metrics
+
+#### Shipped
+
+Make the five calculated vehicle hero values inspectable on touch and keyboard devices:
+AI Distance, Math Distance, km per 1%, distance since charge, and recent energy. A tap or
+~450 ms hold opens a bottom sheet containing the formula, current inputs, derived values,
+and the result, including an explicit missing-input state when the tile shows `—`.
+
+#### Design decision
+
+1. **Keep title tooltips only.** No implementation cost, but inaccessible on touch and
+   unable to show live inputs or explain unavailable results.
+2. **Build a bespoke modal.** Full control, but duplicates focus, backdrop, Escape, and
+   animation behavior already provided by the app's unused Sheet primitive.
+3. **Reuse the bottom Sheet and canonical calculation helpers (recommended, approved).**
+   Export the three private range helper functions without changing behavior, build pure
+   explanation objects from the same live inputs, and keep one sheet at Hero level. This
+   adds a small gesture hook and translation surface while preventing displayed and
+   explained calculations from drifting.
+
+#### Verification
+
+Added pure node tests for result parity and null inputs. TypeScript and focused lint are
+clean; the fixture page confirms keyboard/Escape behavior, result parity, and inspectable
+null values in the Russian locale. The repository-wide lint and test commands retain
+pre-existing failures recorded outside this change.
+
+
 ### Vercel Pro adopted — frontend hosting and free-plan quota decisions closed
 
 - The account moved from the Vercel Hobby plan to **Vercel Pro**. This was option 2 in
