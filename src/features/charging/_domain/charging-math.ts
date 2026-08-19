@@ -119,6 +119,75 @@ export function chargingHoursFromEnergy(
   return energyFromGridKwh / chargerPowerKw;
 }
 
+export function cappedPositivePowerKw(powerKw: number, capKw: number) {
+  return Math.max(1, Math.min(powerKw, capKw));
+}
+
+/** Dashboard projection to 100%, including the deliberately simplified DC taper bands. */
+export function chargingSecondsToFull({
+  batteryCapacityKwh,
+  currentPercent,
+  efficiencyPercent,
+  powerKw,
+  tariffType,
+}: {
+  batteryCapacityKwh: number;
+  currentPercent: number;
+  efficiencyPercent: number;
+  powerKw: number;
+  tariffType: "home" | "commercial_ac" | "fast_dc";
+}): number {
+  if (tariffType !== "fast_dc") {
+    return chargingHoursFromEnergy(
+      energyFromGridKwh(
+        energyNeededKwh(batteryCapacityKwh, currentPercent, 100),
+        efficiencyPercent,
+      ),
+      powerKw,
+    ) * 3600;
+  }
+
+  const bands = [
+    { toPercent: 70, powerKw },
+    { toPercent: 90, powerKw: cappedPositivePowerKw(powerKw, 45) },
+    { toPercent: 95, powerKw: cappedPositivePowerKw(powerKw, 25) },
+    { toPercent: 100, powerKw: cappedPositivePowerKw(powerKw, 15) },
+  ];
+  let fromPercent = currentPercent;
+  let seconds = 0;
+  for (const band of bands) {
+    if (fromPercent >= band.toPercent) continue;
+    const segmentEnergyKwh = energyFromGridKwh(
+      energyNeededKwh(batteryCapacityKwh, fromPercent, band.toPercent),
+      efficiencyPercent,
+    );
+    seconds += chargingHoursFromEnergy(segmentEnergyKwh, band.powerKw) * 3600;
+    fromPercent = band.toPercent;
+  }
+  return seconds;
+}
+
+export function activeChargingTimeLeftSeconds({
+  batteryCapacityKwh,
+  currentPercent,
+  efficiencyPercent,
+  powerKw,
+  fallbackSeconds,
+}: {
+  batteryCapacityKwh: number;
+  currentPercent: number;
+  efficiencyPercent: number;
+  powerKw: number | null;
+  fallbackSeconds: number;
+}): number {
+  if (powerKw == null) return fallbackSeconds;
+  const remainingGridEnergyKwh = energyFromGridKwh(
+    energyNeededKwh(batteryCapacityKwh, currentPercent, 100),
+    efficiencyPercent,
+  );
+  return chargingHoursFromEnergy(remainingGridEnergyKwh, powerKw) * 3600;
+}
+
 export function costFromGridEnergy(
   energyFromGridKwh: number,
   pricePerKwh: number,

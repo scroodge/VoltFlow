@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import type { FormEvent, ReactNode, RefObject } from "react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
+import { Info } from "lucide-react";
 
 import { startChargingSession, stopChargingSession } from "@/features/charging/actions";
 import { BrandBadge } from "@/components/brand/BrandBadge";
@@ -21,6 +22,7 @@ import {
 } from "@/components/dev/dashboard-dev-snapshot-context";
 import type { DashboardBootstrapData } from "@/components/dashboard/dashboard-bootstrap-types";
 import { BatteryRing, ChargingActionButton } from "@/features/charging/ui";
+import { MetricExplainerSheet } from "@/components/vehicle/metric-explainer-sheet";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -51,9 +53,11 @@ import { usePageVisible } from "@/hooks/use-page-visible";
 import { chargingSessionsRefetchInterval, fetchSessions } from "@/hooks/use-sessions-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
+import { useLongPress } from "@/hooks/use-long-press";
 import {
   availableBatteryKwh,
-  chargingHoursFromEnergy,
+  chargingSecondsToFull,
+  activeChargingTimeLeftSeconds,
   costFromGridEnergy,
   energyFromGridKwh,
   energyNeededKwh,
@@ -89,6 +93,17 @@ import { buildWalkingDirectionsUrl } from "@/lib/vehicle-navigation-link";
 import { vehicleReadyDurationBucket } from "@/lib/vehicle-ready-metrics";
 import { cn } from "@/lib/utils";
 import { formatSocPercent } from "@/lib/format-soc-percent";
+import { computeHeroDriveMetrics } from "@/lib/voltflowmate/hero-drive-metrics";
+import {
+  explainActiveChargeCost,
+  explainActiveChargeEnergy,
+  explainActiveChargeTime,
+  explainAiRange,
+  explainParkChargeCost,
+  explainParkChargeEnergy,
+  explainParkChargeTime,
+  type MetricExplanation,
+} from "@/lib/voltflowmate/metric-explain";
 import {
   canStartChargingSession,
   dashboardVehicleStatusLabelKey,
@@ -151,56 +166,6 @@ function defaultEstimatePowerKw(type: ChargingTariffType, homePowerKw?: number |
   return typeof homePowerKw === "number" && homePowerKw > 0 ? homePowerKw : 4.4;
 }
 
-function cappedPositivePowerKw(powerKw: number, capKw: number) {
-  return Math.max(1, Math.min(powerKw, capKw));
-}
-
-function chargingSecondsToFull({
-  batteryCapacityKwh,
-  currentPercent,
-  efficiencyPercent,
-  powerKw,
-  tariffType,
-}: {
-  batteryCapacityKwh: number;
-  currentPercent: number;
-  efficiencyPercent: number;
-  powerKw: number;
-  tariffType: ChargingTariffType;
-}) {
-  if (tariffType !== "fast_dc") {
-    return (
-      chargingHoursFromEnergy(
-        energyFromGridKwh(
-          energyNeededKwh(batteryCapacityKwh, currentPercent, 100),
-          efficiencyPercent,
-        ),
-        powerKw,
-      ) * 3600
-    );
-  }
-
-  const bands = [
-    { toPercent: 70, powerKw },
-    { toPercent: 90, powerKw: cappedPositivePowerKw(powerKw, 45) },
-    { toPercent: 95, powerKw: cappedPositivePowerKw(powerKw, 25) },
-    { toPercent: 100, powerKw: cappedPositivePowerKw(powerKw, 15) },
-  ];
-
-  let fromPercent = currentPercent;
-  let seconds = 0;
-  for (const band of bands) {
-    if (fromPercent >= band.toPercent) continue;
-    const toPercent = Math.min(100, band.toPercent);
-    const segmentEnergyKwh = energyFromGridKwh(
-      energyNeededKwh(batteryCapacityKwh, fromPercent, toPercent),
-      efficiencyPercent,
-    );
-    seconds += chargingHoursFromEnergy(segmentEnergyKwh, band.powerKw) * 3600;
-    fromPercent = toPercent;
-  }
-  return seconds;
-}
 
 function liveStartPercent(snapshot: VoltflowMateLiveSnapshotRow | null | undefined) {
   const soc = snapshotSoc(snapshot);
@@ -210,6 +175,15 @@ function liveStartPercent(snapshot: VoltflowMateLiveSnapshotRow | null | undefin
 
 function fmt(value: number | null | undefined, digits = 0) {
   return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
+}
+
+function withResultDisplay(explanation: MetricExplanation, displayValue: string): MetricExplanation {
+  return {
+    ...explanation,
+    rows: explanation.rows.map((item) =>
+      item.kind === "result" ? { ...item, displayValue } : item,
+    ),
+  };
 }
 
 function drivingStatsFromLive(
@@ -231,15 +205,17 @@ function drivingStatsFromLive(
   };
 }
 
-function DashboardStatTile({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="grid min-h-[84px] grid-rows-[auto_1fr] rounded-xl border border-border bg-white/[0.03] p-2.5">
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+function DashboardStatTile({ label, value, explanation, onExplain }: { label: string; value: ReactNode; explanation?: MetricExplanation; onExplain?: (explanation: MetricExplanation) => void }) {
+  const longPressProps = useLongPress(() => { if (explanation) onExplain?.(explanation); });
+  const content = <>
+      {explanation ? <Info className="absolute right-2.5 top-2.5 size-3.5 opacity-60" aria-hidden /> : null}
+      <p className="pr-5 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         {label}
       </p>
       <p className="flex items-center font-heading text-base font-bold tabular-nums">{value}</p>
-    </div>
-  );
+    </>;
+  const className = "relative grid min-h-[84px] w-full grid-rows-[auto_1fr] rounded-xl border border-border bg-white/[0.03] p-2.5 text-left";
+  return explanation ? <button type="button" className={className} {...longPressProps}>{content}</button> : <div className={className}>{content}</div>;
 }
 
 function DashboardChargingProgressTile({
@@ -247,22 +223,32 @@ function DashboardChargingProgressTile({
   chargedLabel,
   timeLeft,
   timeLeftLabel,
+  timeExplanation,
+  energyExplanation,
+  onExplain,
 }: {
   charged: string;
   chargedLabel: string;
   timeLeft: string;
   timeLeftLabel: string;
+  timeExplanation?: MetricExplanation;
+  energyExplanation?: MetricExplanation;
+  onExplain?: (explanation: MetricExplanation) => void;
 }) {
+  const timePress = useLongPress(() => { if (timeExplanation) onExplain?.(timeExplanation); });
+  const energyPress = useLongPress(() => { if (energyExplanation) onExplain?.(energyExplanation); });
   return (
     <div className="rounded-xl border border-border bg-white/[0.03] p-2.5">
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-        {timeLeftLabel}
-      </p>
-      <p className="mt-1 font-heading text-base font-bold tabular-nums">{timeLeft}</p>
-      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-        {chargedLabel}
-      </p>
-      <p className="mt-1 text-sm font-semibold tabular-nums text-muted-foreground">{charged}</p>
+      <button type="button" className="relative block min-h-11 w-full text-left" {...timePress}>
+        {timeExplanation ? <Info className="absolute right-0 top-0 size-3.5 opacity-60" aria-hidden /> : null}
+        <span className="block pr-5 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{timeLeftLabel}</span>
+        <span className="mt-1 block font-heading text-base font-bold tabular-nums">{timeLeft}</span>
+      </button>
+      <button type="button" className="relative mt-1 block min-h-11 w-full text-left" {...energyPress}>
+        {energyExplanation ? <Info className="absolute right-0 top-0 size-3.5 opacity-60" aria-hidden /> : null}
+        <span className="block pr-5 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{chargedLabel}</span>
+        <span className="mt-1 block text-sm font-semibold tabular-nums text-muted-foreground">{charged}</span>
+      </button>
     </div>
   );
 }
@@ -317,13 +303,22 @@ function drivingStatParts(
   return { value: fmt(value, digits), unit };
 }
 
-function RangeBadge({ value }: { value: string | null }) {
-  if (!value) return null;
+function RangeBadge({ value, explanation, onExplain }: {
+  value: string | null;
+  explanation?: MetricExplanation;
+  onExplain?: () => void;
+}) {
+  const longPressProps = useLongPress(onExplain ?? (() => {}));
+  if (!value && !explanation) return null;
 
-  return (
-    <div className="absolute inset-x-0 bottom-0 z-10 mx-auto w-fit rounded-full border border-[var(--voltflow-cyan)]/35 bg-[#10151D]/95 px-3 py-1 font-heading text-sm font-bold tracking-normal text-[var(--voltflow-cyan)] shadow-[0_0_18px_rgba(0,209,255,0.18)] tabular-nums">
-      {value}
-    </div>
+  const className = "absolute inset-x-0 bottom-0 z-10 mx-auto flex min-h-11 w-fit items-center rounded-full border border-[var(--voltflow-cyan)]/35 bg-[#10151D]/95 px-3 py-1 font-heading text-sm font-bold tracking-normal text-[var(--voltflow-cyan)] shadow-[0_0_18px_rgba(0,209,255,0.18)] tabular-nums";
+  return explanation ? (
+    <button type="button" className={`${className} gap-1.5`} {...longPressProps}>
+      {value ?? "—"}
+      <Info className="size-3.5 shrink-0 opacity-60" aria-hidden />
+    </button>
+  ) : (
+    <div className={className}>{value}</div>
   );
 }
 
@@ -343,6 +338,8 @@ function ParkChargeEstimatePanel({
   t,
   allProviderOptions,
   parseProviderSelectValue,
+  explanations,
+  onExplain,
 }: {
   currency: Currency;
   estimatePowerKw: string;
@@ -364,7 +361,12 @@ function ParkChargeEstimatePanel({
   t: (key: TranslationKey, values?: Record<string, string | number>) => string;
   allProviderOptions: { value: string; label: string }[];
   parseProviderSelectValue: (value: string | null | undefined) => { providerType: ChargingProviderType; userProviderId: string | null };
+  explanations?: { time: MetricExplanation; energy: MetricExplanation; cost: MetricExplanation };
+  onExplain?: (explanation: MetricExplanation) => void;
 }) {
+  const timePress = useLongPress(() => { if (explanations) onExplain?.(explanations.time); });
+  const energyPress = useLongPress(() => { if (explanations) onExplain?.(explanations.energy); });
+  const costPress = useLongPress(() => { if (explanations) onExplain?.(explanations.cost); });
   const durationText = parkEstimate
     ? formatDuration(Math.round(parkEstimate.durationSeconds))
     : "—";
@@ -471,20 +473,25 @@ function ParkChargeEstimatePanel({
       </div>
 
       <div className="rounded-2xl border border-border/70 bg-[#12151C]/55 px-3 py-2">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <button type="button" className="flex min-h-11 w-full items-baseline justify-between gap-2 text-left" {...timePress}>
+          <span className="flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             {t("dashboard.estimateTimeToFull")}
+            {explanations ? <Info className="size-3.5 shrink-0 opacity-60" aria-hidden /> : null}
           </span>
           <span className="font-heading text-base font-bold tabular-nums">{durationText}</span>
-        </div>
-        <div className="mt-1 flex items-baseline justify-between gap-2">
-          <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        </button>
+        <button type="button" className="mt-1 flex min-h-11 w-full items-baseline justify-between gap-2 text-left" {...costPress}>
+          <span className="flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             {t("dashboard.estimateCostToFull")}
+            {explanations ? <Info className="size-3.5 shrink-0 opacity-60" aria-hidden /> : null}
           </span>
           <span className="font-heading text-base font-bold tabular-nums">{costText}</span>
-        </div>
+        </button>
       </div>
-      <p className="truncate text-[10px] leading-4 text-muted-foreground">{detailText}</p>
+      <button type="button" className="flex min-h-11 max-w-full items-center gap-1.5 truncate text-left text-[10px] leading-4 text-muted-foreground" {...energyPress}>
+        <span className="truncate">{detailText}</span>
+        {explanations ? <Info className="size-3.5 shrink-0 opacity-60" aria-hidden /> : null}
+      </button>
     </div>
   );
 }
@@ -529,6 +536,7 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   const heroReadyReported = useRef(false);
   useVoltflowMateTripRealtimeInvalidation();
   const [showDeferredDetails, setShowDeferredDetails] = useState(false);
+  const [openMetric, setOpenMetric] = useState<MetricExplanation["metricKey"] | null>(null);
   const {
     data: carsResult,
     isLoading: loadingCars,
@@ -652,7 +660,7 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   const tripVehicleId = latestVoltflowMateSnapshot?.vehicle_id ?? scopedVehicleId;
   const { data: latestTrips = [], isLoading: loadingTrips } = useLatestVoltflowMateTripsQuery(
     tripVehicleId,
-    1,
+    50,
     Boolean(tripVehicleId) && !forceDevMockMode,
     vehicleMode !== "driving",
   );
@@ -870,17 +878,58 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
         })
       : displayChargePowerKw;
 
+  const dashboardHeroDriveMetrics = useMemo(
+    () =>
+      latestVoltflowMateSnapshot
+        ? computeHeroDriveMetrics({
+            sessions: sessions ?? [],
+            carId: selectedCar?.id ?? null,
+            trips: latestTrips,
+            snapshot: latestVoltflowMateSnapshot,
+            batteryCapacityKwh: selectedCar?.battery_capacity_kwh ?? null,
+          })
+        : null,
+    [
+      latestVoltflowMateSnapshot,
+      sessions,
+      selectedCar?.id,
+      selectedCar?.battery_capacity_kwh,
+      latestTrips,
+    ],
+  );
+
   const rangeEstimate = useVehicleRangeEstimate({
     baseSnapshot: forceDevMockMode ? latestVoltflowMateSnapshot : baseVoltflowMateSnapshot,
     scopedVehicleId,
     batteryCapacityKwh: selectedCar?.battery_capacity_kwh,
     fallbackSoc: currentPercent,
-    recentTripsOverride: forceDevMockMode ? [] : undefined,
+    recentTripsOverride: forceDevMockMode
+      ? []
+      : dashboardHeroDriveMetrics?.rangeEstimateTrips,
   });
   const rangeDetail =
     rangeEstimate?.estimatedRangeKm != null
       ? `≈ ${fmt(rangeEstimate.estimatedRangeKm)} km`
       : null;
+  const rangeExplanation = useMemo(() => {
+    const snapshot = forceDevMockMode ? latestVoltflowMateSnapshot : baseVoltflowMateSnapshot;
+    if (!snapshot) return null;
+    return explainAiRange({
+      snapshot,
+      recentTrips: forceDevMockMode
+        ? []
+        : (dashboardHeroDriveMetrics?.rangeEstimateTrips ?? []),
+      batteryCapacityKwh: selectedCar?.battery_capacity_kwh ?? null,
+      estimate: rangeEstimate,
+    });
+  }, [
+    forceDevMockMode,
+    latestVoltflowMateSnapshot,
+    baseVoltflowMateSnapshot,
+    dashboardHeroDriveMetrics?.rangeEstimateTrips,
+    selectedCar?.battery_capacity_kwh,
+    rangeEstimate,
+  ]);
 
   const estimateLocation = useMemo(() => {
     const lat = latestVoltflowMateSnapshot?.location?.lat;
@@ -953,16 +1002,24 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
         : capacityKwh > 0
           ? `— / ${fmt(capacityKwh, 1)} kWh`
           : "-- kWh";
-    const timeLeftSeconds =
-      remainingGridEnergyKwh != null && dashboardChargePowerKw != null
-        ? (remainingGridEnergyKwh / dashboardChargePowerKw) * 3600
-        : liveActive.remainingSeconds;
+    const timeLeftSeconds = activeChargingTimeLeftSeconds({
+      batteryCapacityKwh: capacityKwh,
+      currentPercent: currentSoc,
+      efficiencyPercent: activeSession.efficiency_percent,
+      powerKw: remainingGridEnergyKwh != null ? dashboardChargePowerKw : null,
+      fallbackSeconds: liveActive.remainingSeconds,
+    });
 
     return {
       charged: `${fmt(liveActive.chargedEnergyKwh, 2)} kWh`,
+      chargedEnergyKwh: liveActive.chargedEnergyKwh,
       timeLeft: formatDuration(Math.round(timeLeftSeconds)),
+      timeLeftSeconds,
+      timePowerKw: remainingGridEnergyKwh != null ? dashboardChargePowerKw : null,
       costToFull,
       packValue,
+      currentSoc,
+      effectivePricePerKwh,
     };
   }, [
     activeSession,
@@ -1035,6 +1092,43 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   ]);
 
   const showParkEstimate = (vehicleMode === "parked" || vehicleMode === "stale") && !activeSession;
+
+  const parkExplanations = useMemo(() => {
+    const efficiencyPercent = selectedCar?.default_efficiency_percent ?? 90;
+    const powerKw = parseDecimalInput(estimatePowerKw);
+    const common = {
+      batteryCapacityKwh: packCapacityKwh ?? null,
+      fromPercent: currentPercent,
+      efficiencyPercent,
+      sourceAt: latestVoltflowMateSnapshot?.received_at ?? null,
+    };
+    const time = explainParkChargeTime({ ...common, powerKw, tariffType: estimateTariffType });
+    const energy = explainParkChargeEnergy(common);
+    const cost = explainParkChargeCost({ ...common, pricePerKwh: parkEstimate?.pricePerKwh ?? null, currencyUnit: currencySymbols[currency] });
+    return {
+      time: withResultDisplay(time, parkEstimate ? formatDuration(Math.round(parkEstimate.durationSeconds)) : "—"),
+      energy: withResultDisplay(energy, parkEstimate ? `${fmt(parkEstimate.gridEnergyKwh, 1)} kWh` : "—"),
+      cost: withResultDisplay(cost, parkEstimate ? formatCurrencyAmount(currency, parkEstimate.cost, locale) : "—"),
+    };
+  }, [selectedCar?.default_efficiency_percent, estimatePowerKw, packCapacityKwh, currentPercent, latestVoltflowMateSnapshot?.received_at, estimateTariffType, parkEstimate, currency, locale]);
+
+  const activeExplanations = useMemo(() => {
+    if (!activeSession || !liveActive || !activeChargingStats) return null;
+    const common = {
+      batteryCapacityKwh: activeSession.battery_capacity_kwh,
+      efficiencyPercent: activeSession.efficiency_percent,
+      sourceAt: latestVoltflowMateSnapshot?.received_at ?? null,
+    };
+    return {
+      time: withResultDisplay(explainActiveChargeTime({ ...common, fromPercent: activeChargingStats.currentSoc, powerKw: activeChargingStats.timePowerKw, fallbackSeconds: liveActive.remainingSeconds }), activeChargingStats.timeLeft),
+      energy: withResultDisplay(explainActiveChargeEnergy({ ...common, fromPercent: activeSession.start_percent, currentPercent: activeChargingStats.currentSoc }), activeChargingStats.charged),
+      cost: withResultDisplay(explainActiveChargeCost({ ...common, fromPercent: activeSession.start_percent, pricePerKwh: activeChargingStats.effectivePricePerKwh, currencyUnit: currencySymbols[currency] }), activeChargingStats.costToFull != null ? formatCurrencyAmount(currency, activeChargingStats.costToFull, locale) : "—"),
+    };
+  }, [activeSession, liveActive, activeChargingStats, latestVoltflowMateSnapshot?.received_at, currency, locale]);
+  const selectedExplanation = openMetric === "aiRange"
+    ? rangeExplanation
+    : [...Object.values(parkExplanations), ...Object.values(activeExplanations ?? {})]
+        .find((explanation) => explanation.metricKey === openMetric) ?? null;
 
   const drivingStats =
     vehicleMode === "driving"
@@ -1300,7 +1394,11 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                       )
                     }
                   />
-                  <RangeBadge value={rangeDetail} />
+                  <RangeBadge
+                    value={rangeDetail}
+                    explanation={rangeExplanation ?? undefined}
+                    onExplain={() => { if (rangeExplanation) setOpenMetric(rangeExplanation.metricKey); }}
+                  />
                 </div>
               </div>
               {/* Centred, not top-aligned: in the charging modes the right column is
@@ -1402,6 +1500,8 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                       t={(key, values) => String(t(key, values))}
                       allProviderOptions={allProviderOptions}
                       parseProviderSelectValue={parseProviderSelectValue}
+                      explanations={parkExplanations}
+                      onExplain={(explanation) => setOpenMetric(explanation.metricKey)}
                     />
                   ) : activeChargingStats ? (
                     <div className="grid grid-cols-2 gap-2">
@@ -1410,6 +1510,9 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                         timeLeft={activeChargingStats.timeLeft}
                         chargedLabel={t("dashboard.chargingCharged") as string}
                         charged={activeChargingStats.charged}
+                        timeExplanation={activeExplanations?.time}
+                        energyExplanation={activeExplanations?.energy}
+                        onExplain={(explanation) => setOpenMetric(explanation.metricKey)}
                       />
                       <DashboardStatTile
                         label={t("dashboard.chargingCostToFull") as string}
@@ -1424,6 +1527,8 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                             "—"
                           )
                         }
+                        explanation={activeExplanations?.cost}
+                        onExplain={(explanation) => setOpenMetric(explanation.metricKey)}
                       />
                       <DashboardStatTile
                         label={t("dashboard.packShort") as string}
@@ -1716,6 +1821,12 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
           </form>
         </DialogContent>
       </Dialog>
+      <MetricExplainerSheet
+        open={openMetric != null}
+        onOpenChange={(open) => { if (!open) setOpenMetric(null); }}
+        explanation={selectedExplanation ?? rangeExplanation}
+        nowMs={nowMs}
+      />
     </div>
   );
 }
