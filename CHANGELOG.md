@@ -9,7 +9,71 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-08-19
+
+### Vercel Pro adopted — frontend hosting and free-plan quota decisions closed
+
+- The account moved from the Vercel Hobby plan to **Vercel Pro**. This was option 2 in
+  both the "Delivery cadence vs the Vercel free plan" and "Frontend hosting: stay on
+  Vercel, or move to the Contabo VPS?" backlog entries, and the standing recommendation in
+  both.
+- **Hosting is settled: the frontend stays on Vercel.** The premise that co-locating
+  Next.js on the Supabase VPS would improve live-status freshness does not hold. The PWA
+  and Telegram widget subscribe to Supabase Realtime `postgres_changes` directly from the
+  browser (`src/hooks/use-bydmate-live-query.ts`, `src/hooks/use-vehicle-commands-query.ts`),
+  so the live path never traverses Vercel at all; the one hop Vercel does own costs ~10 ms
+  against a ~3-9 s status budget. The VPS also had no CPU headroom — 3 vCPU at load average
+  3.05-3.28 measured 2026-07-21 — and is shared with unrelated tenants.
+- **The Hobby overage is no longer a constraint.** Measured over 14 days to 2026-07-20 and
+  projected to 30: function invocations ~155 %, edge requests ~158 %, Fluid Active CPU
+  ~293 %, provisioned memory ~104 % of the Hobby limits. Every lever to get back under the
+  free tier cost either an APK release cycle or user-visible freshness, and the fleet
+  upgrades gradually, so relief would have arrived over weeks while the overage was
+  immediate.
+- The engineering work is **not** cancelled, only de-escalated from a quota emergency to a
+  monthly-cost question. Still open in [BACKLOG.md](BACKLOG.md): **P0** (confirm the
+  per-route attribution — the "89 % is the command poll" figure is still inferred from
+  `BASE_POLL_MS = 6000L` arithmetic, never read off a per-route breakdown), **P1** (fold
+  command delivery into the telemetry POST response, ~-90 % invocations), and **P4** (drop
+  the `308` redirect on `/api/bydmate/*`, free and needing no APK release).
+
+---
+
 ## 2026-08-18
+
+### SOC displays at 0.1 % precision across the PWA
+
+- Di+ 2.0 reports SOC at 0.1 % resolution, and migration
+  `20260814180000_diplus_soc_precise.sql` already landed the decimal in Postgres (see
+  2026-08-14) — but every display site rounded it straight back to a whole number. The
+  `BatteryRing` gauge was the clearest symptom: its arc already swept to the precise angle
+  while the number printed in the middle disagreed with it.
+- New shared helper `src/lib/format-soc-percent.ts` (`formatSocPercent`) formats SOC to one
+  decimal everywhere, with one deliberate exception: **100 % renders as `100`, not
+  `100.0`** — a trailing `.0` there reads as false precision when the battery is simply
+  full. It rounds before comparing, so `99.96` also collapses to `100`.
+- Applied to the `BatteryRing` centre number (shared by the dashboard tile and the charging
+  session screen), the vehicle hero SOC, trip-list and last-trip SOC start/end, the session
+  start/target and remaining-to-target labels, the charge-delta card's axis labels, hover
+  tooltip, delta stat and min/max SOC, and the charge-delta trend-chart tooltip.
+  `BatteryRing`'s type scale dropped one step (`text-6xl` → `text-5xl`, compact `text-4xl`
+  → `text-3xl`) so the extra digit fits without reflowing the gauge.
+- Server-side, `clampStartPercent` in
+  `src/features/charging/_server/charging-auto-session-step.ts` no longer does
+  `Math.round(soc)`; it clamps to `[0, 99.9]`. An auto-started session's `start_percent`
+  now keeps the fractional value its backdated sample carried, so delta math stays
+  internally consistent with the displayed number.
+- **Deliberately unchanged:** `manual-session-dialog.tsx` stays whole-number, because the
+  user types a whole-percent target there.
+- **Known residual:** `src/components/vehicle/analytics-day-view.tsx` still does
+  `Math.abs(Math.round(insight.deltaPercent))` at two call sites. It was in the plan's
+  scope and was not converted.
+- Future repair or validation logic must **not** reintroduce a "fractional SOC ==
+  corrupted" heuristic. `20260630150000_repair_math_overshoot_sessions.sql` used exactly
+  that fingerprint, which held before Di+ 2.0 / Mate 340 and is now wrong.
+- Verification: the auto-session suite passes 10/10, run explicitly per AGENTS.md since it
+  is excluded from the `npm run test` glob. Shipped in PR #10 (`eb1706e`, `184896f`,
+  merged as `e4130aa`).
 
 ### Legacy Vercel hostname removed from documentation
 

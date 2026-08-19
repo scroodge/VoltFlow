@@ -44,91 +44,6 @@ build the debug APK. A connected-car verification remains required after install
 confirm fresh `bydmate_live_snapshots` and `bydmate_telemetry_samples` contain
 `telemetry.soc`, then refresh the Vehicle page and confirm both range cards render.
 
-## 🟡 Display SOC with decimal precision (0.1%) throughout the PWA
-
-### Evidence
-
-`charging_sessions.start_percent` / `current_percent` / `target_percent` are Postgres
-`numeric` (unconstrained precision) since the init migration `20250511000000`.
-
-Di+ 2.0 reports SOC at 0.1% resolution. VoltFlow Mate app versionCode ≥340 puts the
-unrounded value into `telemetry.soc`, but the `diplus` object in the same payload still
-carries the app's own rounded integer (`DiParsData.soc` is a Kotlin `Int`). Migration
-`20260814180000_diplus_soc_precise.sql` (2026-08-14, 4 days old) already fixed the
-ingest RPC `bydmate_apply_diplus_columns` to prefer the finer `telemetry.soc` over
-`diplus.soc` when the two agree within 0.5 (the app's own rounding step), storing the
-decimal into the `diplus_soc` column. Measured on prod at the time: `telemetry->>'soc' =
-66.2` alongside `diplus->>'soc' = 66`, 3649 rows gained a decimal in 7 days, 0 disagreed
-by more than 0.5. So **decimal SOC already reaches Postgres** for any car running Mate
-≥340, and `charging-live.ts:92` (live derivation) already reads
-`snapshot.telemetry.soc ?? snapshot.diplus.soc`, so live-status calculations already
-pick up the decimal.
-
-What still discards it:
-- `BatteryRing.tsx:66` `{known ? Math.round(value) : "—"}` — the big center number in
-  the animated circular gauge, shared by **both** the dashboard tile
-  (`dashboard-view.tsx:1287`) and the charging session screen
-  (`charging-session-screen.tsx:607`). The ring's fill *animation* (line 131,
-  `strokeDashoffset`) already uses the unrounded `value` — only the printed number in
-  the middle is rounded, so the arc already sweeps to the precise angle while the label
-  in the center lies about it.
-- `charging-auto-session-step.ts:61` `clampStartPercent()` does `Math.round(soc)` —
-  an auto-started session's `start_percent` is forced to a whole number even when the
-  backdated/confirming sample was fractional.
-- `dashboard-view.tsx:207` `String(Math.round(soc))` (`liveStartPercent`) — secondary
-  "charging from X%" caption. Note `dashboard-view.tsx:210` already has a reusable
-  `fmt(value, digits = 0)` helper (`.toFixed(digits)`) other call sites in this file can
-  pass `1` into instead of hand-rolling new formatting.
-- `charging-session-screen.tsx:610,617` `.toFixed(0)` — session start/target/
-  remaining-to-target labels.
-- `charging-delta-card.tsx:295,296,343,368,370,375` — chart axis labels, hover
-  tooltip, delta stat, min/max SOC.
-- `charge-delta-trend-chart.tsx:220` `.toFixed(0)`.
-- `analytics-day-view.tsx:54,59` `Math.round(insight.deltaPercent)`.
-- `manual-session-dialog.tsx:217` `.toFixed(0)` — manual entry preview; likely fine to
-  leave whole-number since the user types a whole-percent target.
-
-Historical false lead, now stale: `20260630150000_repair_math_overshoot_sessions.sql`
-treated a fractional `current_percent` as the fingerprint of a since-fixed math-
-projection bug ("real SOC is always an integer percent"). That was true before Di+
-2.0/Mate 340 landed; any future repair/validation logic must not reintroduce a
-"fractional == corrupted" heuristic.
-
-### Data boundary
-
-No new user-facing data model. SOC is existing app-owned vehicle telemetry already
-stored server-side in Postgres (already-unconstrained `numeric` columns) — this is a
-display/formatting change plus removing one server-side rounding step, not a new field
-or a new storage location.
-
-### Options and recommendation
-
-1. **Dashboard/live tile only** — format just the live SOC number to one decimal
-   (`66.2%`), leave session history and chart labels as whole percent. Smallest blast
-   radius, fastest to ship, but leaves the app showing two different precisions for the
-   "same" number depending on screen.
-2. **(Recommended) One decimal everywhere SOC currently renders** — including the
-   `BatteryRing` circular gauge's center number (dashboard tile and charging session
-   screen both use it), the session screen's other labels, delta card, trend chart, and
-   analytics day view. Also stop rounding in `clampStartPercent` so a session's own
-   start/current/target stay internally consistent for delta math, and audit the
-   ≥98%/`=== 100` threshold comparisons in the auto-session/auto-stop logic to confirm
-   they already use `>=`/`>` and not strict equality now that SOC can genuinely sit at
-   e.g. `99.7`.
-3. **Add a display-precision user setting.** Rejected as premature — no signal a user
-   wants this configurable, and it would add scope (a new per-user preference,
-   client-side per this repo's data-ownership default) with no upstream ask.
-
-### Verification
-
-For each touched display site: `npm run build` / `npm run lint`, then use the dev
-server to confirm a car running Mate ≥340 shows one decimal on the dashboard tile and
-session screen, and that a car on an older Mate version (integer-only telemetry) still
-renders cleanly (`66.0%`, not a broken/missing value). Run
-`auto-session.test.mjs` (excluded from the default `npm run test` glob — run explicitly
-per AGENTS.md) after removing the `Math.round` in `clampStartPercent` to confirm no
-existing session-boundary test assumed whole-number start percent.
-
 ## 🔵 Consumption formula map — reference for the parts left as separate tools
 
 The "average consumption" discrepancy investigation (shipped 2026-08-04, see
@@ -1038,13 +953,20 @@ writes `energydata`; the Yuan UP doesn't.
 
 ---
 
-## 🟠 Delivery cadence vs the Vercel free plan — cut invocations, not calculation
+## 🟡 Delivery cadence — cut invocations, not calculation (de-escalated 2026-08-19)
+
+> **Status 2026-08-19 — no longer quota-blocked.** The account moved to **Vercel Pro**, so
+> the Hobby overage that made this urgent is gone. This is now a monthly-cost question
+> rather than a cliff; the plan below stands on its own merits and only the urgency
+> changed. **P0 and P4 are the cheap ones** — P4 needs no APK release at all. See
+> [CHANGELOG.md](CHANGELOG.md) 2026-08-19 for the decision record.
 
 ### Goal
 
-Keep VoltFlow on Vercel's free plan. The binding resource is **function invocations**, and
-invocations are driven by **delivery cadence**, not by how much arithmetic runs per sample.
-Owning sources are APK-side: `CommandDaemon` and `CloudTelemetrySender` in `BYDMate-own`.
+Reduce Vercel function invocations at the source. The binding resource is **function
+invocations**, and invocations are driven by **delivery cadence**, not by how much
+arithmetic runs per sample. Owning sources are APK-side: `CommandDaemon` and
+`CloudTelemetrySender` in `BYDMate-own`.
 
 **Data ownership:** no user-facing data model changes. These are app-owned cadence constants
 compiled into the APK; nothing moves between Postgres and client storage.
@@ -1140,7 +1062,9 @@ consumer of the resource that is actually metered (*invocations*).
 
 **Attribution caveat:** the 89% split is inferred from the deterministic poll arithmetic, not read
 off a per-route breakdown. Observability Events shows **0**, so the Hobby dashboard cannot break
-usage down by route. Confirm before building — see P0 below.
+usage down by route. Confirm before building — see P0 below. **Since 2026-08-19 this is
+cheaper to settle:** Pro includes observability the Hobby dashboard did not, so P0 may now be
+a matter of reading the per-route breakdown rather than instrumenting for it.
 
 ### Revised options — the command poll is now the primary lever
 
@@ -1171,18 +1095,19 @@ Ranked by invocations removed per unit of user-visible cost:
   but bills wall-clock **provisioned memory**, which is already at 104% of quota. It trades a
   red metric for a redder one.
 
-### The honest alternative: Vercel Pro
+### ✅ Resolved 2026-08-19 — Vercel Pro adopted
 
-Three metrics are over on a fleet of eight cars. P1 + P3 plausibly gets invocations to ~200–300K/mo
-and Active CPU proportionally down, which restores real headroom. But every lever here spends
-either APK release cycles or user-visible freshness, and the fleet upgrades gradually (four of
-eight cars on 0.5.0 as of 2026-07-20), so relief arrives over weeks while the overage is now.
-**Vercel Pro at $20/mo removes the constraint immediately and buys time to do P1 properly rather
-than urgently.** Recommend deciding this explicitly rather than defaulting to "stay free" — the
-engineering time to hit the free tier is worth more than $20/mo unless staying free is a goal in
-itself.
+Three metrics were over on a fleet of eight cars, and every lever above spends either APK
+release cycles or user-visible freshness while the fleet upgrades gradually — so relief
+would have arrived over weeks while the overage was immediate. **Vercel Pro was adopted
+2026-08-19**, removing the constraint immediately and buying time to do P1 properly rather
+than urgently. That was the standing recommendation here and in the now-closed
+frontend-hosting entry, whose reasoning is preserved in [CHANGELOG.md](CHANGELOG.md)
+2026-08-19.
 
-Dashboard data supplied by owner 2026-07-20; revised plan awaiting go-ahead.
+What this does *not* settle: P1 + P3 were projected to bring invocations to ~200-300K/mo
+with Active CPU down proportionally. On Pro that is a billing line rather than a cap, so
+check actual Pro usage before deciding whether P1 pays for itself or is only hygiene.
 
 ### Risks
 
@@ -1201,7 +1126,8 @@ Dashboard data supplied by owner 2026-07-20; revised plan awaiting go-ahead.
 - Requires an APK release and fleet upgrade to take effect — four of eight cars are on 0.5.0
   as of 2026-07-20, so the benefit arrives gradually.
 
-Proposed 2026-07-20; awaiting go-ahead.
+Proposed 2026-07-20; revised 2026-07-20 against dashboard data; de-escalated 2026-08-19
+when Vercel Pro was adopted. P0, P1 and P4 remain open and still await go-ahead.
 
 ---
 
@@ -1465,84 +1391,6 @@ warning — that was new user-preference data needing an ownership decision; thi
 existing telemetry field and persists nothing new.
 
 Proposed 2026-08-06; awaiting go-ahead. **Should I build this?**
-
----
-
-## Frontend hosting: stay on Vercel, or move to the Contabo VPS alongside Supabase?
-
-### Goal
-
-Decide whether the Next.js frontend should be co-located on the self-hosted Supabase VPS.
-The question arose from two pressures: the "status must reach PWA/WEB/TELEGRAM/TGWIDGET almost
-immediately" goal, and the Vercel Hobby quota overage recorded in the delivery-cadence entry
-above. Investigated read-only 2026-07-21.
-
-### Research findings
-
-**Topology.** Frontend is on Vercel pinned to `fra1` (Frankfurt) via `vercel.json`. The Supabase
-VPS `144.91.127.194` (`vmi3078244.contaboserver.net`) geolocates to **Lauterbourg, Grand Est,
-France** — roughly 120 km from Frankfurt, same European backbone.
-
-**Co-locating cannot improve live-status latency. Two independent reasons:**
-
-1. **The live path does not traverse Vercel at all.** The PWA and widget subscribe to Supabase
-   Realtime `postgres_changes` straight from the browser — `src/hooks/use-bydmate-live-query.ts:81`,
-   `src/hooks/use-vehicle-commands-query.ts:45`,
-   `src/components/charging/charging-session-screen.tsx:197`. Traffic goes browser → VPS directly.
-   Moving the Next.js server changes nothing on this path.
-2. **The one hop Vercel does sit on is already negligible.** Car → `fra1` → Supabase in
-   Lauterbourg costs single-digit milliseconds on the Vercel→DB leg. Per AGENTS.md the measured
-   status budget is **~3 s** (daemon push) to **5–9 s** (app path), dominated by daemon loop
-   pacing and batch delivery. Saving ~10 ms against ~5,000 ms is unmeasurable.
-
-**The VPS has no spare capacity, and it is not a VoltFlow-only box.** Measured 2026-07-21:
-
-| Resource | Reading |
-| --- | --- |
-| CPU | 3 vCPU, load average **3.05–3.28** — fully saturated |
-| CPU breakdown | 54.7% user, 34.0% sys, **9.4% idle**, 0.0% iowait (real CPU, not I/O stall) |
-| Memory | 7.9 GB total, 4.4 GB used, **3.5 GB available** |
-| Disk | 387 GB total, 63 GB used (17%) — ample |
-
-The box also runs `amnezia` (WireGuard VPN), `f1-news-bot` (+ its own Postgres and Redis),
-`chat_agent_postgres`, `uptime-kuma`, `hellomate-bot`, Grafana/Prometheus/Loki/cadvisor, and
-`ai-gateway`. Supabase is one tenant among many.
-
-**Root cause of the saturation — an unrelated crash loop (see the dedicated entry below).**
-Summed container CPU is under 25%, so the load is not Supabase. It is `ai-gateway.service`
-restarting forever and reloading TensorFlow each time.
-
-### Options
-
-1. **Stay on Vercel, fix invocations at the source (recommended).** The overage is caused by the
-   6 s command poll, not by hosting location — see the delivery-cadence entry's P1 (fold command
-   delivery into the telemetry POST response, ~-90% invocations) and P4 (drop the `308` on
-   `/api/bydmate/*`, free). *Pro:* keeps CDN, preview deploys, managed TLS, autoscaling; fixes the
-   actual cause. *Con:* P1 needs an APK release cycle and the fleet upgrades gradually.
-2. **Vercel Pro, $20/mo.** *Pro:* removes the constraint today, buys time to do option 1 properly
-   rather than urgently. *Con:* recurring cost. Already recommended in the entry above.
-3. **Hybrid — move only `/api/bydmate/telemetry` and `/commands` to the VPS.** These are ~100% of
-   the invocation problem. A Deno skeleton already exists at `supabase/functions/bydmate-telemetry/`.
-   *Pro:* removes the billing driver, keeps Vercel for user-facing pages. *Con:* the Deno path has
-   **minimal validation only** — no auto-session, reconcile, or charge notifications — so this is a
-   real port of `src/app/api/bydmate/telemetry/route.ts` (452 lines), and it duplicates ingest logic
-   across two runtimes, which AGENTS.md already flags as a recurring source of bugs in the
-   two-sender case. Also needs CPU the box does not currently have.
-4. **Full migration of the frontend to the VPS — not recommended.** *Pro:* no invocation billing;
-   one deployment target. *Con:* zero latency benefit (findings above); the box is at ~90% CPU
-   before adding a Node server plus builds; collapses app and database into a single failure
-   domain on one unredundant VPS; loses CDN, preview deployments, managed TLS and autoscaling;
-   adds reverse-proxy, process-supervisor, and deploy-pipeline ops burden.
-
-### Recommendation
-
-**Do not move the frontend.** The premise that co-location improves freshness does not hold — the
-live path already bypasses Vercel entirely, and the remaining hop is ~10 ms against a ~5 s budget.
-Treat hosting and the quota overage as separate problems: take **option 2 now** ($20/mo, immediate)
-and **option 1 (P1 + P4)** as the durable fix. Revisit option 3 only if the invocation count stays
-over quota *after* P1 ships, and only once the VPS has real CPU headroom.
-
-Proposed 2026-07-21; awaiting go-ahead.
 
 ---
 
