@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 
 import { ArticleRenderer } from "@/components/telegram/ArticleRenderer";
 import { ArticleViewTracker } from "@/components/telegram/ArticleViewTracker";
 import { JsonLd, articleSchema, breadcrumbSchema } from "@/lib/seo/json-ld";
 import { openGraph } from "@/lib/seo/open-graph";
+import { createPublicClient } from "@/lib/supabase/public";
 import { getTelegramKnowledgeDataWithFallback } from "@/lib/supabase/knowledge";
 import {
   allArticles,
@@ -16,13 +18,32 @@ type PageProps = {
   params: Promise<{ slug: string }>;
 };
 
+export const revalidate = 3600;
+export const dynamicParams = true;
+
+/**
+ * `generateMetadata` and the page body each need the corpus. Without `cache()`
+ * that is two identical round trips per render.
+ */
+const loadKnowledge = cache(() =>
+  getTelegramKnowledgeDataWithFallback(staticTelegramKnowledgeData, createPublicClient()),
+);
+
 export async function generateStaticParams() {
-  return allArticles.map((article) => ({ slug: article.slug }));
+  // Prebuild DB slugs, not just the bundled fallback corpus — mapping
+  // `allArticles` alone meant CMS-authored articles were never prerendered.
+  // Union with the static list so a DB outage at build time still yields pages.
+  const data = await loadKnowledge();
+  const slugs = new Set([
+    ...data.articles.map((article) => article.slug),
+    ...allArticles.map((article) => article.slug),
+  ]);
+  return [...slugs].map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const data = await getTelegramKnowledgeDataWithFallback(staticTelegramKnowledgeData);
+  const data = await loadKnowledge();
   const articleBySlug = new Map(data.articles.map((item) => [item.slug, item]));
   const article = articleBySlug.get(slug) ?? getArticleBySlug(slug);
 
@@ -52,7 +73,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function TelegramArticlePage({ params }: PageProps) {
   const { slug } = await params;
-  const data = await getTelegramKnowledgeDataWithFallback(staticTelegramKnowledgeData);
+  const data = await loadKnowledge();
   const articleBySlug = new Map(data.articles.map((item) => [item.slug, item]));
   const articleById = new Map(data.articles.map((item) => [item.id, item]));
   const article = articleBySlug.get(slug) ?? getArticleBySlug(slug);

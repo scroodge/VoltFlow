@@ -2,6 +2,7 @@ import { isCarGeneration, type CarGeneration } from "@/lib/car-generations";
 import { buildKnowledgeEmbeddingText, createEmbedding } from "@/lib/embeddings";
 import { invalidateKnowledgeSearchCache } from "@/lib/knowledge-search";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { createPublicClient } from "@/lib/supabase/public";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeModelGenerations } from "@/lib/telegram/generation";
 import { headers } from "next/headers";
@@ -127,8 +128,8 @@ async function isDevAuthBypassRequest() {
   return headersList.get("x-voltflow-dev-auth-bypass") === "1";
 }
 
-export async function getCategories() {
-  const supabase = await createClient();
+export async function getCategories(client?: ReadClient) {
+  const supabase = await readClient(client);
   const { data, error } = await supabase
     .from("knowledge_categories")
     .select("*")
@@ -139,8 +140,27 @@ export async function getCategories() {
   return (data ?? []) as KnowledgeCategory[];
 }
 
-export async function getPublishedArticles() {
-  return getArticlesByStatus("published");
+/**
+ * Optional client for the public read path.
+ *
+ * Every function below defaulted to `createClient()`, which calls `cookies()`
+ * and therefore opts the calling route into dynamic rendering — the reason the
+ * knowledge base was served `private, no-cache, no-store` with a fresh Postgres
+ * round trip on every crawl, and the reason `generateStaticParams` on the
+ * article routes never actually prebuilt anything.
+ *
+ * Passing `createPublicClient()` keeps the same queries but avoids `cookies()`,
+ * so the KB routes can be statically rendered with ISR. Authenticated and admin
+ * callers pass nothing and keep the cookie-bound client.
+ */
+type ReadClient = ReturnType<typeof createPublicClient>;
+
+async function readClient(client?: ReadClient) {
+  return client ?? (await createClient());
+}
+
+export async function getPublishedArticles(client?: ReadClient) {
+  return getArticlesByStatus("published", client);
 }
 
 /**
@@ -149,8 +169,10 @@ export async function getPublishedArticles() {
  * every view and corrupt the "recently updated" list. A missing row simply means nobody
  * has opened that article yet.
  */
-export async function getArticleViewCounts(): Promise<Map<string, number>> {
-  const supabase = await createClient();
+export async function getArticleViewCounts(
+  client?: ReadClient,
+): Promise<Map<string, number>> {
+  const supabase = await readClient(client);
   const { data, error } = await supabase
     .from("knowledge_article_views")
     .select("article_id, view_count");
@@ -270,8 +292,8 @@ export async function deleteArticle(id: string) {
   await deleteKnowledgeItem(id);
 }
 
-export async function getPublishedFAQ() {
-  const supabase = await createClient();
+export async function getPublishedFAQ(client?: ReadClient) {
+  const supabase = await readClient(client);
   const { data, error } = await supabase
     .from("faq_items")
     .select("*, knowledge_categories(*)")
@@ -334,8 +356,8 @@ export async function deleteFAQ(id: string) {
   await deleteKnowledgeItem(id);
 }
 
-export async function getPublishedAccessories() {
-  const supabase = await createClient();
+export async function getPublishedAccessories(client?: ReadClient) {
+  const supabase = await readClient(client);
   const { data, error } = await supabase
     .from("accessories")
     .select("*, knowledge_categories(*)")
@@ -347,8 +369,8 @@ export async function getPublishedAccessories() {
   return (data ?? []).map((item) => mapAccessory(item as RawAccessory));
 }
 
-export async function getPublishedServiceProviders() {
-  const supabase = await createClient();
+export async function getPublishedServiceProviders(client?: ReadClient) {
+  const supabase = await readClient(client);
   const { data, error } = await supabase
     .from("service_providers")
     .select("*")
@@ -360,8 +382,8 @@ export async function getPublishedServiceProviders() {
   return (data ?? []).map((item) => mapServiceProvider(item as RawServiceProvider));
 }
 
-export async function getPublishedServiceProvider(id: string) {
-  const supabase = await createClient();
+export async function getPublishedServiceProvider(id: string, client?: ReadClient) {
+  const supabase = await readClient(client);
   const { data, error } = await supabase
     .from("service_providers")
     .select("*")
@@ -475,8 +497,8 @@ export async function deleteAccessory(id: string) {
   await deleteKnowledgeItem(id);
 }
 
-export async function getPublishedSpareParts() {
-  const supabase = await createClient();
+export async function getPublishedSpareParts(client?: ReadClient) {
+  const supabase = await readClient(client);
   const { data, error } = await supabase
     .from("spare_parts")
     .select("*, knowledge_categories(*)")
@@ -581,19 +603,25 @@ export async function deleteCategory(id: string) {
   if (error) throw error;
 }
 
+/**
+ * Pass `createPublicClient()` from public, statically-rendered routes; omit it
+ * on authenticated ones. See the ReadClient note above — the cookie-bound
+ * default is what forces dynamic rendering on every caller.
+ */
 export async function getTelegramKnowledgeDataWithFallback(
   fallback: TelegramKnowledgeData,
+  client?: ReadClient,
 ) {
   try {
     const [categories, articles, faq, accessories, spareParts, serviceProviders, viewCounts] =
       await Promise.all([
-        getCategories(),
-        getPublishedArticles(),
-        getPublishedFAQ(),
-        getPublishedAccessories(),
-        getPublishedSpareParts(),
-        getPublishedServiceProviders(),
-        getArticleViewCounts(),
+        getCategories(client),
+        getPublishedArticles(client),
+        getPublishedFAQ(client),
+        getPublishedAccessories(client),
+        getPublishedSpareParts(client),
+        getPublishedServiceProviders(client),
+        getArticleViewCounts(client),
       ]);
 
     if (!articles.length && !faq.length && !accessories.length && !spareParts.length && !serviceProviders.length) {
@@ -627,8 +655,8 @@ export async function getTelegramKnowledgeDataWithFallback(
   }
 }
 
-async function getArticlesByStatus(status: "published") {
-  const supabase = await createClient();
+async function getArticlesByStatus(status: "published", client?: ReadClient) {
+  const supabase = await readClient(client);
   const { data, error } = await supabase
     .from("knowledge_articles")
     .select("*, knowledge_categories(*)")

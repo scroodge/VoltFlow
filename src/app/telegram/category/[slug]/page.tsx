@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, cache } from "react";
 
 import { TelegramCategoryView } from "@/components/telegram/TelegramCategoryView";
 import {
@@ -10,6 +10,7 @@ import {
   collectionPageSchema,
 } from "@/lib/seo/json-ld";
 import { openGraph } from "@/lib/seo/open-graph";
+import { createPublicClient } from "@/lib/supabase/public";
 import { getTelegramKnowledgeDataWithFallback } from "@/lib/supabase/knowledge";
 import {
   getCategoryBySlug,
@@ -22,13 +23,25 @@ type PageProps = {
   params: Promise<{ slug: string }>;
 };
 
+export const revalidate = 3600;
+export const dynamicParams = true;
+
+const loadKnowledge = cache(() =>
+  getTelegramKnowledgeDataWithFallback(staticTelegramKnowledgeData, createPublicClient()),
+);
+
 export async function generateStaticParams() {
-  return telegramCategories.map((category) => ({ slug: category.slug }));
+  const data = await loadKnowledge();
+  const slugs = new Set([
+    ...data.categories.map((category) => category.slug),
+    ...telegramCategories.map((category) => category.slug),
+  ]);
+  return [...slugs].map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const data = await getTelegramKnowledgeDataWithFallback(staticTelegramKnowledgeData);
+  const data = await loadKnowledge();
   const category = data.categories.find((item) => item.slug === slug) ?? getCategoryBySlug(slug);
 
   if (!category) {
@@ -51,7 +64,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function TelegramCategoryPage({ params }: PageProps) {
   const { slug } = await params;
-  const data = await getTelegramKnowledgeDataWithFallback(staticTelegramKnowledgeData);
+  const data = await loadKnowledge();
   const category = data.categories.find((item) => item.slug === slug) ?? getCategoryBySlug(slug);
 
   // Real 404 rather than a 200 "раздел не найден" card — see the article route.

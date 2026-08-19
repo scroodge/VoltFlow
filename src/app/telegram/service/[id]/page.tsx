@@ -3,7 +3,19 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, MapPin, ShieldCheck } from "lucide-react";
 
-import { getPublishedServiceProvider } from "@/lib/supabase/knowledge";
+import { createPublicClient } from "@/lib/supabase/public";
+import {
+  getPublishedServiceProvider,
+  getPublishedServiceProviders,
+} from "@/lib/supabase/knowledge";
+
+export const revalidate = 3600;
+
+// See the accessory route: no generateStaticParams means no ISR headers.
+export async function generateStaticParams() {
+  const providers = await getPublishedServiceProviders(createPublicClient());
+  return providers.map((provider) => ({ id: provider.id }));
+}
 import { ServiceMapLink } from "@/components/telegram/ServiceMapLink";
 import { ExternalLinksShare } from "@/components/telegram/ExternalLinksShare";
 
@@ -11,7 +23,7 @@ type PageProps = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
-  const provider = await getPublishedServiceProvider(id);
+  const provider = await getPublishedServiceProvider(id, createPublicClient());
   return provider
     ? { title: `${provider.name} — Сервис VoltFlow`, description: provider.description ?? "Сервис для BYD YUAN UP." }
     : { title: "Сервис VoltFlow" };
@@ -19,7 +31,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function ServiceProviderPage({ params }: PageProps) {
   const { id } = await params;
-  const provider = await getPublishedServiceProvider(id);
+  const provider = await getPublishedServiceProvider(id, createPublicClient());
   if (!provider) notFound();
 
   return (

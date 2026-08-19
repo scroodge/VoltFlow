@@ -6,6 +6,7 @@ import { TelegramEntryGate } from "@/components/telegram/TelegramEntryGate";
 import { TelegramShell } from "@/components/telegram/TelegramShell";
 import { JsonLd, collectionPageSchema } from "@/lib/seo/json-ld";
 import { openGraph } from "@/lib/seo/open-graph";
+import { createPublicClient } from "@/lib/supabase/public";
 import { getTelegramKnowledgeDataWithFallback } from "@/lib/supabase/knowledge";
 import { staticTelegramKnowledgeData } from "@/lib/telegram/knowledge";
 
@@ -37,11 +38,19 @@ export const metadata: Metadata = {
 // have no tgWebApp hash → KB renders normally (SEO preserved).
 const KB_PREPAINT_GUARD = `try{var h=location.hash||'';if(h.indexOf('tgWebApp')>-1||(window.Telegram&&window.Telegram.WebApp&&window.Telegram.WebApp.initData)){var s=document.createElement('style');s.id='tg-kb-cover-style';s.textContent='#tg-kb-root{display:none!important}';document.head.appendChild(s);}}catch(e){}`;
 
+// Statically rendered, refreshed hourly. Safe only because KnowledgeIndex
+// renders real links outside the shell's Suspense boundary — without it, static
+// rendering would prerender the `fallback={null}` and ship an empty shell.
+export const revalidate = 3600;
+
 export default async function TelegramPage() {
-  const data = await getTelegramKnowledgeDataWithFallback(staticTelegramKnowledgeData);
+  const data = await getTelegramKnowledgeDataWithFallback(
+    staticTelegramKnowledgeData,
+    createPublicClient(),
+  );
 
   return (
-    <Suspense fallback={null}>
+    <>
       <script dangerouslySetInnerHTML={{ __html: KB_PREPAINT_GUARD }} />
       <JsonLd
         data={collectionPageSchema({
@@ -56,17 +65,25 @@ export default async function TelegramPage() {
         })}
       />
       {/*
-        KnowledgeIndex sits inside #tg-kb-root so the Telegram pre-paint guard
-        keeps hiding and revealing the whole KB as one unit — but outside the
-        shell's Suspense boundary, so its links survive static rendering.
+        Only TelegramShell may sit inside Suspense — it calls useSearchParams(),
+        which under static rendering makes Next prerender the `fallback={null}`
+        and defer the subtree to the client. Wrapping the whole page in that
+        boundary prerendered /telegram as a 7-word empty shell with zero links.
+        KnowledgeIndex therefore lives OUTSIDE it (but still inside
+        #tg-kb-root, so the Telegram pre-paint guard hides and reveals the KB
+        as one unit).
       */}
       <div id="tg-kb-root">
-        <TelegramShell data={data} />
+        <Suspense fallback={null}>
+          <TelegramShell data={data} />
+        </Suspense>
         <div className="mobile-page px-4 pb-[calc(env(safe-area-inset-bottom)+2rem)]">
           <KnowledgeIndex data={data} />
         </div>
       </div>
-      <TelegramEntryGate />
-    </Suspense>
+      <Suspense fallback={null}>
+        <TelegramEntryGate />
+      </Suspense>
+    </>
   );
 }

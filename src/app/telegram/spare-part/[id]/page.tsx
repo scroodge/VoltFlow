@@ -5,13 +5,27 @@ import Image from "next/image";
 import { ArrowLeft } from "lucide-react";
 
 import { staticTelegramKnowledgeData } from "@/lib/telegram/knowledge";
+import { cache } from "react";
+import { createPublicClient } from "@/lib/supabase/public";
 import { getTelegramKnowledgeDataWithFallback } from "@/lib/supabase/knowledge";
 import { ExternalLinksShare } from "@/components/telegram/ExternalLinksShare";
 
 type PageProps = { params: Promise<{ id: string }> };
 
+export const revalidate = 3600;
+
+const loadKnowledge = cache(() =>
+  getTelegramKnowledgeDataWithFallback(staticTelegramKnowledgeData, createPublicClient()),
+);
+
+// See the accessory route: no generateStaticParams means no ISR headers.
+export async function generateStaticParams() {
+  const data = await loadKnowledge();
+  return data.spareParts.map((item) => ({ id: item.id }));
+}
+
 async function getSparePart(id: string) {
-  const data = await getTelegramKnowledgeDataWithFallback(staticTelegramKnowledgeData);
+  const data = await loadKnowledge();
   return data.spareParts.find((item) => item.id === id) ?? null;
 }
 

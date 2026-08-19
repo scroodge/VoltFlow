@@ -5,13 +5,28 @@ import Image from "next/image";
 import { ArrowLeft } from "lucide-react";
 
 import { staticTelegramKnowledgeData } from "@/lib/telegram/knowledge";
+import { cache } from "react";
+import { createPublicClient } from "@/lib/supabase/public";
 import { getTelegramKnowledgeDataWithFallback } from "@/lib/supabase/knowledge";
 import { ExternalLinksShare } from "@/components/telegram/ExternalLinksShare";
 
 type PageProps = { params: Promise<{ id: string }> };
 
+export const revalidate = 3600;
+
+const loadKnowledge = cache(() =>
+  getTelegramKnowledgeDataWithFallback(staticTelegramKnowledgeData, createPublicClient()),
+);
+
+// Without generateStaticParams a dynamic segment renders on demand and never
+// picks up the ISR cache headers, so these stayed `private, no-store`.
+export async function generateStaticParams() {
+  const data = await loadKnowledge();
+  return data.accessories.map((item) => ({ id: item.id }));
+}
+
 async function getAccessory(id: string) {
-  const data = await getTelegramKnowledgeDataWithFallback(staticTelegramKnowledgeData);
+  const data = await loadKnowledge();
   return data.accessories.find((item) => item.id === id) ?? null;
 }
 

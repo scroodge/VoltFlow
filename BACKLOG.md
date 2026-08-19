@@ -779,9 +779,11 @@ Remaining items are optional and none block anything:
 
 ## 🟠 SEO remediation — the site is technically unindexable (approved 2026-08-19)
 
-**Status: Phases 1, 2, 4-partial and 5 built and verified against a production
-build 2026-08-19 (uncommitted). Remaining: the `/knowledge/*` move (Phase 3) and
-ISR (`revalidate`) on the KB routes.** Full plan lives at
+**Status: Phases 1, 2, 4 and 5 built and verified against a production build
+2026-08-19 (uncommitted). Every KB route is now prerendered with 1h ISR and
+`s-maxage=3600` instead of `private, no-store`. Remaining: the `/knowledge/*`
+move (Phase 3, blocked on a UX decision — see below) and Search Console /
+Yandex registration.** Full plan lives at
 `~/.claude/plans/how-to-improve-seo-sorted-gem.md` (local, not in the repo).
 
 Verified against the live site on 2026-08-19. This is not an "optimize the copy" item —
@@ -830,6 +832,22 @@ several independent blockers each make the site unindexable on their own:
 - **5** — JSON-LD (`Organization`/`WebSite`, `TechArticle`, `BreadcrumbList`,
   `CollectionPage`, `Product`).
 - **6** — Google Search Console **and Yandex Webmaster** registration.
+
+### Phase 3 is blocked on a UX decision, not on code
+
+`/knowledge` is currently owned by `src/app/(app)/knowledge/page.tsx`, which sits
+inside the `(app)` route group and is therefore wrapped in `MobileShell` (bottom
+nav, in-app chrome). Moving the public KB hub to `/knowledge` collides with it, and
+the resolution decides what an anonymous visitor sees:
+
+- **(a)** Public hub at `src/app/knowledge/page.tsx`, delete the `(app)` one —
+  authenticated users lose the in-app shell while browsing the KB.
+- **(b)** Keep `(app)/knowledge/page.tsx` and branch on session — anonymous users
+  get `MobileShell`, whose bottom nav links to auth-gated routes.
+- **(c)** Leave the hub at `/knowledge` as-is and move only the detail routes.
+
+`(app)/layout.tsx` does NOT enforce auth (the proxy does), so (b) is possible but
+needs the nav hidden for anonymous visitors. Confirm the choice before building.
 
 ### Two traps found during research — do not skip
 
