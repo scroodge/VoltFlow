@@ -1,15 +1,16 @@
 import { resolveVoltflowMateApiKeyProfile } from "@/lib/voltflowmate/api-auth";
 import { liveFastSecondsFor } from "@/lib/voltflowmate/live-fast";
 import { createServiceClient } from "@/lib/supabase/service";
+import {
+  ACTIVE_COMMAND_POLL_AFTER_SECONDS,
+  REMOTE_COMMANDS_DISABLED,
+  SUSPENDED_COMMAND_POLL_AFTER_SECONDS,
+} from "@/lib/voltflowmate/remote-commands";
 
 export const runtime = "nodejs";
 
 const COMMAND_TIMEOUT_MS = 60 * 1000;
 const MAX_BATCH = 10;
-
-// Temporary operational kill switch. Keep the response protocol-compatible so older Mate
-// clients stop receiving commands and fast-status grants without entering an error/retry loop.
-const REMOTE_COMMANDS_DISABLED = true;
 
 /**
  * Poll cadence handed back to the car in `poll_after_seconds`.
@@ -22,7 +23,7 @@ const REMOTE_COMMANDS_DISABLED = true;
  * A car running an older build ignores the field and keeps its built-in 6s, so this is purely
  * additive and needs no version gate.
  */
-const ACTIVE_POLL_AFTER_SECONDS = 6;
+const ACTIVE_POLL_AFTER_SECONDS = ACTIVE_COMMAND_POLL_AFTER_SECONDS;
 /**
  * While commands are suspended the poll carries nothing a slower cadence would lose: the
  * `live_fast_seconds` grant now also rides the telemetry ingest response, which every car
@@ -30,9 +31,11 @@ const ACTIVE_POLL_AFTER_SECONDS = 6;
  * bounded by that cadence rather than by this one, and once fast mode is on the 3s
  * `live_only` pings renew the grant themselves.
  *
- * Drop this back to [ACTIVE_POLL_AFTER_SECONDS] the moment remote commands come back.
+ * 300s is the ceiling both supported clients accept: they clamp the server-provided interval
+ * to MAX_SERVER_POLL_MS = 300_000. Drop this back to [ACTIVE_POLL_AFTER_SECONDS] the moment
+ * remote commands come back.
  */
-const SUSPENDED_POLL_AFTER_SECONDS = 60;
+const SUSPENDED_POLL_AFTER_SECONDS = SUSPENDED_COMMAND_POLL_AFTER_SECONDS;
 
 const POLL_AFTER_SECONDS = REMOTE_COMMANDS_DISABLED
   ? SUSPENDED_POLL_AFTER_SECONDS
@@ -80,6 +83,7 @@ export async function GET(request: Request) {
       return Response.json({
         ok: true,
         commands: [],
+        commands_enabled: !REMOTE_COMMANDS_DISABLED,
         live_fast_seconds: liveFastSeconds,
         poll_after_seconds: POLL_AFTER_SECONDS,
       });
@@ -113,6 +117,7 @@ export async function GET(request: Request) {
       return Response.json({
         ok: true,
         commands: [],
+        commands_enabled: !REMOTE_COMMANDS_DISABLED,
         live_fast_seconds: liveFastSeconds,
         poll_after_seconds: POLL_AFTER_SECONDS,
       });
@@ -145,6 +150,7 @@ export async function GET(request: Request) {
     return Response.json({
       ok: true,
       commands,
+      commands_enabled: !REMOTE_COMMANDS_DISABLED,
       live_fast_seconds: liveFastSeconds,
       poll_after_seconds: ACTIVE_POLL_AFTER_SECONDS,
     });
