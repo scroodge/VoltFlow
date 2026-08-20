@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+import { REMOTE_COMMANDS_DISABLED } from "./src/lib/voltflowmate/remote-commands";
+
 const securityHeaders = [
   { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -37,6 +39,20 @@ const nextConfig: NextConfig = {
         headers: securityHeaders,
       },
     ];
+  },
+  async rewrites() {
+    return {
+      beforeFiles: REMOTE_COMMANDS_DISABLED
+        ? [
+            {
+              source: "/api/bydmate/commands",
+              destination: "/bydmate-commands-disabled.json",
+            },
+          ]
+        : [],
+      afterFiles: [],
+      fallback: [],
+    };
   },
 };
 

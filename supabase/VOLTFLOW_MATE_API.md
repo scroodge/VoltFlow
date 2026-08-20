@@ -177,11 +177,17 @@ X-API-Key: <paired-client-key>
 X-Vehicle-Id: <vehicle-id>
 ```
 
-The response contains `commands` (at most 10 pending commands) and always includes
-`live_fast_seconds`. A positive value grants that vehicle a short, expiring fast-status window;
+The response contains `commands` (at most 10 pending commands), `commands_enabled`, and always
+includes `live_fast_seconds` and `poll_after_seconds`. A positive `live_fast_seconds` value grants
+that vehicle a short, expiring fast-status window;
 the client may send `live_only: true` snapshots at its compatible fast cadence while it lasts.
 `0` means normal delivery cadence. This signal is not a command and must never be persisted as a
 user preference by the client.
+
+`commands_enabled` reports whether remote command delivery is active. When it is `false`, a client
+may suspend its fast command loop and fall back to a slow floor poll. It MUST keep polling at that
+floor so it learns when command delivery is enabled again. `poll_after_seconds` is the server's
+requested delay before that next poll; clients may clamp it to their supported range.
 
 ```json
 {
@@ -189,7 +195,9 @@ user preference by the client.
   "commands": [
     { "id": "command-id", "type": "lock", "params": {}, "created_at": "2026-01-01T12:00:00Z" }
   ],
-  "live_fast_seconds": 20
+  "commands_enabled": true,
+  "live_fast_seconds": 20,
+  "poll_after_seconds": 6
 }
 ```
 
