@@ -4,7 +4,7 @@ import {
   listClusterBackgrounds,
   resolveEntitledProfileId,
 } from "@/lib/voltflowmate/cluster-backgrounds";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
@@ -15,12 +15,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const auth = await resolveEntitledProfileId(supabaseAdmin, apiKey);
+    const auth = await resolveEntitledProfileId(getSupabaseAdmin(), apiKey);
     if ("error" in auth) {
       return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
     }
 
-    const backgrounds = await listClusterBackgrounds(supabaseAdmin, auth.userId);
+    const backgrounds = await listClusterBackgrounds(getSupabaseAdmin(), auth.userId);
     return NextResponse.json({ ok: true, backgrounds });
   } catch (error) {
     const message = error instanceof Error ? error.message : "list_failed";

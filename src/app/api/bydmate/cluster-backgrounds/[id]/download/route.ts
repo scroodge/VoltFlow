@@ -5,7 +5,7 @@ import {
   getClusterBackgroundForDownload,
   resolveEntitledProfileId,
 } from "@/lib/voltflowmate/cluster-backgrounds";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
@@ -25,17 +25,17 @@ export async function GET(request: NextRequest, context: RouteContext) {
   }
 
   try {
-    const auth = await resolveEntitledProfileId(supabaseAdmin, apiKey);
+    const auth = await resolveEntitledProfileId(getSupabaseAdmin(), apiKey);
     if ("error" in auth) {
       return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
     }
 
-    const row = await getClusterBackgroundForDownload(supabaseAdmin, auth.userId, id.trim());
+    const row = await getClusterBackgroundForDownload(getSupabaseAdmin(), auth.userId, id.trim());
     if (!row) {
       return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
     }
 
-    const bytes = await downloadClusterBackgroundBytes(supabaseAdmin, row.storagePath);
+    const bytes = await downloadClusterBackgroundBytes(getSupabaseAdmin(), row.storagePath);
     return new NextResponse(Buffer.from(bytes), {
       status: 200,
       headers: {

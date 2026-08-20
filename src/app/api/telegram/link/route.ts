@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { verifyTelegramInitData } from "@/lib/telegram/verify-init-data";
 
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
   const bearerUser =
     cookieUser || !bearerToken
       ? null
-      : (await supabaseAdmin.auth.getUser(bearerToken)).data.user;
+      : (await getSupabaseAdmin().auth.getUser(bearerToken)).data.user;
   const user = cookieUser ?? bearerUser;
 
   if ((userErr && !bearerToken) || !user) {
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: verified.error }, { status: 401 });
   }
 
-  const { error: updateErr } = await supabaseAdmin
+  const { error: updateErr } = await getSupabaseAdmin()
     .from("profiles")
     .update({
       telegram_id: verified.user.id,
