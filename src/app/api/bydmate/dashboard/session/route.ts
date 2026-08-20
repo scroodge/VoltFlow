@@ -5,7 +5,7 @@ import {
   recordDashboardAppVersion,
   resolveDashboardSession,
 } from "@/lib/voltflowmate/dashboard-entitlement";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     buildHeader === "debug" && process.env.ALLOW_DEBUG_DASHBOARD === "true";
 
   try {
-    const result = await resolveDashboardSession(supabaseAdmin, apiKey, { allowDebugBuild });
+    const result = await resolveDashboardSession(getSupabaseAdmin(), apiKey, { allowDebugBuild });
 
     if (!result.ok) {
       return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     // Awaited rather than fired and forgotten: this runtime may freeze the function once
     // the response is returned, which would drop the write silently.
     await recordDashboardAppVersion(
-      supabaseAdmin,
+      getSupabaseAdmin(),
       apiKey,
       parseDashboardVersionHeaders(
         request.headers.get("x-dashboard-version"),

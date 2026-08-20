@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isDashboardEntitled } from "@/lib/voltflowmate/dashboard-entitlement";
 import { BUCKET } from "@/lib/voltflowmate/cluster-backgrounds";
 import { createClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
@@ -16,7 +16,7 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
-  const entitled = await isDashboardEntitled(supabaseAdmin, userData.user.id);
+  const entitled = await isDashboardEntitled(getSupabaseAdmin(), userData.user.id);
   if (!entitled) {
     return NextResponse.json({ ok: false, error: "not_entitled" }, { status: 403 });
   }
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
-  const entitled = await isDashboardEntitled(supabaseAdmin, userData.user.id);
+  const entitled = await isDashboardEntitled(getSupabaseAdmin(), userData.user.id);
   if (!entitled) {
     return NextResponse.json({ ok: false, error: "not_entitled" }, { status: 403 });
   }
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
   const storagePath = `${userData.user.id}/${id}.png`;
   const bytes = new Uint8Array(await file.arrayBuffer());
 
-  const { error: uploadError } = await supabaseAdmin.storage
+  const { error: uploadError } = await getSupabaseAdmin().storage
     .from(BUCKET)
     .upload(storagePath, bytes, {
       contentType: file.type || "image/png",
