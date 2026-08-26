@@ -5,6 +5,7 @@ import { resolveChargingSessionSampleWindow } from "./telemetry-session-window.t
 import {
   enumerateCalendarDays,
   fetchChargingSessionSamples,
+  fetchTelemetryHistory,
   parseSohPercent,
 } from "./telemetry-history.ts";
 import { medianSampleGapSeconds } from "./telemetry-ranges.ts";
@@ -205,4 +206,21 @@ test("charging-session history excludes traction power and stale unplugged sampl
     "2026-07-23T10:02:00.000Z",
     "2026-07-23T10:03:00.000Z",
   ]);
+});
+
+
+test("day history uses the full-window aggregation RPC instead of a leading raw-row cap", async () => {
+  const calls = [];
+  const rows = [
+    { bucket_id: 0, bucket_kind: 0, device_time: "2026-08-20T00:10:00.000Z", telemetry: { power_kw: -80 }, diplus_charge_gun_state: "1", source_sample_count: "42000", source_first_time: "2026-08-20T00:10:00.000Z", source_last_time: "2026-08-20T22:45:00.000Z" },
+    { bucket_id: 400, bucket_kind: 1, device_time: "2026-08-20T12:00:00.000Z", telemetry: { power_kw: 120 }, diplus_charge_gun_state: "2", source_sample_count: "42000", source_first_time: "2026-08-20T00:10:00.000Z", source_last_time: "2026-08-20T22:45:00.000Z" },
+    { bucket_id: 799, bucket_kind: 2, device_time: "2026-08-20T22:45:00.000Z", telemetry: { power_kw: 0 }, diplus_charge_gun_state: "1", source_sample_count: "42000", source_first_time: "2026-08-20T00:10:00.000Z", source_last_time: "2026-08-20T22:45:00.000Z" },
+  ];
+  const supabase = { rpc: (name, params) => { const query = { order: () => query, range: async (from, to) => { calls.push({ name, params, from, to }); return { data: rows.slice(from, to + 1), error: null }; } }; return query; } };
+  const points = await fetchTelemetryHistory({ supabase, userId: "user-1", vehicleId: "car-1", range: "day", anchorDate: "2026-08-20" });
+  assert.equal(calls[0].name, "bydmate_telemetry_day_buckets");
+  assert.equal(calls[0].params.p_bucket_count, 800);
+  assert.deepEqual(points.map((point) => point.device_time), ["2026-08-20T00:10:00.000Z", "2026-08-20T12:00:00.000Z", "2026-08-20T22:45:00.000Z"]);
+  assert.equal(points[1].telemetry.power_kw, 120);
+  assert.equal(points[1].diplus_charge_gun_state, "2");
 });
