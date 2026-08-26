@@ -193,13 +193,14 @@ export function VehicleComfortControls({
     return liveRows?.find((row) => row.vehicle_id === vehicleId);
   }, [liveRows, vehicleId]);
 
+  const aux = readAuxVoltage(snapshot);
+
   const allowed = relaxGuards || isControlAllowed(snapshot);
   const remoteReady = relaxGuards || isRemoteReady(snapshot);
   const stale =
     !relaxGuards &&
     snapshot != null &&
     Date.now() - new Date(snapshot.received_at).getTime() > VEHICLE_CONTROL_STALE_MS;
-  const aux = readAuxVoltage(snapshot);
   const lowAux = !relaxGuards && aux != null && aux > 0 && aux < VEHICLE_CONTROL_LOW_AUX_V;
   const disabled = !vehicleId || !allowed || sendCommand.isPending;
 

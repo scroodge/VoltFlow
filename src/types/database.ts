@@ -33,12 +33,14 @@ export type Profile = {
 };
 
 import type { CarGeneration } from "@/lib/car-generations";
+import type { AuxBatteryChemistry } from "@/lib/vehicle/aux-battery-chemistry";
 
 export type Car = {
   id: string;
   user_id: string;
   name: string;
   model_generation: CarGeneration;
+  battery_chemistry: AuxBatteryChemistry | null;
   battery_capacity_kwh: number;
   default_charger_power_kw: number;
   /** AC efficiency — home and commercial. Fast DC uses fast_dc_efficiency_percent. */

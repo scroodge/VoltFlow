@@ -37,7 +37,16 @@ export function readSpeed(snapshot: VoltflowMateLiveSnapshotRow | undefined) {
 }
 
 export function readAuxVoltage(snapshot: VoltflowMateLiveSnapshotRow | undefined) {
-  return snapshot?.diplus?.voltage_12v ?? snapshot?.telemetry?.aux_voltage_v ?? null;
+  const candidates = [
+    snapshot?.telemetry?.aux_voltage_v,
+    snapshot?.diplus_voltage_12v,
+    snapshot?.diplus?.voltage_12v,
+  ];
+  for (const candidate of candidates) {
+    const voltage = typeof candidate === "number" ? candidate : Number(candidate);
+    if (Number.isFinite(voltage) && voltage >= 6 && voltage <= 18) return voltage;
+  }
+  return null;
 }
 
 /** Parked (P) or plugged in and stationary — windows/climate OK while charging. */

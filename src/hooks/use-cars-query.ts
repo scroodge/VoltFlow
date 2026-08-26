@@ -85,6 +85,7 @@ export function useCreateCarMutation() {
         user_id: "local",
         name: String(formData.get("name") ?? "Vehicle"),
         model_generation: isCarGeneration(generationRaw) ? generationRaw : "gen1_2024",
+        battery_chemistry: null,
         battery_capacity_kwh: parseDecimalInput(String(formData.get("battery_capacity_kwh") ?? "")) || 75,
         default_charger_power_kw: parseDecimalInput(String(formData.get("default_charger_power_kw") ?? "")) || 4.4,
         default_efficiency_percent:

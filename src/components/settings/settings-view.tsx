@@ -81,6 +81,11 @@ import { useAppPath } from "@/lib/dev/dev-path";
 import { mapChargingTariffLocation, mapUserProvider } from "@/lib/db-map";
 import { queryKeys } from "@/lib/query-keys";
 import {
+  auxBatteryChemistries,
+  deriveAuxBatteryChemistry,
+  type AuxBatteryChemistry,
+} from "@/lib/vehicle/aux-battery-chemistry";
+import {
   ensureNotificationsPermission,
   ensurePushSubscription,
   getPushClientStatus,
@@ -2227,7 +2232,28 @@ function PushStatusRow({ label, value }: { label: string; value: string }) {
 function CarRow({ car }: { car: Car }) {
   const { t } = useTranslation();
   const appPath = useAppPath();
+  const qc = useQueryClient();
+  const [chemistrySaving, setChemistrySaving] = useState(false);
   const generationLabel = t(`cars.generation.${car.model_generation}`) as string;
+  const derivedChemistry = deriveAuxBatteryChemistry(car.model_generation);
+
+  const handleChemistryChange = async (value: string | null) => {
+    if (value == null) return;
+    const batteryChemistry = value === "auto" ? null : value as AuxBatteryChemistry;
+    setChemistrySaving(true);
+    const { error } = await createClient()
+      .from("cars")
+      .update({ battery_chemistry: batteryChemistry })
+      .eq("id", car.id)
+      .eq("user_id", car.user_id);
+    setChemistrySaving(false);
+    if (error) {
+      toast.error(t("settings.auxBattery.saveError") as string);
+      return;
+    }
+    await qc.invalidateQueries({ queryKey: queryKeys.cars });
+    toast.success(t("settings.auxBattery.saved") as string);
+  };
 
   const handleDelete = async () => {
     if (!confirm(t("settings.removeConfirm", { name: car.name }) as string)) return;
@@ -2243,7 +2269,7 @@ function CarRow({ car }: { car: Car }) {
 
   return (
     <div className="border-white/[0.08] flex flex-wrap items-start justify-between gap-3 rounded-2xl border bg-white/[0.02] px-4 py-3.5">
-      <div>
+      <div className="min-w-[16rem] flex-1">
         <p className="text-base font-semibold tracking-tight">{car.name}</p>
         <p className="text-muted-foreground text-sm">{generationLabel}</p>
         <p className="text-muted-foreground text-sm">
@@ -2252,6 +2278,25 @@ function CarRow({ car }: { car: Car }) {
             power: car.default_charger_power_kw,
           })}
         </p>
+        <div className="mt-3 max-w-sm space-y-1.5">
+          <Label htmlFor={`battery-chemistry-${car.id}`}>{t("settings.auxBattery.label")}</Label>
+          <Select value={car.battery_chemistry ?? "auto"} onValueChange={(value) => void handleChemistryChange(value)} disabled={chemistrySaving}>
+            <SelectTrigger id={`battery-chemistry-${car.id}`} className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">
+                {t("settings.auxBattery.derived", { chemistry: t(`settings.auxBattery.options.${derivedChemistry}` as TranslationKey) as string })}
+              </SelectItem>
+              {auxBatteryChemistries.map((chemistry) => (
+                <SelectItem key={chemistry} value={chemistry}>
+                  {t(`settings.auxBattery.options.${chemistry}` as TranslationKey)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">{t("settings.auxBattery.help")}</p>
+        </div>
       </div>
       <div className="flex flex-wrap gap-2">
         <Button
