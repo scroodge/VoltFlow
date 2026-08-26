@@ -11,6 +11,15 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-08-26
 
+### Full-day telemetry charts no longer stop after 5,000 samples
+
+Day analytics now aggregate the complete selected window in PostgreSQL instead of
+fetching only its first 5,000 raw samples. Up to 800 fixed time buckets return min,
+max, and last envelopes, preserving sharp transients while staying within the existing
+2,400-point render budget. RPC paging plus source-bound metadata fails closed if a
+response is incomplete, so a partial morning can no longer look like a complete day.
+
+
 ### 12 V auxiliary-battery resting-voltage analytics
 
 History → Analytics now charts the useful resting 12 V signal rather than treating the

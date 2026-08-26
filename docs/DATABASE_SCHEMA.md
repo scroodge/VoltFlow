@@ -273,6 +273,14 @@ web pushes. It is distinct from `profiles.live_status_mode`, which is the user's
 
 Unique on `(user_id, vehicle_id, device_time)`.
 
+Day-range charts use `bydmate_telemetry_day_buckets(user, vehicle, from, to, 800)`
+rather than a leading raw-row limit. Fixed time buckets cover the complete requested
+window and emit min/max/last envelopes (at most 2,400 points). Min/max retain sharp
+power, speed, temperature, SOC, auxiliary-voltage, and cell-voltage transients; last
+retains an actual end-of-bucket sample and state context. Every row carries full-source
+count/first/last metadata, and the server pages the RPC response then rejects incomplete
+coverage instead of returning a plausible partial chart.
+
 Auxiliary-battery analytics use `bydmate_aux_voltage_daily(user, vehicle, from, to)` to
 return UTC-day min/max voltage, the median resting voltage after two continuous parked,
 unplugged hours, and its sample count. `bydmate_is_parked_unplugged(telemetry, gun_state)`

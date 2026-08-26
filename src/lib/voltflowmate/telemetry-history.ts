@@ -10,6 +10,7 @@ import {
 import { isTelemetryHistoryCharging } from "@/features/charging/domain";
 import { resolveChargingSessionSampleWindow } from "./telemetry-session-window.ts";
 import { mapSohDailyRows, normalizeSohPercent } from "./soh-history-mapping.ts";
+import { mapDayTelemetryBucketRows, type DayTelemetryBucketRow } from "./telemetry-day-buckets.ts";
 import { mapWithConcurrency } from "../async/map-with-concurrency.ts";
 import type { VoltflowMateDiplus, VoltflowMateTelemetry, VoltflowMateTelemetrySampleRow } from "../../types/database.ts";
 
@@ -34,8 +35,8 @@ const SUPABASE_PAGE_SIZE = 1000;
 // prefer the flat columns; the live snapshot table keeps its own diplus blob.
 const TELEMETRY_SAMPLE_SELECT =
   "device_time, telemetry, diplus_charge_gun_state, diplus_min_cell_voltage_v, diplus_max_cell_voltage_v, diplus_cell_delta_v";
-/** Cap raw day fetches before client downsample (heavy charging days). */
-export const MAX_DAY_RAW_SAMPLES = 5000;
+/** Three envelope points (min/max/last) per server-side day bucket. */
+export const DAY_TELEMETRY_BUCKET_COUNT = Math.floor(MAX_TELEMETRY_CHART_POINTS / 3);
 /** Safety cap for trip detail fetches (~5.5 h at 1 Hz). */
 export const MAX_TRIP_RAW_SAMPLES = 20_000;
 
@@ -96,31 +97,26 @@ export async function fetchTelemetryHistory({
   const vehicleFilter = vehicleId ? { vehicle_id: vehicleId } : {};
 
   if (range === "day") {
-    const rows: TelemetryHistorySamplePoint[] = [];
-
-    for (let fromIndex = 0; fromIndex < MAX_DAY_RAW_SAMPLES; fromIndex += SUPABASE_PAGE_SIZE) {
-      const toIndex = Math.min(fromIndex + SUPABASE_PAGE_SIZE - 1, MAX_DAY_RAW_SAMPLES - 1);
+    const rows: (TelemetryHistorySamplePoint & DayTelemetryBucketRow)[] = [];
+    for (let fromIndex = 0; fromIndex < MAX_TELEMETRY_CHART_POINTS; fromIndex += SUPABASE_PAGE_SIZE) {
+      const toIndex = Math.min(fromIndex + SUPABASE_PAGE_SIZE - 1, MAX_TELEMETRY_CHART_POINTS - 1);
       const { data, error } = await supabase
-        .from("bydmate_telemetry_samples")
-        .select(TELEMETRY_SAMPLE_SELECT)
-        .eq("user_id", userId)
-        .match(vehicleFilter)
-        .gte("device_time", window.from)
-        .lte("device_time", window.to)
-        .order("device_time", { ascending: true })
+        .rpc("bydmate_telemetry_day_buckets", {
+          p_user_id: userId,
+          p_vehicle_id: vehicleId,
+          p_from: window.from,
+          p_to: window.to,
+          p_bucket_count: DAY_TELEMETRY_BUCKET_COUNT,
+        })
+        .order("bucket_id", { ascending: true })
+        .order("bucket_kind", { ascending: true })
         .range(fromIndex, toIndex);
-
       if (error) throw error;
-
-      const page = (data ?? []) as TelemetryHistorySamplePoint[];
+      const page = (data ?? []) as (TelemetryHistorySamplePoint & DayTelemetryBucketRow)[];
       rows.push(...page);
-
-      if (page.length < SUPABASE_PAGE_SIZE || rows.length >= MAX_DAY_RAW_SAMPLES) {
-        break;
-      }
+      if (page.length < toIndex - fromIndex + 1) break;
     }
-
-    return downsampleByIndex(rows, MAX_TELEMETRY_CHART_POINTS).map(stripChargingContext);
+    return mapDayTelemetryBucketRows<TelemetryHistorySamplePoint>(rows, MAX_TELEMETRY_CHART_POINTS);
   }
 
   const rawFrom =
