@@ -21,6 +21,14 @@ test("an explicit chemistry overrides the generation default", () => {
 test("other keeps the legacy low reference and has no absolute resting band", () => {
   assert.deepEqual(AUX_BATTERY_REFERENCES.other, {
     restingBand: null,
+    restingCeiling: null,
     lowVoltage: 11.8,
   });
+});
+
+test("resting ceilings leave margin above full charge while excluding converter voltage", () => {
+  assert.equal(AUX_BATTERY_REFERENCES.flooded.restingCeiling, 12.9);
+  assert.equal(AUX_BATTERY_REFERENCES.efb.restingCeiling, 13.0);
+  assert.equal(AUX_BATTERY_REFERENCES.agm.restingCeiling, 13.1);
+  assert.equal(AUX_BATTERY_REFERENCES.lifepo4.restingCeiling, 13.5);
 });

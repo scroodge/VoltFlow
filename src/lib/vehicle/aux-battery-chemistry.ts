@@ -5,16 +5,17 @@ export type AuxBatteryChemistry = (typeof auxBatteryChemistries)[number];
 
 export type AuxBatteryReference = {
   restingBand: readonly [number, number] | null;
+  restingCeiling: number | null;
   lowVoltage: number;
 };
 
 export const AUX_BATTERY_REFERENCES: Record<AuxBatteryChemistry, AuxBatteryReference> = {
-  flooded: { restingBand: [12.6, 12.7], lowVoltage: 11.8 },
-  agm: { restingBand: [12.8, 12.9], lowVoltage: 12.0 },
-  efb: { restingBand: [12.7, 12.8], lowVoltage: 11.9 },
-  lifepo4: { restingBand: [13.3, 13.4], lowVoltage: 12.8 },
+  flooded: { restingBand: [12.6, 12.7], restingCeiling: 12.9, lowVoltage: 11.8 },
+  agm: { restingBand: [12.8, 12.9], restingCeiling: 13.1, lowVoltage: 12.0 },
+  efb: { restingBand: [12.7, 12.8], restingCeiling: 13.0, lowVoltage: 11.9 },
+  lifepo4: { restingBand: [13.3, 13.4], restingCeiling: 13.5, lowVoltage: 12.8 },
   // Unknown batteries retain self-baselining only and the legacy low reference.
-  other: { restingBand: null, lowVoltage: 11.8 },
+  other: { restingBand: null, restingCeiling: null, lowVoltage: 11.8 },
 };
 
 export function isAuxBatteryChemistry(value: unknown): value is AuxBatteryChemistry {
