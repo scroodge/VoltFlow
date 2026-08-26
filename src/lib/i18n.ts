@@ -1348,6 +1348,10 @@ export const dictionaries = {
         channelHelp:
           "Telegram delivery works after you have started the bot at least once.",
         channelSaved: "Notification channel saved.",
+        auxBatteryAlertsLabel: "12V battery health alerts",
+        auxBatteryAlertsHelp: "Acute low-voltage warnings and a silent weekly decline digest. Charging alerts are unaffected.",
+        auxBatteryAlertsSaved: "12V battery alerts setting saved.",
+        enabled: "On", disabled: "Off",
         channels: {
           web_push: "Web push",
           telegram: "Telegram",
@@ -1484,6 +1488,7 @@ export const dictionaries = {
       copyright:
         "© 2026 VoltFlow. Third-party packages and services remain under their respective licenses.",
     },
+    auxBatteryAlerts: { open: "Open VoltFlow", acute: { title: "12V battery needs attention", body: "{vehicle}: resting voltage has stayed low for two days ({voltage} V). Check or charge the auxiliary battery." }, digest: { title: "12V battery is declining", body: "{vehicle}: resting voltage is {voltage} V versus the 90-day baseline of {baseline} V. Consider checking the battery." } },
     auxVoltageStats: {
       minimum: "Minimum",
       maximum: "Maximum",
@@ -2766,6 +2771,10 @@ export const dictionaries = {
         channelHelp:
           "Дастаўка ў Telegram працуе пасля таго, як вы хаця б раз запусцілі бота.",
         channelSaved: "Канал апавяшчэнняў захаваны.",
+        auxBatteryAlertsLabel: "Апавяшчэнні пра стан 12V акумулятара",
+        auxBatteryAlertsHelp: "Тэрміновыя папярэджанні пра нізкае напружанне і ціхая штотыднёвая зводка. Апавяшчэнні пра зарадку не змяняюцца.",
+        auxBatteryAlertsSaved: "Налада апавяшчэнняў 12V акумулятара захавана.",
+        enabled: "Укл.", disabled: "Выкл.",
         channels: {
           web_push: "Web push",
           telegram: "Telegram",
@@ -2902,6 +2911,7 @@ export const dictionaries = {
       copyright:
         "© 2026 VoltFlow. Пакеты і сэрвісы трэціх бакоў застаюцца пад сваімі ліцэнзіямі.",
     },
+    auxBatteryAlerts: { open: "Адкрыць VoltFlow", acute: { title: "12V акумулятар патрабуе ўвагі", body: "{vehicle}: напружанне ў спакоі застаецца нізкім два дні ({voltage} В). Праверце або зарадзіце дапаможны акумулятар." }, digest: { title: "Стан 12V акумулятара пагаршаецца", body: "{vehicle}: напружанне ў спакоі {voltage} В пры базавым значэнні за 90 дзён {baseline} В. Варта праверыць акумулятар." } },
     auxVoltageStats: {
       minimum: "Мінімум",
       maximum: "Максімум",
@@ -4183,6 +4193,10 @@ export const dictionaries = {
         channelHelp:
           "Доставка в Telegram работает после того, как вы хотя бы раз запустили бота.",
         channelSaved: "Канал уведомлений сохранен.",
+        auxBatteryAlertsLabel: "Уведомления о состоянии 12V аккумулятора",
+        auxBatteryAlertsHelp: "Срочные предупреждения о низком напряжении и тихая еженедельная сводка. Уведомления о зарядке не меняются.",
+        auxBatteryAlertsSaved: "Настройка уведомлений 12V аккумулятора сохранена.",
+        enabled: "Вкл.", disabled: "Выкл.",
         channels: {
           web_push: "Web push",
           telegram: "Telegram",
@@ -4319,6 +4333,7 @@ export const dictionaries = {
       copyright:
         "© 2026 VoltFlow. Пакеты и сервисы третьих сторон остаются под своими лицензиями.",
     },
+    auxBatteryAlerts: { open: "Открыть VoltFlow", acute: { title: "12V аккумулятор требует внимания", body: "{vehicle}: напряжение покоя остаётся низким два дня ({voltage} В). Проверьте или зарядите вспомогательный аккумулятор." }, digest: { title: "Состояние 12V аккумулятора ухудшается", body: "{vehicle}: напряжение покоя {voltage} В при базовом значении за 90 дней {baseline} В. Стоит проверить аккумулятор." } },
     auxVoltageStats: {
       minimum: "Минимум",
       maximum: "Максимум",

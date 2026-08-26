@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  AUX_BATTERY_ALERT_THRESHOLDS,
   AUX_BATTERY_REFERENCES,
   deriveAuxBatteryChemistry,
   resolveAuxBatteryChemistry,
@@ -10,6 +11,13 @@ import {
 test("derives the stock chemistry from model generation", () => {
   assert.equal(deriveAuxBatteryChemistry("gen1_2024"), "flooded");
   assert.equal(deriveAuxBatteryChemistry("gen2_2025"), "lifepo4");
+});
+
+test("alert thresholds warn earlier than command-block thresholds and never guess unknown chemistry", () => {
+  for (const chemistry of ["flooded", "efb", "agm", "lifepo4"]) {
+    assert.ok(AUX_BATTERY_ALERT_THRESHOLDS[chemistry] > AUX_BATTERY_REFERENCES[chemistry].lowVoltage);
+  }
+  assert.equal(AUX_BATTERY_ALERT_THRESHOLDS.other, null);
 });
 
 test("an explicit chemistry overrides the generation default", () => {

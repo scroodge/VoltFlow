@@ -87,6 +87,28 @@ telegram_live_messages (
 - Widget copy (labels, emoji, map link format) is Russian-only; there is no
   i18n pass on this surface yet.
 
+## 12V auxiliary-battery health alerts
+
+`POST /api/cron/aux-battery-health` is a once-daily, `x-cron-secret` protected
+evaluation job. It evaluates only completed UTC days from
+`bydmate_aux_voltage_daily.v_resting`; it never uses instantaneous voltage.
+
+- Acute levels are intentionally earlier than remote-command blocking levels:
+  flooded 12.3 V, EFB 12.4 V, AGM 12.5 V, and LiFePO4 13.0 V. Unknown chemistry
+  has no absolute alert.
+- Acute delivery requires two consecutive low calendar days. Durable state in
+  `bydmate_aux_battery_alert_state` allows one audible message per episode and
+  rearms only after two days at least 0.2 V above the alert level.
+- A silent decline digest requires the validated 90-day p90 baseline (at least
+  14 resting days), a latest reading at least 0.2 V below baseline, and a drop
+  of at least 0.1 V across the latest seven resting observations. It is sent at
+  most once per UTC week and never alongside an acute alert.
+- `profiles.aux_battery_alerts_enabled` is the alert-specific opt-out. Delivery
+  continues to use `profiles.notify_channel` (`web_push`, `telegram`, `both`).
+
+The scheduler is intentionally external to the migration: deploying the code
+and schema does not activate a production job automatically.
+
 ## File map
 
 | File | Role |

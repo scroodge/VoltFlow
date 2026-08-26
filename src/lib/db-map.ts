@@ -79,6 +79,11 @@ export function mapProfile(raw: Record<string, unknown>): Profile {
     home_price_per_kwh: num(raw.home_price_per_kwh, defaultPricePerKwh),
     commercial_ac_price_per_kwh: num(raw.commercial_ac_price_per_kwh, defaultPricePerKwh),
     fast_dc_price_per_kwh: num(raw.fast_dc_price_per_kwh, defaultPricePerKwh),
+    telegram_id: raw.telegram_id == null ? null : num(raw.telegram_id),
+    telegram_username: raw.telegram_username == null ? null : String(raw.telegram_username),
+    notify_channel: enumValue(raw.notify_channel, ["web_push", "telegram", "both"] as const, "web_push"),
+    live_status_mode: enumValue(raw.live_status_mode, ["off", "charging", "charging_parked"] as const, "charging"),
+    aux_battery_alerts_enabled: raw.aux_battery_alerts_enabled !== false,
     is_premium: raw.is_premium === true,
     created_at: String(raw.created_at ?? ""),
   };

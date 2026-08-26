@@ -168,6 +168,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   const [telegramUsername, setTelegramUsername] = useState<string | null>(null);
   const [notifyChannel, setNotifyChannel] = useState<NotifyChannel>("web_push");
   const [liveStatusMode, setLiveStatusMode] = useState<LiveStatusMode>("charging");
+  const [auxBatteryAlertsEnabled, setAuxBatteryAlertsEnabled] = useState(true);
   const [pressureUnit, setPressureUnit] = useState<PressureUnit>(defaultPressureUnit);
   const [pressureUnitSaving, setPressureUnitSaving] = useState(false);
   const [telegramInstructionsOpen, setTelegramInstructionsOpen] = useState(false);
@@ -264,6 +265,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             telegram_username?: string | null;
             notify_channel?: string | null;
             live_status_mode?: string | null;
+            aux_battery_alerts_enabled?: boolean | null;
           } | null;
           tariffLocations?: Record<string, unknown>[];
         };
@@ -284,6 +286,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         if (isLiveStatusMode(payload.profile?.live_status_mode)) {
           setLiveStatusMode(payload.profile.live_status_mode);
         }
+        setAuxBatteryAlertsEnabled(payload.profile?.aux_battery_alerts_enabled !== false);
 
         const preferredCurrency = payload.profile?.preferred_currency;
         if (typeof preferredCurrency === "string" && isCurrency(preferredCurrency)) {
@@ -343,7 +346,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       const [{ data: profile, error }, { data: locationRows }] = await Promise.all([
         supabase
         .from("profiles")
-        .select("preferred_currency, preferred_pressure_unit, default_price_per_kwh, home_price_per_kwh, commercial_ac_price_per_kwh, fast_dc_price_per_kwh, telegram_id, telegram_username, notify_channel, live_status_mode")
+        .select("preferred_currency, preferred_pressure_unit, default_price_per_kwh, home_price_per_kwh, commercial_ac_price_per_kwh, fast_dc_price_per_kwh, telegram_id, telegram_username, notify_channel, live_status_mode, aux_battery_alerts_enabled")
         .eq("id", user.id)
         .single(),
         supabase.from("charging_tariff_locations").select("*").eq("user_id", user.id),
@@ -361,6 +364,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       if (isLiveStatusMode(profile?.live_status_mode)) {
         setLiveStatusMode(profile.live_status_mode);
       }
+      setAuxBatteryAlertsEnabled(profile?.aux_battery_alerts_enabled !== false);
 
       const preferredCurrency = profile?.preferred_currency;
       if (typeof preferredCurrency === "string" && isCurrency(preferredCurrency)) {
@@ -927,6 +931,18 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       });
   };
 
+  const handleAuxBatteryAlertsChange = (value: string | null) => {
+    const enabled = value === "enabled";
+    if (value !== "enabled" && value !== "disabled") return;
+    const previous = auxBatteryAlertsEnabled;
+    setAuxBatteryAlertsEnabled(enabled);
+    if (!profileUserId) return;
+    void createClient().from("profiles").update({ aux_battery_alerts_enabled: enabled }).eq("id", profileUserId).then(({ error }) => {
+      if (error) { setAuxBatteryAlertsEnabled(previous); toast.error(error.message); return; }
+      toast.success(t("settings.telegramConnect.auxBatteryAlertsSaved") as string);
+    });
+  };
+
   useEffect(() => {
     if (!linkExpiresAt) return;
     const id = window.setInterval(() => setNowMs(Date.now()), 1000);
@@ -1281,6 +1297,18 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
               </SelectContent>
             </Select>
             <p className="text-muted-foreground text-sm">{t("settings.liveStatus.help")}</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="aux-battery-alerts">{t("settings.telegramConnect.auxBatteryAlertsLabel")}</Label>
+            <Select value={auxBatteryAlertsEnabled ? "enabled" : "disabled"} onValueChange={handleAuxBatteryAlertsChange} items={["enabled", "disabled"].map((value) => ({ value, label: t(`settings.telegramConnect.${value}` as TranslationKey) as string }))}>
+              <SelectTrigger id="aux-battery-alerts" className="h-11 w-full rounded-2xl text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="enabled">{t("settings.telegramConnect.enabled")}</SelectItem>
+                <SelectItem value="disabled">{t("settings.telegramConnect.disabled")}</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-muted-foreground text-sm">{t("settings.telegramConnect.auxBatteryAlertsHelp")}</p>
           </div>
         </CardContent>
       </Card>
