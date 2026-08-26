@@ -1,5 +1,5 @@
 -- Exclude DC-DC converter voltage from the resting median. Min/max deliberately
--- retain the full valid 6-18 V range so converter activity remains visible.
+-- use sanitized telemetry only, while resting keeps raw fallback for sparse sleep samples.
 create or replace function public.bydmate_aux_voltage_daily(
   p_user_id uuid,
   p_vehicle_id text,
@@ -46,6 +46,7 @@ as $$
         public.bydmate_jsonb_numeric(telemetry, 'aux_voltage_v'),
         diplus_voltage_12v
       ) as voltage,
+      public.bydmate_jsonb_numeric(telemetry, 'aux_voltage_v') as telemetry_voltage,
       public.bydmate_is_parked_unplugged(telemetry, diplus_charge_gun_state) as is_parked,
       (select resting_ceiling from car_config) as resting_ceiling
     from public.bydmate_telemetry_samples
@@ -72,8 +73,8 @@ as $$
   )
   select
     (device_time at time zone 'UTC')::date as date,
-    min(voltage) filter (where voltage between 6 and 18)::numeric as v_min,
-    max(voltage) filter (where voltage between 6 and 18)::numeric as v_max,
+    min(telemetry_voltage) filter (where telemetry_voltage between 6 and 18)::numeric as v_min,
+    max(telemetry_voltage) filter (where telemetry_voltage between 6 and 18)::numeric as v_max,
     percentile_cont(0.5) within group (order by voltage)
       filter (
         where voltage between 6 and 18
