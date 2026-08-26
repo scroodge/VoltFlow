@@ -1,6 +1,6 @@
 import { createEmbedding } from "@/lib/embeddings";
 import { isCarGeneration, type CarGeneration } from "@/lib/car-generations";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export type KnowledgeSearchResult = {
   id: string;
@@ -94,7 +94,7 @@ async function runKnowledgeSearch(params: {
 }) {
   const embedding = await createEmbedding(params.query);
 
-  const { data, error } = await supabaseAdmin.rpc("match_knowledge_items", {
+  const { data, error } = await getSupabaseAdmin().rpc("match_knowledge_items", {
     query_embedding: embedding,
     match_threshold: 0.2,
     match_count: params.limit ?? 8,

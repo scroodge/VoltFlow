@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { mapAdminUsersAttention } from "@/lib/admin-users-attention";
 import { mapAdminUsersStats } from "@/lib/admin-users-stats";
 import { isPremiumFromUntil, resolveEffectivePremium } from "@/lib/premium-entitlement";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/supabase/knowledge";
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
 
   let telemetryUserIds: string[] | undefined;
   if (telemetry === "7d" || telemetry === "30d") {
-    const { data, error } = await supabaseAdmin.rpc("admin_users_activity_filter_ids", {
+    const { data, error } = await getSupabaseAdmin().rpc("admin_users_activity_filter_ids", {
       p_filter: telemetry,
     });
     if (error) return NextResponse.json({ error: "Activity filter failed" }, { status: 500 });
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
           : lastSeen === "24h" || lastSeen === "never"
             ? lastSeen
             : "30d_seen";
-    const { data, error } = await supabaseAdmin.rpc("admin_users_activity_filter_ids", {
+    const { data, error } = await getSupabaseAdmin().rpc("admin_users_activity_filter_ids", {
       p_filter: filter,
     });
     if (error) return NextResponse.json({ error: "Last-seen filter failed" }, { status: 500 });
@@ -222,7 +222,7 @@ async function runProfilesQuery(params: {
   registeredSince: string;
   registeredBefore: string;
 }) {
-  let query = supabaseAdmin
+  let query = getSupabaseAdmin()
     .from("profiles")
     .select(
       params.includePremiumUntil
@@ -284,13 +284,13 @@ async function runProfilesQuery(params: {
 }
 
 async function loadAllAdminIds() {
-  const { data } = await supabaseAdmin.from("admin_users").select("user_id");
+  const { data } = await getSupabaseAdmin().from("admin_users").select("user_id");
   return new Set<string>((data ?? []).map((r) => String(r.user_id)).filter(Boolean));
 }
 
 async function loadAdminSet(userIds: string[]) {
   if (userIds.length === 0) return new Set<string>();
-  const { data } = await supabaseAdmin
+  const { data } = await getSupabaseAdmin()
     .from("admin_users")
     .select("user_id")
     .in("user_id", userIds);
@@ -307,7 +307,7 @@ async function loadUserMetrics(userIds: string[]) {
   const map = new Map<string, AdminUserMetrics>();
   if (userIds.length === 0) return map;
 
-  const { data, error } = await supabaseAdmin.rpc("admin_users_user_metrics", {
+  const { data, error } = await getSupabaseAdmin().rpc("admin_users_user_metrics", {
     p_user_ids: userIds,
   });
   if (error) throw new Error(`Could not load user metrics: ${error.message}`);
@@ -342,7 +342,7 @@ function emptyActivity(): ActivityCounts {
 }
 
 async function loadAdminStats() {
-  const { data, error } = await supabaseAdmin.rpc("admin_users_dashboard_stats");
+  const { data, error } = await getSupabaseAdmin().rpc("admin_users_dashboard_stats");
   if (error) {
     throw new Error(`Could not load admin dashboard stats: ${error.message}`);
   }
@@ -355,7 +355,7 @@ async function loadAdminOverview() {
 }
 
 async function loadAdminAttention() {
-  const { data, error } = await supabaseAdmin.rpc("admin_users_attention_queue");
+  const { data, error } = await getSupabaseAdmin().rpc("admin_users_attention_queue");
   if (error) {
     throw new Error(`Could not load admin attention queue: ${error.message}`);
   }

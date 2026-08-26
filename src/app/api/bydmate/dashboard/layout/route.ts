@@ -6,7 +6,7 @@ import {
   getDashboardLayout,
   saveDashboardLayout,
 } from "@/lib/voltflowmate/dashboard-layouts";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
@@ -22,7 +22,7 @@ async function authorize(request: NextRequest): Promise<Authorized | Rejected> {
   // Re-checks entitlement on every call. The cluster caches its own entitlement for six
   // hours, so a lapsed subscription can still present a client that believes it is
   // premium; this is the check that is actually current.
-  const auth = await resolveEntitledProfileId(supabaseAdmin, apiKey);
+  const auth = await resolveEntitledProfileId(getSupabaseAdmin(), apiKey);
   if ("error" in auth) {
     return {
       response: NextResponse.json({ ok: false, error: auth.error }, { status: auth.status }),
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const stored = await getDashboardLayout(supabaseAdmin, auth.userId);
+    const stored = await getDashboardLayout(getSupabaseAdmin(), auth.userId);
     if (!stored) {
       // An account that has never backed up is not an error — the cluster shows
       // "no backup yet" rather than a failure.
@@ -103,7 +103,7 @@ export async function PUT(request: NextRequest) {
 
   try {
     const { updatedAt } = await saveDashboardLayout(
-      supabaseAdmin,
+      getSupabaseAdmin(),
       auth.userId,
       layout as Record<string, unknown>,
       version,

@@ -1,7 +1,7 @@
 import { isCarGeneration, type CarGeneration } from "@/lib/car-generations";
 import { buildKnowledgeEmbeddingText, createEmbedding } from "@/lib/embeddings";
 import { invalidateKnowledgeSearchCache } from "@/lib/knowledge-search";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createPublicClient } from "@/lib/supabase/public";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeModelGenerations } from "@/lib/telegram/generation";
@@ -276,7 +276,7 @@ export async function updateArticleStatus(id: string, status: ArticleStatus) {
 
   if (error) throw error;
 
-  const { error: knowledgeError } = await supabaseAdmin
+  const { error: knowledgeError } = await getSupabaseAdmin()
     .from("knowledge_items")
     .update({ is_published: status === "published" })
     .eq("id", id);
@@ -834,7 +834,7 @@ async function upsertKnowledgeItem(item: {
     tags: item.tags,
   });
   const embedding = await createEmbedding(embeddingText);
-  const { error } = await supabaseAdmin.from("knowledge_items").upsert({
+  const { error } = await getSupabaseAdmin().from("knowledge_items").upsert({
     id: item.id,
     title: item.title,
     content: item.content,
@@ -855,7 +855,7 @@ async function upsertKnowledgeItem(item: {
 }
 
 async function deleteKnowledgeItem(id: string) {
-  const { error } = await supabaseAdmin.from("knowledge_items").delete().eq("id", id);
+  const { error } = await getSupabaseAdmin().from("knowledge_items").delete().eq("id", id);
   if (error) throw error;
   invalidateKnowledgeSearchCache();
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/supabase/knowledge";
 
 export async function DELETE(
@@ -24,7 +24,7 @@ export async function DELETE(
     );
   }
 
-  const { data: existing, error: lookupError } = await supabaseAdmin
+  const { data: existing, error: lookupError } = await getSupabaseAdmin()
     .from("admin_users")
     .select("user_id")
     .eq("user_id", targetUserId)
@@ -40,7 +40,7 @@ export async function DELETE(
     );
   }
 
-  const { error: deleteError } = await supabaseAdmin
+  const { error: deleteError } = await getSupabaseAdmin()
     .from("admin_users")
     .delete()
     .eq("user_id", targetUserId);

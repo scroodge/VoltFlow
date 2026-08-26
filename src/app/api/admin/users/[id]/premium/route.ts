@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/supabase/knowledge";
 
 type PremiumUpdateBody = {
@@ -22,7 +22,7 @@ export async function POST(
     return NextResponse.json({ error: "Missing user id." }, { status: 400 });
   }
 
-  const { data: adminRow, error: adminError } = await supabaseAdmin
+  const { data: adminRow, error: adminError } = await getSupabaseAdmin()
     .from("admin_users")
     .select("user_id")
     .eq("user_id", userId)
@@ -71,7 +71,7 @@ export async function POST(
     return NextResponse.json({ error: "No premium fields provided." }, { status: 400 });
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await getSupabaseAdmin()
     .from("profiles")
     .update(updatePayload)
     .eq("id", userId)

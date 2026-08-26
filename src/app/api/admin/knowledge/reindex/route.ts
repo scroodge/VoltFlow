@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { buildKnowledgeEmbeddingText, createEmbedding } from "@/lib/embeddings";
 import { mapWithConcurrency } from "@/lib/async/map-with-concurrency";
 import { invalidateKnowledgeSearchCache } from "@/lib/knowledge-search";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/supabase/knowledge";
 
 type KnowledgeItemForReindex = {
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     const force = body?.force === true;
     const concurrency = clampConcurrency(body?.concurrency);
 
-    let query = supabaseAdmin
+    let query = getSupabaseAdmin()
       .from("knowledge_items")
       .select("id,title,content,category,tags")
       .eq("is_published", true)
@@ -93,7 +93,7 @@ async function reindexKnowledgeItem(item: KnowledgeItemForReindex): Promise<Rein
       tags: item.tags ?? [],
     });
     const embedding = await createEmbedding(embeddingText);
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await getSupabaseAdmin()
       .from("knowledge_items")
       .update({ embedding })
       .eq("id", item.id);

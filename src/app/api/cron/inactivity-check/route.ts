@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { sendInactivityWarning } from "@/lib/email/inactivity-warning";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const CRON_SECRET = process.env.CRON_SECRET ?? "";
 
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
   // Step 1: find users inactive for 30+ days, no warning sent yet, not premium
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: warnCandidates } = await supabaseAdmin
+  const { data: warnCandidates } = await getSupabaseAdmin()
     .from("profiles")
     .select("id, email")
     .lt("last_active_at", thirtyDaysAgo)
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       if (!profile.email) continue;
       const result = await sendInactivityWarning(profile.email);
       if (result.ok) {
-        await supabaseAdmin
+        await getSupabaseAdmin()
           .from("profiles")
           .update({ inactivity_warning_sent_at: now.toISOString() })
           .eq("id", profile.id);
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
   // Step 2: find users inactive for 60+ days, warning sent, not premium
   const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: deleteCandidates } = await supabaseAdmin
+  const { data: deleteCandidates } = await getSupabaseAdmin()
     .from("profiles")
     .select("id, email")
     .lt("last_active_at", sixtyDaysAgo)
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
 
   if (deleteCandidates) {
     for (const profile of deleteCandidates) {
-      const { error } = await supabaseAdmin.auth.admin.deleteUser(profile.id);
+      const { error } = await getSupabaseAdmin().auth.admin.deleteUser(profile.id);
       if (error) {
         results.errors.push(`Deletion failed for ${profile.id}: ${error.message}`);
       } else {

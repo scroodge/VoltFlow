@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { verifyTelegramInitData } from "@/lib/telegram/verify-init-data";
 
 // node:crypto (HMAC verify) requires the Node.js runtime, not Edge.
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
   const username = tg.username ?? null;
 
   // 1. Resolve the account by linked telegram_id.
-  const { data: linked, error: linkedErr } = await supabaseAdmin
+  const { data: linked, error: linkedErr } = await getSupabaseAdmin()
     .from("profiles")
     .select("id, email")
     .eq("telegram_id", tg.id)
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     userEmail = linked.email ?? email;
   } else {
     // 2a. Re-link edge case: a tg_* account exists but lost its telegram_id.
-    const { data: byEmail } = await supabaseAdmin
+    const { data: byEmail } = await getSupabaseAdmin()
       .from("profiles")
       .select("id, email")
       .eq("email", email)
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
     } else {
       // 2b. Create a fresh account. The on_auth_user_created trigger inserts
       // the matching profiles row.
-      const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+      const { data: created, error: createErr } = await getSupabaseAdmin().auth.admin.createUser({
         email,
         email_confirm: true,
         user_metadata: {
@@ -100,7 +100,7 @@ export async function POST(request: Request) {
     }
 
     // Link telegram identity onto the profile (service role bypasses RLS).
-    const { error: updateErr } = await supabaseAdmin
+    const { error: updateErr } = await getSupabaseAdmin()
       .from("profiles")
       .update({ telegram_id: tg.id, telegram_username: username })
       .eq("id", userId);
@@ -114,7 +114,7 @@ export async function POST(request: Request) {
 
   // 3. Mint a session: generate a magiclink (no email is sent) then redeem the
   // OTP server-side to obtain access/refresh tokens for the client.
-  const { data: link, error: genErr } = await supabaseAdmin.auth.admin.generateLink({
+  const { data: link, error: genErr } = await getSupabaseAdmin().auth.admin.generateLink({
     type: "magiclink",
     email: userEmail,
   });
