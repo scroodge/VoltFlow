@@ -1,5 +1,7 @@
 -- One-off audit and cleanup for vehicle commands stranded by the remote-command kill switch.
 --
+-- IMPORTANT: As of the production audit on 2026-08-26, this cleanup runbook was NOT executed.
+--
 -- Audit boundary, when the static kill-switch bypass merged (PR #15):
 --   2026-08-20 19:27:16+00
 -- Cleanup cutoff, when command creation was gated (PR #17):
@@ -9,6 +11,25 @@
 --
 -- This file is intended for manual review and execution in the Supabase SQL editor.
 -- Nothing in this repository runs it automatically.
+--
+-- Findings as of 2026-08-26 (audit run, cleanup NOT executed)
+-- -----------------------------------------------------------------------------
+-- Production contained 70 vehicle_commands rows:
+--   done = 52, failed = 11, rejected = 6, pending = 1
+--
+-- The sole pending row was a windows_preset command created at
+-- 2026-08-10T16:12:29.099370+00:00. It was also the newest row in the entire table; no
+-- command had been enqueued since 2026-08-10. There was therefore no accumulation during
+-- the kill-switch window. This row predates the 2026-08-20 kill switch by ten days and was
+-- stranded for another reason, most likely because its poll never returned before the old
+-- expiry path could mark it.
+--
+-- WARNING: The cleanup cutoff below (2026-08-26 10:42:29+00) would include that lone row and
+-- label it kill_switch=true and never_delivered=true. That attribution would be factually
+-- wrong for this particular row. Do not run the cleanup blindly: re-run and review the audit
+-- and preview, confirm the cutoff and provenance of every candidate, and adjust the operation
+-- as appropriate. The unchanged runbook remains here for a future kill-switch window in which
+-- rows genuinely accumulate.
 
 -- -----------------------------------------------------------------------------
 -- AUDIT (read-only)
