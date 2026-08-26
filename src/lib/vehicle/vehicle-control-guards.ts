@@ -3,6 +3,7 @@ import { isTelemetryCharging } from "@/features/charging/domain";
 import type { VoltflowMateLiveSnapshotRow } from "@/types/database";
 import {
   auxCommandBlockVoltage,
+  hasCorroboratedLowAuxVoltage,
   type AuxBatteryChemistry,
 } from "@/lib/vehicle/aux-battery-chemistry";
 
@@ -62,6 +63,7 @@ export function isStationaryForRemoteControl(snapshot: VoltflowMateLiveSnapshotR
 export function isControlAllowed(
   snapshot: VoltflowMateLiveSnapshotRow | undefined,
   chemistry: AuxBatteryChemistry = "other",
+  recentAuxVoltages: readonly number[] = [],
 ) {
   if (!snapshot) return false;
   const receivedAt = new Date(snapshot.received_at).getTime();
@@ -70,17 +72,26 @@ export function isControlAllowed(
   }
   if (!isStationaryForRemoteControl(snapshot)) return false;
   const aux = readAuxVoltage(snapshot);
-  if (aux != null && aux < auxCommandBlockVoltage(chemistry)) return false;
+  if (
+    aux != null &&
+    aux < auxCommandBlockVoltage(chemistry) &&
+    hasCorroboratedLowAuxVoltage(recentAuxVoltages, chemistry)
+  ) return false;
   return true;
 }
 
 export function isRemoteReady(
   snapshot: VoltflowMateLiveSnapshotRow | undefined,
   chemistry: AuxBatteryChemistry = "other",
+  recentAuxVoltages: readonly number[] = [],
 ) {
   if (!isTelemetryFresh(snapshot)) return false;
   if (!isStationaryForRemoteControl(snapshot)) return false;
   const aux = readAuxVoltage(snapshot);
-  if (aux != null && aux < auxCommandBlockVoltage(chemistry)) return false;
+  if (
+    aux != null &&
+    aux < auxCommandBlockVoltage(chemistry) &&
+    hasCorroboratedLowAuxVoltage(recentAuxVoltages, chemistry)
+  ) return false;
   return isSentryReady(snapshot);
 }

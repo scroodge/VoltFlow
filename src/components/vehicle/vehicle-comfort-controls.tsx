@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   AirVent,
   ChevronDown,
@@ -192,6 +192,7 @@ export function VehicleComfortControls({
   const scheduleActions = useVehicleCommandSchedules(vehicleId);
   const sendCommand = useSendVehicleCommand(vehicleId);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [previousAuxReading, setPreviousAuxReading] = useState<{ vehicleId: string; receivedAt: string; voltage: number } | null>(null);
 
   const snapshot = useMemo(() => {
     if (!vehicleId) return undefined;
@@ -203,14 +204,34 @@ export function VehicleComfortControls({
     return resolveAuxBatteryChemistry(car?.battery_chemistry, car?.model_generation);
   }, [carsResult?.cars, vehicleId]);
   const lowAuxVoltage = auxCommandBlockVoltage(chemistry);
+  const aux = readAuxVoltage(snapshot);
+  const currentReceivedAt = snapshot?.received_at;
+  const recentAuxVoltages =
+    vehicleId && currentReceivedAt && aux != null &&
+    previousAuxReading?.vehicleId === vehicleId &&
+    previousAuxReading.receivedAt !== currentReceivedAt
+      ? [previousAuxReading.voltage, aux]
+      : [];
 
-  const allowed = relaxGuards || isControlAllowed(snapshot, chemistry);
-  const remoteReady = relaxGuards || isRemoteReady(snapshot, chemistry);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setPreviousAuxReading(
+        vehicleId && currentReceivedAt && aux != null
+          ? { vehicleId, receivedAt: currentReceivedAt, voltage: aux }
+          : null,
+      );
+    });
+    return () => { cancelled = true; };
+  }, [aux, currentReceivedAt, vehicleId]);
+
+  const allowed = relaxGuards || isControlAllowed(snapshot, chemistry, recentAuxVoltages);
+  const remoteReady = relaxGuards || isRemoteReady(snapshot, chemistry, recentAuxVoltages);
   const stale =
     !relaxGuards &&
     snapshot != null &&
     Date.now() - new Date(snapshot.received_at).getTime() > VEHICLE_CONTROL_STALE_MS;
-  const aux = readAuxVoltage(snapshot);
   const lowAux = !relaxGuards && aux != null && aux < lowAuxVoltage;
   const disabled = !vehicleId || !allowed || sendCommand.isPending;
 

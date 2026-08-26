@@ -4,12 +4,20 @@ import test from "node:test";
 import {
   AUX_BATTERY_REFERENCES,
   deriveAuxBatteryChemistry,
+  hasCorroboratedLowAuxVoltage,
   resolveAuxBatteryChemistry,
 } from "./vehicle/aux-battery-chemistry.ts";
 
 test("derives the stock chemistry from model generation", () => {
   assert.equal(deriveAuxBatteryChemistry("gen1_2024"), "flooded");
   assert.equal(deriveAuxBatteryChemistry("gen2_2025"), "lifepo4");
+});
+
+test("requires two consecutive low readings before blocking", () => {
+  assert.equal(hasCorroboratedLowAuxVoltage([12.5], "lifepo4"), false);
+  assert.equal(hasCorroboratedLowAuxVoltage([13.2, 12.5], "lifepo4"), false);
+  assert.equal(hasCorroboratedLowAuxVoltage([12.7, 12.5], "lifepo4"), true);
+  assert.equal(hasCorroboratedLowAuxVoltage([], "lifepo4"), false);
 });
 
 test("an explicit chemistry overrides the generation default", () => {

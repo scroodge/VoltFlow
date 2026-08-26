@@ -36,3 +36,12 @@ export function resolveAuxBatteryChemistry(
 export function auxCommandBlockVoltage(chemistry: AuxBatteryChemistry) {
   return AUX_BATTERY_REFERENCES[chemistry].commandBlockVoltage;
 }
+
+/** Two consecutive valid readings are required before the safety guard blocks. */
+export function hasCorroboratedLowAuxVoltage(
+  recentVoltages: readonly number[],
+  chemistry: AuxBatteryChemistry,
+) {
+  const threshold = auxCommandBlockVoltage(chemistry);
+  return recentVoltages.length >= 2 && recentVoltages.slice(-2).every((voltage) => voltage < threshold);
+}
