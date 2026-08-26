@@ -272,6 +272,13 @@ web pushes. It is distinct from `profiles.live_status_mode`, which is the user's
 | `telemetry` | jsonb | `{soc, speed_kmh, power_kw, charge_power_kw, battery_temp_c, cabin_temp_c, outside_temp_c, soh_percent, odometer_km, gear, …}` |
 
 Unique on `(user_id, vehicle_id, device_time)`.
+
+Auxiliary-battery analytics use `bydmate_aux_voltage_daily(user, vehicle, from, to)` to
+return UTC-day min/max voltage, the median resting voltage after two continuous parked,
+unplugged hours, and its sample count. `bydmate_is_parked_unplugged(telemetry, gun_state)`
+is the immutable per-sample predicate shared with `bydmate_phantom_drain_daily`; callers
+retain their distinct two-hour and four-hour interval thresholds. Inputs resolve
+`telemetry.aux_voltage_v` before `diplus_voltage_12v` and are revalidated to 6–18 V.
 Retention: free users **30 days**; Premium/Admin data is retained indefinitely while the account
 is active (migration `20260626130000`). Managed by `purge_old_bydmate_telemetry_by_tier()` (see
 [Retention & Housekeeping](#retention--housekeeping)).

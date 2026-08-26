@@ -11,6 +11,17 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-08-26
 
+### 12 V auxiliary-battery resting-voltage analytics
+
+History → Analytics now charts the useful resting 12 V signal rather than treating the
+~14 V DC-DC charging plateau as battery health. Day view uses raw intraday readings;
+longer ranges show daily min/max bands and a median resting line after two continuous
+parked-and-unplugged hours. Facts include the latest resting value, a chemistry-agnostic
+trailing-90-day p90 baseline, signed voltage change, history sufficiency, the 11.8 V
+remote-command marker, and low-voltage day count. The parked predicate is shared with
+phantom-drain SQL while preserving its separate four-hour threshold.
+
+
 ### Phantom charging sessions while the gun stays plugged in
 
 #### Shipped

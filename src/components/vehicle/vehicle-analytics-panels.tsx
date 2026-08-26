@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { AnalyticsDayView } from "@/components/vehicle/analytics-day-view";
 import { ChargeDeltaTrendChart } from "@/components/vehicle/charge-delta-trend-chart";
+import { AuxVoltageTrendChart } from "@/components/vehicle/aux-voltage-trend-chart";
 import { HistoryDaySummaryCard } from "@/components/history/history-day-summary-card";
 import {
   AnalyticsSummaryStats,
@@ -22,11 +23,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useVoltflowMateLiveQuery } from "@/hooks/use-voltflowmate-live-query";
+import { useAuxVoltageHistoryQuery } from "@/hooks/use-aux-voltage-history-query";
 import { useVoltflowMateSohHistoryQuery } from "@/hooks/use-voltflowmate-soh-history-query";
 import { useVoltflowMateTelemetryHistoryQuery } from "@/hooks/use-voltflowmate-telemetry-history-query";
 import type { TelemetryHistoryPoint } from "@/lib/voltflowmate/telemetry-history";
 import { useTranslation } from "@/hooks/use-translation";
 import { buildChargeDeltaTrend } from "@/lib/voltflowmate/charge-delta-trend";
+import { computeAuxVoltageBaseline, AUX_MIN_RESTING_DAYS } from "@/lib/voltflowmate/aux-voltage-baseline";
 import { buildAnalyticsSummary, consumptionByOutsideTemp } from "@/lib/voltflowmate/telemetry-buckets";
 import { computeHistoryPeriodSummary } from "@/lib/history-day-summary";
 import {
@@ -59,6 +62,7 @@ type PeriodTripRow = VoltflowMateTripRow & { outside_temp_avg?: number | null };
 const EMPTY_PERIOD_TRIPS: PeriodTripRow[] = [];
 const EMPTY_PERIOD_SESSIONS: ChargingSessionRow[] = [];
 const EMPTY_HISTORY_POINTS: TelemetryHistoryPoint[] = [];
+const EMPTY_AUX_DAILY_POINTS: import("@/lib/voltflowmate/aux-voltage-history").AuxVoltageDailyPoint[] = [];
 
 function fmt(value: number | null | undefined, digits = 1) {
   return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
@@ -345,6 +349,25 @@ export function VehicleAnalyticsPanels({
 
   const isDayRange = historyRange === "day";
 
+  const auxFetchFrom = useMemo(() => {
+    const baselineFrom = new Date(Date.parse(telemetryWindow.to));
+    baselineFrom.setUTCDate(baselineFrom.getUTCDate() - 89);
+    return Date.parse(telemetryWindow.from) < baselineFrom.getTime()
+      ? telemetryWindow.from
+      : baselineFrom.toISOString();
+  }, [telemetryWindow.from, telemetryWindow.to]);
+  const auxVoltageQuery = useAuxVoltageHistoryQuery({
+    vehicleId,
+    from: auxFetchFrom,
+    to: telemetryWindow.to,
+    enabled: !isDayRange,
+  });
+  const retentionQuery = useQuery({
+    queryKey: ["vehicle-retention-status"],
+    queryFn: () => fetchAnalytics<{ isPremium: boolean; retentionDays: number }>("/api/vehicle/retention-status"),
+    staleTime: 5 * 60_000,
+  });
+
   const periodOverviewQuery = useQuery({
     queryKey: ["vehicle-analytics", "period-overview", historyRange, anchorDate, vehicleId],
     queryFn: () => {
@@ -484,6 +507,17 @@ export function VehicleAnalyticsPanels({
     () => buildChargeDeltaTrend(periodSessions, sohQuery.data ?? []),
     [periodSessions, sohQuery.data],
   );
+
+  const auxDailyPoints = auxVoltageQuery.data ?? EMPTY_AUX_DAILY_POINTS;
+  const visibleAuxDailyPoints = useMemo(
+    () => auxDailyPoints.filter((point) => {
+      const time = Date.parse(`${point.date}T00:00:00Z`);
+      return time >= Date.parse(telemetryWindow.from) && time <= Date.parse(telemetryWindow.to);
+    }),
+    [auxDailyPoints, telemetryWindow.from, telemetryWindow.to],
+  );
+  const auxBaseline = useMemo(() => computeAuxVoltageBaseline(auxDailyPoints), [auxDailyPoints]);
+  const lowAuxDayCount = visibleAuxDailyPoints.filter((point) => point.vResting != null && point.vResting < 11.8).length;
 
   const latestSohPercent = useMemo(() => {
     const points = (sohQuery.data ?? []).filter(
@@ -669,6 +703,36 @@ export function VehicleAnalyticsPanels({
             <ChargeDeltaTrendChart trend={chargeDeltaTrend} locale={locale} tx={tx} />
           )}
         </div>
+      </section>
+
+      <section className="voltflow-card p-5">
+        <h2 className="font-heading text-2xl font-semibold tracking-tight">{tx("vehicle.analytics.aux12vTitle")}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{tx("vehicle.analytics.aux12vSubtitle")}</p>
+        {auxVoltageQuery.isLoading && !isDayRange ? (
+          <Skeleton className="mt-4 h-52 rounded-2xl" />
+        ) : auxVoltageQuery.error && !isDayRange ? (
+          <p className="mt-4 rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">{tx("vehicle.analytics.aux12vNoData")}</p>
+        ) : (isDayRange ? historyPoints.some((point) => typeof point.telemetry.aux_voltage_v === "number") : visibleAuxDailyPoints.length > 0) ? (
+          <>
+            <div className="mt-4">
+              <AuxVoltageTrendChart range={historyRange} dailyPoints={visibleAuxDailyPoints} dayPoints={historyPoints} baseline={auxBaseline.baseline} locale={locale} tx={tx} />
+            </div>
+            {!isDayRange ? auxBaseline.sufficient ? (
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <AnalyticsStat label={tx("vehicle.analytics.aux12vRestingNow")} value={`${fmt(auxBaseline.restingNow, 2)} V`} />
+                <AnalyticsStat label={tx("vehicle.analytics.aux12vBaseline")} value={`${fmt(auxBaseline.baseline, 2)} V`} />
+                <AnalyticsStat label={tx("vehicle.analytics.aux12vChange")} value={`${(auxBaseline.change ?? 0) >= 0 ? "+" : ""}${fmt(auxBaseline.change, 2)} V`} />
+              </div>
+            ) : (
+              <p className="mt-3 rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">{tx("vehicle.analytics.aux12vNotEnough", { count: auxBaseline.restingDayCount, required: AUX_MIN_RESTING_DAYS })}</p>
+            ) : null}
+            {!isDayRange && auxBaseline.sufficient ? <p className="mt-3 text-xs text-muted-foreground">{tx("vehicle.analytics.aux12vBasedOn", { count: auxBaseline.restingDayCount })}</p> : null}
+            {lowAuxDayCount > 0 ? <p className="mt-2 text-sm text-amber-400">{tx("vehicle.analytics.aux12vLowDays", { count: lowAuxDayCount })}</p> : null}
+            {!retentionQuery.data?.isPremium && (historyRange === "quarter" || historyRange === "year") ? <p className="mt-2 text-xs text-muted-foreground">{tx("vehicle.analytics.aux12vPremiumHistory")}</p> : null}
+          </>
+        ) : (
+          <p className="mt-4 rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">{tx("vehicle.analytics.aux12vNoData")}</p>
+        )}
       </section>
 
       {!isDayRange && chargingBarCharts.length > 0 ? (

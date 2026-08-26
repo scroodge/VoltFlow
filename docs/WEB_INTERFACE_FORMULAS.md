@@ -312,6 +312,26 @@ Owning sources: [`telemetry-analytics-charts.tsx`](../src/components/vehicle/tel
 [`vehicle-analytics-panels.tsx`](../src/components/vehicle/vehicle-analytics-panels.tsx), and
 [`charge-delta-trend.ts`](../src/lib/voltflowmate/charge-delta-trend.ts).
 
+## Vehicle analytics: 12 V auxiliary-battery health
+
+| Displayed result | Formula or rule | Explanation |
+| --- | --- | --- |
+| Intraday voltage | Every valid `telemetry.aux_voltage_v` sample in the selected day | Shows the raw 6–18 V curve for day view. |
+| Daily voltage band | `min(V)` to `max(V)` for valid samples | Keeps a visible record even when no resting interval qualifies. |
+| Resting voltage | Median of valid samples after two continuous hours parked and unplugged | Excludes the DC-DC charging plateau and lets surface charge dissipate. |
+| 90-day baseline | p90 of daily resting voltages in the trailing 90-day window | Self-baselines the vehicle without assuming lead-acid or LiFePO4 chemistry. |
+| Change | `latest daily resting voltage − 90-day baseline` | Signed voltage difference; no health category is inferred. |
+| History gate | At least 14 days with resting readings | Baseline and change remain hidden until enough history exists. |
+| Command-block marker | `11.8 V` | Remote vehicle commands are blocked below this measured voltage. |
+
+A sample is parked and unplugged when speed is at most 0.5 km/h, absolute power is at
+most 0.1 kW, and charging is false, with Di+ gun state `1` explicitly treated as
+unplugged. Voltage resolves as `coalesce(telemetry.aux_voltage_v, diplus_voltage_12v)`
+and is accepted only from 6 through 18 V. Owning sources:
+[`aux-voltage-baseline.ts`](../src/lib/voltflowmate/aux-voltage-baseline.ts),
+[`aux-voltage-trend-chart.tsx`](../src/components/vehicle/aux-voltage-trend-chart.tsx),
+and migration `20260826172117_aux_voltage_daily.sql`.
+
 ## Vehicle analytics: phantom drain
 
 | Displayed result | Formula or rule | Explanation |
