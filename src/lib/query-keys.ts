@@ -18,6 +18,8 @@ export const queryKeys = {
     ["bydmate-telemetry-history", range, date, vehicleId] as const,
   voltflowMateSohHistory: (date: string, vehicleId: string | null) =>
     ["bydmate-soh-history", date, vehicleId] as const,
+  voltflowMateAuxVoltageHistory: (vehicleId: string, from: string, to: string) =>
+    ["bydmate-aux-voltage-history", vehicleId, from, to] as const,
   vehicleCommands: (vehicleId: string | null) => ["vehicle-commands", vehicleId] as const,
   mateLatestRelease: ["mate-latest-release"] as const,
   pairedDevices: ["bydmate-paired-devices"] as const,
