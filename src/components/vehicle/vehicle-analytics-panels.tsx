@@ -715,7 +715,7 @@ export function VehicleAnalyticsPanels({
         ) : (isDayRange ? historyPoints.some((point) => typeof point.telemetry.aux_voltage_v === "number") : visibleAuxDailyPoints.length > 0) ? (
           <>
             <div className="mt-4">
-              <AuxVoltageTrendChart range={historyRange} dailyPoints={visibleAuxDailyPoints} dayPoints={historyPoints} baseline={auxBaseline.baseline} locale={locale} baselineLabel={tx("vehicle.analytics.aux12vBaseline")} commandBlockLabel={tx("vehicle.analytics.aux12vCommandBlock")} />
+              <AuxVoltageTrendChart range={historyRange} dailyPoints={visibleAuxDailyPoints} dayPoints={historyPoints} baseline={auxBaseline.baseline} locale={locale} tx={tx} />
             </div>
             {!isDayRange ? auxBaseline.sufficient ? (
               <div className="mt-3 grid grid-cols-3 gap-2">
