@@ -18,6 +18,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ComponentType } from "react";
 
+import { REMOTE_COMMANDS_ENABLED } from "@/lib/voltflowmate/remote-commands";
+
 export const dynamic = "force-dynamic";
 
 type DevRoute = {
@@ -68,7 +70,9 @@ const fixtureRoutes: DevRoute[] = [
   directRoute("WB API debug", "/dev/api", Server),
   directRoute("Vehicle fixture controls", "/dev/vehicle-telemetry-fixtures", Beaker),
   directRoute("DiPlus diagnostics", "/dev/bydmate-diplus", Beaker),
-  directRoute("Vehicle remote control", "/dev/vehicle-control", CarFront),
+  ...(REMOTE_COMMANDS_ENABLED
+    ? [directRoute("Vehicle remote control", "/dev/vehicle-control", CarFront)]
+    : []),
 ];
 
 const dynamicRoutes: DevRoute[] = [

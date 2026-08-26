@@ -1,13 +1,14 @@
 import { notFound } from "next/navigation";
 
 import { DEV_WAY_VEHICLE_ID } from "@/lib/dev/way-context";
+import { REMOTE_COMMANDS_ENABLED } from "@/lib/voltflowmate/remote-commands";
 
 import { VehicleControlDevClient } from "./VehicleControlDevClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function VehicleControlDevPage() {
-  if (process.env.NODE_ENV === "production") {
+  if (process.env.NODE_ENV === "production" || !REMOTE_COMMANDS_ENABLED) {
     notFound();
   }
 

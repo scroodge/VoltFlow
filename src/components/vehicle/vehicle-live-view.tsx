@@ -232,7 +232,13 @@ function useClientMounted() {
   );
 }
 
-export function VehicleLiveView({ isAdmin = false }: { isAdmin?: boolean }) {
+export function VehicleLiveView({
+  isAdmin = false,
+  remoteCommandsEnabled = false,
+}: {
+  isAdmin?: boolean;
+  remoteCommandsEnabled?: boolean;
+}) {
   const { t } = useTranslation();
   const tx = t as Translator;
   const searchParams = useSearchParams();
@@ -316,6 +322,7 @@ export function VehicleLiveView({ isAdmin = false }: { isAdmin?: boolean }) {
       initialTripId={initialTripId}
       hasMounted={hasMounted}
       isAdmin={isAdmin}
+      remoteCommandsEnabled={remoteCommandsEnabled}
     />
   );
 }
@@ -350,6 +357,7 @@ function VehicleLiveContent({
   initialTripId = null,
   hasMounted = true,
   isAdmin = false,
+  remoteCommandsEnabled = false,
 }: {
   snapshot: VoltflowMateLiveSnapshotRow;
   rangeBaseSnapshot: VoltflowMateLiveSnapshotRow | null;
@@ -359,6 +367,7 @@ function VehicleLiveContent({
   initialTripId?: string | null;
   hasMounted?: boolean;
   isAdmin?: boolean;
+  remoteCommandsEnabled?: boolean;
 }) {
   const { data: carsData } = useCarsQuery();
   const selectedCarId = useAppPreferences((state) => state.selectedCarId);
@@ -525,6 +534,7 @@ function VehicleLiveContent({
           ) : null}
           {!fixturePoints && isAdmin ? (
             <VehicleControlPanel
+              enabled={remoteCommandsEnabled}
               vehicleId={scopedVehicleId ?? snapshot.vehicle_id}
               collapsible
             />
@@ -534,6 +544,7 @@ function VehicleLiveContent({
         <>
           {!fixturePoints && isAdmin ? (
             <VehicleControlPanel
+              enabled={remoteCommandsEnabled}
               vehicleId={scopedVehicleId ?? snapshot.vehicle_id}
               collapsible
             />

@@ -3,6 +3,7 @@ import { Suspense } from "react";
 
 import { VehicleHub } from "@/components/vehicle/vehicle-hub";
 import { isCurrentUserAdmin } from "@/lib/supabase/knowledge";
+import { REMOTE_COMMANDS_ENABLED } from "@/lib/voltflowmate/remote-commands";
 
 export const metadata: Metadata = {
   title: "Авто",
@@ -31,7 +32,12 @@ function VehicleLoading() {
 async function VehiclePageContent() {
   const isAdmin = await isCurrentUserAdmin();
 
-  return <VehicleHub isAdmin={isAdmin} />;
+  return (
+    <VehicleHub
+      isAdmin={isAdmin}
+      remoteCommandsEnabled={REMOTE_COMMANDS_ENABLED}
+    />
+  );
 }
 
 export default function VehiclePage() {

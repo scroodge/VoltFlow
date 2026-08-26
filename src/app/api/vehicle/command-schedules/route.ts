@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { validateVehicleCommand } from "@/lib/diplus/command-allowlist";
 import { resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
+import { REMOTE_COMMANDS_ENABLED } from "@/lib/voltflowmate/remote-commands";
 
 export const runtime = "nodejs";
 
@@ -74,6 +75,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const access = await resolveVehicleApiAccess(request);
   if (!access) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!REMOTE_COMMANDS_ENABLED) {
+    return NextResponse.json(
+      { ok: false, error: "remote_commands_disabled" },
+      { status: 403 },
+    );
+  }
 
   let body: ScheduleInput;
   try { body = await request.json() as ScheduleInput; } catch {
