@@ -272,3 +272,134 @@ test("frozen-value detection is skipped without a raw charge_power_kw reading", 
     assert.equal(action.type, "none", `minute ${minute}`);
   }
 });
+
+test("stops an open session after a sustained run of explicit zero charge power", () => {
+  // Charger stopped with the gun still in the car (AC). Di+ keeps is_charging true, so
+  // the keep-alive predicate holds the session open, and SOC drifts down from standby
+  // draw — which defeats the frozen-reading check, since it needs SOC bit-identical.
+  // Only the zero-power stall can end this. Car `way`, 2026-08-26.
+  const socAt = (minute) => (minute < 2 ? 100 : minute < 4 ? 99.9 : 99.8);
+  let state = null;
+  let action = { type: "none" };
+  let stoppedAtMinute = null;
+  for (let minute = 0; minute <= 6 && stoppedAtMinute == null; minute += 1) {
+    const step = nextAutoChargingSessionStep({
+      state,
+      isCharging: true,
+      canStartSession: false,
+      soc: socAt(minute),
+      speedKmh: 0,
+      hasActiveSession: true,
+      chargerPowerKw: 4.4,
+      rawChargePowerKw: 0,
+      deviceTime: at(minute),
+    });
+    state = step.state;
+    action = step.action;
+    if (action.type === "stop") stoppedAtMinute = minute;
+    else assert.equal(action.type, "none", `minute ${minute}`);
+  }
+  // AUTO_CHARGING_ZERO_POWER_STALL_MS is 5 minutes, measured from the first zero sample.
+  assert.equal(stoppedAtMinute, 5);
+  assert.equal(action.currentPercent, 99.8);
+});
+
+test("a brief zero-kW blip mid-charge does not stop the session", () => {
+  // Genuine charges report the odd zero reading; only a sustained run may end a session.
+  let state = null;
+  for (let minute = 0; minute <= 12; minute += 1) {
+    const blip = minute === 4 || minute === 5;
+    const step = nextAutoChargingSessionStep({
+      state,
+      isCharging: true,
+      canStartSession: !blip,
+      soc: 70 + minute,
+      speedKmh: 0,
+      hasActiveSession: true,
+      chargerPowerKw: 4.4,
+      rawChargePowerKw: blip ? 0 : 4.4,
+      deviceTime: at(minute),
+    });
+    state = step.state;
+    assert.equal(step.action.type, "none", `minute ${minute}`);
+  }
+});
+
+test("no charge power means no measurement, not zero — the stall must not fire", () => {
+  // Firmware that never populates charge_power_kw must keep behaving as before.
+  let state = null;
+  for (let minute = 0; minute <= 12; minute += 1) {
+    const step = nextAutoChargingSessionStep({
+      state,
+      isCharging: true,
+      canStartSession: false,
+      soc: 80,
+      speedKmh: 0,
+      hasActiveSession: true,
+      chargerPowerKw: null,
+      rawChargePowerKw: null,
+      deviceTime: at(minute),
+    });
+    state = step.state;
+    assert.equal(step.action.type, "none", `minute ${minute}`);
+  }
+});
+
+test("plugged in at zero power never starts a session, however long it sits there", () => {
+  let state = null;
+  for (let minute = 0; minute <= 30; minute += 1) {
+    const step = nextAutoChargingSessionStep({
+      state,
+      isCharging: true,
+      canStartSession: false,
+      soc: 99.8,
+      speedKmh: 0,
+      hasActiveSession: false,
+      chargerPowerKw: 4.4,
+      rawChargePowerKw: 0,
+      deviceTime: at(minute),
+    });
+    state = step.state;
+    assert.equal(step.action.type, "none", `minute ${minute}`);
+  }
+});
+
+test("a delayed-start charger backdates to the SOC it sat at while plugged in and idle", () => {
+  // Plugged in at 40% for hours with the charger idle, then real power arrives. The
+  // plugged-but-idle samples are the correct pre-charge baseline, so the session must
+  // start from 40 — not from whatever SOC the confirming sample happens to carry.
+  let state = null;
+  for (let minute = 0; minute <= 3; minute += 1) {
+    state = nextAutoChargingSessionStep({
+      state,
+      isCharging: true,
+      canStartSession: false,
+      soc: 40,
+      speedKmh: 0,
+      hasActiveSession: false,
+      chargerPowerKw: 4.4,
+      rawChargePowerKw: 0,
+      deviceTime: at(minute),
+    }).state;
+  }
+
+  let action = { type: "none" };
+  for (let minute = 4; minute <= 7; minute += 1) {
+    const step = nextAutoChargingSessionStep({
+      state,
+      isCharging: true,
+      canStartSession: true,
+      soc: 40 + (minute - 4),
+      speedKmh: 0,
+      hasActiveSession: false,
+      chargerPowerKw: 4.4,
+      rawChargePowerKw: 4.4,
+      deviceTime: at(minute),
+    });
+    state = step.state;
+    action = step.action;
+  }
+  assert.equal(action.type, "start");
+  assert.equal(action.startPercent, 40);
+  assert.equal(action.startedAt, at(4));
+});

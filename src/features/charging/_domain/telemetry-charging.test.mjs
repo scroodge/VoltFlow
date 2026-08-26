@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   isMateAutoSessionCharging,
+  isMateAutoSessionChargingSustained,
   isTelemetryHistoryCharging,
   isTelemetryCharging,
   sanitizeChargerPowerKw,
@@ -32,15 +33,66 @@ test("100% balance tail is not charging", () => {
   );
 });
 
-test("parked is_charging below 100% counts even at ~0 kW (regression: branch was dead code)", () => {
-  // e.g. charge ramp-up or a car reporting is_charging without charge_power_kw
+test("parked is_charging at ~0 kW does not START a session (phantom-session regression)", () => {
+  // Reverses an earlier assertion that this "counts even at ~0 kW". Di+ `is_charging`
+  // means the gun is connected, not that energy is flowing, and it stays true for hours
+  // after a charger stops with the gun left in — which opened a loop of phantom 0 kWh
+  // sessions on car `way` (2026-08-26). A real charge reports real power on 77–99% of
+  // rising-SOC samples across every production vehicle, so nothing genuine is lost, and
+  // ramp-up is recovered by backdating instead.
   assert.equal(
     isMateAutoSessionCharging({ is_charging: true, charge_power_kw: 0, soc: 84 }, 0),
-    true,
+    false,
   );
   assert.equal(
     isMateAutoSessionCharging({ is_charging: true, charge_power_kw: null, soc: 84 }, 0),
+    false,
+  );
+});
+
+test("SOC drifting below 100 while plugged in does not start a phantom session", () => {
+  // The exact production sample that caused the bug: charger stopped, gun still in (AC,
+  // gun state 2), SOC drifted 100 -> 99.8 from standby draw. The old `soc >= 100`
+  // balance-tail guard missed it by 0.2%.
+  assert.equal(
+    isMateAutoSessionCharging(
+      { is_charging: true, charge_power_kw: 0, soc: 99.8 },
+      0,
+      { diplus: { charge_gun_state: 2 } },
+    ),
+    false,
+  );
+});
+
+test("an open session stays alive through a momentary zero-kW reading", () => {
+  // The tolerant half of the pair: ending a real charge on a couple of zero blips would
+  // be far worse than holding it open until the zero-power stall confirms the stop.
+  assert.equal(
+    isMateAutoSessionChargingSustained(
+      { is_charging: true, charge_power_kw: 0, soc: 84 },
+      0,
+      { diplus: { charge_gun_state: 2 } },
+    ),
     true,
+  );
+  assert.equal(
+    isMateAutoSessionChargingSustained({ is_charging: true, charge_power_kw: null, soc: 84 }, 0),
+    true,
+  );
+});
+
+test("keep-alive still respects an explicit unplug and drive-away", () => {
+  assert.equal(
+    isMateAutoSessionChargingSustained(
+      { is_charging: true, charge_power_kw: 0, soc: 84 },
+      0,
+      { diplus: { charge_gun_state: 1 } },
+    ),
+    false,
+  );
+  assert.equal(
+    isMateAutoSessionChargingSustained({ is_charging: true, charge_power_kw: 4, soc: 84 }, 20),
+    false,
   );
 });
 

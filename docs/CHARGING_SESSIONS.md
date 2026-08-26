@@ -29,24 +29,48 @@ vehicle data or complete a session while fresh live SOC is available.
 
 ## Automatic session detection
 
-Automatic charging detection requires all of the following:
+**Starting and staying open are two different questions, answered by two different
+predicates.** Di+ reports `is_charging` for as long as the gun is *connected*, not while
+energy is flowing, so a single signal cannot serve both: strict enough to avoid phantom
+sessions is strict enough to end real ones on a momentary zero reading.
 
-- `charge_power_kw > 0.1 kW`, or the compatible `is_charging` fallback when Di+ does not
-  explicitly report an unplugged gun;
+Starting a session (`isMateAutoSessionCharging`) requires all of the following:
+
+- `charge_power_kw > 0.1 kW` — **real measured power, with no `is_charging` fallback**;
 - the vehicle is parked (`speed_kmh ≤ 5`);
 - four consecutive charging samples in the recent three-minute ingest window;
 - a vehicle alias matching the authenticated telemetry stream.
 
-Traction `power_kw` is not a charging signal. An explicit unplug state overrides a stale
-charging flag, and the 100% balance tail does not start a new session.
+Traction `power_kw` is never a charging signal. Gun state is deliberately *not* consulted
+when starting: on car `way` it reads `1` ("unplugged") for the majority of genuine charging
+samples, so real measured power must win outright.
+
+Keeping an open session alive (`isMateAutoSessionChargingSustained`) is deliberately more
+tolerant: real power, or `is_charging` while the gun is not explicitly unplugged. Genuine
+charges report the occasional zero or absent `charge_power_kw`, and ending a real session on
+a couple of those is worse than holding it open a few minutes too long.
 
 The server backdates an automatic start to the first charging sample. It uses the last suitable
 idle SOC when that reading is at most 30 minutes old and no greater than the first charging SOC;
 otherwise it uses the first charging sample's SOC. It never takes the confirming fourth sample as
-the real start when earlier evidence exists.
+the real start when earlier evidence exists. A plugged-in-but-idle sample counts as an idle
+reading, so a car left on a delayed-start charger opens its session at the SOC it sat at.
 
-An open session stops after two consecutive non-charging samples or immediately after a
-drive-away above 5 km/h. A stop timestamp can never precede its start timestamp.
+An open session stops on any of:
+
+- two consecutive non-charging samples;
+- immediately after a drive-away above 5 km/h;
+- `AUTO_CHARGING_ZERO_POWER_STALL_MS` (5 min) of *explicitly* zero `charge_power_kw`, at any
+  SOC — the "charger stopped, gun still in" case;
+- the frozen-reading check: SOC and charge power bit-identical for 10 minutes.
+
+A stop timestamp can never precede its start timestamp.
+
+The zero-power stall and the frozen-reading check are **not** redundant. The frozen check
+needs SOC *and* power unchanged, and a parked car's SOC drifts *down* (100 → 99.9 → 99.8)
+from standby draw, resetting it at every step; the stall watches power alone. A `null` power
+reading is never treated as zero — no measurement is not the same as no energy, and firmware
+that never populates `charge_power_kw` must not be auto-stopped by it.
 
 ## Energy and cost
 

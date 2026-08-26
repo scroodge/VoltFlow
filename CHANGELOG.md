@@ -9,6 +9,79 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-08-26
+
+### Phantom charging sessions while the gun stays plugged in
+
+#### Shipped
+
+Auto-created charging sessions no longer appear after a charger stops with the charge gun
+left in the car. Di+ reports `is_charging` for as long as the gun is *connected*, not while
+energy is flowing, so the ingest reducer kept opening 0 kWh sessions on a loop. Observed on
+car `way` on 2026-08-26: a real AC charge ended at 08:42 UTC (77.6% -> 100%, 10.31 kWh) and
+three phantom sessions followed it, each created within 4-15 seconds of the previous one
+being auto-stopped.
+
+Two independent defects combined:
+
+1. **Auto-start accepted "plugged in" as "charging".** `isMateAutoSessionCharging` fell
+   through the `charge_power_kw > 0.1` test at 0 kW; the gun-state fallback rejects only
+   state `1` (explicitly unplugged), so state `2` (AC connected) passed; `is_charging`
+   passed; and the balance-tail guard `soc >= 100` missed because a parked car's SOC drifts
+   *down* (100 -> 99.9 -> 99.8) from standby draw.
+2. **The frozen-reading auto-stop could not converge.** It requires `soc` **and**
+   `charge_power_kw` bit-identical for 10 minutes, and every 0.1% drift step reset the
+   timer. When it did fire, defect 1 was still true, so a replacement session opened
+   seconds later.
+
+#### Design decision
+
+**The start and keep-alive decisions are now separate predicates**, because one boolean
+cannot serve both. Making the single signal strict would have ended genuine charges on two
+brief zero-kW blips; leaving it tolerant is what created the phantom sessions.
+
+- `isMateAutoSessionCharging` (**strict**, gates *starting*) requires real measured charge
+  power. Safe fleet-wide: on samples with strictly-rising SOC, every production vehicle
+  reports `charge_power_kw > 0.1` on 77-99% of samples (`way` 82.0%, `cl` 99.4%,
+  `yuan up` 77.4%, `BYD Yuan Up 25` 94.8%), so no car depended on the `is_charging`-only
+  path. This **reverses** an earlier deliberate assertion ("parked is_charging below 100%
+  counts even at ~0 kW"), which had been added for charge ramp-up; ramp-up is instead
+  covered by the existing backdating.
+- `isMateAutoSessionChargingSustained` (**tolerant**, keeps an open session alive) keeps the
+  previous gun-state/`is_charging` behavior, so momentary zero readings mid-charge are
+  harmless.
+- `AUTO_CHARGING_ZERO_POWER_STALL_MS` (5 min) closes a session after a sustained run of
+  *explicitly* zero charge power, at any SOC. It watches power only, so SOC drift cannot
+  reset it. A null reading is deliberately **not** treated as zero — no measurement is not
+  the same as no energy.
+- A plugged-in-but-idle sample now falls into the reducer's idle branch, so its SOC becomes
+  the pre-charge baseline. A car left on a delayed-start charger therefore opens its session
+  at the right start percent when power finally arrives.
+- Session rotation after a telemetry gap now keys off the strict predicate, so a
+  plugged-in-but-idle sample cannot spawn a replacement session.
+
+#### Migration
+
+`20260826120000_bydmate_auto_charging_zero_power_state.sql` adds
+`zero_power_since_device_time timestamptz` to `bydmate_auto_charging_session_state`.
+Applied to self-hosted production via `psql -f` and verified present. Existing rows are
+`NULL`, which is the correct "no stall in progress" state, so no backfill was needed.
+
+#### Verification
+
+TypeScript clean. Full suite 128/128; the excluded `auto-session.test.mjs` 15/15, including
+new cases for the 5-minute stall, a mid-charge zero blip that must *not* stop a session, a
+null power reading that must not trigger the stall, a plugged-in car that never starts a
+session, and delayed-start backdating. Lint on the changed files: 0 errors. Repo-wide lint
+unchanged at its 13-error baseline (all pre-existing React component errors).
+
+#### Known gap at time of writing
+
+The fix is in the working tree only. Production still runs the previous build, so the loop
+continues there until the API is deployed.
+
+---
+
 ## 2026-08-19
 
 ### Trip metric explainers

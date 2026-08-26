@@ -24,6 +24,23 @@ export const AUTO_CHARGING_BACKDATE_MAX_IDLE_GAP_MS = 30 * 60_000;
  * the same way an explicit unplug would.
  */
 export const AUTO_CHARGING_FROZEN_READING_STALE_MS = 10 * 60_000;
+/**
+ * How long an open session may keep reporting an explicit ~0 kW `charge_power_kw` before
+ * it is closed, regardless of SOC.
+ *
+ * This is the "charger stopped but the gun is still in" case. Di+ keeps `is_charging`
+ * true for as long as the gun is connected, so the session's keep-alive predicate
+ * (`isMateAutoSessionChargingSustained`) correctly holds it open — something has to end
+ * it. The frozen-reading check above cannot: it needs SOC *and* power bit-identical, and
+ * a parked car's SOC drifts *down* (100 → 99.9 → 99.8) from standby draw, resetting that
+ * timer at every step. This check watches power only, so drift cannot defeat it.
+ *
+ * Must stay comfortably longer than a genuine mid-charge zero blip. Charging telemetry
+ * queues at 10 s and is delivered in 60 s bulk batches, so this spans several batches.
+ */
+export const AUTO_CHARGING_ZERO_POWER_STALL_MS = 5 * 60_000;
+/** `charge_power_kw` at or below this is "no energy flowing" (mirrors the domain threshold). */
+export const AUTO_CHARGING_ZERO_POWER_THRESHOLD_KW = 0.1;
 
 export type AutoChargingSessionState = {
   consecutiveChargingSamples: number;
@@ -44,6 +61,12 @@ export type AutoChargingSessionState = {
   frozenSoc: number | null;
   frozenChargePowerKw: number | null;
   frozenSinceDeviceTime: string | null;
+  /**
+   * Device time since `charge_power_kw` was first seen at an explicit ~0 while a session
+   * was open — see AUTO_CHARGING_ZERO_POWER_STALL_MS. Null whenever real power is flowing
+   * (or none is reported at all, which is a different case: no measurement, not zero).
+   */
+  zeroPowerSinceDeviceTime: string | null;
 };
 
 const NOT_FROZEN = {
@@ -51,6 +74,8 @@ const NOT_FROZEN = {
   frozenChargePowerKw: null,
   frozenSinceDeviceTime: null,
 } as const;
+
+const NO_ZERO_POWER = { zeroPowerSinceDeviceTime: null } as const;
 
 export type AutoChargingSessionAction =
   | { type: "none" }
@@ -100,6 +125,7 @@ function resolveBackdatedStart({
 export function nextAutoChargingSessionStep({
   state,
   isCharging,
+  canStartSession,
   soc,
   speedKmh,
   hasActiveSession,
@@ -108,7 +134,19 @@ export function nextAutoChargingSessionStep({
   deviceTime,
 }: {
   state: AutoChargingSessionState | null;
+  /**
+   * Keep-alive signal — whether an *already-open* session is still charging
+   * (`isMateAutoSessionChargingSustained`). Deliberately tolerant: true while the gun is
+   * connected, so a momentary zero-kW reading mid-charge does not end a real session.
+   */
   isCharging: boolean;
+  /**
+   * Start gate — whether this sample is real, measured charging
+   * (`isMateAutoSessionCharging`). Strict: requires actual charge power, because Di+
+   * reports `is_charging` for as long as the gun is plugged in, long after a charger has
+   * stopped. Defaults to `isCharging` when omitted, which is the pre-split behavior.
+   */
+  canStartSession?: boolean;
   soc: number | null;
   speedKmh: number | null;
   hasActiveSession: boolean;
@@ -116,12 +154,14 @@ export function nextAutoChargingSessionStep({
   /**
    * The sample's own `charge_power_kw`, undefaulted (unlike `chargerPowerKw`, which the
    * caller may have substituted with the car's default power). Used only to detect a
-   * frozen/stale reading — a defaulted value would look "unchanged" on every sample that
-   * has no real power telemetry at all, which is a different and far more common case.
+   * frozen/stale or stalled-at-zero reading — a defaulted value would look "unchanged" on
+   * every sample that has no real power telemetry at all, which is a different and far
+   * more common case.
    */
   rawChargePowerKw?: number | null;
   deviceTime: string;
 }): { state: AutoChargingSessionState; action: AutoChargingSessionAction } {
+  const canStart = canStartSession ?? isCharging;
   const prev: AutoChargingSessionState = state ?? {
     consecutiveChargingSamples: 0,
     consecutiveUnplugSamples: 0,
@@ -131,7 +171,13 @@ export function nextAutoChargingSessionStep({
     lastIdlePercent: null,
     lastIdleDeviceTime: null,
     ...NOT_FROZEN,
+    ...NO_ZERO_POWER,
   };
+
+  // Explicitly measured "no energy flowing", as opposed to no power reading at all
+  // (null) — only the former can end a session via the zero-power stall.
+  const isExplicitZeroPower =
+    rawChargePowerKw != null && rawChargePowerKw <= AUTO_CHARGING_ZERO_POWER_THRESHOLD_KW;
 
   const idle =
     soc != null
@@ -161,6 +207,7 @@ export function nextAutoChargingSessionStep({
             ...noStreak,
             ...idle,
             ...NOT_FROZEN,
+            ...NO_ZERO_POWER,
           },
           action: { type: "stop", currentPercent: soc },
         };
@@ -173,9 +220,36 @@ export function nextAutoChargingSessionStep({
           ...noStreak,
           ...idle,
           ...NOT_FROZEN,
+          ...NO_ZERO_POWER,
         },
         action: { type: "none" },
       };
+    }
+
+    // Reported charging, but the charger may simply have stopped with the gun left in —
+    // Di+ keeps `is_charging` true indefinitely in that state. A *sustained* run of
+    // explicitly-zero charge power ends the session at any SOC, where the frozen-reading
+    // check below cannot (parked SOC drift resets it). See
+    // AUTO_CHARGING_ZERO_POWER_STALL_MS.
+    const zeroPowerSinceDeviceTime = isExplicitZeroPower
+      ? (prev.zeroPowerSinceDeviceTime ?? deviceTime)
+      : null;
+    if (zeroPowerSinceDeviceTime != null && soc != null) {
+      const zeroPowerMs = Date.parse(deviceTime) - Date.parse(zeroPowerSinceDeviceTime);
+      if (Number.isFinite(zeroPowerMs) && zeroPowerMs >= AUTO_CHARGING_ZERO_POWER_STALL_MS) {
+        return {
+          state: {
+            consecutiveChargingSamples: 0,
+            consecutiveUnplugSamples: 0,
+            lastIsCharging: false,
+            ...noStreak,
+            ...idle,
+            ...NOT_FROZEN,
+            ...NO_ZERO_POWER,
+          },
+          action: { type: "stop", currentPercent: soc },
+        };
+      }
     }
 
     // Reported charging — but Di+ can keep echoing the last real charge_power_kw/SOC
@@ -219,6 +293,7 @@ export function nextAutoChargingSessionStep({
             ...noStreak,
             ...idle,
             ...NOT_FROZEN,
+            ...NO_ZERO_POWER,
           },
           action: { type: "stop", currentPercent: soc },
         };
@@ -231,6 +306,7 @@ export function nextAutoChargingSessionStep({
           ...noStreak,
           ...carriedIdle,
           ...frozenTracking,
+          zeroPowerSinceDeviceTime,
         },
         action: { type: "none" },
       };
@@ -244,13 +320,19 @@ export function nextAutoChargingSessionStep({
         ...noStreak,
         ...carriedIdle,
         ...frozenTracking,
+        zeroPowerSinceDeviceTime,
       },
       action: { type: "none" },
     };
   }
 
+  // No active session. A sample that is plugged-in-but-not-actually-charging (tolerant
+  // `isCharging` true, strict `canStart` false) deliberately falls into the idle branch:
+  // its SOC is exactly the pre-charge baseline that backdating wants, so the car can sit
+  // plugged in for hours on a delayed-start charger and still open a session with the
+  // right start percent the moment real power appears.
   const drivingAway = speedKmh != null && speedKmh > AUTO_CHARGING_DRIVE_STOP_SPEED_KMH;
-  if (!isCharging || drivingAway) {
+  if (!canStart || drivingAway) {
     return {
       state: {
         consecutiveChargingSamples: 0,
@@ -259,6 +341,7 @@ export function nextAutoChargingSessionStep({
         ...noStreak,
         ...idle,
         ...NOT_FROZEN,
+        ...NO_ZERO_POWER,
       },
       action: { type: "none" },
     };
@@ -292,6 +375,7 @@ export function nextAutoChargingSessionStep({
         lastIdlePercent: null,
         lastIdleDeviceTime: null,
         ...NOT_FROZEN,
+        ...NO_ZERO_POWER,
       },
       action: {
         type: "start",
@@ -310,6 +394,7 @@ export function nextAutoChargingSessionStep({
       ...streakStart,
       ...carriedIdle,
       ...NOT_FROZEN,
+      ...NO_ZERO_POWER,
     },
     action: { type: "none" },
   };
