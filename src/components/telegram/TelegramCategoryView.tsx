@@ -42,7 +42,7 @@ export function TelegramCategoryView({ category, content }: TelegramCategoryView
   return (
     <>
       <Link
-        href={`/telegram?gen=${generation}`}
+        href={`/knowledge?gen=${generation}`}
         className="inline-flex min-h-11 items-center rounded-lg border border-border bg-white/[0.04] px-4 text-sm font-semibold text-muted-foreground"
       >
         На главную

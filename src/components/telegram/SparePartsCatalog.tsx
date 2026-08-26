@@ -70,7 +70,7 @@ function SparePartCard({ item }: { item: SparePartItem }) {
   const cover = item.images[0];
 
   return (
-    <Link href={`/telegram/spare-part/${item.id}`} className="voltflow-card block p-4 transition hover:border-[var(--voltflow-cyan)]/60 focus-visible:ring-3 focus-visible:ring-[var(--voltflow-cyan)]/30">
+    <Link href={`/knowledge/spare-part/${item.id}`} className="voltflow-card block p-4 transition hover:border-[var(--voltflow-cyan)]/60 focus-visible:ring-3 focus-visible:ring-[var(--voltflow-cyan)]/30">
       {cover ? (
         <div className="mb-4 block w-full overflow-hidden rounded-lg border border-border">
           <Image

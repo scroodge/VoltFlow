@@ -40,6 +40,10 @@ export async function proxy(request: NextRequest) {
 
   const isPublic =
     PUBLIC_PATHS.has(pathname) ||
+    pathname.startsWith("/knowledge/") ||
+    // Kept alongside /knowledge/ for the redirect window: next.config redirects
+    // and the proxy are separate layers, so a /telegram/* content URL must stay
+    // public regardless of which one sees the request first.
     pathname.startsWith("/telegram/") ||
     pathname.startsWith("/legal/");
   const isDevAuthPath = DEV_AUTH_PREFIXES.some(

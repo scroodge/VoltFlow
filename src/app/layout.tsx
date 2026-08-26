@@ -32,9 +32,12 @@ export const metadata: Metadata = {
     template: "%s · VoltFlow",
   },
   description: DESCRIPTION,
-  alternates: {
-    canonical: "/",
-  },
+  // No `alternates` here on purpose. Metadata is inherited, so a root canonical
+  // of "/" silently self-canonicalises every route that does not set its own —
+  // /support, /onboarding, the whole (app) group and the KB detail routes all
+  // pointed at the homepage, which tells Google they are duplicates of it.
+  // Each indexable route declares its own canonical; non-indexable ones carry
+  // `robots: noindex` instead.
   openGraph: {
     type: "website",
     siteName: "VoltFlow",

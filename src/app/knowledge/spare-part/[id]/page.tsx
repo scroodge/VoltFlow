@@ -9,6 +9,7 @@ import { cache } from "react";
 import { createPublicClient } from "@/lib/supabase/public";
 import { getTelegramKnowledgeDataWithFallback } from "@/lib/supabase/knowledge";
 import { ExternalLinksShare } from "@/components/telegram/ExternalLinksShare";
+import { openGraph } from "@/lib/seo/open-graph";
 
 type PageProps = { params: Promise<{ id: string }> };
 
@@ -30,8 +31,21 @@ async function getSparePart(id: string) {
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const item = await getSparePart((await params).id);
-  return item ? { title: `${item.title} — VoltFlow`, description: item.description ?? "Запчасть для BYD YUAN UP." } : { title: "Запчасть — VoltFlow" };
+  const { id } = await params;
+  const item = await getSparePart(id);
+  if (!item) return { title: "Запчасть" };
+  const description = item.description ?? "Запчасть для BYD YUAN UP.";
+  return {
+    title: item.title,
+    description,
+    alternates: { canonical: `/knowledge/spare-part/${id}` },
+    openGraph: openGraph({
+      url: `/knowledge/spare-part/${id}`,
+      title: item.title,
+      description,
+      type: "article",
+    }),
+  };
 }
 
 export default async function SparePartPage({ params }: PageProps) {
@@ -41,7 +55,7 @@ export default async function SparePartPage({ params }: PageProps) {
   return (
     <main className="min-h-dvh bg-background px-3 py-4 text-foreground sm:px-4 sm:py-6">
       <div className="mx-auto max-w-[680px] space-y-5">
-        <Link href="/telegram?tab=buy" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-white/[0.04] px-4 text-sm font-semibold text-muted-foreground transition hover:text-foreground"><ArrowLeft className="size-4" aria-hidden />Назад в каталог</Link>
+        <Link href="/knowledge?tab=buy" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-white/[0.04] px-4 text-sm font-semibold text-muted-foreground transition hover:text-foreground"><ArrowLeft className="size-4" aria-hidden />Назад в каталог</Link>
         <article className="voltflow-card p-5">
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--voltflow-cyan)]">Запчасть</p>
           <h1 className="mt-2 font-heading text-3xl font-bold leading-tight">{item.title}</h1>

@@ -19,9 +19,9 @@ import { readTelegramInitData } from "@/lib/telegram/init-data";
  * telegram-web-app.js fails to load (CSP/network/WebView). It runs on mount and
  * again on Script onReady; a ref guard prevents double-execution.
  *
- * The KB is hidden pre-paint by an inline guard script in page.tsx whenever
- * Telegram context is present, so it never flashes. This gate then either
- * navigates away or reveals the KB via revealKnowledgeBase().
+ * This page renders no knowledge-base markup: the KB lives at `/knowledge/*`.
+ * The old pre-paint guard, revealKnowledgeBase() and its safety timeout existed
+ * only because the gate and the KB shared a URL, and are gone with the split.
  *
  * Navigations out of /telegram use HARD loads (window.location), not the Next
  * router. Soft RSC navigations fetch `/<route>?_rsc=…` from Vercel, which the
@@ -30,7 +30,7 @@ import { readTelegramInitData } from "@/lib/telegram/init-data";
  * load goes through the same path as the initial /telegram load that succeeded.
  *
  * State machine:
- *   • Not in Telegram → renders nothing; KB was never hidden (SEO preserved).
+ *   • Not in Telegram → sends the visitor to the public KB at /knowledge.
  *   • In Telegram + already authenticated → loads /dashboard immediately and
  *     stamps telegram_id in the background (idempotent). Covers the "existing
  *     PWA user" case after they log in via "Already have account?".
@@ -38,15 +38,8 @@ import { readTelegramInitData } from "@/lib/telegram/init-data";
  *       - "Open the app" → loginWithTelegram() (silent new account) → /dashboard
  *       - "Already have account?" → /login?next=/telegram (email/password in
  *         WebView → callback → back here → auto-link path above)
- *       - "Knowledge base" → reveal the KB and dismiss the overlay
+ *       - "Knowledge base" → /knowledge
  */
-/** Reveal the KB hidden by the pre-paint guard in src/app/telegram/page.tsx. */
-function revealKnowledgeBase() {
-  if (typeof document !== "undefined") {
-    document.getElementById("tg-kb-cover-style")?.remove();
-  }
-}
-
 /** Hard navigation — survives the Vercel Security Checkpoint inside the WebView. */
 function hardNavigate(path: string) {
   if (typeof window !== "undefined") window.location.assign(path);
@@ -62,7 +55,12 @@ export function TelegramEntryGate() {
   const detectTelegramAsync = async () => {
     if (detected.current) return;
     const initData = readTelegramInitData();
-    if (!initData) return; // plain browser — KB was never hidden
+    if (!initData) {
+      // Plain browser on the Mini App entry URL: this route has no content of
+      // its own any more, so send them to the KB rather than a blank page.
+      hardNavigate("/knowledge");
+      return;
+    }
     detected.current = true;
     const webApp = typeof window !== "undefined" ? window.Telegram?.WebApp : undefined;
     webApp?.ready?.();
@@ -97,19 +95,12 @@ export function TelegramEntryGate() {
 
   // Primary detection: runs on mount. readTelegramInitData() reads the URL hash
   // so it resolves even before (or without) the SDK; onReady re-runs it as a
-  // belt-and-suspenders trigger. Safety timeout: if detection never resolves but
-  // the pre-paint guard hid the KB, reveal it so the user is never stuck blank.
-  // detected.current is true once we've committed to an overlay/redirect, so the
-  // timeout only fires in the genuinely-stuck case.
+  // belt-and-suspenders trigger.
   useEffect(() => {
     // setState only runs after async awaits inside detectTelegramAsync, so there
     // is no synchronous render cascade despite the rule's static analysis.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void detectTelegramAsync();
-    const fallback = setTimeout(() => {
-      if (!detected.current) revealKnowledgeBase();
-    }, 5000);
-    return () => clearTimeout(fallback);
   }, []);
 
   const handleOpenApp = async () => {
@@ -146,8 +137,8 @@ export function TelegramEntryGate() {
           onOpenApp={handleOpenApp}
           onHaveAccount={handleHaveAccount}
           onOpenKnowledge={() => {
-            revealKnowledgeBase();
             setDismissed(true);
+            hardNavigate("/knowledge");
           }}
         />
       ) : null}

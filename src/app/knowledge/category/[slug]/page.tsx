@@ -52,10 +52,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: `${category.title} · База знаний`,
     description: category.description,
-    alternates: { canonical: `/telegram/category/${slug}` },
+    alternates: { canonical: `/knowledge/category/${slug}` },
     openGraph: openGraph({
       type: "website",
-      url: `/telegram/category/${slug}`,
+      url: `/knowledge/category/${slug}`,
       title: `${category.title} · VoltFlow`,
       description: category.description,
     }),
@@ -93,18 +93,18 @@ export default async function TelegramCategoryPage({ params }: PageProps) {
           data={collectionPageSchema({
             name: category.title,
             description: category.description,
-            path: `/telegram/category/${slug}`,
+            path: `/knowledge/category/${slug}`,
             items: safeContent.articles.map((item) => ({
               title: item.title,
-              path: `/telegram/article/${item.slug}`,
+              path: `/knowledge/article/${item.slug}`,
             })),
           })}
         />
         <JsonLd
           data={breadcrumbSchema([
             { name: "Главная", path: "/" },
-            { name: "База знаний", path: "/telegram" },
-            { name: category.title, path: `/telegram/category/${slug}` },
+            { name: "База знаний", path: "/knowledge" },
+            { name: category.title, path: `/knowledge/category/${slug}` },
           ])}
         />
         {/*
@@ -125,7 +125,7 @@ export default async function TelegramCategoryPage({ params }: PageProps) {
               {safeContent.articles.map((item) => (
                 <li key={item.slug}>
                   <Link
-                    href={`/telegram/article/${item.slug}`}
+                    href={`/knowledge/article/${item.slug}`}
                     className="text-sm leading-6 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                   >
                     {item.title}

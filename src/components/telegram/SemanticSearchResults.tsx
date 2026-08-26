@@ -176,21 +176,36 @@ export function SemanticSearchResults({
   );
 }
 
+/**
+ * `source_url` is stored on `knowledge_items` at index time, so rows written
+ * before the KB moved from `/telegram/*` to `/knowledge/*` still hold the old
+ * path. Those 308 correctly, but an internal link should never depend on a
+ * redirect — and a reindex only rewrites rows it happens to touch. Map forward
+ * on read; safe to delete once every row has been reindexed.
+ */
+function normalizeKnowledgeHref(href: string) {
+  return href.startsWith("/telegram/") || href.startsWith("/telegram?")
+    ? href.replace(/^\/telegram/, "/knowledge")
+    : href;
+}
+
 function getInternalResultHref(result: KnowledgeSearchResult) {
-  if (result.source_url?.startsWith("/")) return result.source_url;
-  if (result.source_type === "faq") return "/telegram?tab=faq";
+  if (result.source_url?.startsWith("/")) {
+    return normalizeKnowledgeHref(result.source_url);
+  }
+  if (result.source_type === "faq") return "/knowledge?tab=faq";
   return null;
 }
 
 function getCatalogResultHref(result: KnowledgeSearchResult) {
   if (result.source_type === "accessory") {
-    return `/telegram/accessory/${result.id}`;
+    return `/knowledge/accessory/${result.id}`;
   }
   if (result.source_type === "spare_part") {
-    return `/telegram/spare-part/${result.id}`;
+    return `/knowledge/spare-part/${result.id}`;
   }
   if (result.source_type === "service_provider" && result.source_url?.startsWith("/")) {
-    return result.source_url;
+    return normalizeKnowledgeHref(result.source_url);
   }
   return null;
 }

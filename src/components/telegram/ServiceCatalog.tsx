@@ -53,7 +53,7 @@ export function ServiceCatalog({ providers = [], generation }: { providers?: Ser
 
 function ServiceCard({ provider }: { provider: ServiceProviderItem }) {
   return (
-    <Link href={`/telegram/service/${provider.id}`} className="voltflow-card block overflow-hidden p-4 transition hover:border-[var(--voltflow-cyan)]/60 focus-visible:ring-3 focus-visible:ring-[var(--voltflow-cyan)]/30">
+    <Link href={`/knowledge/service/${provider.id}`} className="voltflow-card block overflow-hidden p-4 transition hover:border-[var(--voltflow-cyan)]/60 focus-visible:ring-3 focus-visible:ring-[var(--voltflow-cyan)]/30">
       {provider.image_url ? <Image src={provider.image_url} alt={provider.image_alt ?? provider.name} width={640} height={360} unoptimized className="mb-4 aspect-[16/9] w-full rounded-lg border border-border object-cover" /> : null}
       <div className="flex items-start justify-between gap-3">
         <div>

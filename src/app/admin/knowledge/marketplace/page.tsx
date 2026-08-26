@@ -44,7 +44,7 @@ export default async function MarketplaceAdminPage() {
         <p className="text-sm text-muted-foreground">
           Всего: {listings.length} · На модерации: {drafts}
         </p>
-        <Link href="/telegram?tab=buy" className="text-sm font-semibold text-[var(--voltflow-cyan)] hover:underline">
+        <Link href="/knowledge?tab=buy" className="text-sm font-semibold text-[var(--voltflow-cyan)] hover:underline">
           Открыть каталог
         </Link>
       </div>

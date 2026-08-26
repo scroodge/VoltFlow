@@ -18,15 +18,26 @@ export async function generateStaticParams() {
 }
 import { ServiceMapLink } from "@/components/telegram/ServiceMapLink";
 import { ExternalLinksShare } from "@/components/telegram/ExternalLinksShare";
+import { openGraph } from "@/lib/seo/open-graph";
 
 type PageProps = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
   const provider = await getPublishedServiceProvider(id, createPublicClient());
-  return provider
-    ? { title: `${provider.name} — Сервис VoltFlow`, description: provider.description ?? "Сервис для BYD YUAN UP." }
-    : { title: "Сервис VoltFlow" };
+  if (!provider) return { title: "Сервис" };
+  const description = provider.description ?? "Сервис для BYD YUAN UP.";
+  return {
+    title: `${provider.name} — Сервис`,
+    description,
+    alternates: { canonical: `/knowledge/service/${id}` },
+    openGraph: openGraph({
+      url: `/knowledge/service/${id}`,
+      title: `${provider.name} — Сервис`,
+      description,
+      type: "article",
+    }),
+  };
 }
 
 export default async function ServiceProviderPage({ params }: PageProps) {
@@ -38,7 +49,7 @@ export default async function ServiceProviderPage({ params }: PageProps) {
     <main className="min-h-dvh bg-background px-3 py-4 text-foreground sm:px-4 sm:py-6">
       <div className="mx-auto max-w-[680px] space-y-5">
         <div className="flex items-center justify-between gap-3">
-          <Link href="/telegram?tab=buy" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-white/[0.04] px-4 text-sm font-semibold text-muted-foreground transition hover:text-foreground">
+          <Link href="/knowledge?tab=buy" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-white/[0.04] px-4 text-sm font-semibold text-muted-foreground transition hover:text-foreground">
             <ArrowLeft className="size-4" aria-hidden /> Назад в каталог
           </Link>
           {provider.verified_at ? <span className="hidden items-center gap-1 rounded-full border border-[var(--voltflow-green)]/35 bg-[var(--voltflow-green)]/10 px-2.5 py-1 text-xs font-bold text-[var(--voltflow-green)] sm:inline-flex"><ShieldCheck className="size-3.5" aria-hidden />Проверен</span> : null}

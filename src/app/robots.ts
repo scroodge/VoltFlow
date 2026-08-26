@@ -38,7 +38,6 @@ export default function robots(): MetadataRoute.Robots {
           "/service",
           // Search results pages are classic index bloat.
           "/knowledge/search",
-          "/telegram/service-preview",
         ],
       },
     ],

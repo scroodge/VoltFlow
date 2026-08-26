@@ -30,7 +30,7 @@ export default function KnowledgeNotFound() {
             Ссылка может быть устаревшей, либо материал еще готовится к публикации.
           </p>
           <Link
-            href="/telegram"
+            href="/knowledge"
             className="mt-5 inline-flex min-h-11 items-center rounded-lg border border-border bg-white/[0.04] px-4 text-sm font-semibold text-[var(--voltflow-cyan)]"
           >
             Вернуться в базу знаний

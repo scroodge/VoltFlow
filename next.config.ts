@@ -32,6 +32,28 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "20mb",
     },
   },
+  /**
+   * The public knowledge base moved from `/telegram/*` to `/knowledge/*`: the
+   * `telegram` segment was the most prominent token in the SERP URL line and
+   * told Google each page was about Telegram rather than EV charging.
+   *
+   * `/telegram` itself is deliberately NOT redirected — it remains the Mini App
+   * entry gate that BotFather points at, and now carries `robots: noindex`.
+   * A sitemap must never list a redirect source, so `sitemap.ts` emits only the
+   * `/knowledge/*` forms.
+   *
+   * `permanent: true` emits 308, matching the existing host canonicalization.
+   */
+  async redirects() {
+    return [
+      { source: "/telegram/article/:slug", destination: "/knowledge/article/:slug", permanent: true },
+      { source: "/telegram/category/:slug", destination: "/knowledge/category/:slug", permanent: true },
+      { source: "/telegram/accessory/:id", destination: "/knowledge/accessory/:id", permanent: true },
+      { source: "/telegram/spare-part/:id", destination: "/knowledge/spare-part/:id", permanent: true },
+      { source: "/telegram/service/:id", destination: "/knowledge/service/:id", permanent: true },
+      { source: "/telegram/service-preview", destination: "/knowledge?tab=buy", permanent: true },
+    ];
+  },
   async headers() {
     return [
       {

@@ -9,14 +9,16 @@ import type { TelegramKnowledgeData } from "@/types/knowledge";
  * OUTSIDE any `<Suspense>` boundary. Two problems it solves:
  *
  * 1. `CategoryFilter` renders categories as `<button>`, so the served HTML of
- *    /telegram contained 4 article URLs and ZERO category URLs. Every category,
+ *    the KB hub contained 4 article URLs and ZERO category URLs. Every category,
  *    accessory, spare-part and service page was orphaned — reachable only by
  *    client-side state, and with no sitemap to find them either.
- * 2. `TelegramShell` and `TelegramCategoryView` call `useSearchParams()` inside
+ * 2. `KnowledgeChrome` and `TelegramCategoryView` call `useSearchParams()` inside
  *    `<Suspense fallback={null}>`. Under static rendering Next prerenders that
  *    fallback and defers the subtree to the client, so the page would ship as
  *    an empty shell. This index is what keeps real content in the static HTML,
- *    and must land BEFORE `revalidate` is enabled on these routes.
+ *    and must land BEFORE `revalidate` is enabled on these routes. The <h1> is
+ *    outside that boundary too, in `KnowledgeHeader` — it used to sit in the
+ *    shell, which left the prerendered hub with 29 links and no heading.
  *
  * It is a genuine, visible "all sections / all articles" footer index, not a
  * hidden link farm — never give this `display: none`.
@@ -44,7 +46,7 @@ export function KnowledgeIndex({ data }: { data: TelegramKnowledgeData }) {
         {data.categories.map((category) => (
           <li key={category.slug}>
             <Link
-              href={`/telegram/category/${category.slug}`}
+              href={`/knowledge/category/${category.slug}`}
               className="inline-flex min-h-9 items-center rounded-full border border-border bg-white/[0.03] px-3 text-xs font-semibold text-muted-foreground hover:text-foreground"
             >
               {category.title}
@@ -62,7 +64,7 @@ export function KnowledgeIndex({ data }: { data: TelegramKnowledgeData }) {
             {articles.map((article) => (
               <li key={article.slug}>
                 <Link
-                  href={`/telegram/article/${article.slug}`}
+                  href={`/knowledge/article/${article.slug}`}
                   className="text-sm leading-6 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                 >
                   {article.title}
@@ -82,7 +84,7 @@ export function KnowledgeIndex({ data }: { data: TelegramKnowledgeData }) {
             {data.accessories.map((item) => (
               <li key={item.id}>
                 <Link
-                  href={`/telegram/accessory/${item.id}`}
+                  href={`/knowledge/accessory/${item.id}`}
                   className="text-sm leading-6 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                 >
                   {item.title}
@@ -102,7 +104,7 @@ export function KnowledgeIndex({ data }: { data: TelegramKnowledgeData }) {
             {data.spareParts.map((item) => (
               <li key={item.id}>
                 <Link
-                  href={`/telegram/spare-part/${item.id}`}
+                  href={`/knowledge/spare-part/${item.id}`}
                   className="text-sm leading-6 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                 >
                   {item.title}
@@ -122,7 +124,7 @@ export function KnowledgeIndex({ data }: { data: TelegramKnowledgeData }) {
             {data.serviceProviders.map((item) => (
               <li key={item.id}>
                 <Link
-                  href={`/telegram/service/${item.id}`}
+                  href={`/knowledge/service/${item.id}`}
                   className="text-sm leading-6 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                 >
                   {item.name}

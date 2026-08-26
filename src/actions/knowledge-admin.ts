@@ -712,10 +712,10 @@ function slugify(value: string) {
 
 function revalidateKnowledge() {
   revalidatePath("/admin/knowledge");
-  revalidatePath("/telegram");
-  revalidatePath("/telegram/article/[slug]", "page");
-  revalidatePath("/telegram/category/[slug]", "page");
-  revalidatePath("/telegram/service/[id]", "page");
+  revalidatePath("/knowledge");
+  revalidatePath("/knowledge/article/[slug]", "page");
+  revalidatePath("/knowledge/category/[slug]", "page");
+  revalidatePath("/knowledge/service/[id]", "page");
 }
 
 function isFormState<T>(value: T | AdminFormState): value is AdminFormState {

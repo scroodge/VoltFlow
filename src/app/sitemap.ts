@@ -17,10 +17,12 @@ import { staticTelegramKnowledgeData, telegramCategories } from "@/lib/telegram/
  * 2. `src/proxy.ts` must keep excluding `sitemap*.xml` from its matcher, or
  *    this 307s to `/login`.
  *
- * The KB currently lives at `/telegram/*`. When the `/knowledge/*` move ships,
- * update KB_BASE below — a sitemap must never list redirect sources.
+ * The KB lives at `/knowledge/*`. The old `/telegram/*` forms 308 to these via
+ * `redirects()` in next.config.ts and must never appear here — a sitemap must
+ * not list redirect sources. `/telegram` itself is the Mini App gate and is
+ * `noindex`, so it is absent too.
  */
-const KB_BASE = "/telegram";
+const KB_BASE = "/knowledge";
 
 export const revalidate = 3600;
 

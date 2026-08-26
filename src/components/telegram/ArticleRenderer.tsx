@@ -44,7 +44,7 @@ export function ArticleRenderer({
     }
 
     try {
-      const articleUrl = `${window.location.origin}/telegram/article/${article.slug}`;
+      const articleUrl = `${window.location.origin}/knowledge/article/${article.slug}`;
       await navigator.clipboard.writeText(articleUrl);
       setCopyStatus("copied");
       window.setTimeout(() => setCopyStatus("idle"), 1800);
@@ -66,7 +66,7 @@ export function ArticleRenderer({
           Назад
         </button>
         <Link
-          href="/telegram"
+          href="/knowledge"
           className="inline-flex min-h-11 items-center rounded-lg border border-border bg-white/[0.04] px-4 text-sm font-semibold text-muted-foreground transition hover:text-foreground focus-visible:ring-3 focus-visible:ring-[var(--voltflow-cyan)]/30"
         >
           Главная
@@ -87,7 +87,7 @@ export function ArticleRenderer({
 
       <header className="voltflow-card p-5">
         <Link
-          href={`/telegram/category/${article.categorySlug}`}
+          href={`/knowledge/category/${article.categorySlug}`}
           className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--voltflow-green)]"
         >
           {article.category}
@@ -236,7 +236,7 @@ export function ArticleRenderer({
           {relatedArticles.map((related) => (
             <Link
               key={related.id}
-              href={`/telegram/article/${related.slug}`}
+              href={`/knowledge/article/${related.slug}`}
               className="voltflow-card block p-4 transition hover:border-[var(--voltflow-cyan)]/60 focus-visible:ring-3 focus-visible:ring-[var(--voltflow-cyan)]/30"
             >
               <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--voltflow-green)]">

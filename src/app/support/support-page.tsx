@@ -63,7 +63,7 @@ function CopyRow({ value, label }: { value: string; label?: string }) {
   );
 }
 
-export default function SupportPage() {
+export function SupportPage() {
   const { t } = useTranslation();
   const [email, setEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);

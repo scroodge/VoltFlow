@@ -142,7 +142,7 @@ export function SmartFAQ({
                       {item.relatedIds.map((id) => (
                         <Link
                           key={id}
-                          href={`/telegram/article/${id}`}
+                          href={`/knowledge/article/${id}`}
                           className="rounded-full border border-border bg-white/[0.03] px-3 py-1 text-xs font-semibold text-[var(--voltflow-cyan)]"
                         >
                           {id}

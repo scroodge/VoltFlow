@@ -779,12 +779,45 @@ Remaining items are optional and none block anything:
 
 ## 🟠 SEO remediation — the site is technically unindexable (approved 2026-08-19)
 
-**Status: Phases 1, 2, 4 and 5 built and verified against a production build
-2026-08-19 (uncommitted). Every KB route is now prerendered with 1h ISR and
-`s-maxage=3600` instead of `private, no-store`. Remaining: the `/knowledge/*`
-move (Phase 3, blocked on a UX decision — see below) and Search Console /
-Yandex registration.** Full plan lives at
-`~/.claude/plans/how-to-improve-seo-sorted-gem.md` (local, not in the repo).
+**Status 2026-08-20: Phases 1-5 built. The `/knowledge/*` move (Phase 3) shipped
+on branch `feature/seo-knowledge-split` — see the resolution note below, which
+supersedes the (a)/(b)/(c) options that blocked it. Every KB route is prerendered
+with 1h ISR and `s-maxage=3600`.**
+
+**Remaining, and blocking everything above: Phase 0.** Re-probed 2026-08-20 —
+Vercel Attack Challenge Mode is **ON**. `GET /`, `/robots.txt` and `/sitemap.xml`
+all return `403` + `x-vercel-mitigated: challenge` (a "Vercel Security Checkpoint"
+JS page), including under Googlebot and YandexBot user agents, 5/5 consecutive.
+`bot.voltflow.life` answers 404 unchallenged, so it is a per-project firewall
+toggle, not DNS. It must be turned off or given a verified-crawler bypass in the
+Vercel dashboard; until then nothing else here is visible to a crawler. Also
+outstanding: Yandex Webmaster registration (`src/proxy.ts` already whitelists the
+`yandex_<hash>.html` token; the Google one is in `public/`).
+
+Plans: `~/.claude/plans/how-to-improve-seo-sorted-gem.md` (Phases 1-6, the first
+pass) and `~/.claude/plans/check-our-project-seo-polymorphic-noodle.md` (the KB
+split and the metadata defects) — both local, not in the repo.
+
+### Phase 3 resolution — split by job, not by audience
+
+The (a)/(b)/(c) options below all traded one audience's UX against another's,
+which is why this stalled. The actual problem was that `/telegram` did two
+unrelated jobs: Mini App entry gate **and** public KB, welded together by
+`KB_PREPAINT_GUARD`. `TelegramShell` and `KnowledgeHub` were already two wrappers
+around the same `KnowledgeView`.
+
+Shipped instead: the KB is the canonical public tree at `/knowledge/*` (one
+namespace, the only one in the sitemap, ISR intact); `/telegram` keeps only
+`TelegramEntryGate`, carries `robots: noindex`, and is absent from the sitemap;
+old `/telegram/*` content paths 308 forward. BotFather still points at
+`/telegram`, so no bot reconfiguration was needed. The pre-paint guard,
+`revealKnowledgeBase()` and its 5s timeout are **deleted** — they existed only
+because the gate and the KB shared a URL, so the move removed the risky code
+rather than threading it through a redirect as the earlier plan proposed.
+
+In-app chrome is chosen **client-side** (`KnowledgeHeader` reads the session in
+the browser). Reading it on the server would make the route dynamic and cost the
+`s-maxage=3600` CDN cache that makes the KB indexable at all.
 
 Verified against the live site on 2026-08-19. This is not an "optimize the copy" item —
 several independent blockers each make the site unindexable on their own:

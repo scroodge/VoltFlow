@@ -80,8 +80,8 @@ const dynamicRoutes: DevRoute[] = [
   templateRoute("Edit FAQ", "/admin/knowledge/faq/[id]", MessageCircle),
   templateRoute("Edit accessory", "/admin/knowledge/accessories/[id]", Wrench),
   templateRoute("Edit spare part", "/admin/knowledge/spare-parts/[id]", Wrench),
-  templateRoute("Telegram article", "/telegram/article/[slug]", MessageCircle),
-  templateRoute("Telegram category", "/telegram/category/[slug]", MessageCircle),
+  templateRoute("Telegram article", "/knowledge/article/[slug]", MessageCircle),
+  templateRoute("Telegram category", "/knowledge/category/[slug]", MessageCircle),
 ];
 
 export default function DevIndexPage() {

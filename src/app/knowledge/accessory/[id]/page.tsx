@@ -9,6 +9,7 @@ import { cache } from "react";
 import { createPublicClient } from "@/lib/supabase/public";
 import { getTelegramKnowledgeDataWithFallback } from "@/lib/supabase/knowledge";
 import { ExternalLinksShare } from "@/components/telegram/ExternalLinksShare";
+import { openGraph } from "@/lib/seo/open-graph";
 
 type PageProps = { params: Promise<{ id: string }> };
 
@@ -31,8 +32,22 @@ async function getAccessory(id: string) {
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const item = await getAccessory((await params).id);
-  return item ? { title: `${item.title} — VoltFlow`, description: item.whyUseful } : { title: "Аксессуар — VoltFlow" };
+  const { id } = await params;
+  const item = await getAccessory(id);
+  // Titles carry no " — VoltFlow" suffix: the root layout's template is
+  // "%s · VoltFlow" and applies to child titles, so the suffix rendered twice.
+  if (!item) return { title: "Аксессуар" };
+  return {
+    title: item.title,
+    description: item.whyUseful,
+    alternates: { canonical: `/knowledge/accessory/${id}` },
+    openGraph: openGraph({
+      url: `/knowledge/accessory/${id}`,
+      title: item.title,
+      description: item.whyUseful,
+      type: "article",
+    }),
+  };
 }
 
 export default async function AccessoryPage({ params }: PageProps) {
@@ -48,7 +63,7 @@ export default async function AccessoryPage({ params }: PageProps) {
   return (
     <main className="min-h-dvh bg-background px-3 py-4 text-foreground sm:px-4 sm:py-6">
       <div className="mx-auto max-w-[680px] space-y-5">
-        <Link href="/telegram?tab=buy" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-white/[0.04] px-4 text-sm font-semibold text-muted-foreground transition hover:text-foreground"><ArrowLeft className="size-4" aria-hidden />Назад в каталог</Link>
+        <Link href="/knowledge?tab=buy" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-white/[0.04] px-4 text-sm font-semibold text-muted-foreground transition hover:text-foreground"><ArrowLeft className="size-4" aria-hidden />Назад в каталог</Link>
         <article className="voltflow-card p-5">
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--voltflow-cyan)]">Аксессуар</p>
           <h1 className="mt-2 font-heading text-3xl font-bold leading-tight">{item.title}</h1>

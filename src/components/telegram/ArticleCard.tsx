@@ -13,7 +13,7 @@ export function ArticleCard({ article, priorityImage = false }: ArticleCardProps
 
   return (
     <Link
-      href={`/telegram/article/${article.slug}`}
+      href={`/knowledge/article/${article.slug}`}
       className="voltflow-card block p-3 transition hover:border-[var(--voltflow-cyan)]/60 focus-visible:ring-3 focus-visible:ring-[var(--voltflow-cyan)]/30"
     >
       {cover ? (
@@ -57,7 +57,7 @@ export function AccessoryCard({
   }[item.priority];
   return (
     <Link
-      href={`/telegram/accessory/${item.id}`}
+      href={`/knowledge/accessory/${item.id}`}
       className="voltflow-card block p-4 transition hover:border-[var(--voltflow-cyan)]/60 focus-visible:ring-3 focus-visible:ring-[var(--voltflow-cyan)]/30"
     >
       {item.imageUrl ? (

@@ -37,7 +37,7 @@ export default async function KnowledgeAdminPage() {
         <Metric label="Запчасти" value={spareParts.length} href="/admin/knowledge/spare-parts" />
         <Metric label="Сервис" value={serviceProviders.length} href="/admin/knowledge/service-providers" />
         <Metric label="Разделы" value={categories.length} href="/admin/knowledge/categories" />
-        <Metric label="Опубликовано" value={counts.published} href="/telegram" />
+        <Metric label="Опубликовано" value={counts.published} href="/knowledge" />
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">
