@@ -92,6 +92,8 @@ telegram_live_messages (
 `POST /api/cron/aux-battery-health` is a once-daily, `x-cron-secret` protected
 evaluation job. It evaluates only completed UTC days from
 `bydmate_aux_voltage_daily.v_resting`; it never uses instantaneous voltage.
+See [Cron jobs](CRON_JOBS.md) for the Contabo crontab entry, required Vercel
+secret, and the account-deletion warning for the separate inactivity route.
 
 - Acute levels are intentionally earlier than remote-command blocking levels:
   flooded 12.3 V, EFB 12.4 V, AGM 12.5 V, and LiFePO4 13.0 V. Unknown chemistry

@@ -20,7 +20,7 @@ function channel(value: string | null): "web_push" | "telegram" | "both" {
 
 export async function POST(request: NextRequest) {
   if (!CRON_SECRET || request.headers.get("x-cron-secret") !== CRON_SECRET) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const supabase = getSupabaseAdmin();

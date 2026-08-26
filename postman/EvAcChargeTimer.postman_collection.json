@@ -248,6 +248,33 @@
             "description": "Session cookie + admin required."
           },
           "response": []
+        },
+        {
+          "name": "12V auxiliary-battery health",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-cron-secret",
+                "value": "{{cron_secret}}",
+                "description": "Must equal the server's CRON_SECRET env var. The route returns 401 when it is unset or does not match.",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/cron/aux-battery-health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "cron",
+                "aux-battery-health"
+              ]
+            },
+            "description": "Cron-only. No body. Evaluates completed UTC resting-voltage days. Safe for manual testing; this is not the destructive inactivity-check endpoint."
+          },
+          "response": []
         }
       ]
     },
