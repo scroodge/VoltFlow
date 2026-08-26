@@ -13,6 +13,7 @@ import {
 import {
   finiteTelemetryNumber,
   isMateAutoSessionCharging,
+  isMateAutoSessionChargingSustained,
   sanitizeChargerPowerKw,
   telemetryChargingContext,
   telemetrySpeedKmh,
@@ -35,7 +36,7 @@ export type { AutoChargingSessionState, AutoChargingSessionAction } from "./char
 export { nextAutoChargingSessionStep } from "./charging-auto-session-step";
 
 const AUTO_CHARGING_STATE_COLUMNS =
-  "user_id,vehicle_id,consecutive_charging_samples,consecutive_unplug_samples,last_is_charging,last_device_time,streak_start_percent,streak_start_device_time,last_idle_percent,last_idle_device_time,frozen_soc,frozen_charge_power_kw,frozen_since_device_time";
+  "user_id,vehicle_id,consecutive_charging_samples,consecutive_unplug_samples,last_is_charging,last_device_time,streak_start_percent,streak_start_device_time,last_idle_percent,last_idle_device_time,frozen_soc,frozen_charge_power_kw,frozen_since_device_time,zero_power_since_device_time";
 
 type AutoChargingStateRow = {
   user_id: string;
@@ -51,6 +52,7 @@ type AutoChargingStateRow = {
   frozen_soc: number | string | null;
   frozen_charge_power_kw: number | string | null;
   frozen_since_device_time: string | null;
+  zero_power_since_device_time: string | null;
 };
 
 function numericOrNull(value: number | string | null | undefined): number | null {
@@ -71,6 +73,7 @@ function stateFromRow(row: AutoChargingStateRow): AutoChargingSessionState {
     frozenSoc: numericOrNull(row.frozen_soc),
     frozenChargePowerKw: numericOrNull(row.frozen_charge_power_kw),
     frozenSinceDeviceTime: row.frozen_since_device_time,
+    zeroPowerSinceDeviceTime: row.zero_power_since_device_time ?? null,
   };
 }
 
@@ -94,6 +97,7 @@ function stateToRow(
     frozen_soc: state.frozenSoc,
     frozen_charge_power_kw: state.frozenChargePowerKw,
     frozen_since_device_time: state.frozenSinceDeviceTime,
+    zero_power_since_device_time: state.zeroPowerSinceDeviceTime,
   };
 }
 
@@ -330,10 +334,19 @@ export async function processVoltflowMateAutoChargingSessions({
     }
 
     const speedKmh = telemetrySpeedKmh(sample.telemetry);
-    const isCharging = isMateAutoSessionCharging(
+    const chargingContext = telemetryChargingContext(sample);
+    // Two predicates, deliberately different (see telemetry-charging.ts): the strict one
+    // gates *starting* a session and needs real measured power, the tolerant one keeps an
+    // open session alive so a momentary zero-kW reading mid-charge does not end it.
+    const canStartSession = isMateAutoSessionCharging(
       sample.telemetry,
       speedKmh,
-      telemetryChargingContext(sample),
+      chargingContext,
+    );
+    const isCharging = isMateAutoSessionChargingSustained(
+      sample.telemetry,
+      speedKmh,
+      chargingContext,
     );
     const soc = finiteTelemetryNumber(sample.telemetry.soc);
     const chargePowerKw = finiteTelemetryNumber(sample.telemetry.charge_power_kw);
@@ -349,7 +362,9 @@ export async function processVoltflowMateAutoChargingSessions({
     const sampleMs = Date.parse(sample.device_time);
     const lastMs = lastDeviceTime ? Date.parse(lastDeviceTime) : null;
     const gapMs = lastMs != null && Number.isFinite(sampleMs) ? sampleMs - lastMs : 0;
-    if (activeSession && isCharging && gapMs > CHARGING_RESUME_GAP_MS && soc != null) {
+    // Rotate the session only when *real* charging has resumed after the silence — a
+    // plugged-in-but-idle sample must not spawn a replacement session.
+    if (activeSession && canStartSession && gapMs > CHARGING_RESUME_GAP_MS && soc != null) {
       await stopSessionFromTelemetry({
         supabase,
         session: activeSession,
@@ -365,6 +380,7 @@ export async function processVoltflowMateAutoChargingSessions({
     const step = nextAutoChargingSessionStep({
       state: states.get(sample.vehicle_id) ?? null,
       isCharging,
+      canStartSession,
       soc,
       speedKmh,
       hasActiveSession: activeByCarId.has(car.id),

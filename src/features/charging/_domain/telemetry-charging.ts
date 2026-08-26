@@ -97,21 +97,59 @@ export function isVehicleParkedForCharging(speedKmh: number | null | undefined) 
 }
 
 /**
- * Mate ingest auto session start/stop only.
+ * Mate ingest auto session **start** only — the strict half of the pair.
  * Uses charge_power_kw (never traction power_kw). Requires vehicle parked.
- * Excludes 100% SOC balance tail (is_charging + ~0 kW).
+ *
+ * Requires *real charge power*: Di+ `is_charging` means "gun connected", not "energy
+ * flowing", and it stays true indefinitely after a charger stops while the gun is left
+ * plugged in. Accepting it alone opened phantom sessions in a loop (car `way`,
+ * 2026-08-26: two 0 kWh sessions after a charge that had ended two hours earlier — see
+ * CHANGELOG.md). The old `soc >= 100` balance-tail guard could not catch it either,
+ * because SOC drifts *down* (100 → 99.9 → 99.8) from standby draw while parked.
+ *
+ * Not accepting `is_charging` at ~0 kW costs nothing on a genuine charge: across every
+ * vehicle in production, samples with strictly-rising SOC report
+ * `charge_power_kw > TELEMETRY_CHARGE_POWER_THRESHOLD_KW` 77–99% of the time, auto-start
+ * needs a multi-sample streak anyway, and the session is backdated to the streak's first
+ * charging sample (and to the last idle SOC within 30 min), so ramp-up energy is kept.
+ *
+ * Use `isMateAutoSessionChargingSustained` to decide whether an already-open session is
+ * still charging — that one must tolerate momentary zero readings.
  */
 export function isMateAutoSessionCharging(
+  telemetry: Pick<VoltflowMateTelemetry, "is_charging" | "charge_power_kw" | "soc">,
+  speedKmh: number | null | undefined,
+  // Kept for call-site symmetry with isMateAutoSessionChargingSustained: both predicates
+  // are called on the same sample. Gun state is deliberately not consulted here — real
+  // measured power is the only thing that may start a session.
+  _context?: TelemetryChargingDiplusContext | null,
+) {
+  if (!isVehicleParkedForCharging(speedKmh)) return false;
+
+  // Real charge power regardless of gun state (see isTelemetryCharging: car `way`'s gun
+  // state reads 1 for the majority of its genuine charging samples), so an unreliable gun
+  // state can never suppress a real measured charge.
+  const chargePowerKw = finiteTelemetryNumber(telemetry.charge_power_kw);
+  return chargePowerKw != null && chargePowerKw > TELEMETRY_CHARGE_POWER_THRESHOLD_KW;
+}
+
+/**
+ * Mate ingest auto session **keep-alive** only — the tolerant half of the pair.
+ * Whether an already-open session should stay open on this sample.
+ *
+ * Deliberately looser than `isMateAutoSessionCharging`: a genuine charge reports the odd
+ * zero/absent `charge_power_kw` mid-session, and ending a real session on two such blips
+ * would be far worse than holding it open a few minutes too long. The "charger stopped
+ * but the gun is still in" case is closed by the reducer's zero-power stall
+ * (`AUTO_CHARGING_ZERO_POWER_STALL_MS`) instead, which needs a *sustained* run of zero.
+ */
+export function isMateAutoSessionChargingSustained(
   telemetry: Pick<VoltflowMateTelemetry, "is_charging" | "charge_power_kw" | "soc">,
   speedKmh: number | null | undefined,
   context?: TelemetryChargingDiplusContext | null,
 ) {
   if (!isVehicleParkedForCharging(speedKmh)) return false;
 
-  // Real charge power wins regardless of gun state (see isTelemetryCharging: car `way`'s
-  // gun state reads 1 for the majority of its genuine charging samples). The gun-state
-  // override is a fallback only, for `is_charging`/`charge_power_kw` values stuck at a
-  // stale nonzero/true reading left over from a charge that has actually ended.
   const chargePowerKw = finiteTelemetryNumber(telemetry.charge_power_kw);
   if (chargePowerKw != null && chargePowerKw > TELEMETRY_CHARGE_POWER_THRESHOLD_KW) {
     return true;
@@ -119,10 +157,7 @@ export function isMateAutoSessionCharging(
 
   if (finiteTelemetryNumber(readChargeGunState(context)) === 1) return false;
 
-  if (telemetry.is_charging !== true) return false;
-  const soc = finiteTelemetryNumber(telemetry.soc);
-  if (soc != null && soc >= 100) return false;
-  return true;
+  return telemetry.is_charging === true;
 }
 
 /** @deprecated Use isMateAutoSessionCharging — kept so call sites can migrate. */
