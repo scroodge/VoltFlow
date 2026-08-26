@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useVoltflowMateLiveQuery } from "@/hooks/use-voltflowmate-live-query";
+import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useAuxVoltageHistoryQuery } from "@/hooks/use-aux-voltage-history-query";
 import { useVoltflowMateSohHistoryQuery } from "@/hooks/use-voltflowmate-soh-history-query";
 import { useVoltflowMateTelemetryHistoryQuery } from "@/hooks/use-voltflowmate-telemetry-history-query";
@@ -30,6 +31,7 @@ import type { TelemetryHistoryPoint } from "@/lib/voltflowmate/telemetry-history
 import { useTranslation } from "@/hooks/use-translation";
 import { buildChargeDeltaTrend } from "@/lib/voltflowmate/charge-delta-trend";
 import { computeAuxVoltageBaseline, AUX_MIN_RESTING_DAYS } from "@/lib/voltflowmate/aux-voltage-baseline";
+import { normalizeAuxVoltage } from "@/lib/voltflowmate/aux-voltage-history";
 import { buildAnalyticsSummary, consumptionByOutsideTemp } from "@/lib/voltflowmate/telemetry-buckets";
 import { computeHistoryPeriodSummary } from "@/lib/history-day-summary";
 import {
@@ -52,6 +54,7 @@ import { useAppPreferences } from "@/stores/use-app-preferences";
 import { devFetch, isDevAppRoute, withDevApiParams } from "@/lib/dev/dev-fetch";
 import { formatCurrencyAmount, type Locale, type TranslationKey } from "@/lib/i18n";
 import type { VoltflowMateTripRow, VoltflowMateTripTrackPointRow, ChargingSessionRow } from "@/types/database";
+import { auxCommandBlockVoltage, resolveAuxBatteryChemistry } from "@/lib/vehicle/aux-battery-chemistry";
 
 const HISTORY_RANGES: TelemetryHistoryRange[] = ["day", "week", "month", "quarter", "year"];
 
@@ -299,6 +302,9 @@ export function VehicleAnalyticsPanels({
   const { locale, t } = useTranslation();
   const tx = t as Translator;
   const currency = useAppPreferences((state) => state.currency);
+  const { data: carsResult } = useCarsQuery();
+  const car = carsResult?.cars.find((candidate) => candidate.vehicle_alias === vehicleId);
+  const auxBatteryChemistry = resolveAuxBatteryChemistry(car?.battery_chemistry, car?.model_generation);
 
   const formatMoney = (value: number | null | undefined, digits = 2) => {
     if (typeof value !== "number" || !Number.isFinite(value)) return "—";
@@ -517,7 +523,35 @@ export function VehicleAnalyticsPanels({
     [auxDailyPoints, telemetryWindow.from, telemetryWindow.to],
   );
   const auxBaseline = useMemo(() => computeAuxVoltageBaseline(auxDailyPoints), [auxDailyPoints]);
-  const lowAuxDayCount = visibleAuxDailyPoints.filter((point) => point.vResting != null && point.vResting < 11.8).length;
+  const lowAuxDayCount = visibleAuxDailyPoints.filter((point) =>
+    point.vResting != null && point.vResting < auxCommandBlockVoltage(auxBatteryChemistry)
+  ).length;
+  const auxWindowExtremes = useMemo(() => {
+    if (isDayRange) {
+      const samples = historyPoints.flatMap((point) => {
+        const voltage = normalizeAuxVoltage(point.telemetry.aux_voltage_v);
+        return voltage == null ? [] : [{ voltage, time: Date.parse(point.device_time) }];
+      });
+      if (samples.length === 0) return null;
+      return {
+        min: samples.reduce((best, sample) => sample.voltage < best.voltage ? sample : best),
+        max: samples.reduce((best, sample) => sample.voltage > best.voltage ? sample : best),
+      };
+    }
+    if (visibleAuxDailyPoints.length === 0) return null;
+    const minPoint = visibleAuxDailyPoints.reduce((best, point) => point.vMin < best.vMin ? point : best);
+    const maxPoint = visibleAuxDailyPoints.reduce((best, point) => point.vMax > best.vMax ? point : best);
+    return {
+      min: { voltage: minPoint.vMin, time: Date.parse(`${minPoint.date}T12:00:00Z`) },
+      max: { voltage: maxPoint.vMax, time: Date.parse(`${maxPoint.date}T12:00:00Z`) },
+    };
+  }, [historyPoints, isDayRange, visibleAuxDailyPoints]);
+  const formatAuxExtreme = (sample: { voltage: number; time: number }) => {
+    const when = new Date(sample.time).toLocaleString(locale, isDayRange
+      ? { hour: "2-digit", minute: "2-digit" }
+      : { year: "numeric", month: "short", day: "numeric" });
+    return `${sample.voltage.toFixed(2)} V · ${when}`;
+  };
 
   const latestSohPercent = useMemo(() => {
     const points = (sohQuery.data ?? []).filter(
@@ -715,15 +749,16 @@ export function VehicleAnalyticsPanels({
         ) : (isDayRange ? historyPoints.some((point) => typeof point.telemetry.aux_voltage_v === "number") : visibleAuxDailyPoints.length > 0) ? (
           <>
             <div className="mt-4">
-              <AuxVoltageTrendChart range={historyRange} dailyPoints={visibleAuxDailyPoints} dayPoints={historyPoints} baseline={auxBaseline.baseline} locale={locale} tx={tx} />
+              <AuxVoltageTrendChart range={historyRange} dailyPoints={visibleAuxDailyPoints} dayPoints={historyPoints} baseline={auxBaseline.baseline} chemistry={auxBatteryChemistry} locale={locale} tx={tx} />
             </div>
-            {!isDayRange ? auxBaseline.sufficient ? (
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                <AnalyticsStat label={tx("vehicle.analytics.aux12vRestingNow")} value={`${fmt(auxBaseline.restingNow, 2)} V`} />
-                <AnalyticsStat label={tx("vehicle.analytics.aux12vBaseline")} value={`${fmt(auxBaseline.baseline, 2)} V`} />
-                <AnalyticsStat label={tx("vehicle.analytics.aux12vChange")} value={`${(auxBaseline.change ?? 0) >= 0 ? "+" : ""}${fmt(auxBaseline.change, 2)} V`} />
-              </div>
-            ) : (
+            {auxWindowExtremes ? <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-5">
+              <AnalyticsStat label={t("auxVoltageStats.minimum") as string} value={formatAuxExtreme(auxWindowExtremes.min)} />
+              <AnalyticsStat label={t("auxVoltageStats.maximum") as string} value={formatAuxExtreme(auxWindowExtremes.max)} />
+              {!isDayRange && auxBaseline.restingNow != null ? <AnalyticsStat label={tx("vehicle.analytics.aux12vRestingNow")} value={`${fmt(auxBaseline.restingNow, 2)} V`} /> : null}
+              {!isDayRange && auxBaseline.sufficient ? <AnalyticsStat label={tx("vehicle.analytics.aux12vBaseline")} value={`${fmt(auxBaseline.baseline, 2)} V`} /> : null}
+              {!isDayRange && auxBaseline.sufficient ? <AnalyticsStat label={tx("vehicle.analytics.aux12vChange")} value={`${(auxBaseline.change ?? 0) >= 0 ? "+" : ""}${fmt(auxBaseline.change, 2)} V`} /> : null}
+            </div> : null}
+            {!isDayRange && !auxBaseline.sufficient ? (
               <p className="mt-3 rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">{tx("vehicle.analytics.aux12vNotEnough", { count: auxBaseline.restingDayCount, required: AUX_MIN_RESTING_DAYS })}</p>
             ) : null}
             {!isDayRange && auxBaseline.sufficient ? <p className="mt-3 text-xs text-muted-foreground">{tx("vehicle.analytics.aux12vBasedOn", { count: auxBaseline.restingDayCount })}</p> : null}

@@ -16,7 +16,7 @@ import {
 } from "@/components/vehicle/chart-interaction";
 import { isTelemetryHistoryCharging } from "@/features/charging/domain";
 import type { TranslationKey } from "@/lib/i18n";
-import { VEHICLE_CONTROL_LOW_AUX_V } from "@/lib/vehicle/vehicle-control-guards";
+import { AUX_BATTERY_REFERENCES, type AuxBatteryChemistry } from "@/lib/vehicle/aux-battery-chemistry";
 import type { AuxVoltageDailyPoint } from "@/lib/voltflowmate/aux-voltage-history";
 import { normalizeAuxVoltage } from "@/lib/voltflowmate/aux-voltage-history";
 import type { TelemetryHistoryPoint } from "@/lib/voltflowmate/telemetry-history";
@@ -77,11 +77,12 @@ function restingSpans(points: DayPoint[]) {
   return spans;
 }
 
-export function AuxVoltageTrendChart({ range, dailyPoints, dayPoints, baseline, locale, tx }: {
+export function AuxVoltageTrendChart({ range, dailyPoints, dayPoints, baseline, chemistry, locale, tx }: {
   range: TelemetryHistoryRange;
   dailyPoints: readonly AuxVoltageDailyPoint[];
   dayPoints: readonly TelemetryHistoryPoint[];
   baseline: number | null;
+  chemistry: AuxBatteryChemistry;
   locale: string;
   tx: Translator;
 }) {
@@ -134,8 +135,10 @@ export function AuxVoltageTrendChart({ range, dailyPoints, dayPoints, baseline, 
   const shortDate = (time: number) => new Date(time).toLocaleDateString(locale, isDay
     ? { hour: "2-digit", minute: "2-digit" }
     : { month: "short", day: "numeric" });
-  const lowWithinRange = VEHICLE_CONTROL_LOW_AUX_V >= yMin && VEHICLE_CONTROL_LOW_AUX_V <= yMax;
-  const lowNearRange = !lowWithinRange && VEHICLE_CONTROL_LOW_AUX_V >= yMin - LOW_MARKER_NEAR_V;
+  const reference = AUX_BATTERY_REFERENCES[chemistry];
+  const lowVoltage = reference.commandBlockVoltage;
+  const lowWithinRange = lowVoltage >= yMin && lowVoltage <= yMax;
+  const lowNearRange = !lowWithinRange && lowVoltage >= yMin - LOW_MARKER_NEAR_V;
 
   const handlePointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
     const pointer = clientToSvg(event.currentTarget, event.clientX, event.clientY, STD_CHART.width, STD_CHART.height);
@@ -156,6 +159,7 @@ export function AuxVoltageTrendChart({ range, dailyPoints, dayPoints, baseline, 
     onPointerLeave={() => setHoverIndex(null)}
   >
     {restSpans.map((span, index) => <rect key={`rest-${index}`} x={x(span.start)} y={STD_CHART.plotTop} width={Math.max(1, x(span.end) - x(span.start))} height={STD_CHART.plotBottom - STD_CHART.plotTop} fill="var(--voltflow-cyan)" opacity="0.08" />)}
+    {reference.restingBand ? <rect x={STD_CHART.plotLeft} y={y(Math.min(reference.restingBand[1], yMax))} width={STD_CHART.plotRight - STD_CHART.plotLeft} height={Math.max(0, y(Math.max(reference.restingBand[0], yMin)) - y(Math.min(reference.restingBand[1], yMax)))} fill="var(--voltflow-cyan)" opacity="0.06" /> : null}
     {[yMin, (yMin + yMax) / 2, yMax].map((value) => <g key={value}>
       <line x1={STD_CHART.plotLeft} x2={STD_CHART.plotRight} y1={y(value)} y2={y(value)} className="text-border/40" stroke="currentColor" strokeDasharray="4 6" />
       <text x={STD_CHART.plotLeft - 5} y={y(value) + 3} textAnchor="end" className="fill-muted-foreground text-[8px]">{value.toFixed(1)}V</text>
@@ -165,8 +169,8 @@ export function AuxVoltageTrendChart({ range, dailyPoints, dayPoints, baseline, 
       <text x={STD_CHART.plotRight - 2} y={y(baseline) - 3} textAnchor="end" fontSize="8" fill="#a78bfa">{tx("vehicle.analytics.aux12vBaseline")}</text>
     </g> : null}
     {lowWithinRange ? <g>
-      <line x1={STD_CHART.plotLeft} x2={STD_CHART.plotRight} y1={y(VEHICLE_CONTROL_LOW_AUX_V)} y2={y(VEHICLE_CONTROL_LOW_AUX_V)} stroke="#ef4444" strokeDasharray="5 4" />
-      <text x={STD_CHART.plotRight - 2} y={y(VEHICLE_CONTROL_LOW_AUX_V) - 3} textAnchor="end" fontSize="8" fill="#ef4444">{tx("vehicle.analytics.aux12vCommandBlock")}</text>
+      <line x1={STD_CHART.plotLeft} x2={STD_CHART.plotRight} y1={y(lowVoltage)} y2={y(lowVoltage)} stroke="#ef4444" strokeDasharray="5 4" />
+      <text x={STD_CHART.plotRight - 2} y={y(lowVoltage) - 3} textAnchor="end" fontSize="8" fill="#ef4444">{tx("vehicle.analytics.aux12vCommandBlock")}</text>
     </g> : lowNearRange ? <text x={STD_CHART.plotRight} y={STD_CHART.plotBottom - 2} textAnchor="end" fontSize="8" fill="#ef4444">↓ {tx("vehicle.analytics.aux12vCommandBlock")}</text> : null}
     {area ? <path d={area} fill="var(--voltflow-cyan)" opacity="0.16" /> : null}
     {linePaths.map((path, index) => <path key={index} d={path} fill="none" stroke="var(--voltflow-cyan)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />)}

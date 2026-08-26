@@ -93,6 +93,7 @@ import { formatSocPercent } from "@/lib/format-soc-percent";
 import { formatTimeAgo } from "@/lib/time-ago";
 import { vehicleReadyDurationBucket } from "@/lib/vehicle-ready-metrics";
 import { readDiPlusCabinTemperature } from "@/lib/vehicle-cabin-temperature";
+import { readAuxVoltage } from "@/lib/vehicle/vehicle-control-guards";
 import {
   deriveDashboardVehicleMode,
   isFreshLiveSnapshot,
@@ -161,16 +162,7 @@ function finiteKm(value: unknown) {
 function readAuxVoltageV(
   snapshot: Pick<VoltflowMateLiveSnapshotRow, "telemetry" | "diplus" | "diplus_voltage_12v">,
 ) {
-  const fromTelemetry = finiteMetric(snapshot.telemetry.aux_voltage_v);
-  if (fromTelemetry != null) return fromTelemetry;
-
-  const fromColumn = finiteMetric(snapshot.diplus_voltage_12v);
-  if (fromColumn != null) return fromColumn;
-
-  const fromDiplus = finiteMetric(snapshot.diplus?.voltage_12v);
-  if (fromDiplus != null) return fromDiplus;
-
-  return null;
+  return readAuxVoltage(snapshot as VoltflowMateLiveSnapshotRow);
 }
 
 function heroCoreMetrics(snapshot: VoltflowMateLiveSnapshotRow, t: Translator, locale: Locale) {

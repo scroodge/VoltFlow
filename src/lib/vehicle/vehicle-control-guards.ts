@@ -1,12 +1,14 @@
 import { gearIsPark, readGear } from "@/lib/voltflowmate/gear";
 import { isTelemetryCharging } from "@/features/charging/domain";
 import type { VoltflowMateLiveSnapshotRow } from "@/types/database";
+import {
+  auxCommandBlockVoltage,
+  type AuxBatteryChemistry,
+} from "@/lib/vehicle/aux-battery-chemistry";
 
 export { gearIsPark, readGear };
 
 export const VEHICLE_CONTROL_STALE_MS = 90_000;
-export const VEHICLE_CONTROL_LOW_AUX_V = 11.8;
-
 export function isTelemetryFresh(snapshot: VoltflowMateLiveSnapshotRow | undefined) {
   if (!snapshot) return false;
   const receivedAt = new Date(snapshot.received_at).getTime();
@@ -37,7 +39,16 @@ export function readSpeed(snapshot: VoltflowMateLiveSnapshotRow | undefined) {
 }
 
 export function readAuxVoltage(snapshot: VoltflowMateLiveSnapshotRow | undefined) {
-  return snapshot?.diplus?.voltage_12v ?? snapshot?.telemetry?.aux_voltage_v ?? null;
+  const candidates = [
+    snapshot?.telemetry?.aux_voltage_v,
+    snapshot?.diplus_voltage_12v,
+    snapshot?.diplus?.voltage_12v,
+  ];
+  for (const candidate of candidates) {
+    const voltage = typeof candidate === "number" ? candidate : Number(candidate);
+    if (Number.isFinite(voltage) && voltage >= 6 && voltage <= 18) return voltage;
+  }
+  return null;
 }
 
 /** Parked (P) or plugged in and stationary — windows/climate OK while charging. */
@@ -48,7 +59,10 @@ export function isStationaryForRemoteControl(snapshot: VoltflowMateLiveSnapshotR
   return isTelemetryCharging(snapshot.telemetry, snapshot);
 }
 
-export function isControlAllowed(snapshot: VoltflowMateLiveSnapshotRow | undefined) {
+export function isControlAllowed(
+  snapshot: VoltflowMateLiveSnapshotRow | undefined,
+  chemistry: AuxBatteryChemistry = "other",
+) {
   if (!snapshot) return false;
   const receivedAt = new Date(snapshot.received_at).getTime();
   if (Number.isNaN(receivedAt) || Date.now() - receivedAt > VEHICLE_CONTROL_STALE_MS) {
@@ -56,14 +70,17 @@ export function isControlAllowed(snapshot: VoltflowMateLiveSnapshotRow | undefin
   }
   if (!isStationaryForRemoteControl(snapshot)) return false;
   const aux = readAuxVoltage(snapshot);
-  if (aux != null && aux > 0 && aux < VEHICLE_CONTROL_LOW_AUX_V) return false;
+  if (aux != null && aux < auxCommandBlockVoltage(chemistry)) return false;
   return true;
 }
 
-export function isRemoteReady(snapshot: VoltflowMateLiveSnapshotRow | undefined) {
+export function isRemoteReady(
+  snapshot: VoltflowMateLiveSnapshotRow | undefined,
+  chemistry: AuxBatteryChemistry = "other",
+) {
   if (!isTelemetryFresh(snapshot)) return false;
   if (!isStationaryForRemoteControl(snapshot)) return false;
   const aux = readAuxVoltage(snapshot);
-  if (aux != null && aux > 0 && aux < VEHICLE_CONTROL_LOW_AUX_V) return false;
+  if (aux != null && aux < auxCommandBlockVoltage(chemistry)) return false;
   return isSentryReady(snapshot);
 }

@@ -4,6 +4,7 @@ import {
   DEFAULT_FAST_DC_EFFICIENCY_PERCENT,
 } from "@/lib/charging-efficiency";
 import { defaultPressureUnit, isPressureUnit } from "@/lib/pressure-units";
+import { isAuxBatteryChemistry } from "@/lib/vehicle/aux-battery-chemistry";
 import type {
   ChargingSessionRow,
   Car,
@@ -42,6 +43,9 @@ export function mapCar(raw: Record<string, unknown>): Car {
     model_generation: isCarGeneration(raw.model_generation)
       ? raw.model_generation
       : "gen1_2024",
+    battery_chemistry: isAuxBatteryChemistry(raw.battery_chemistry)
+      ? raw.battery_chemistry
+      : null,
     battery_capacity_kwh: num(raw.battery_capacity_kwh),
     default_charger_power_kw: num(raw.default_charger_power_kw, 4.4),
     default_efficiency_percent: num(raw.default_efficiency_percent, DEFAULT_AC_EFFICIENCY_PERCENT),

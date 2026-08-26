@@ -1185,6 +1185,20 @@ export const dictionaries = {
     },
     settings: {
       eyebrow: "Settings",
+      auxBattery: {
+        label: "12V auxiliary battery",
+        help: "The chemistry sets safety limits and chart context. Other / not sure keeps self-baselining only.",
+        derived: "Automatic — {chemistry} (stock fit)",
+        saved: "Auxiliary battery chemistry saved",
+        saveError: "Could not save auxiliary battery chemistry",
+        options: {
+          flooded: "Lead-acid (flooded) · 12.6–12.7 V",
+          agm: "AGM · 12.8–12.9 V",
+          efb: "EFB · 12.7–12.8 V",
+          lifepo4: "LiFePO4 · 13.3–13.4 V",
+          other: "Other / not sure",
+        },
+      },
       tariffMapTitle: "Tariff location map",
       openInOsm: "Open in OpenStreetMap",
       push: {
@@ -1469,6 +1483,10 @@ export const dictionaries = {
         "Project code is copyright protected. All rights reserved unless the repository later publishes a separate license.",
       copyright:
         "© 2026 VoltFlow. Third-party packages and services remain under their respective licenses.",
+    },
+    auxVoltageStats: {
+      minimum: "Minimum",
+      maximum: "Maximum",
     },
   },
   be: {
@@ -2584,6 +2602,20 @@ export const dictionaries = {
     },
     settings: {
       eyebrow: "Налады",
+      auxBattery: {
+        label: "Дапаможны акумулятар 12 В",
+        help: "Тып акумулятара задае бяспечныя межы і кантэкст графіка. «Іншы / не ўпэўнены» пакідае толькі асабістую базавую лінію.",
+        derived: "Аўтаматычна — {chemistry} (штатны)",
+        saved: "Тып дапаможнага акумулятара захаваны",
+        saveError: "Не ўдалося захаваць тып дапаможнага акумулятара",
+        options: {
+          flooded: "Свінцова-кіслотны (вадкасны) · 12,6–12,7 В",
+          agm: "AGM · 12,8–12,9 В",
+          efb: "EFB · 12,7–12,8 В",
+          lifepo4: "LiFePO4 · 13,3–13,4 В",
+          other: "Іншы / не ўпэўнены",
+        },
+      },
       tariffMapTitle: "Карта размяшчэння тарыфу",
       openInOsm: "Адкрыць у OpenStreetMap",
       push: {
@@ -2869,6 +2901,10 @@ export const dictionaries = {
         "Код праекта абаронены аўтарскім правам. Усе правы захаваныя, калі ў рэпазіторыі пазней не з'явіцца асобная ліцэнзія.",
       copyright:
         "© 2026 VoltFlow. Пакеты і сэрвісы трэціх бакоў застаюцца пад сваімі ліцэнзіямі.",
+    },
+    auxVoltageStats: {
+      minimum: "Мінімум",
+      maximum: "Максімум",
     },
   },
   ru: {
@@ -3983,6 +4019,20 @@ export const dictionaries = {
     },
     settings: {
       eyebrow: "Настройки",
+      auxBattery: {
+        label: "Вспомогательный аккумулятор 12 В",
+        help: "Тип аккумулятора задаёт безопасные пределы и контекст графика. «Другой / не уверен» оставляет только персональную базовую линию.",
+        derived: "Автоматически — {chemistry} (штатный)",
+        saved: "Тип вспомогательного аккумулятора сохранён",
+        saveError: "Не удалось сохранить тип вспомогательного аккумулятора",
+        options: {
+          flooded: "Свинцово-кислотный (жидкостный) · 12,6–12,7 В",
+          agm: "AGM · 12,8–12,9 В",
+          efb: "EFB · 12,7–12,8 В",
+          lifepo4: "LiFePO4 · 13,3–13,4 В",
+          other: "Другой / не уверен",
+        },
+      },
       tariffMapTitle: "Карта расположения тарифа",
       openInOsm: "Открыть в OpenStreetMap",
       push: {
@@ -4268,6 +4318,10 @@ export const dictionaries = {
         "Код проекта защищен авторским правом. Все права защищены, если в репозитории позже не опубликована отдельная лицензия.",
       copyright:
         "© 2026 VoltFlow. Пакеты и сервисы третьих сторон остаются под своими лицензиями.",
+    },
+    auxVoltageStats: {
+      minimum: "Минимум",
+      maximum: "Максимум",
     },
   },
 } as const;
