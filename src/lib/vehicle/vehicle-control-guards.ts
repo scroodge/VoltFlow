@@ -1,15 +1,12 @@
 import { gearIsPark, readGear } from "@/lib/voltflowmate/gear";
 import { isTelemetryCharging } from "@/features/charging/domain";
 import type { VoltflowMateLiveSnapshotRow } from "@/types/database";
-import {
-  auxCommandBlockVoltage,
-  hasCorroboratedLowAuxVoltage,
-  type AuxBatteryChemistry,
-} from "@/lib/vehicle/aux-battery-chemistry";
 
 export { gearIsPark, readGear };
 
 export const VEHICLE_CONTROL_STALE_MS = 90_000;
+export const VEHICLE_CONTROL_LOW_AUX_V = 11.8;
+
 export function isTelemetryFresh(snapshot: VoltflowMateLiveSnapshotRow | undefined) {
   if (!snapshot) return false;
   const receivedAt = new Date(snapshot.received_at).getTime();
@@ -60,11 +57,7 @@ export function isStationaryForRemoteControl(snapshot: VoltflowMateLiveSnapshotR
   return isTelemetryCharging(snapshot.telemetry, snapshot);
 }
 
-export function isControlAllowed(
-  snapshot: VoltflowMateLiveSnapshotRow | undefined,
-  chemistry: AuxBatteryChemistry = "other",
-  recentAuxVoltages: readonly number[] = [],
-) {
+export function isControlAllowed(snapshot: VoltflowMateLiveSnapshotRow | undefined) {
   if (!snapshot) return false;
   const receivedAt = new Date(snapshot.received_at).getTime();
   if (Number.isNaN(receivedAt) || Date.now() - receivedAt > VEHICLE_CONTROL_STALE_MS) {
@@ -72,26 +65,14 @@ export function isControlAllowed(
   }
   if (!isStationaryForRemoteControl(snapshot)) return false;
   const aux = readAuxVoltage(snapshot);
-  if (
-    aux != null &&
-    aux < auxCommandBlockVoltage(chemistry) &&
-    hasCorroboratedLowAuxVoltage(recentAuxVoltages, chemistry)
-  ) return false;
+  if (aux != null && aux > 0 && aux < VEHICLE_CONTROL_LOW_AUX_V) return false;
   return true;
 }
 
-export function isRemoteReady(
-  snapshot: VoltflowMateLiveSnapshotRow | undefined,
-  chemistry: AuxBatteryChemistry = "other",
-  recentAuxVoltages: readonly number[] = [],
-) {
+export function isRemoteReady(snapshot: VoltflowMateLiveSnapshotRow | undefined) {
   if (!isTelemetryFresh(snapshot)) return false;
   if (!isStationaryForRemoteControl(snapshot)) return false;
   const aux = readAuxVoltage(snapshot);
-  if (
-    aux != null &&
-    aux < auxCommandBlockVoltage(chemistry) &&
-    hasCorroboratedLowAuxVoltage(recentAuxVoltages, chemistry)
-  ) return false;
+  if (aux != null && aux > 0 && aux < VEHICLE_CONTROL_LOW_AUX_V) return false;
   return isSentryReady(snapshot);
 }

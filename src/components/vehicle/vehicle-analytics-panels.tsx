@@ -54,7 +54,7 @@ import { useAppPreferences } from "@/stores/use-app-preferences";
 import { devFetch, isDevAppRoute, withDevApiParams } from "@/lib/dev/dev-fetch";
 import { formatCurrencyAmount, type Locale, type TranslationKey } from "@/lib/i18n";
 import type { VoltflowMateTripRow, VoltflowMateTripTrackPointRow, ChargingSessionRow } from "@/types/database";
-import { auxCommandBlockVoltage, resolveAuxBatteryChemistry } from "@/lib/vehicle/aux-battery-chemistry";
+import { auxLowVoltage, resolveAuxBatteryChemistry } from "@/lib/vehicle/aux-battery-chemistry";
 
 const HISTORY_RANGES: TelemetryHistoryRange[] = ["day", "week", "month", "quarter", "year"];
 
@@ -524,7 +524,7 @@ export function VehicleAnalyticsPanels({
   );
   const auxBaseline = useMemo(() => computeAuxVoltageBaseline(auxDailyPoints), [auxDailyPoints]);
   const lowAuxDayCount = visibleAuxDailyPoints.filter((point) =>
-    point.vResting != null && point.vResting < auxCommandBlockVoltage(auxBatteryChemistry)
+    point.vResting != null && point.vResting < auxLowVoltage(auxBatteryChemistry)
   ).length;
   const auxWindowExtremes = useMemo(() => {
     if (isDayRange) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   AirVent,
   ChevronDown,
@@ -20,7 +20,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useVoltflowMateLiveQuery } from "@/hooks/use-voltflowmate-live-query";
-import { useCarsQuery } from "@/hooks/use-cars-query";
 import {
   useSendVehicleCommand,
   useVehicleCommandsQuery,
@@ -37,12 +36,9 @@ import {
   readGear,
   readSentryProvider,
   readSpeed,
+  VEHICLE_CONTROL_LOW_AUX_V,
   VEHICLE_CONTROL_STALE_MS,
 } from "@/lib/vehicle/vehicle-control-guards";
-import {
-  auxCommandBlockVoltage,
-  resolveAuxBatteryChemistry,
-} from "@/lib/vehicle/aux-battery-chemistry";
 import { cn } from "@/lib/utils";
 import type { VoltflowMateLiveSnapshotRow, VehicleCommandRow, VehicleCommandScheduleRow } from "@/types/database";
 
@@ -183,7 +179,6 @@ export function VehicleComfortControls({
   defaultExpanded = false,
 }: VehicleComfortControlsProps) {
   const { data: liveRows } = useVoltflowMateLiveQuery();
-  const { data: carsResult } = useCarsQuery();
   const [expanded, setExpanded] = useState(defaultExpanded);
   const { data: commands } = useVehicleCommandsQuery(vehicleId, {
     enabled: !collapsible || expanded,
@@ -192,47 +187,21 @@ export function VehicleComfortControls({
   const scheduleActions = useVehicleCommandSchedules(vehicleId);
   const sendCommand = useSendVehicleCommand(vehicleId);
   const [pendingId, setPendingId] = useState<string | null>(null);
-  const [previousAuxReading, setPreviousAuxReading] = useState<{ vehicleId: string; receivedAt: string; voltage: number } | null>(null);
 
   const snapshot = useMemo(() => {
     if (!vehicleId) return undefined;
     return liveRows?.find((row) => row.vehicle_id === vehicleId);
   }, [liveRows, vehicleId]);
 
-  const chemistry = useMemo(() => {
-    const car = carsResult?.cars.find((candidate) => candidate.vehicle_alias === vehicleId);
-    return resolveAuxBatteryChemistry(car?.battery_chemistry, car?.model_generation);
-  }, [carsResult?.cars, vehicleId]);
-  const lowAuxVoltage = auxCommandBlockVoltage(chemistry);
   const aux = readAuxVoltage(snapshot);
-  const currentReceivedAt = snapshot?.received_at;
-  const recentAuxVoltages =
-    vehicleId && currentReceivedAt && aux != null &&
-    previousAuxReading?.vehicleId === vehicleId &&
-    previousAuxReading.receivedAt !== currentReceivedAt
-      ? [previousAuxReading.voltage, aux]
-      : [];
 
-  useEffect(() => {
-    let cancelled = false;
-    queueMicrotask(() => {
-      if (cancelled) return;
-      setPreviousAuxReading(
-        vehicleId && currentReceivedAt && aux != null
-          ? { vehicleId, receivedAt: currentReceivedAt, voltage: aux }
-          : null,
-      );
-    });
-    return () => { cancelled = true; };
-  }, [aux, currentReceivedAt, vehicleId]);
-
-  const allowed = relaxGuards || isControlAllowed(snapshot, chemistry, recentAuxVoltages);
-  const remoteReady = relaxGuards || isRemoteReady(snapshot, chemistry, recentAuxVoltages);
+  const allowed = relaxGuards || isControlAllowed(snapshot);
+  const remoteReady = relaxGuards || isRemoteReady(snapshot);
   const stale =
     !relaxGuards &&
     snapshot != null &&
     Date.now() - new Date(snapshot.received_at).getTime() > VEHICLE_CONTROL_STALE_MS;
-  const lowAux = !relaxGuards && aux != null && aux < lowAuxVoltage;
+  const lowAux = !relaxGuards && aux != null && aux > 0 && aux < VEHICLE_CONTROL_LOW_AUX_V;
   const disabled = !vehicleId || !allowed || sendCommand.isPending;
 
   async function runAction(action: ComfortAction) {

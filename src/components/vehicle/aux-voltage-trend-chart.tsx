@@ -136,7 +136,7 @@ export function AuxVoltageTrendChart({ range, dailyPoints, dayPoints, baseline, 
     ? { hour: "2-digit", minute: "2-digit" }
     : { month: "short", day: "numeric" });
   const reference = AUX_BATTERY_REFERENCES[chemistry];
-  const lowVoltage = reference.commandBlockVoltage;
+  const lowVoltage = reference.lowVoltage;
   const lowWithinRange = lowVoltage >= yMin && lowVoltage <= yMax;
   const lowNearRange = !lowWithinRange && lowVoltage >= yMin - LOW_MARKER_NEAR_V;
 
@@ -170,8 +170,8 @@ export function AuxVoltageTrendChart({ range, dailyPoints, dayPoints, baseline, 
     </g> : null}
     {lowWithinRange ? <g>
       <line x1={STD_CHART.plotLeft} x2={STD_CHART.plotRight} y1={y(lowVoltage)} y2={y(lowVoltage)} stroke="#ef4444" strokeDasharray="5 4" />
-      <text x={STD_CHART.plotRight - 2} y={y(lowVoltage) - 3} textAnchor="end" fontSize="8" fill="#ef4444">{tx("vehicle.analytics.aux12vCommandBlock")}</text>
-    </g> : lowNearRange ? <text x={STD_CHART.plotRight} y={STD_CHART.plotBottom - 2} textAnchor="end" fontSize="8" fill="#ef4444">↓ {tx("vehicle.analytics.aux12vCommandBlock")}</text> : null}
+      <text x={STD_CHART.plotRight - 2} y={y(lowVoltage) - 3} textAnchor="end" fontSize="8" fill="#ef4444">{tx("vehicle.analytics.aux12vLowVoltageMarker")}</text>
+    </g> : lowNearRange ? <text x={STD_CHART.plotRight} y={STD_CHART.plotBottom - 2} textAnchor="end" fontSize="8" fill="#ef4444">↓ {tx("vehicle.analytics.aux12vLowVoltageMarker")}</text> : null}
     {area ? <path d={area} fill="var(--voltflow-cyan)" opacity="0.16" /> : null}
     {linePaths.map((path, index) => <path key={index} d={path} fill="none" stroke="var(--voltflow-cyan)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />)}
     {points.filter((point) => point.resting != null).map((point, index) => <circle key={`point-${index}`} cx={x(point.time)} cy={y(point.resting!)} r={points.length <= 60 ? 2 : 1.25} fill="var(--voltflow-cyan)" />)}

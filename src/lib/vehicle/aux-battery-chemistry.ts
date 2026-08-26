@@ -5,16 +5,16 @@ export type AuxBatteryChemistry = (typeof auxBatteryChemistries)[number];
 
 export type AuxBatteryReference = {
   restingBand: readonly [number, number] | null;
-  commandBlockVoltage: number;
+  lowVoltage: number;
 };
 
 export const AUX_BATTERY_REFERENCES: Record<AuxBatteryChemistry, AuxBatteryReference> = {
-  flooded: { restingBand: [12.6, 12.7], commandBlockVoltage: 11.8 },
-  agm: { restingBand: [12.8, 12.9], commandBlockVoltage: 12.0 },
-  efb: { restingBand: [12.7, 12.8], commandBlockVoltage: 11.9 },
-  lifepo4: { restingBand: [13.3, 13.4], commandBlockVoltage: 12.8 },
-  // Unknown batteries retain the legacy guard and use self-baselining only.
-  other: { restingBand: null, commandBlockVoltage: 11.8 },
+  flooded: { restingBand: [12.6, 12.7], lowVoltage: 11.8 },
+  agm: { restingBand: [12.8, 12.9], lowVoltage: 12.0 },
+  efb: { restingBand: [12.7, 12.8], lowVoltage: 11.9 },
+  lifepo4: { restingBand: [13.3, 13.4], lowVoltage: 12.8 },
+  // Unknown batteries retain self-baselining only and the legacy low reference.
+  other: { restingBand: null, lowVoltage: 11.8 },
 };
 
 export function isAuxBatteryChemistry(value: unknown): value is AuxBatteryChemistry {
@@ -33,15 +33,6 @@ export function resolveAuxBatteryChemistry(
   return modelGeneration ? deriveAuxBatteryChemistry(modelGeneration) : "other";
 }
 
-export function auxCommandBlockVoltage(chemistry: AuxBatteryChemistry) {
-  return AUX_BATTERY_REFERENCES[chemistry].commandBlockVoltage;
-}
-
-/** Two consecutive valid readings are required before the safety guard blocks. */
-export function hasCorroboratedLowAuxVoltage(
-  recentVoltages: readonly number[],
-  chemistry: AuxBatteryChemistry,
-) {
-  const threshold = auxCommandBlockVoltage(chemistry);
-  return recentVoltages.length >= 2 && recentVoltages.slice(-2).every((voltage) => voltage < threshold);
+export function auxLowVoltage(chemistry: AuxBatteryChemistry) {
+  return AUX_BATTERY_REFERENCES[chemistry].lowVoltage;
 }
