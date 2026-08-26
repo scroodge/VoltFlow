@@ -44,7 +44,13 @@ function VehicleTabLoading() {
   );
 }
 
-export function VehicleHub({ isAdmin }: { isAdmin: boolean }) {
+export function VehicleHub({
+  isAdmin,
+  remoteCommandsEnabled,
+}: {
+  isAdmin: boolean;
+  remoteCommandsEnabled: boolean;
+}) {
   const searchParams = useSearchParams();
   const { t } = useTranslation();
 
@@ -102,7 +108,12 @@ export function VehicleHub({ isAdmin }: { isAdmin: boolean }) {
         </div>
 
         <div className="mt-3">
-          {activeTab === "live" ? <VehicleLiveView isAdmin={isAdmin} /> : null}
+          {activeTab === "live" ? (
+            <VehicleLiveView
+              isAdmin={isAdmin}
+              remoteCommandsEnabled={remoteCommandsEnabled}
+            />
+          ) : null}
           {activeTab === "service" ? <ServiceView /> : null}
         </div>
       </div>
