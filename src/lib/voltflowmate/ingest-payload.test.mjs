@@ -245,3 +245,32 @@ test("accepts legacy 60-sample batch from old APK", () => {
   assert.equal(result.payloads[0].schema_version, 1);
   assert.equal(result.payloads.at(-1)?.telemetry.soc, 55.9);
 });
+
+test("keeps telemetry.soc_source so the two SOC scales stay distinguishable", () => {
+  const result = normalizePayloads({
+    ...basePayload,
+    telemetry: { ...basePayload.telemetry, soc: 99.4, soc_source: "diplus" },
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(result.payloads[0].telemetry.soc, 99.4);
+  assert.equal(result.payloads[0].telemetry.soc_source, "diplus");
+});
+
+test("keeps soc_source on the autoservice fallback path", () => {
+  const result = normalizePayloads({
+    ...basePayload,
+    telemetry: { ...basePayload.telemetry, soc: 100, soc_source: "autoservice" },
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(result.payloads[0].telemetry.soc_source, "autoservice");
+});
+
+test("omitted soc_source stays omitted rather than becoming a value", () => {
+  // Cars below versionCode 341 never send the key; it must not materialise as null/"".
+  const result = normalizePayloads(basePayload);
+
+  assert.equal(result.success, true);
+  assert.equal(result.payloads[0].telemetry.soc_source, undefined);
+});
