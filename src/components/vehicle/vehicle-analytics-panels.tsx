@@ -30,7 +30,6 @@ import { useVoltflowMateTelemetryHistoryQuery } from "@/hooks/use-voltflowmate-t
 import type { TelemetryHistoryPoint } from "@/lib/voltflowmate/telemetry-history";
 import { useTranslation } from "@/hooks/use-translation";
 import { buildChargeDeltaTrend } from "@/lib/voltflowmate/charge-delta-trend";
-import { computeAuxVoltageBaseline, AUX_MIN_RESTING_DAYS } from "@/lib/voltflowmate/aux-voltage-baseline";
 import { normalizeAuxVoltage } from "@/lib/voltflowmate/aux-voltage-history";
 import { buildAnalyticsSummary, consumptionByOutsideTemp } from "@/lib/voltflowmate/telemetry-buckets";
 import { computeHistoryPeriodSummary } from "@/lib/history-day-summary";
@@ -54,7 +53,7 @@ import { useAppPreferences } from "@/stores/use-app-preferences";
 import { devFetch, isDevAppRoute, withDevApiParams } from "@/lib/dev/dev-fetch";
 import { formatCurrencyAmount, type Locale, type TranslationKey } from "@/lib/i18n";
 import type { VoltflowMateTripRow, VoltflowMateTripTrackPointRow, ChargingSessionRow } from "@/types/database";
-import { auxLowVoltage, resolveAuxBatteryChemistry } from "@/lib/vehicle/aux-battery-chemistry";
+import { resolveAuxBatteryChemistry } from "@/lib/vehicle/aux-battery-chemistry";
 
 const HISTORY_RANGES: TelemetryHistoryRange[] = ["day", "week", "month", "quarter", "year"];
 
@@ -366,14 +365,11 @@ export function VehicleAnalyticsPanels({
     vehicleId,
     from: auxFetchFrom,
     to: telemetryWindow.to,
-    enabled: !isDayRange,
+    // Stopgap: the raw daily RPC exceeds the production PostgREST timeout for
+    // every multi-day range. Keep day analytics useful without issuing a known
+    // failing request until the server-side query path is repaired.
+    enabled: false,
   });
-  const retentionQuery = useQuery({
-    queryKey: ["vehicle-retention-status"],
-    queryFn: () => fetchAnalytics<{ isPremium: boolean; retentionDays: number }>("/api/vehicle/retention-status"),
-    staleTime: 5 * 60_000,
-  });
-
   const periodOverviewQuery = useQuery({
     queryKey: ["vehicle-analytics", "period-overview", historyRange, anchorDate, vehicleId],
     queryFn: () => {
@@ -522,10 +518,6 @@ export function VehicleAnalyticsPanels({
     }),
     [auxDailyPoints, telemetryWindow.from, telemetryWindow.to],
   );
-  const auxBaseline = useMemo(() => computeAuxVoltageBaseline(auxDailyPoints), [auxDailyPoints]);
-  const lowAuxDayCount = visibleAuxDailyPoints.filter((point) =>
-    point.vResting != null && point.vResting < auxLowVoltage(auxBatteryChemistry)
-  ).length;
   const auxWindowExtremes = useMemo(() => {
     if (isDayRange) {
       const samples = historyPoints.flatMap((point) => {
@@ -742,28 +734,17 @@ export function VehicleAnalyticsPanels({
       <section className="voltflow-card p-5">
         <h2 className="font-heading text-2xl font-semibold tracking-tight">{tx("vehicle.analytics.aux12vTitle")}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{tx("vehicle.analytics.aux12vSubtitle")}</p>
-        {auxVoltageQuery.isLoading && !isDayRange ? (
-          <Skeleton className="mt-4 h-52 rounded-2xl" />
-        ) : auxVoltageQuery.error && !isDayRange ? (
-          <p className="mt-4 rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">{tx("vehicle.analytics.aux12vNoData")}</p>
-        ) : (isDayRange ? historyPoints.some((point) => typeof point.telemetry.aux_voltage_v === "number") : visibleAuxDailyPoints.length > 0) ? (
+        {!isDayRange ? (
+          <p className="mt-4 rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">{tx("vehicle.analytics.aux12vTemporarilyUnavailable")}</p>
+        ) : historyPoints.some((point) => typeof point.telemetry.aux_voltage_v === "number") ? (
           <>
             <div className="mt-4">
-              <AuxVoltageTrendChart range={historyRange} dailyPoints={visibleAuxDailyPoints} dayPoints={historyPoints} baseline={auxBaseline.baseline} chemistry={auxBatteryChemistry} locale={locale} tx={tx} />
+              <AuxVoltageTrendChart range={historyRange} dailyPoints={visibleAuxDailyPoints} dayPoints={historyPoints} baseline={null} chemistry={auxBatteryChemistry} locale={locale} tx={tx} />
             </div>
             {auxWindowExtremes ? <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-2">
               <AnalyticsStat label={t("auxVoltageStats.minimum") as string} {...formatAuxExtreme(auxWindowExtremes.min)} />
               <AnalyticsStat label={t("auxVoltageStats.maximum") as string} {...formatAuxExtreme(auxWindowExtremes.max)} />
-              {!isDayRange && auxBaseline.restingNow != null ? <AnalyticsStat label={tx("vehicle.analytics.aux12vRestingNow")} value={`${fmt(auxBaseline.restingNow, 2)} V`} /> : null}
-              {!isDayRange && auxBaseline.sufficient ? <AnalyticsStat label={tx("vehicle.analytics.aux12vBaseline")} value={`${fmt(auxBaseline.baseline, 2)} V`} /> : null}
-              {!isDayRange && auxBaseline.sufficient ? <AnalyticsStat label={tx("vehicle.analytics.aux12vChange")} value={`${(auxBaseline.change ?? 0) >= 0 ? "+" : ""}${fmt(auxBaseline.change, 2)} V`} /> : null}
             </div> : null}
-            {!isDayRange && !auxBaseline.sufficient ? (
-              <p className="mt-3 rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">{tx("vehicle.analytics.aux12vNotEnough", { count: auxBaseline.restingDayCount, required: AUX_MIN_RESTING_DAYS })}</p>
-            ) : null}
-            {!isDayRange && auxBaseline.sufficient ? <p className="mt-3 text-xs text-muted-foreground">{tx("vehicle.analytics.aux12vBasedOn", { count: auxBaseline.restingDayCount })}</p> : null}
-            {lowAuxDayCount > 0 ? <p className="mt-2 text-sm text-amber-400">{tx("vehicle.analytics.aux12vLowDays", { count: lowAuxDayCount })}</p> : null}
-            {!retentionQuery.data?.isPremium && (historyRange === "quarter" || historyRange === "year") ? <p className="mt-2 text-xs text-muted-foreground">{tx("vehicle.analytics.aux12vPremiumHistory")}</p> : null}
           </>
         ) : (
           <p className="mt-4 rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">{tx("vehicle.analytics.aux12vNoData")}</p>
