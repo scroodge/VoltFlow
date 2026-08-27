@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { sendInactivityWarning } from "@/lib/email/inactivity-warning";
+import { getInactivityCutoffs } from "@/lib/inactivity-cleanup";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const CRON_SECRET = process.env.CRON_SECRET ?? "";
@@ -15,9 +16,9 @@ export async function POST(request: NextRequest) {
   const results = { warnings_sent: 0, accounts_deleted: 0, errors: [] as string[] };
 
   // Step 1: find users inactive for 30+ days, no warning sent yet, not premium
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { thirtyDaysAgo, sixtyDaysAgo } = getInactivityCutoffs(now);
 
-  const { data: warnCandidates } = await getSupabaseAdmin()
+  const { data: warnCandidates, error: warnQueryError } = await getSupabaseAdmin()
     .from("profiles")
     .select("id, email")
     .lt("last_active_at", thirtyDaysAgo)
@@ -25,32 +26,48 @@ export async function POST(request: NextRequest) {
     .or("is_premium.is.null,is_premium.eq.false")
     .or(`premium_until.is.null,premium_until.lt.${thirtyDaysAgo}`);
 
+  if (warnQueryError) {
+    return NextResponse.json(
+      { ok: false, ...results, error: `Warning candidate query failed: ${warnQueryError.message}` },
+      { status: 500 },
+    );
+  }
+
   if (warnCandidates) {
     for (const profile of warnCandidates) {
       if (!profile.email) continue;
       const result = await sendInactivityWarning(profile.email);
       if (result.ok) {
-        await getSupabaseAdmin()
+        const { error: warningStampError } = await getSupabaseAdmin()
           .from("profiles")
           .update({ inactivity_warning_sent_at: now.toISOString() })
           .eq("id", profile.id);
-        results.warnings_sent++;
+        if (warningStampError) {
+          results.errors.push(`Warning stamp failed for ${profile.id}: ${warningStampError.message}`);
+        } else {
+          results.warnings_sent++;
+        }
       } else {
         results.errors.push(`Warning email failed for ${profile.id}: ${result.error}`);
       }
     }
   }
 
-  // Step 2: find users inactive for 60+ days, warning sent, not premium
-  const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString();
-
-  const { data: deleteCandidates } = await getSupabaseAdmin()
+  // Step 2: find users inactive for 60+ days whose warning is at least 30 days old, not premium
+  const { data: deleteCandidates, error: deleteQueryError } = await getSupabaseAdmin()
     .from("profiles")
     .select("id, email")
     .lt("last_active_at", sixtyDaysAgo)
-    .not("inactivity_warning_sent_at", "is", null)
+    .lt("inactivity_warning_sent_at", thirtyDaysAgo)
     .or("is_premium.is.null,is_premium.eq.false")
     .or(`premium_until.is.null,premium_until.lt.${sixtyDaysAgo}`);
+
+  if (deleteQueryError) {
+    return NextResponse.json(
+      { ok: false, ...results, error: `Deletion candidate query failed: ${deleteQueryError.message}` },
+      { status: 500 },
+    );
+  }
 
   if (deleteCandidates) {
     for (const profile of deleteCandidates) {

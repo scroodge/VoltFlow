@@ -9,6 +9,16 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-08-27
+
+### Inactivity cleanup preserves the warning grace period
+
+The inactivity cron now requires a warning to be at least 30 days old before deleting
+an account, so a first run over an old backlog cannot warn and delete the same account
+in one pass. Candidate-query failures now return an explicit server error instead of a
+misleading successful response with zero work reported.
+
+
 ## 2026-08-26
 
 ### Full-day telemetry charts no longer stop after 5,000 samples
