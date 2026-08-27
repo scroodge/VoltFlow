@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { Suspense, useEffect, useState } from "react";
 
+import { touchUserActivity } from "@/actions/activity";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,6 +52,7 @@ function ConfirmEmailInner() {
         return;
       }
 
+      await touchUserActivity();
       setStatus("success");
       // Session is now established; the onboarding gate takes over from here.
       router.replace("/onboarding");

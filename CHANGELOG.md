@@ -11,6 +11,15 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-08-27
 
+### User activity now follows every supported app entry path
+
+The shared, hour-throttled activity stamp now covers web authentication, Telegram
+authentication and linking, Mate telemetry, and trip-summary-only ingestion. Failed
+browser stamps no longer set the local throttle marker, so they retry on the next app
+open. New profile rows start with a concrete activity timestamp; existing NULL rows are
+deliberately left untouched until the separate backfill is reviewed.
+
+
 ### Inactivity cleanup preserves the warning grace period
 
 The inactivity cron now requires a warning to be at least 30 days old before deleting
