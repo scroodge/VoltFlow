@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   composeTelegramLiveWidget,
+  freshRangeEstimateKm,
   TELEGRAM_LIVE_RANGE_ACTIVE_MAX_AGE_MS,
   TELEGRAM_LIVE_RANGE_PARKED_MAX_AGE_MS,
 } from "./telegram/live-widget-message.ts";
@@ -29,10 +30,10 @@ function message(overrides = {}) {
   });
 }
 
-test("live widget header shows fresh estimated range and keeps odometer in detail row", () => {
+test("live widget header omits range and keeps odometer in detail row", () => {
   const lines = message().split("\n");
 
-  assert.equal(lines[0], "🔋 100% · ⚡ · ≈ 287 km");
+  assert.equal(lines[0], "🔋 100% · ⚡");
   assert.equal(lines[1], "<b>🔌 Yuan UP Way</b> · Зарядка");
   assert.equal(lines[3], "⚡ 4.4 kW");
   assert.equal(lines[4], "🚗 Пробег 46632 км");
@@ -48,46 +49,54 @@ test("live widget omits an unavailable range from the header", () => {
 });
 
 test("live widget omits a stale driving range from the header", () => {
-  const lines = message({
-    state: "driving",
-    rangeSampleTime: new Date(NOW_MS - TELEGRAM_LIVE_RANGE_ACTIVE_MAX_AGE_MS - 1).toISOString(),
-  }).split("\n");
+  const range = freshRangeEstimateKm(
+    286.6,
+    new Date(NOW_MS - TELEGRAM_LIVE_RANGE_ACTIVE_MAX_AGE_MS - 1).toISOString(),
+    NOW_MS,
+    "driving",
+  );
 
-  assert.equal(lines[0], "🔋 100% · D");
+  assert.equal(range, null);
 });
 
 test("live widget omits a stale charging range from the header", () => {
-  const lines = message({
-    rangeSampleTime: new Date(NOW_MS - TELEGRAM_LIVE_RANGE_ACTIVE_MAX_AGE_MS - 1).toISOString(),
-  }).split("\n");
+  const range = freshRangeEstimateKm(
+    286.6,
+    new Date(NOW_MS - TELEGRAM_LIVE_RANGE_ACTIVE_MAX_AGE_MS - 1).toISOString(),
+    NOW_MS,
+    "charging",
+  );
 
-  assert.equal(lines[0], "🔋 100% · ⚡");
+  assert.equal(range, null);
 });
 
 test("live widget keeps an overnight parked range but eventually expires it", () => {
-  const overnight = message({
-    state: "parked",
-    emoji: "🚗",
-    rangeSampleTime: new Date(NOW_MS - 12 * 60 * 60 * 1000).toISOString(),
-  }).split("\n");
-  assert.equal(overnight[0], "🔋 100% · P · ≈ 287 km");
+  const overnight = freshRangeEstimateKm(
+    286.6,
+    new Date(NOW_MS - 12 * 60 * 60 * 1000).toISOString(),
+    NOW_MS,
+    "parked",
+  );
+  assert.equal(overnight, 287);
 
-  const expired = message({
-    state: "parked",
-    emoji: "🚗",
-    rangeSampleTime: new Date(NOW_MS - TELEGRAM_LIVE_RANGE_PARKED_MAX_AGE_MS - 1).toISOString(),
-  }).split("\n");
-  assert.equal(expired[0], "🔋 100% · P");
+  const expired = freshRangeEstimateKm(
+    286.6,
+    new Date(NOW_MS - TELEGRAM_LIVE_RANGE_PARKED_MAX_AGE_MS - 1).toISOString(),
+    NOW_MS,
+    "parked",
+  );
+  assert.equal(expired, null);
 });
 
 test("live widget keeps an overnight range when the last vehicle state is offline", () => {
-  const lines = message({
-    state: "offline",
-    emoji: "💤",
-    rangeSampleTime: new Date(NOW_MS - 12 * 60 * 60 * 1000).toISOString(),
-  }).split("\n");
+  const range = freshRangeEstimateKm(
+    286.6,
+    new Date(NOW_MS - 12 * 60 * 60 * 1000).toISOString(),
+    NOW_MS,
+    "offline",
+  );
 
-  assert.equal(lines[0], "🔋 100% · — · ≈ 287 km");
+  assert.equal(range, 287);
 });
 
 test("live widget localizes message copy in English and Belarusian", () => {

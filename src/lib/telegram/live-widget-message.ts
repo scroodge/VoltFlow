@@ -70,14 +70,7 @@ function stateLabel(locale: Locale, state: TelegramLiveVehicleState): string {
 export function composeTelegramLiveWidget(data: TelegramLiveWidgetMessage): string {
   const lines: string[] = [];
   const battery = data.soc != null ? `🔋 ${data.soc}%` : "🔋 —";
-  const rangeKm = freshRangeEstimateKm(
-    data.rangeEstKm,
-    data.rangeSampleTime,
-    data.nowMs,
-    data.state,
-  );
   const summary = [battery, stateMark(data.state)];
-  if (rangeKm != null) summary.push(`≈ ${rangeKm.toLocaleString(data.locale)} km`);
   lines.push(summary.join(" · "));
 
   lines.push(`<b>${data.emoji} ${escapeHtml(data.carName)}</b> · ${stateLabel(data.locale, data.state)}`);
