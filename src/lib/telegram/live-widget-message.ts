@@ -1,6 +1,9 @@
 import { translate, type Locale } from "../i18n.ts";
 
-export const TELEGRAM_LIVE_RANGE_MAX_AGE_MS = 10 * 60 * 1000;
+// Driving and charging both move SOC materially; parked/offline cars can safely retain
+// an overnight estimate, but it still expires after a day to bound phantom-drain error.
+export const TELEGRAM_LIVE_RANGE_ACTIVE_MAX_AGE_MS = 10 * 60 * 1000;
+export const TELEGRAM_LIVE_RANGE_PARKED_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const SOC_BAR_LENGTH = 12;
 
 export type TelegramLiveVehicleState = "charging" | "parked" | "driving" | "offline";
@@ -39,10 +42,15 @@ export function freshRangeEstimateKm(
   value: number | null,
   sampleTime: string,
   nowMs: number,
+  state: TelegramLiveVehicleState,
 ): number | null {
   if (value == null || !Number.isFinite(value) || value <= 0) return null;
   const sampleMs = Date.parse(sampleTime);
-  if (!Number.isFinite(sampleMs) || nowMs - sampleMs > TELEGRAM_LIVE_RANGE_MAX_AGE_MS) {
+  const maxAgeMs =
+    state === "parked" || state === "offline"
+      ? TELEGRAM_LIVE_RANGE_PARKED_MAX_AGE_MS
+      : TELEGRAM_LIVE_RANGE_ACTIVE_MAX_AGE_MS;
+  if (!Number.isFinite(sampleMs) || nowMs - sampleMs > maxAgeMs) {
     return null;
   }
   return Math.round(value);
@@ -62,7 +70,12 @@ function stateLabel(locale: Locale, state: TelegramLiveVehicleState): string {
 export function composeTelegramLiveWidget(data: TelegramLiveWidgetMessage): string {
   const lines: string[] = [];
   const battery = data.soc != null ? `🔋 ${data.soc}%` : "🔋 —";
-  const rangeKm = freshRangeEstimateKm(data.rangeEstKm, data.rangeSampleTime, data.nowMs);
+  const rangeKm = freshRangeEstimateKm(
+    data.rangeEstKm,
+    data.rangeSampleTime,
+    data.nowMs,
+    data.state,
+  );
   const summary = [battery, stateMark(data.state)];
   if (rangeKm != null) summary.push(`≈ ${rangeKm.toLocaleString(data.locale)} km`);
   lines.push(summary.join(" · "));
