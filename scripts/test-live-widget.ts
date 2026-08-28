@@ -37,6 +37,7 @@ async function main() {
     supabase,
     userId,
     telegramId: null,
+    profileLocale: "ru",
     samples,
     receivedAt: now,
   });

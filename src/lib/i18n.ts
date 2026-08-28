@@ -1488,6 +1488,16 @@ export const dictionaries = {
       copyright:
         "© 2026 VoltFlow. Third-party packages and services remain under their respective licenses.",
     },
+    telegramLiveWidget: {
+      state: { charging: "Charging", parked: "Parked", driving: "Driving", offline: "Offline" },
+      mileage: "Mileage {value} km",
+      vehicle: "Vehicle",
+      timeHoursMinutes: "~{hours}h {minutes}m",
+      timeHours: "~{hours}h",
+      timeMinutes: "~{minutes}m",
+      openMap: "Open map",
+      openVoltFlow: "Open VoltFlow",
+    },
     auxBatteryAlerts: { open: "Open VoltFlow", acute: { title: "12V battery needs attention", body: "{vehicle}: resting voltage has stayed low for two days ({voltage} V). Check or charge the auxiliary battery." }, digest: { title: "12V battery is declining", body: "{vehicle}: resting voltage is {voltage} V versus the 90-day baseline of {baseline} V. Consider checking the battery." } },
     auxVoltageStats: {
       minimum: "Minimum",
@@ -2911,6 +2921,16 @@ export const dictionaries = {
       copyright:
         "© 2026 VoltFlow. Пакеты і сэрвісы трэціх бакоў застаюцца пад сваімі ліцэнзіямі.",
     },
+    telegramLiveWidget: {
+      state: { charging: "Зарадка", parked: "Прыпаркаваны", driving: "У руху", offline: "Афлайн" },
+      mileage: "Прабег {value} км",
+      vehicle: "Аўтамабіль",
+      timeHoursMinutes: "~{hours}г {minutes}хв",
+      timeHours: "~{hours}г",
+      timeMinutes: "~{minutes}хв",
+      openMap: "Адкрыць карту",
+      openVoltFlow: "Адкрыць VoltFlow",
+    },
     auxBatteryAlerts: { open: "Адкрыць VoltFlow", acute: { title: "12V акумулятар патрабуе ўвагі", body: "{vehicle}: напружанне ў спакоі застаецца нізкім два дні ({voltage} В). Праверце або зарадзіце дапаможны акумулятар." }, digest: { title: "Стан 12V акумулятара пагаршаецца", body: "{vehicle}: напружанне ў спакоі {voltage} В пры базавым значэнні за 90 дзён {baseline} В. Варта праверыць акумулятар." } },
     auxVoltageStats: {
       minimum: "Мінімум",
@@ -4332,6 +4352,16 @@ export const dictionaries = {
         "Код проекта защищен авторским правом. Все права защищены, если в репозитории позже не опубликована отдельная лицензия.",
       copyright:
         "© 2026 VoltFlow. Пакеты и сервисы третьих сторон остаются под своими лицензиями.",
+    },
+    telegramLiveWidget: {
+      state: { charging: "Зарядка", parked: "Припаркован", driving: "В движении", offline: "Офлайн" },
+      mileage: "Пробег {value} км",
+      vehicle: "Автомобиль",
+      timeHoursMinutes: "~{hours}ч {minutes}м",
+      timeHours: "~{hours}ч",
+      timeMinutes: "~{minutes}м",
+      openMap: "Открыть карту",
+      openVoltFlow: "Открыть VoltFlow",
     },
     auxBatteryAlerts: { open: "Открыть VoltFlow", acute: { title: "12V аккумулятор требует внимания", body: "{vehicle}: напряжение покоя остаётся низким два дня ({voltage} В). Проверьте или зарядите вспомогательный аккумулятор." }, digest: { title: "Состояние 12V аккумулятора ухудшается", body: "{vehicle}: напряжение покоя {voltage} В при базовом значении за 90 дней {baseline} В. Стоит проверить аккумулятор." } },
     auxVoltageStats: {
