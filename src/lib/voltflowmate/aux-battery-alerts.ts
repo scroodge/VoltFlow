@@ -38,6 +38,12 @@ function isSameUtcWeek(a: string, b: string) {
   return weekStart(a) === weekStart(b);
 }
 
+function previousUtcDate(now: string) {
+  const date = new Date(now);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+
 export function evaluateAuxBatteryAlerts({
   points,
   chemistry,
@@ -51,6 +57,15 @@ export function evaluateAuxBatteryAlerts({
 }): AuxBatteryAlertDecision {
   const resting = restingPoints(points);
   const latest = resting.at(-1) ?? null;
+  if (latest?.date !== previousUtcDate(now)) {
+    return {
+      sendAcute: false,
+      sendDigest: false,
+      nextState: state,
+      latestVoltage: latest?.vResting ?? null,
+      baseline: null,
+    };
+  }
   const threshold = AUX_BATTERY_ALERT_THRESHOLDS[chemistry];
   let episodeActive = state.acuteEpisodeActive;
   let sendAcute = false;
