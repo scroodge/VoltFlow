@@ -178,6 +178,18 @@ export function nextAutoChargingSessionStep({
   // (null) — only the former can end a session via the zero-power stall.
   const isExplicitZeroPower =
     rawChargePowerKw != null && rawChargePowerKw <= AUTO_CHARGING_ZERO_POWER_THRESHOLD_KW;
+  /**
+   * No `charge_power_kw` on this sample at all. Distinct from an explicit zero *and* from
+   * real power: it is no measurement, so it is neither evidence that the charger stopped
+   * nor evidence that it is still running, and it must not clear a zero-power run that
+   * other samples established. The car-off `CommandDaemon` builds its own minimal payload
+   * that omits `charge_power_kw` (and `power_kw`) while still sending `is_charging: true`,
+   * and it pushes more often than AUTO_CHARGING_ZERO_POWER_STALL_MS — so treating its
+   * samples as a reset made the stall mathematically unreachable and left sessions open
+   * for hours after the charge had ended. See BACKLOG.md "A power-less telemetry sample
+   * must not reset the zero-power stall".
+   */
+  const hasNoPowerReading = rawChargePowerKw == null;
 
   const idle =
     soc != null
@@ -231,9 +243,17 @@ export function nextAutoChargingSessionStep({
     // explicitly-zero charge power ends the session at any SOC, where the frozen-reading
     // check below cannot (parked SOC drift resets it). See
     // AUTO_CHARGING_ZERO_POWER_STALL_MS.
+    //
+    // Three states, not two: an explicit zero starts or extends the run, real power
+    // clears it, and a sample with no power reading at all carries it forward untouched
+    // (see `hasNoPowerReading`). Carrying is safe because the run can still only *start*
+    // on an explicit zero — firmware that never reports `charge_power_kw` never
+    // accumulates one and so can never be stopped by this path.
     const zeroPowerSinceDeviceTime = isExplicitZeroPower
       ? (prev.zeroPowerSinceDeviceTime ?? deviceTime)
-      : null;
+      : hasNoPowerReading
+        ? prev.zeroPowerSinceDeviceTime
+        : null;
     if (zeroPowerSinceDeviceTime != null && soc != null) {
       const zeroPowerMs = Date.parse(deviceTime) - Date.parse(zeroPowerSinceDeviceTime);
       if (Number.isFinite(zeroPowerMs) && zeroPowerMs >= AUTO_CHARGING_ZERO_POWER_STALL_MS) {

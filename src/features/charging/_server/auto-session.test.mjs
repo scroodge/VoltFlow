@@ -403,3 +403,63 @@ test("a delayed-start charger backdates to the SOC it sat at while plugged in an
   assert.equal(action.startPercent, 40);
   assert.equal(action.startedAt, at(4));
 });
+
+test("power-less daemon samples interleaved with zeros do not reset the stall", () => {
+  // The production failure: two senders push concurrently. CloudTelemetrySender reports
+  // an explicit 0 kW, while the car-off CommandDaemon builds its own minimal payload
+  // that omits charge_power_kw entirely but still sends is_charging: true. The daemon
+  // pushes more often than the 5-minute stall, so treating its samples as a reset made
+  // the stall unreachable — car `way` sat `charging` at 99.8% for hours after the charge
+  // finished. Longest clean zero window observed was 4 minutes against a 5-minute
+  // threshold. Absent power is no measurement: it must carry the run, not clear it.
+  // Session 3ea4c611, 2026-08-28.
+  const daemonMinutes = new Set([1, 4, 5]);
+  const socAt = (minute) => (minute < 3 ? 99.9 : 99.8);
+  let state = null;
+  let action = { type: "none" };
+  let stoppedAtMinute = null;
+  for (let minute = 0; minute <= 6 && stoppedAtMinute == null; minute += 1) {
+    const step = nextAutoChargingSessionStep({
+      state,
+      isCharging: true,
+      canStartSession: false,
+      soc: socAt(minute),
+      speedKmh: 0,
+      hasActiveSession: true,
+      chargerPowerKw: 4.4,
+      rawChargePowerKw: daemonMinutes.has(minute) ? null : 0,
+      deviceTime: at(minute),
+    });
+    state = step.state;
+    action = step.action;
+    if (action.type === "stop") stoppedAtMinute = minute;
+    else assert.equal(action.type, "none", `minute ${minute}`);
+  }
+  // Still measured from the first explicit zero at minute 0, undisturbed by the daemon.
+  assert.equal(stoppedAtMinute, 5);
+  assert.equal(action.currentPercent, 99.8);
+});
+
+test("real power after a zero run clears it, even across power-less samples", () => {
+  // The carry must not become a latch: a genuine nonzero reading still resets the run,
+  // so a charge that resumes (or a zero blip bracketed by daemon pushes) stays open.
+  let state = null;
+  for (let minute = 0; minute <= 12; minute += 1) {
+    // Zeros and power-less daemon samples early, then real power arrives at minute 3.
+    const rawChargePowerKw = minute < 2 ? 0 : minute === 2 ? null : 4.4;
+    const step = nextAutoChargingSessionStep({
+      state,
+      isCharging: true,
+      canStartSession: true,
+      soc: 70 + minute,
+      speedKmh: 0,
+      hasActiveSession: true,
+      chargerPowerKw: 4.4,
+      rawChargePowerKw,
+      deviceTime: at(minute),
+    });
+    state = step.state;
+    assert.equal(step.action.type, "none", `minute ${minute}`);
+  }
+  assert.equal(state.zeroPowerSinceDeviceTime, null);
+});

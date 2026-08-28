@@ -4,6 +4,83 @@ Per the agent workflow in [AGENTS.md](AGENTS.md): **plan first, build only on ex
 go-ahead.** These are researched but **not built**. Shipped work lives in
 [CHANGELOG.md](CHANGELOG.md).
 
+## ✅ A power-less telemetry sample must not reset the zero-power stall (approved 2026-08-28)
+
+### Evidence
+
+Car `way`, session `3ea4c611-131f-4084-a02a-3619885ac399`: charge finished, gun left in,
+and the session was still `charging` at 99.8% more than an hour later. Read-only
+production checks found three layered causes:
+
+1. **A 2h20m ingest blackout hid the end of the charge.** Samples stop at 09:20 UTC
+   (SOC 82%) and resume at 11:40 UTC (SOC 99.9%); `autoservice_bms_state` went `1` →
+   `15` (charge complete) across the gap. Auto-stop had nothing to evaluate.
+2. **The keep-alive predicate correctly held the session open.** Resumed samples read
+   `charge_power_kw = 0`, `charge_gun_state = 2` (plugged), `is_charging = true`,
+   `speed_kmh = 0` — parked, not explicitly unplugged, `is_charging` true, so
+   `isMateAutoSessionChargingSustained` returns true. Working as designed: Di+
+   `is_charging` means *gun connected*, not *energy flowing*.
+3. **The 5-minute zero-power stall — the guard built for exactly this case — could never
+   converge.** Two senders push with different payload shapes:
+
+   | Sender | `telemetry` keys | `charge_power_kw` |
+   |---|---|---|
+   | `CloudTelemetrySender` (app) | 17 / 19 | `0` present |
+   | `CommandDaemon` (car-off) | **14** | **absent** |
+
+   The 14-key daemon payload omits `charge_power_kw` and `power_kw` but still sends
+   `is_charging: true`. In `nextAutoChargingSessionStep`, `isExplicitZeroPower` requires
+   `rawChargePowerKw != null`, so every daemon sample sets `zeroPowerSinceDeviceTime =
+   null` and restarts the 5-minute clock. Measured clean zero-power windows after 11:44
+   UTC: 1m49s, 4m00s, 1m00s, 3m00s — longest run **4 minutes** against a **5-minute**
+   threshold. It can never fire. The frozen-reading check is blocked identically
+   (`readingUnchanged` also requires `rawChargePowerKw != null`).
+
+Secondary display effect: the CHARGER tile read `~ 3.9 kW` on a car drawing nothing.
+`resolveChargingEtaPowerKw` finds no positive live power and falls back to the session
+average (20.295 kWh ÷ 5.2 h = 3.90 kW). The energy figure itself is correct
+(55.7 → 99.8% × 45.1 kWh ÷ 0.98 = 20.29 kWh).
+
+### Data boundary
+
+No user-facing data model change. No new column, no migration: the state column
+`zero_power_since_device_time` already exists (migration `20260826120000`). This is a
+pure change to how an **app-owned** server-side reducer interprets an absent field, and
+the data stays in **Postgres** where it already lives.
+
+### Options and recommendation
+
+1. **Make the daemon payload include `charge_power_kw`.** Fixes it at the source, but
+   the Mate app (Kotlin) is not in this repo and it needs a car-side release plus
+   install. It also leaves the server trusting that every present and future sender
+   populates the field — the exact assumption that broke here. Worth doing eventually,
+   not sufficient alone.
+2. **Shorten `AUTO_CHARGING_ZERO_POWER_STALL_MS` below the daemon's cadence.** Rejected:
+   it races an interval we do not control, and a shorter stall is what previously ended
+   real charges on a momentary zero reading.
+3. **Treat an absent `charge_power_kw` as neutral rather than as a reset (recommended,
+   approved).** A sample with no power field is *no measurement*, not a measurement of
+   flowing power — it should carry the existing zero-power run forward instead of
+   clearing it. The run still only ever *starts* on an explicit zero, so the AGENTS.md
+   invariant holds unchanged: firmware that never reports `charge_power_kw` still never
+   accumulates a run and can never be stopped by this path. Three-state, not two:
+   explicit zero starts/extends the run, real power clears it, absent carries it.
+
+Leave the frozen-reading check as it is. Its job is a stuck *nonzero* reading, and
+loosening its null handling would risk stopping sessions on never-report firmware; the
+zero-power stall converging is what closes the observed case.
+
+The 2h20m ingest blackout is a separate problem and is **not** in scope here.
+
+### Verification
+
+Extend `src/features/charging/_server/auto-session.test.mjs` with the production
+interleave — explicit zeros punctuated by power-less daemon samples — and assert the
+session stops at the 5-minute mark; keep a case asserting a never-reports-power stream
+never stops. Run the auto-session suite (excluded from the `npm run test` glob), the
+full `npm run test`, and `npm run build`. Then confirm against production that the open
+session closes with `stopped_at` set and `current_percent` at the live SOC.
+
 ## ✅ Restore live SOC after the Di+ 0.5.2 update (approved 2026-08-14)
 
 ### Evidence
