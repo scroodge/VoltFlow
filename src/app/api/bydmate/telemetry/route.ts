@@ -346,6 +346,7 @@ export async function POST(request: Request) {
       supabase,
       userId: profile.id,
       telegramId: profile.telegramId,
+      profileLocale: profile.preferredLocale,
       samples,
       receivedAt,
     }).catch(() => ({ updated: 0 }));

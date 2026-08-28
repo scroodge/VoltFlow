@@ -12,9 +12,13 @@ import {
   type TelegramActiveChargingSession,
 } from "@/lib/telegram/live-widget-charging";
 import { isChargingTelemetry } from "@/lib/vehicle-live-mode";
+import { translate, type Locale } from "@/lib/i18n";
+import {
+  composeTelegramLiveWidget,
+  type TelegramLiveVehicleState,
+} from "@/lib/telegram/live-widget-message";
 
 const THROTTLE_MS = 30_000;
-const SOC_BAR_LENGTH = 12;
 
 function clampSoc(value: unknown): number | null {
   const n = finiteTelemetryNumber(value);
@@ -31,34 +35,17 @@ function clampSpeed(value: unknown): number | null {
   return n != null && n >= 0 ? Math.round(n) : null;
 }
 
-function socBar(soc: number): string {
-  const filled = Math.round((soc / 100) * SOC_BAR_LENGTH);
-  const empty = SOC_BAR_LENGTH - filled;
-  return "█".repeat(filled) + "░".repeat(empty);
-}
-
-function formatHoursMinutes(totalHours: number): string {
+function formatHoursMinutes(totalHours: number, locale: Locale): string {
   if (totalHours <= 0 || !Number.isFinite(totalHours)) return "";
   const h = Math.floor(totalHours);
   const m = Math.round((totalHours - h) * 60);
-  if (h > 0 && m > 0) return `~${h}ч ${m}м`;
-  if (h > 0) return `~${h}ч`;
-  return `~${m}м`;
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
-function chatListSummary(
-  soc: number | null,
-  odometer: number | null,
-  state: VehicleState,
-): string {
-  const battery = soc != null ? `🔋 ${soc}%` : "🔋 —";
-  const stateMark = state === "driving" ? "D" : state === "parked" ? "P" : state === "charging" ? "⚡" : "—";
-  const mileage = odometer != null ? `${odometer.toLocaleString("ru-RU")} км` : "—";
-  return `${battery} · ${stateMark} · ${mileage}`;
+  if (h > 0 && m > 0) {
+    return translate(locale, "telegramLiveWidget.timeHoursMinutes", { hours: h, minutes: m }) as string;
+  }
+  if (h > 0) {
+    return translate(locale, "telegramLiveWidget.timeHours", { hours: h }) as string;
+  }
+  return translate(locale, "telegramLiveWidget.timeMinutes", { minutes: m }) as string;
 }
 
 type LiveWidgetRow = {
@@ -81,60 +68,6 @@ function isWidgetEditDue(existing: LiveWidgetRow | null, nowMs: number) {
   if (!existing || existing.status !== "active") return true;
   const lastEditMs = Date.parse(existing.updated_at);
   return !Number.isFinite(lastEditMs) || nowMs - lastEditMs >= THROTTLE_MS;
-}
-
-function widgetHtml(data: {
-  carName: string;
-  emoji: string;
-  state: VehicleState;
-  stateLabel: string;
-  soc: number | null;
-  chargePowerKw: number | null;
-  timeToFull: string | null;
-  odometer: number | null;
-  speedKmh: number | null;
-  lat: number | null;
-  lon: number | null;
-}): string {
-  const lines: string[] = [];
-  const name = escapeHtml(data.carName);
-
-  // Telegram's chat list previews the beginning of the latest message. Keep
-  // this concise, live line first while preserving the detailed card below.
-  lines.push(chatListSummary(data.soc, data.odometer, data.state));
-  lines.push(`<b>${data.emoji} ${name}</b> · ${data.stateLabel}`);
-
-  if (data.soc != null) {
-    lines.push(`<code>${socBar(data.soc)}</code> <b>${data.soc}%</b>`);
-  }
-
-  const chargeParts: string[] = [];
-  if (data.chargePowerKw != null && data.chargePowerKw > 0) {
-    chargeParts.push(`⚡ ${data.chargePowerKw.toFixed(1)} kW`);
-  }
-  if (data.timeToFull) {
-    chargeParts.push(`⏱ ${data.timeToFull}`);
-  }
-  if (chargeParts.length > 0) {
-    lines.push(chargeParts.join(" · "));
-  }
-
-  const statusParts: string[] = [];
-  if (data.odometer != null) {
-    statusParts.push(`Пробег ${data.odometer} км`);
-  }
-  if (data.speedKmh != null && data.speedKmh > 0) {
-    statusParts.push(`${data.speedKmh} km/h`);
-  }
-  if (statusParts.length > 0) {
-    lines.push(`🚗 ${statusParts.join(" · ")}`);
-  }
-
-  if (data.lat != null && data.lon != null) {
-    lines.push(`📍 <a href="https://www.google.com/maps?q=${data.lat},${data.lon}">Открыть карту</a>`);
-  }
-
-  return lines.join("\n");
 }
 
 async function loadWidgetRow(
@@ -245,7 +178,7 @@ async function loadActiveChargingSessions(
   return newestActiveSessionByCar(sessions);
 }
 
-type VehicleState = "charging" | "parked" | "driving" | "offline";
+type VehicleState = TelegramLiveVehicleState;
 
 function determineState(lastSample: TelemetryPayload, nowMs: number, receivedAt: string): VehicleState {
   const receivedMs = Date.parse(receivedAt);
@@ -276,15 +209,6 @@ function stateEmoji(state: VehicleState): string {
   }
 }
 
-function stateLabel(state: VehicleState): string {
-  switch (state) {
-    case "charging": return "Зарядка";
-    case "parked": return "Припаркован";
-    case "driving": return "В движении";
-    case "offline": return "Офлайн";
-  }
-}
-
 async function sendOrEditWidget(
   supabase: SupabaseClient,
   userId: string,
@@ -293,10 +217,11 @@ async function sendOrEditWidget(
   existingMessageId: number | null,
   html: string,
   webAppUrl: string,
+  locale: Locale,
 ): Promise<boolean> {
   const replyMarkup = {
     inline_keyboard: [[
-      { text: "Открыть VoltFlow", web_app: { url: webAppUrl } },
+      { text: translate(locale, "telegramLiveWidget.openVoltFlow") as string, web_app: { url: webAppUrl } },
     ]],
   };
 
@@ -326,12 +251,14 @@ export async function updateTelegramLiveWidgets({
   supabase,
   userId,
   telegramId,
+  profileLocale,
   samples,
   receivedAt,
 }: {
   supabase: SupabaseClient;
   userId: string;
   telegramId: number | null;
+  profileLocale: Locale;
   samples: TelemetryPayload[];
   receivedAt: string;
 }) {
@@ -400,15 +327,18 @@ export async function updateTelegramLiveWidgets({
     const chargePowerKw = chargingMetrics.chargePowerKw;
     const timeToFull =
       chargingMetrics.timeToFullHours != null
-        ? formatHoursMinutes(chargingMetrics.timeToFullHours)
+        ? formatHoursMinutes(chargingMetrics.timeToFullHours, profileLocale)
         : null;
 
-    const html = widgetHtml({
-      carName: carInfo?.name ?? "Автомобиль",
+    const html = composeTelegramLiveWidget({
+      carName: carInfo?.name ?? (translate(profileLocale, "telegramLiveWidget.vehicle") as string),
       emoji: stateEmoji(state),
       state,
-      stateLabel: stateLabel(state),
+      locale: profileLocale,
       soc,
+      rangeEstKm: finiteTelemetryNumber(lastSample.telemetry.range_est_km),
+      rangeSampleTime: lastSample.device_time,
+      nowMs,
       chargePowerKw,
       timeToFull,
       odometer,
@@ -430,6 +360,7 @@ export async function updateTelegramLiveWidgets({
       useExistingMessageId,
       html,
       webAppUrl,
+      profileLocale,
     );
     if (ok) updated++;
   }

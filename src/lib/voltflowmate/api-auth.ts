@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { defaultLocale, isLocale, type Locale } from "@/lib/i18n";
 
 /** Mate (the car) and the Dashboard (the head unit) pair independently. */
 export type VoltflowMateDeviceKind = "mate" | "dashboard";
@@ -9,6 +10,7 @@ export type VoltflowMateApiKeyProfile = {
   id: string;
   /** Present only for server-side fan-out eligibility; never returned to the paired client. */
   telegramId: number | null;
+  preferredLocale: Locale;
   /** See `profiles.live_fast_until` — while in the future, Mate should send status fast. */
   liveFastUntil: string | null;
   liveFastVehicleId: string | null;
@@ -41,6 +43,7 @@ export function voltflowMateApiKeyFingerprint(apiKey: string): string {
 type ProfileRow = {
   id: string;
   telegram_id?: number | null;
+  preferred_locale?: string | null;
   live_fast_until?: string | null;
   live_fast_vehicle_id?: string | null;
   vehicle_connected_at?: string | null;
@@ -50,6 +53,8 @@ function toApiKeyProfile(row: ProfileRow): VoltflowMateApiKeyProfile {
   return {
     id: row.id,
     telegramId: row.telegram_id ?? null,
+    preferredLocale:
+      row.preferred_locale && isLocale(row.preferred_locale) ? row.preferred_locale : defaultLocale,
     liveFastUntil: row.live_fast_until ?? null,
     liveFastVehicleId: row.live_fast_vehicle_id ?? null,
     vehicleConnectedAt: row.vehicle_connected_at ?? null,
@@ -67,7 +72,7 @@ export async function resolveVoltflowMateApiKeyProfile(
   // every ~6s per car, and reading them here keeps that hot path at one indexed read.
   // Legacy plaintext values remain readable only during the one-way migration; newly
   // paired cars are authenticated solely by the keyed hash.
-  const fields = "id, telegram_id, live_fast_until, live_fast_vehicle_id, vehicle_connected_at";
+  const fields = "id, telegram_id, preferred_locale, live_fast_until, live_fast_vehicle_id, vehicle_connected_at";
   const keyHash = hashVoltflowMateApiKey(trimmed);
 
   // Devices first — this is where every credential paired after the bydmate_devices
