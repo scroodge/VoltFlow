@@ -243,14 +243,9 @@ begin
         s.diplus_voltage_12v
       ) as voltage,
       public.bydmate_jsonb_numeric(s.telemetry, 'aux_voltage_v') as telemetry_voltage,
-      (
-        coalesce(s.diplus_speed_kmh, public.bydmate_jsonb_numeric(s.telemetry, 'speed_kmh'), 0) <= 0.5
-        and abs(coalesce(s.diplus_power_kw, public.bydmate_jsonb_numeric(s.telemetry, 'power_kw'), 0)) <= 0.1
-        and not case
-          when coalesce(public.bydmate_jsonb_numeric(s.telemetry, 'charge_power_kw'), 0) > 0 then true
-          when s.diplus_charge_gun_state = '1' then false
-          else lower(coalesce(s.telemetry->>'is_charging', '')) in ('true', '1', 'yes', 'on')
-        end
+      public.bydmate_is_parked_unplugged(
+        s.telemetry,
+        s.diplus_charge_gun_state
       ) as is_parked
     from public.bydmate_telemetry_samples s
     where s.user_id = p_user_id

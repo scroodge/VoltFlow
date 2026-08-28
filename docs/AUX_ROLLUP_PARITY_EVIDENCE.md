@@ -140,3 +140,49 @@ order by is_premium;
 
 Its actual result must be reported before enqueueing production backfill. No such
 query or backfill has been run against production yet.
+
+## Production parity (2026-08-28)
+
+After approved phase-A application, the tier-bounded eligible set contained 449
+vehicle-days: 229 free-tier days and 220 premium days. At the measured planning
+range, the bounded backfill estimate is 898-6,735 seconds (about 15 minutes to 1
+hour 52 minutes). No backfill was started.
+
+The production comparison captured frozen raw-baseline values before invoking the
+materialiser, compared with a null-safe full join, and rolled the entire parity
+transaction back. Six real vehicle-days covered eight labels:
+
+- flooded, LiFePO4, and other (the effective chemistries represented in retained
+  production telemetry; local fixtures additionally cover EFB and AGM);
+- dense and sparse days;
+- no resting samples;
+- sanitized voltage with Di+ fallback;
+- a parked interval crossing UTC midnight.
+
+A flat-first experiment initially produced one mismatch: identical min/max/median
+but resting count 2 versus 3. Thirteen source samples classified differently
+because JSON and flat power diverged. A JSON-first/flat-fallback audit then found
+9 classification shifts among 212 eligible rows with missing JSON motion data.
+The final materialiser therefore invokes the shared
+`bydmate_is_parked_unplugged` predicate exactly, with no duplicated or flat
+fallback motion logic.
+
+The full six-day/eight-label production rerun after that correction returned:
+
+```text
+PARITY_MISMATCH_COUNT
+ mismatch_count
+----------------
+              0
+(1 row)
+
+PARITY_MISMATCH_DETAIL_ANONYMISED (expected: 0 rows)
+ vehicle_hash | date | baseline_v_min | rollup_v_min | baseline_v_max | rollup_v_max | baseline_v_resting | rollup_v_resting | baseline_count | rollup_count
+--------------+------+----------------+--------------+----------------+--------------+--------------------+------------------+----------------+--------------
+(0 rows)
+```
+
+Follow-up question, not part of this performance change: should missing JSON
+speed/power continue to mean stationary? Changing that shared predicate affects
+both auxiliary resting voltage and phantom drain, so the 9-of-212 evidence must
+inform a separate design decision rather than an incidental rollup optimization.

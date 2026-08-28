@@ -63,13 +63,20 @@ A one-day maintenance function accepts one user, vehicle, and UTC date. It:
 4. Upserts exactly one rollup row and removes the corresponding queue item in the
    same transaction.
 
-Where semantics are identical, calculation will prefer the flat
-`diplus_speed_kmh`, `diplus_power_kw`, and `diplus_charge_gun_state` columns and
-fall back to JSON for legacy rows. `charge_power_kw` remains JSON because there
-is no equivalent flat column. Sanitized `telemetry.aux_voltage_v` remains the
-source for min/max, while resting voltage retains the existing
-`diplus_voltage_12v` fallback; merging those intentionally distinct sources
-would break parity.
+Parked classification calls the existing shared
+`bydmate_is_parked_unplugged(telemetry, diplus_charge_gun_state)` predicate exactly;
+the materialiser does not duplicate it. Production evidence rejected both
+flat-first and flat-fallback variants because either can change classification.
+Sanitized `telemetry.aux_voltage_v` remains the source for min/max, while resting
+voltage retains the existing `diplus_voltage_12v` fallback; merging those
+intentionally distinct sources would break parity.
+
+Follow-up, deliberately outside this performance change: the shared predicate
+currently treats missing JSON speed/power as zero (stationary). In the retained
+production window, 212 samples had missing JSON speed/power with a flat value
+available, and substituting that flat value changed parked classification for 9.
+Whether missing motion data should be treated as stationary affects both resting
+voltage and phantom drain and requires a separate product/domain decision.
 
 A `pg_cron` scheduler, not telemetry ingestion, triggers the work. After a UTC
 day is complete, it enqueues that date for vehicles having telemetry in the
