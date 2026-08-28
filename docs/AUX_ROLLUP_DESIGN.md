@@ -111,19 +111,41 @@ so progress survives timeouts and failures. Batch size remains configurable and
 starts conservatively at one vehicle-day per worker invocation; it is increased
 only after production timings demonstrate safe headroom.
 
-Observed timings bound the estimate:
+Raw telemetry retention bounds the amount of history that can be backfilled:
+non-premium accounts retain at most 30 days and premium accounts at most 365
+days. Rollup rows are deliberately not included in the raw telemetry purge.
+Before production backfill, count distinct eligible `(user, vehicle, UTC date)`
+keys after applying those tier bounds; do not extrapolate from hypothetical
+vehicle-years that can no longer exist in raw storage.
+
+Observed timings bound the estimate for that actual eligible-day count:
 
 - The 105-second one-week query is about 15 seconds per vehicle-day on cold,
   scattered history.
 - A 90-day query exceeded 180 seconds, establishing a lower observed average of
   more than 2 seconds per vehicle-day.
 
-Plan on **2-15 seconds per vehicle-day**. Thus one vehicle-year is approximately
-12-91 minutes, and 100 vehicle-years approximately 20-152 hours. Before starting
-a production backfill, count the actual eligible vehicle-days and report
-`vehicle_days * 2-15 seconds` as the estimated range. Time representative recent
-and old one-day chunks to refine it. Backfill must remain throttled and resumable;
-it must never run as one 90-day or whole-history statement.
+Plan on **2-15 seconds per eligible vehicle-day**. The maximum raw window is
+therefore about 1-7.5 minutes per free vehicle or 12-91 minutes per premium
+vehicle, with the fleet total calculated from the real tier-bounded count.
+Report that count and estimate before starting production backfill. Time
+representative recent and old one-day chunks to refine it. Backfill must remain
+throttled and resumable; it must never run as one 90-day or whole-history
+statement.
+
+### Rollup retention
+
+Keep daily rollups for **five years**, independent of account tier and raw sample
+retention. At one narrow row per vehicle per day, this is inexpensive while
+providing genuinely useful long-term battery-health history. Revisit the period
+only with measured table/index size and an explicit product decision. A future
+rollup purge, if approved, must be separate from
+`purge_old_bydmate_telemetry_by_tier`; the raw purge must never delete rollups.
+
+This means 12 V history will accumulate beyond the current 30-day free-account
+raw-data window. Existing UI copy that says longer history requires Premium will
+eventually become inaccurate for this panel. That copy is intentionally outside
+this database change and must be resolved explicitly as a product decision.
 
 ## 5. Stable reader API
 
