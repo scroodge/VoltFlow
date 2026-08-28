@@ -90,8 +90,13 @@ export function MobileShell({ children }: { children: ReactNode }) {
       const lastTouch = localStorage.getItem("voltflow:last_active_touch");
       const hourAgo = Date.now() - 3600_000;
       if (lastTouch && Number(lastTouch) > hourAgo) return;
-      localStorage.setItem("voltflow:last_active_touch", String(Date.now()));
-      void touchUserActivity();
+      void touchUserActivity()
+        .then((stamped) => {
+          if (stamped) {
+            localStorage.setItem("voltflow:last_active_touch", String(Date.now()));
+          }
+        })
+        .catch(() => {});
     } catch {}
   }, []);
   const telegramThemeStyle = useMemo(() => {
