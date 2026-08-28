@@ -8,6 +8,7 @@ import type { FormEvent } from "react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { touchUserActivity } from "@/actions/activity";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { LegalFooterLinks } from "@/components/legal/legal-document-view";
 import { Button } from "@/components/ui/button";
@@ -101,6 +102,7 @@ export function LoginForm() {
     // Email confirmation is required (GoTrue AUTOCONFIRM off): signUp returns no
     // session. Show the "check your inbox" panel with a resend affordance.
     if (data.session) {
+      await touchUserActivity();
       toast.success(t("auth.welcome") as string);
       router.replace(next);
       router.refresh();
@@ -145,6 +147,7 @@ export function LoginForm() {
       return;
     }
 
+    await touchUserActivity();
     toast.success(t("auth.welcome") as string);
     router.replace(next);
     router.refresh();

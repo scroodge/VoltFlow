@@ -21,10 +21,10 @@ import {
   RequestBodyTooLargeError,
 } from "@/lib/api/read-body";
 import type { TelemetryPayload } from "@/lib/voltflowmate/ingest-payload";
+import { stampUserActivity } from "@/lib/user-activity";
 
 export const runtime = "nodejs";
 const MAX_INGEST_BODY_BYTES = 2_000_000;
-const LAST_ACTIVE_REFRESH_MS = 60 * 60 * 1_000;
 
 type PersistedTelemetryRow = {
   vehicle_id: string;
@@ -286,14 +286,7 @@ export async function POST(request: Request) {
 
     // The inactivity job works on a 30/60-day horizon. Updating this on every
     // three-second fast-status push only contends with the command-poll profile read.
-    const lastActiveBefore = new Date(Date.now() - LAST_ACTIVE_REFRESH_MS).toISOString();
-    activityUpdates.push(
-      supabase
-        .from("profiles")
-        .update({ last_active_at: activityTime })
-        .eq("id", profile.id)
-        .or(`last_active_at.is.null,last_active_at.lt.${lastActiveBefore}`),
-    );
+    activityUpdates.push(stampUserActivity(supabase, profile.id, new Date(activityTime)));
 
     const lastSample = samples.at(-1);
     const persistedLookup = deliveryPlan.verifyPersistedSnapshot && lastSample
