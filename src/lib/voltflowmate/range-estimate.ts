@@ -1,10 +1,13 @@
 import { tripNetConsumptionKwh100, weightedAvgConsumptionKwh100 } from "./trip-metrics.ts";
 import type { VoltflowMateLiveSnapshotRow, VoltflowMateTripRow } from "@/types/database";
 
-const DEFAULT_USABLE_BATTERY_KWH = 45.1;
+type RangeEstimateSnapshot = Pick<VoltflowMateLiveSnapshotRow, "telemetry" | "diplus">;
+
 const DEFAULT_CONSUMPTION_KWH_100KM = 18.5;
 const MIN_FORECAST_CONSUMPTION_KWH_100KM = 8;
 const MAX_FORECAST_CONSUMPTION_KWH_100KM = 42;
+const MIN_PLAUSIBLE_BATTERY_KWH = 10;
+const MAX_PLAUSIBLE_BATTERY_KWH = 200;
 
 type WeightedConsumption = {
   value: number;
@@ -33,7 +36,14 @@ export function resolveUsableBatteryKwh(
   batteryCapacityKwh: number | null | undefined,
   sohPercent: number | null | undefined,
 ): number | null {
-  const capacity = validNumber(batteryCapacityKwh) ?? DEFAULT_USABLE_BATTERY_KWH;
+  const capacity = validNumber(batteryCapacityKwh);
+  if (
+    capacity == null ||
+    capacity < MIN_PLAUSIBLE_BATTERY_KWH ||
+    capacity > MAX_PLAUSIBLE_BATTERY_KWH
+  ) {
+    return null;
+  }
   const soh = validNumber(sohPercent);
   return capacity * (soh != null ? clamp(soh, 70, 105) / 100 : 1);
 }
@@ -66,7 +76,7 @@ export type VehicleRangeEstimateOptions = {
 };
 
 export function estimateVehicleRangeKm(
-  snapshot: VoltflowMateLiveSnapshotRow,
+  snapshot: RangeEstimateSnapshot,
   recentTrips: VoltflowMateTripRow[],
   options: VehicleRangeEstimateOptions = {},
 ): RangeEstimate {
@@ -82,9 +92,7 @@ export function estimateVehicleRangeKm(
     return { estimatedRangeKm: null, consumptionKwh100Km: null };
   }
   const usableEnergyKwh = usableBatteryKwh * (clamp(soc, 0, 100) / 100);
-  const consumptionKwh100Km = estimateConsumptionKwh100Km(snapshot, recentTrips, {
-    batteryCapacityKwh: options.batteryCapacityKwh,
-  });
+  const consumptionKwh100Km = estimateConsumptionKwh100Km(snapshot, recentTrips);
 
   if (consumptionKwh100Km == null || consumptionKwh100Km <= 0) {
     return { estimatedRangeKm: null, consumptionKwh100Km: null };
@@ -98,7 +106,7 @@ export function estimateVehicleRangeKm(
 
 export function estimateRangeFromSoc({
   soc,
-  batteryCapacityKwh = DEFAULT_USABLE_BATTERY_KWH,
+  batteryCapacityKwh,
   recentTrips,
 }: {
   soc: number | null | undefined;
@@ -123,7 +131,10 @@ export function estimateRangeFromSoc({
     }),
   );
   const consumptionKwh100Km = tripAverage ?? userMedianConsumption(recentTrips);
-  const usableBatteryKwh = validNumber(batteryCapacityKwh) ?? DEFAULT_USABLE_BATTERY_KWH;
+  const usableBatteryKwh = resolveUsableBatteryKwh(batteryCapacityKwh, null);
+  if (usableBatteryKwh == null) {
+    return { estimatedRangeKm: null, consumptionKwh100Km: null };
+  }
   const usableEnergyKwh = usableBatteryKwh * (clamp(validSoc, 0, 100) / 100);
 
   return {
@@ -133,11 +144,9 @@ export function estimateRangeFromSoc({
 }
 
 export function estimateConsumptionKwh100Km(
-  snapshot: VoltflowMateLiveSnapshotRow,
+  snapshot: RangeEstimateSnapshot,
   recentTrips: VoltflowMateTripRow[],
-  options: VehicleRangeEstimateOptions = {},
 ) {
-  const usableBatteryKwh = validNumber(options.batteryCapacityKwh) ?? DEFAULT_USABLE_BATTERY_KWH;
   const telemetry = snapshot.telemetry;
   const estimates: WeightedConsumption[] = [];
   let reliableCount = 0;
@@ -198,18 +207,6 @@ export function estimateConsumptionKwh100Km(
     });
   }
 
-  const reportedRangeKm = validNumber(telemetry.range_est_km);
-  const soc = validNumber(telemetry.soc);
-  if (reportedRangeKm != null && reportedRangeKm > 10 && soc != null && soc > 2) {
-    const reportedConsumption = ((usableBatteryKwh * (soc / 100)) / reportedRangeKm) * 100;
-    if (
-      reportedConsumption >= MIN_FORECAST_CONSUMPTION_KWH_100KM &&
-      reportedConsumption <= MAX_FORECAST_CONSUMPTION_KWH_100KM
-    ) {
-      estimates.push({ value: reportedConsumption, weight: 0.35 });
-    }
-  }
-
   const userDefault = userMedianConsumption(recentTrips);
   const fallbackWeight = reliableCount >= 2 ? 0.15 : reliableCount >= 1 ? 0.35 : 0.8;
   estimates.push({ value: userDefault, weight: fallbackWeight });
@@ -225,7 +222,7 @@ export function estimateConsumptionKwh100Km(
   );
 }
 
-export function environmentConsumptionFactor(snapshot: VoltflowMateLiveSnapshotRow) {
+export function environmentConsumptionFactor(snapshot: RangeEstimateSnapshot) {
   const telemetry = snapshot.telemetry;
   let factor = 1;
 

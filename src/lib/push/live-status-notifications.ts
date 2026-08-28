@@ -224,18 +224,13 @@ export function liveStatusFinalPayload({
 export function liveStatusParkedPayload({
   vehicleId,
   soc,
-  rangeEstKm,
 }: {
   vehicleId: string;
   soc: number | null;
-  rangeEstKm: number | null;
 }) {
   return {
     title: soc != null ? `🅿️ Parked · ${Math.round(soc)}%` : "🅿️ Parked",
-    body:
-      rangeEstKm != null && rangeEstKm > 0
-        ? `Range ~${Math.round(rangeEstKm)} km`
-        : "Live vehicle status",
+    body: "Live vehicle status",
     url: "/vehicle",
     tag: liveStatusTag(vehicleId),
     renotify: false,
@@ -377,7 +372,6 @@ export async function processVoltflowMateLiveStatusNotifications({
         ? liveStatusParkedPayload({
             vehicleId: sample.vehicle_id,
             soc,
-            rangeEstKm: finiteTelemetryNumber(sample.telemetry.range_est_km),
           })
         : liveStatusChargingPayload({
             vehicleId: sample.vehicle_id,

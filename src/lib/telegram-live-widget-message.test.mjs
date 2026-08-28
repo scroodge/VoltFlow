@@ -17,7 +17,7 @@ function message(overrides = {}) {
     state: "charging",
     locale: "ru",
     soc: 100,
-    rangeEstKm: 286.6,
+    estimatedRangeKm: 286.6,
     rangeSampleTime: new Date(NOW_MS - 30_000).toISOString(),
     nowMs: NOW_MS,
     chargePowerKw: 4.4,
@@ -30,10 +30,10 @@ function message(overrides = {}) {
   });
 }
 
-test("live widget header omits range and keeps odometer in detail row", () => {
+test("live widget header shows the clean estimate and keeps odometer in detail row", () => {
   const lines = message().split("\n");
 
-  assert.equal(lines[0], "🔋 100% · ⚡");
+  assert.equal(lines[0], "🔋 100% · ⚡ · ≈ 287 km");
   assert.equal(lines[1], "<b>🔌 Yuan UP Way</b> · Зарядка");
   assert.equal(lines[3], "⚡ 4.4 kW");
   assert.equal(lines[4], "🚗 Пробег 46632 км");
@@ -42,7 +42,7 @@ test("live widget header omits range and keeps odometer in detail row", () => {
 });
 
 test("live widget omits an unavailable range from the header", () => {
-  const lines = message({ rangeEstKm: null }).split("\n");
+  const lines = message({ estimatedRangeKm: null }).split("\n");
 
   assert.equal(lines[0], "🔋 100% · ⚡");
   assert.equal(lines[4], "🚗 Пробег 46632 км");
