@@ -51,6 +51,13 @@ export const telemetrySchema = z
     range_est_km: numericSchema,
     current_trip_distance_km: numericSchema,
     current_trip_consumption_kwh_100km: numericSchema,
+    // Which of the car's two SOC scales `soc` is on: "diplus" (raw BMS, 0.1 % on di+ 2.0)
+    // or "autoservice" (the whole-percent dashboard value). The two differ by up to ~2 pp
+    // and the gap changes sign with SOC, so a consumer that mixes them sees phantom steps.
+    // Sent by app versionCode 341+; absent on older builds. Note this object is `.strip()`ed
+    // — a key missing from this list is dropped silently, which is exactly how this field
+    // went missing on its first on-car test.
+    soc_source: z.string().nullable().optional(),
   })
   .strip();
 

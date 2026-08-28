@@ -550,7 +550,7 @@ export function VehicleAnalyticsPanels({
     const when = new Date(sample.time).toLocaleString(locale, isDayRange
       ? { hour: "2-digit", minute: "2-digit" }
       : { year: "numeric", month: "short", day: "numeric" });
-    return `${sample.voltage.toFixed(2)} V · ${when}`;
+    return { value: `${sample.voltage.toFixed(2)} V`, hint: when };
   };
 
   const latestSohPercent = useMemo(() => {
@@ -751,9 +751,9 @@ export function VehicleAnalyticsPanels({
             <div className="mt-4">
               <AuxVoltageTrendChart range={historyRange} dailyPoints={visibleAuxDailyPoints} dayPoints={historyPoints} baseline={auxBaseline.baseline} chemistry={auxBatteryChemistry} locale={locale} tx={tx} />
             </div>
-            {auxWindowExtremes ? <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-5">
-              <AnalyticsStat label={t("auxVoltageStats.minimum") as string} value={formatAuxExtreme(auxWindowExtremes.min)} />
-              <AnalyticsStat label={t("auxVoltageStats.maximum") as string} value={formatAuxExtreme(auxWindowExtremes.max)} />
+            {auxWindowExtremes ? <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-2">
+              <AnalyticsStat label={t("auxVoltageStats.minimum") as string} {...formatAuxExtreme(auxWindowExtremes.min)} />
+              <AnalyticsStat label={t("auxVoltageStats.maximum") as string} {...formatAuxExtreme(auxWindowExtremes.max)} />
               {!isDayRange && auxBaseline.restingNow != null ? <AnalyticsStat label={tx("vehicle.analytics.aux12vRestingNow")} value={`${fmt(auxBaseline.restingNow, 2)} V`} /> : null}
               {!isDayRange && auxBaseline.sufficient ? <AnalyticsStat label={tx("vehicle.analytics.aux12vBaseline")} value={`${fmt(auxBaseline.baseline, 2)} V`} /> : null}
               {!isDayRange && auxBaseline.sufficient ? <AnalyticsStat label={tx("vehicle.analytics.aux12vChange")} value={`${(auxBaseline.change ?? 0) >= 0 ? "+" : ""}${fmt(auxBaseline.change, 2)} V`} /> : null}
@@ -951,11 +951,12 @@ function SohTrendChart({
   );
 }
 
-function AnalyticsStat({ label, value }: { label: string; value: string }) {
+function AnalyticsStat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="rounded-2xl border border-border bg-white/[0.02] p-3">
       <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
       <p className="mt-1 font-heading text-lg font-semibold tabular-nums">{value}</p>
+      {hint ? <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }

@@ -10,6 +10,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
@@ -150,6 +151,8 @@ class TelegramApiHandler(BaseHTTPRequestHandler):
                 self.write_json(500, {"ok": False, "error": "link_failed", "detail": str(exc)})
                 return
 
+        supabase_touch_user_activity(user_id)
+
         link = supabase_auth_admin(
             "POST",
             "/admin/generate_link",
@@ -210,6 +213,8 @@ class TelegramApiHandler(BaseHTTPRequestHandler):
         except RuntimeError:
             self.write_json(500, {"ok": False, "error": "link_failed"})
             return
+
+        supabase_touch_user_activity(user["id"])
 
         self.write_json(200, {"ok": True, "telegram_id": tg_user["id"]})
 
@@ -343,6 +348,28 @@ def supabase_update_profile(user_id, telegram_id, username):
         headers={"prefer": "return=minimal"},
         expect_empty=True,
     )
+
+
+def supabase_touch_user_activity(user_id):
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=1)
+    params = urllib.parse.urlencode(
+        {
+            "id": f"eq.{user_id}",
+            "or": f"(last_active_at.is.null,last_active_at.lt.{cutoff.isoformat()})",
+        }
+    )
+    try:
+        supabase_request(
+            "PATCH",
+            f"/rest/v1/profiles?{params}",
+            {"last_active_at": now.isoformat()},
+            key=SERVICE_ROLE_KEY,
+            headers={"prefer": "return=minimal"},
+            expect_empty=True,
+        )
+    except RuntimeError as exc:
+        print(f"activity stamp failed: {exc}", file=sys.stderr)
 
 
 def supabase_auth_admin(method, path, payload=None):

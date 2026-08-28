@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { verifyTelegramInitData } from "@/lib/telegram/verify-init-data";
+import { stampUserActivity } from "@/lib/user-activity";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -66,6 +67,8 @@ export async function POST(request: Request) {
   if (updateErr) {
     return NextResponse.json({ ok: false, error: "link_failed" }, { status: 500 });
   }
+
+  await stampUserActivity(getSupabaseAdmin(), user.id);
 
   return NextResponse.json({ ok: true, telegram_id: verified.user.id });
 }

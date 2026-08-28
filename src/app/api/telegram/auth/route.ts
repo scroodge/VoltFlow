@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { verifyTelegramInitData } from "@/lib/telegram/verify-init-data";
+import { stampUserActivity } from "@/lib/user-activity";
 
 // node:crypto (HMAC verify) requires the Node.js runtime, not Edge.
 export const runtime = "nodejs";
@@ -139,6 +140,8 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+
+  await stampUserActivity(getSupabaseAdmin(), userId);
 
   return NextResponse.json({
     ok: true,

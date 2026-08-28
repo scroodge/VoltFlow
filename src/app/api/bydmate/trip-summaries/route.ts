@@ -1,6 +1,7 @@
 import { parseTripSummaryBatch } from "@/lib/voltflowmate/trip-summary-payload";
 import { resolveVoltflowMateApiKeyProfile } from "@/lib/voltflowmate/api-auth";
 import { createServiceClient } from "@/lib/supabase/service";
+import { stampUserActivity } from "@/lib/user-activity";
 import {
   readBodyWithLimit,
   RequestBodyTooLargeError,
@@ -52,14 +53,14 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { data: result, error: ingestError } = await supabase.rpc(
-      "bydmate_ingest_trip_summaries",
-      {
+    const [{ data: result, error: ingestError }] = await Promise.all([
+      supabase.rpc("bydmate_ingest_trip_summaries", {
         p_user_id: profile.id,
         p_vehicle_id: vehicleId,
         p_trips: parsed.data,
-      },
-    );
+      }),
+      stampUserActivity(supabase, profile.id),
+    ]);
 
     if (ingestError) {
       return Response.json({ ok: false, error: "Ingest failed" }, { status: 500 });
