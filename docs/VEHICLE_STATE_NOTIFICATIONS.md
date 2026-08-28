@@ -95,9 +95,8 @@ evaluation job. It evaluates only completed UTC days from
 See [Cron jobs](CRON_JOBS.md) for the Contabo crontab entry, required Vercel
 secret, and the account-deletion warning for the separate inactivity route.
 
-- Acute levels are intentionally earlier than remote-command blocking levels:
-  flooded 12.3 V, EFB 12.4 V, AGM 12.5 V, and LiFePO4 13.0 V. Unknown chemistry
-  has no absolute alert.
+- Acute levels are flooded 12.3 V, EFB 12.4 V, AGM 12.5 V, and LiFePO4
+  13.0 V. Unknown chemistry has no absolute alert.
 - Acute delivery requires two consecutive low calendar days. Durable state in
   `bydmate_aux_battery_alert_state` allows one audible message per episode and
   rearms only after two days at least 0.2 V above the alert level.

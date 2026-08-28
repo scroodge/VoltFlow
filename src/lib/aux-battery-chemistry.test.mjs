@@ -13,7 +13,7 @@ test("derives the stock chemistry from model generation", () => {
   assert.equal(deriveAuxBatteryChemistry("gen2_2025"), "lifepo4");
 });
 
-test("alert thresholds warn earlier than command-block thresholds and never guess unknown chemistry", () => {
+test("alert thresholds stay above the general low references and never guess unknown chemistry", () => {
   for (const chemistry of ["flooded", "efb", "agm", "lifepo4"]) {
     assert.ok(AUX_BATTERY_ALERT_THRESHOLDS[chemistry] > AUX_BATTERY_REFERENCES[chemistry].lowVoltage);
   }
