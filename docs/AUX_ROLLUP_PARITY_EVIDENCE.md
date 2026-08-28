@@ -186,3 +186,45 @@ Follow-up question, not part of this performance change: should missing JSON
 speed/power continue to mean stationary? Changing that shared predicate affects
 both auxiliary resting voltage and phantom drain, so the 9-of-212 evidence must
 inform a separate design decision rather than an incidental rollup optimization.
+
+## Backfill, coverage, scheduling, and read-path timing
+
+The approved production backfill enqueued the 449 tier-bounded eligible
+vehicle-days, then processed one vehicle-day per transaction with a one-second
+pause between units. It ran from `07:51:31.428725+00` through
+`08:13:43.073259+00`: **22 minutes 11.645 seconds** including pacing. There were
+**zero failed vehicle-days**. Periodic checks showed no waiting ingest query in
+all but one snapshot; that one wait was 361 ms and the following checks returned
+to zero.
+
+A fresh post-backfill eligible-set comparison returned:
+
+```text
+ eligible_days | rollup_rows | gaps | extras | queued_remaining
+---------------+-------------+------+--------+------------------
+           449 |         449 |    0 |      0 |                0
+```
+
+The following active `pg_cron` jobs were then registered, before any reader
+switch:
+
+| Job | UTC schedule | Command |
+| --- | --- | --- |
+| `enqueue-bydmate-aux-voltage-daily` | `10 0 * * *` | Enqueue the newly completed UTC day. |
+| `process-bydmate-aux-voltage-rollups` | `*/5 * * * *` | Process one queued vehicle-day every five minutes. |
+| `purge-bydmate-aux-voltage-rollups` | `30 3 * * *` | Enforce the independent five-year rollup retention policy. |
+
+Finally, the future rollup read shape was executed directly as the
+`authenticated` role with RLS, chemistry-provenance filtering, and an 8-second
+`statement_timeout`, without replacing the public RPC. The vehicle with the most
+materialised history was used:
+
+| Range | Rows | Production latency |
+| --- | ---: | ---: |
+| Week | 7 | 48.905 ms |
+| Month | 30 | 32.254 ms |
+| Quarter | 88 | 32.855 ms |
+| Year | 100 | 67.425 ms |
+
+These are comfortably below 8 seconds. The target-selection setup was excluded
+from each reader timing; it is not part of the RPC read path.
