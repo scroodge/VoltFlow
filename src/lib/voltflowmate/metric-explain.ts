@@ -57,7 +57,7 @@ export function explainAiRange({ snapshot, recentTrips, batteryCapacityKwh, esti
   const soc = finite(snapshot.telemetry.soc);
   const soh = finite(snapshot.telemetry.soh_percent);
   const usableBattery = resolveUsableBatteryKwh(batteryCapacityKwh, soh);
-  const consumption = estimateConsumptionKwh100Km(snapshot, recentTrips, { batteryCapacityKwh });
+  const consumption = estimateConsumptionKwh100Km(snapshot, recentTrips);
   const calculated = estimateVehicleRangeKm(snapshot, recentTrips, { batteryCapacityKwh });
   const result = estimate?.estimatedRangeKm ?? calculated.estimatedRangeKm;
   return {

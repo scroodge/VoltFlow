@@ -17,6 +17,12 @@ import {
   composeTelegramLiveWidget,
   type TelegramLiveVehicleState,
 } from "@/lib/telegram/live-widget-message";
+import { estimateVehicleRangeKm } from "@/lib/voltflowmate/range-estimate";
+import {
+  dedupeTripsBySource,
+  selectTripsWithinDistanceWindow,
+} from "@/lib/voltflowmate/hero-drive-metrics";
+import type { VoltflowMateTripRow } from "@/types/database";
 
 const THROTTLE_MS = 30_000;
 
@@ -141,6 +147,28 @@ async function loadCars(
     }
   }
   return map;
+}
+
+async function loadRecentTrips(
+  supabase: SupabaseClient,
+  userId: string,
+  vehicleId: string,
+): Promise<VoltflowMateTripRow[]> {
+  const { data, error } = await supabase
+    .from("bydmate_trips")
+    .select(
+      "id,user_id,vehicle_id,started_at,ended_at,last_device_time,sample_count,track_point_count,distance_km,soc_start,soc_end,max_speed_kmh,avg_speed_kmh,avg_consumption_kwh_100km,regen_energy_kwh,traction_energy_kwh,source",
+    )
+    .eq("user_id", userId)
+    .eq("vehicle_id", vehicleId)
+    .order("started_at", { ascending: false })
+    .limit(100);
+
+  if (error) {
+    console.error("telegram live widget recent trips:", error.message);
+    return [];
+  }
+  return (data ?? []) as VoltflowMateTripRow[];
 }
 
 async function loadActiveChargingSessions(
@@ -297,6 +325,14 @@ export async function updateTelegramLiveWidgets({
     userId,
     Array.from(cars.values(), (car) => car.id).filter(Boolean),
   );
+  const recentTripsByVehicle = new Map(
+    await Promise.all(
+      eligibleVehicleIds.map(async (vehicleId) => [
+        vehicleId,
+        await loadRecentTrips(supabase, userId, vehicleId),
+      ] as const),
+    ),
+  );
   let updated = 0;
 
   for (const vehicleId of eligibleVehicleIds) {
@@ -330,13 +366,25 @@ export async function updateTelegramLiveWidgets({
         ? formatHoursMinutes(chargingMetrics.timeToFullHours, profileLocale)
         : null;
 
+    const capacityKwh = carInfo?.battery_capacity_kwh;
+    const recentTrips = selectTripsWithinDistanceWindow(
+      dedupeTripsBySource(recentTripsByVehicle.get(vehicleId) ?? []),
+      lastSample.telemetry.current_trip_distance_km,
+    );
+    const estimatedRangeKm =
+      capacityKwh != null && Number.isFinite(capacityKwh) && capacityKwh > 0
+        ? estimateVehicleRangeKm(lastSample, recentTrips, {
+            batteryCapacityKwh: capacityKwh,
+          }).estimatedRangeKm
+        : null;
+
     const html = composeTelegramLiveWidget({
       carName: carInfo?.name ?? (translate(profileLocale, "telegramLiveWidget.vehicle") as string),
       emoji: stateEmoji(state),
       state,
       locale: profileLocale,
       soc,
-      rangeEstKm: finiteTelemetryNumber(lastSample.telemetry.range_est_km),
+      estimatedRangeKm,
       rangeSampleTime: lastSample.device_time,
       nowMs,
       chargePowerKw,
