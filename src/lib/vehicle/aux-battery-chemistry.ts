@@ -18,6 +18,15 @@ export const AUX_BATTERY_REFERENCES: Record<AuxBatteryChemistry, AuxBatteryRefer
   other: { restingBand: null, restingCeiling: null, lowVoltage: 11.8 },
 };
 
+/** Early-warning levels for resting voltage, kept separate from the general low reference. */
+export const AUX_BATTERY_ALERT_THRESHOLDS: Record<AuxBatteryChemistry, number | null> = {
+  flooded: 12.3,
+  efb: 12.4,
+  agm: 12.5,
+  lifepo4: 13.0,
+  other: null,
+};
+
 export function isAuxBatteryChemistry(value: unknown): value is AuxBatteryChemistry {
   return typeof value === "string" && auxBatteryChemistries.includes(value as AuxBatteryChemistry);
 }

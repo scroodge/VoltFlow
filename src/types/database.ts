@@ -25,6 +25,7 @@ export type Profile = {
   telegram_id?: number | null;
   telegram_username?: string | null;
   notify_channel?: "web_push" | "telegram" | "both";
+  aux_battery_alerts_enabled?: boolean;
   /** Android live lock-screen status pushes (tag-replaced); iOS endpoints are skipped. */
   live_status_mode?: "off" | "charging" | "charging_parked";
   is_premium: boolean;
