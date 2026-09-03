@@ -11,6 +11,28 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-09-03
 
+### Expanded trip graphs synchronize with a compact route map
+
+Expanded trip telemetry charts now include the trip route directly below the graph.
+Mouse hover, touch scrubbing, and keyboard Arrow/Home/End selection choose the nearest
+GPS track point within 15 seconds and move the map marker to the car's corresponding
+position. The marker stays hidden when no sufficiently close GPS sample exists, while
+the route remains visible.
+
+The PWA dialog no longer reserves a tall viewport-relative graph box: it follows the
+chart's real aspect ratio, removes the duplicate Route card heading, and uses a shorter
+responsive map. Time charts also provide accessible minus, plus, and reset controls for
+1x through 16x horizontal zoom. Each visible window recalculates its Y domains while
+preserving the aligned physical zero line on Speed & power.
+
+GPS remains user-owned telemetry in Postgres. Selection and zoom are ephemeral UI state;
+no schema, API, retention, preference, or localStorage behavior changed.
+
+#### Verification
+
+Nearest-time and dual-axis focused tests passed; full Node suite passed (152 tests);
+production build and TypeScript passed.
+
 ### Speed and traction-power chart shares its physical zero line
 
 The Vehicle chart still uses two independently scaled axes because speed is `km/h` and

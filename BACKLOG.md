@@ -4,7 +4,33 @@ Per the agent workflow in [AGENTS.md](AGENTS.md): **plan first, build only on ex
 go-ahead.** These are researched but **not built**. Shipped work lives in
 [CHANGELOG.md](CHANGELOG.md).
 
-## 🔵 Synchronize the expanded telemetry graph with the trip map (proposed 2026-09-03)
+## ✅ Synchronize the expanded telemetry graph with the trip map (shipped 2026-09-03; see CHANGELOG)
+
+### Mobile compactness and graph zoom follow-up (proposed 2026-09-03)
+
+The first synchronized prototype exposed a PWA layout problem: the expanded graph uses
+a tall viewport-relative container while its SVG preserves a wide aspect ratio, leaving
+large empty bands above and below the actual plot. The embedded route repeats its full
+page-card heading and generous spacing, pushing the useful map below the first screen.
+
+Options for graph zoom:
+
+1. **Scale the SVG visually.** Easy, but clips labels and does not reveal more detail;
+   rejected.
+2. **Zoom both Y axes.** Makes peaks larger, but can hide zero and undermine the shared
+   physical zero-line behavior; rejected as the default.
+3. **Zoom the time window (recommended).** Add minus, plus, and reset controls to narrow
+   or widen the visible time range around the selected point. Recompute both Y domains
+   from the visible samples while retaining zero alignment. Pointer/touch scrubbing and
+   keyboard selection remain synchronized with the map.
+
+Recommended compact layout: size the graph by its aspect ratio instead of `dvh`, use a
+compact map presentation inside the graph dialog (no repeated card border/title/range),
+and cap the map height responsively. On a small PWA screen the graph, controls, legend,
+and most or all of the map should fit without large dead zones; short screens may still
+need a small amount of scrolling rather than making labels or touch targets too small.
+This remains ephemeral UI state. GPS stays user-owned in Postgres; no schema, API,
+retention, preference, or localStorage change is proposed.
 
 ### Goal
 
@@ -56,6 +82,9 @@ clearing. Verify that chart-only analytics, GPS-disabled trips, and sparse/out-o
 timestamps remain safe. Run focused tests, the full Node suite, and the production build
 after approval; manually check mouse, touch, and keyboard focus behavior in the expanded
 trip view.
+
+This plan has shipped and is retained here temporarily as the detailed design record;
+the shipped outcome is recorded in CHANGELOG.md.
 
 ## ✅ A power-less telemetry sample must not reset the zero-power stall (approved 2026-08-28)
 

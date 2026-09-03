@@ -621,6 +621,7 @@ export function RouteMap({
   headingMode = "route",
   selectedTimeMs = null,
   allowFullscreen = true,
+  compact = false,
 }: {
   points?: VoltflowMateTelemetryPointRow[];
   trackPoints?: VoltflowMateTripTrackPointRow[];
@@ -633,6 +634,8 @@ export function RouteMap({
   selectedTimeMs?: number | null;
   /** Disable the map's own dialog when it is already rendered inside another dialog. */
   allowFullscreen?: boolean;
+  /** Condensed presentation for the synchronized map inside a graph dialog. */
+  compact?: boolean;
 }) {
   const { t } = useTranslation();
   const tx = t as Translator;
@@ -669,8 +672,8 @@ export function RouteMap({
     headingMode === "lastSeen" ? ("vehicle.location.lastSeen" as TranslationKey) : ("vehicle.route.dialogTitle" as TranslationKey);
 
   return (
-    <section className={embedded ? "rounded-2xl border border-border bg-white/[0.02] p-4" : "voltflow-card p-5"}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <section className={compact ? "min-h-0" : embedded ? "rounded-2xl border border-border bg-white/[0.02] p-4" : "voltflow-card p-5"}>
+      {!compact ? <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="font-heading text-2xl font-semibold tracking-tight">
             {tx(headingMode === "lastSeen" ? "vehicle.location.lastSeen" : "vehicle.route.title")}
@@ -689,7 +692,7 @@ export function RouteMap({
             {formatClock(start.time)} - {formatClock(end.time)}
           </span>
         ) : null}
-      </div>
+      </div> : null}
 
       {isLoading ? (
         <Skeleton className="mt-5 h-64 rounded-2xl" />
@@ -702,7 +705,7 @@ export function RouteMap({
           {tx("vehicle.route.empty")}
         </p>
       ) : (
-        <div className="mt-5 overflow-hidden rounded-2xl border border-border bg-background">
+        <div className={`${compact ? "mt-1" : "mt-5"} overflow-hidden rounded-2xl border border-border bg-background`}>
           <InteractiveRouteCanvas
             route={route}
             zoomOffset={zoomOffset}
@@ -717,7 +720,7 @@ export function RouteMap({
             selectedTimeMs={selectedTimeMs}
             showLayerLegend={false}
             showToolbarControls={false}
-            className="h-64"
+            className={compact ? "h-40 sm:h-48" : "h-64"}
           />
           <div className="border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
             {tx("vehicle.route.mapData")} &copy;{" "}

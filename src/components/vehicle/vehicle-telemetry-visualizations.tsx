@@ -939,9 +939,42 @@ function TelemetryLineChart({
   const tx = t as Translator;
   const [isOpen, setIsOpen] = useState(false);
   const [hoverTime, setHoverTime] = useState<number | null>(null);
-  const { title, unit, valueDigits, series, hasData, minValue, maxValue, minTime, maxTime, minDistanceKm, maxDistanceKm } = chart;
+  const [timeZoom, setTimeZoom] = useState(0);
+  const {
+    title,
+    unit,
+    valueDigits,
+    series: fullSeries,
+    hasData: fullHasData,
+    minValue: fullMinValue,
+    maxValue: fullMaxValue,
+    minTime: fullMinTime,
+    maxTime: fullMaxTime,
+    minDistanceKm,
+    maxDistanceKm,
+  } = chart;
   // Fall back to time axis if no distance data available
   const activeXAxis = xAxis === "distance" && chart.hasDistanceData ? "distance" : "time";
+  const zoomCenter = hoverTime ?? fullMinTime + (fullMaxTime - fullMinTime) / 2;
+  const fullDuration = Math.max(1, fullMaxTime - fullMinTime);
+  const visibleDuration = fullDuration / 2 ** timeZoom;
+  const unclampedMinTime = zoomCenter - visibleDuration / 2;
+  const minTime = Math.max(fullMinTime, Math.min(unclampedMinTime, fullMaxTime - visibleDuration));
+  const maxTime = Math.min(fullMaxTime, minTime + visibleDuration);
+  const series = useMemo(
+    () =>
+      timeZoom === 0 || activeXAxis === "distance"
+        ? fullSeries
+        : fullSeries.map((item) => ({
+            ...item,
+            points: item.points.filter((point) => point.time >= minTime && point.time <= maxTime),
+          })),
+    [activeXAxis, fullSeries, maxTime, minTime, timeZoom],
+  );
+  const visibleValues = series.flatMap((item) => item.points.map((point) => point.value));
+  const hasData = fullHasData && visibleValues.length > 0;
+  const minValue = visibleValues.length > 0 ? Math.min(...visibleValues) : fullMinValue;
+  const maxValue = visibleValues.length > 0 ? Math.max(...visibleValues) : fullMaxValue;
   const dualAxis = chartUsesDualAxis(series, unit);
   const valuePad = Math.max((maxValue - minValue) * 0.12, maxValue === minValue ? 1 : 0);
   const yMin = minValue - valuePad;
@@ -1284,18 +1317,41 @@ function TelemetryLineChart({
         open={isOpen}
         onOpenChange={(open) => {
           setIsOpen(open);
-          if (!open) setHoverTime(null);
+          if (!open) {
+            setHoverTime(null);
+            setTimeZoom(0);
+          }
         }}
       >
         <DialogContent className="h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] gap-3 overflow-y-auto p-3 sm:max-w-[calc(100vw-2rem)]">
           <DialogTitle className="sr-only">{title}</DialogTitle>
-          <div className="px-1">
-            <h3 className="font-heading text-xl font-semibold tracking-tight">{title}</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {hasData ? rangeLabel : tx("vehicle.charts.noValues")}
-            </p>
+          <div className="flex items-start justify-between gap-3 px-1">
+            <div>
+              <h3 className="font-heading text-xl font-semibold tracking-tight">{title}</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {hasData ? rangeLabel : tx("vehicle.charts.noValues")}
+              </p>
+            </div>
+            {activeXAxis === "time" ? (
+              <div className="flex shrink-0 items-center gap-1" aria-label="Graph time scale">
+                <IconButton label="Zoom out graph" onClick={() => setTimeZoom((value) => Math.max(0, value - 1))} disabled={timeZoom === 0}>
+                  <Minus className="size-4" aria-hidden />
+                </IconButton>
+                <button
+                  type="button"
+                  onClick={() => setTimeZoom(0)}
+                  className="h-9 min-w-12 rounded-full border border-border bg-white/[0.03] px-2 text-xs text-muted-foreground"
+                  aria-label="Reset graph zoom"
+                >
+                  {2 ** timeZoom}×
+                </button>
+                <IconButton label="Zoom in graph" onClick={() => setTimeZoom((value) => Math.min(4, value + 1))} disabled={timeZoom === 4}>
+                  <Plus className="size-4" aria-hidden />
+                </IconButton>
+              </div>
+            ) : null}
           </div>
-          {plot("h-[46dvh]", true)}
+          {plot("aspect-[360/158] max-h-[38dvh] w-full", true)}
           <div className="px-1 pt-1">
             <ChartSeriesLegend series={series} />
           </div>
@@ -1306,6 +1362,7 @@ function TelemetryLineChart({
               selectedTimeMs={hoverTime}
               embedded
               allowFullscreen={false}
+              compact
             />
           ) : null}
         </DialogContent>
