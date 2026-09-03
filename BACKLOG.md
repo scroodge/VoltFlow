@@ -4,6 +4,59 @@ Per the agent workflow in [AGENTS.md](AGENTS.md): **plan first, build only on ex
 go-ahead.** These are researched but **not built**. Shipped work lives in
 [CHANGELOG.md](CHANGELOG.md).
 
+## 🔵 Synchronize the expanded telemetry graph with the trip map (proposed 2026-09-03)
+
+### Goal
+
+When a user hovers, scrubs, or slides across the expanded Speed & power graph in a trip
+detail view, show the car at the corresponding GPS position on the map below. The map
+marker should move with the selected graph time and clear when no nearby GPS point exists.
+
+### Evidence
+
+Trip details already load both required streams in [TripDetailPanel](src/components/vehicle/TripDetailPanel.tsx):
+`TelemetryHistoryCharts` receives telemetry samples and `RouteMap` receives the trip
+track. The chart already tracks a selected `hoverTime` during pointer movement, while
+the route map already supports a highlighted/hovered point and renders a trip track.
+However, the chart history points and route-track points are separate types and are not
+currently linked by a shared selection state. GPS is not included in the compact history
+chart query, so matching by nearest `device_time` against the already-loaded track is the
+safer seam than widening the analytics sample payload.
+
+### Data boundary and privacy
+
+GPS tracks are existing **user-owned telemetry** stored in **Postgres** under the current
+RLS rules. This feature adds no GPS column, retention rule, preference, or localStorage
+copy. The selected timestamp and highlighted marker are ephemeral client UI state only.
+It applies initially to expanded trip details, where a user has explicitly opened a
+private trip map; day-level analytics and live location remain unchanged.
+
+### Options and recommendation
+
+1. **Copy GPS coordinates into every chart sample.** Simplifies rendering, but enlarges
+   history responses and duplicates location data; rejected.
+2. **Create a server endpoint that joins chart samples to track points.** Gives one
+   canonical response, but adds query/API complexity and must define gap/interpolation
+   semantics; defer unless client matching proves too slow.
+3. **Lift one selected timestamp into `TripDetailPanel` and match the nearest loaded
+   track point (recommended).** Add an optional `onTimeChange`/`selectedTime` seam to the
+   chart and map. On hover or touch-scrub, choose the nearest track point by
+   `device_time` within a bounded tolerance; move the map marker and show its existing
+   coordinate/time details. If the gap exceeds the tolerance or GPS is absent, keep the
+   route visible but hide the synced marker. Click/tap can pin the selection; pointer
+   leave can restore the last pinned time or clear it, with keyboard-accessible controls
+   retained.
+
+### Build and verification
+
+Keep the first implementation scoped to expanded trip details and the existing SVG route
+map. Add pure tests for nearest-time matching (exact, between samples, outside tolerance,
+and missing GPS), plus component tests for hover/scrub selection propagation and marker
+clearing. Verify that chart-only analytics, GPS-disabled trips, and sparse/out-of-order
+timestamps remain safe. Run focused tests, the full Node suite, and the production build
+after approval; manually check mouse, touch, and keyboard focus behavior in the expanded
+trip view.
+
 ## ✅ A power-less telemetry sample must not reset the zero-power stall (approved 2026-08-28)
 
 ### Evidence

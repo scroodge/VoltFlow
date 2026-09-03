@@ -28,6 +28,7 @@ export function TripDetailPanel({ tripId, trip }: { tripId: string; trip?: Voltf
         points={samples}
         isLoading={isSamplesLoading}
         hasError={Boolean(samplesError)}
+        trackPoints={track}
         embedded
       />
       {!trip || showRouteMap || isTrackLoading || trackError || track.length === 0 ? (

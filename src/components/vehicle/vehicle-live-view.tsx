@@ -1684,6 +1684,7 @@ function TripBrowser({
                         points={expandedFixtureTrip.points}
                         isLoading={false}
                         hasError={false}
+                        mapPoints={expandedFixtureTrip.points}
                         embedded
                       />
                       <RouteMap points={expandedFixtureTrip.points} embedded />

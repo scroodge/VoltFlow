@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { Maximize2, Minus, Plus } from "lucide-react";
 
 import { ChartSeriesLegend, TelemetryBarChart, type BarChartModel } from "@/components/vehicle/telemetry-analytics-charts";
+import { RouteMap } from "@/components/vehicle/vehicle-route-map";
 import {
   ChartDataTooltip,
   CHART_LINE_GAP_MS,
@@ -26,7 +27,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "@/hooks/use-translation";
 import { calculateRegenRecoverySegments, prepareRegenRecoveryBars } from "@/lib/voltflowmate/trip-energy";
 import type { Locale, TranslationKey } from "@/lib/i18n";
-import type { VoltflowMateDiplus, VoltflowMateLocation, VoltflowMateTelemetry } from "@/types/database";
+import type {
+  VoltflowMateDiplus,
+  VoltflowMateLocation,
+  VoltflowMateTelemetry,
+  VoltflowMateTelemetryPointRow,
+  VoltflowMateTripTrackPointRow,
+} from "@/types/database";
 import { buildZeroAlignedAxisScales } from "./dual-axis-scale";
 
 type Translator = (key: TranslationKey, values?: Record<string, string | number>) => string;
@@ -498,6 +505,8 @@ export function TelemetryHistoryCharts({
   historyRange,
   anchorDate,
   barCharts,
+  mapPoints,
+  trackPoints,
 }: {
   points: TelemetryChartSource[];
   isLoading: boolean;
@@ -507,6 +516,8 @@ export function TelemetryHistoryCharts({
   historyRange?: TelemetryHistoryRange;
   anchorDate?: string;
   barCharts?: BarChartModel[];
+  mapPoints?: VoltflowMateTelemetryPointRow[];
+  trackPoints?: VoltflowMateTripTrackPointRow[];
 }) {
   const { locale, t } = useTranslation();
   const tx = t as Translator;
@@ -623,6 +634,8 @@ export function TelemetryHistoryCharts({
                       chart={chart}
                       lineGapMs={lineGapMs}
                       xAxis={chartMode === "trip" ? tripXAxis : "time"}
+                      mapPoints={chartMode === "trip" ? mapPoints : undefined}
+                      trackPoints={chartMode === "trip" ? trackPoints : undefined}
                     />
                   ))}
               </div>
@@ -646,6 +659,8 @@ export function TelemetryHistoryCharts({
                           key={chart.title}
                           chart={chart}
                           lineGapMs={lineGapMs}
+                          mapPoints={chartMode === "trip" ? mapPoints : undefined}
+                          trackPoints={chartMode === "trip" ? trackPoints : undefined}
                         />
                       ))}
                       {history.regenRecoveryChart.hasData ? (
@@ -779,7 +794,7 @@ function RegenRecoveryChart({ chart }: { chart: RegenRecoveryChartModel }) {
     const svg = (
       <svg
         className={interactive ? "size-full overflow-visible" : `${heightClass} w-full overflow-visible`}
-        viewBox={`0 0 ${LINE_CHART_VIEWBOX_WIDTH} 158`}
+        viewBox={`0 0 ${STD_CHART.width} ${STD_CHART.height}`}
         role="img"
         aria-label={tx("vehicle.charts.chartAria", { title })}
         onMouseMove={interactive ? handleMouseMove : undefined}
@@ -860,7 +875,7 @@ function RegenRecoveryChart({ chart }: { chart: RegenRecoveryChartModel }) {
               rows={[{ label: tx("vehicle.trips.regen"), value: `${fmt(hoveredSegment.regenKwh, valueDigits)} ${unit}`, color: regenColor }]}
               viewBoxX={xScale(hoveredSegment.x)}
               viewBoxY={STD_CHART.plotTop + 8}
-              viewBoxWidth={STD_CHART.width}
+              viewBoxWidth={LINE_CHART_VIEWBOX_WIDTH}
               viewBoxHeight={STD_CHART.height}
             />
           ) : null
@@ -894,7 +909,7 @@ function RegenRecoveryChart({ chart }: { chart: RegenRecoveryChartModel }) {
           if (!open) setHoverIndex(null);
         }}
       >
-        <DialogContent className="h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] gap-3 p-3 sm:max-w-[calc(100vw-2rem)]">
+        <DialogContent className="h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] gap-3 overflow-y-auto p-3 sm:max-w-[calc(100vw-2rem)]">
           <DialogTitle className="sr-only">{title}</DialogTitle>
           <div className="px-1">
             <h3 className="font-heading text-xl font-semibold tracking-tight">{title}</h3>
@@ -911,10 +926,14 @@ function TelemetryLineChart({
   chart,
   lineGapMs = CHART_LINE_GAP_MS,
   xAxis = "time",
+  mapPoints,
+  trackPoints,
 }: {
   chart: TelemetryChart;
   lineGapMs?: number;
   xAxis?: "time" | "distance";
+  mapPoints?: VoltflowMateTelemetryPointRow[];
+  trackPoints?: VoltflowMateTripTrackPointRow[];
 }) {
   const { t } = useTranslation();
   const tx = t as Translator;
@@ -1028,8 +1047,8 @@ function TelemetryLineChart({
           .filter((row): row is NonNullable<typeof row> => row != null);
 
   const plot = (heightClass: string, interactive = false) => {
-    const handleMouseMove = (event: React.MouseEvent<SVGSVGElement>) => {
-      const pointer = clientToSvg(event.currentTarget, event.clientX, event.clientY, STD_CHART.width, STD_CHART.height);
+    const updateSelectedTime = (element: SVGSVGElement, clientX: number, clientY: number) => {
+      const pointer = clientToSvg(element, clientX, clientY, LINE_CHART_VIEWBOX_WIDTH, STD_CHART.height);
       if (pointer.x < STD_CHART.plotLeft || pointer.x > STD_CHART.plotRight || chartTimes.length === 0) {
         setHoverTime(null);
         return;
@@ -1041,6 +1060,18 @@ function TelemetryLineChart({
       );
       const index = nearestIndexByX(pointer.x, xPositions);
       setHoverTime(chartTimes[index] ?? null);
+    };
+    const handleKeyDown = (event: React.KeyboardEvent<SVGSVGElement>) => {
+      if (!interactive || chartTimes.length === 0) return;
+      const currentIndex = hoverTime == null ? 0 : Math.max(0, chartTimes.indexOf(hoverTime));
+      let nextIndex = currentIndex;
+      if (event.key === "ArrowLeft") nextIndex = Math.max(0, currentIndex - 1);
+      else if (event.key === "ArrowRight") nextIndex = Math.min(chartTimes.length - 1, currentIndex + 1);
+      else if (event.key === "Home") nextIndex = 0;
+      else if (event.key === "End") nextIndex = chartTimes.length - 1;
+      else return;
+      event.preventDefault();
+      setHoverTime(chartTimes[nextIndex] ?? null);
     };
 
     // Hover X position in SVG coords — distance mode uses mapped distanceKm
@@ -1057,12 +1088,35 @@ function TelemetryLineChart({
 
     const svg = (
       <svg
-        className={interactive ? "size-full overflow-visible" : `${heightClass} w-full overflow-visible`}
-        viewBox="0 0 340 158"
-        role="img"
+        className={interactive ? "size-full touch-none overflow-visible focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" : `${heightClass} w-full overflow-visible`}
+        viewBox={`0 0 ${LINE_CHART_VIEWBOX_WIDTH} 158`}
+        role={interactive ? "slider" : "img"}
         aria-label={tx("vehicle.charts.chartAria", { title })}
-        onMouseMove={interactive ? handleMouseMove : undefined}
-        onMouseLeave={interactive ? () => setHoverTime(null) : undefined}
+        aria-orientation={interactive ? "horizontal" : undefined}
+        aria-valuemin={interactive ? 0 : undefined}
+        aria-valuemax={interactive ? Math.max(0, chartTimes.length - 1) : undefined}
+        aria-valuenow={interactive && hoverTime != null ? Math.max(0, chartTimes.indexOf(hoverTime)) : undefined}
+        aria-valuetext={interactive && hoverTime != null ? formatClock(hoverTime) : undefined}
+        tabIndex={interactive ? 0 : undefined}
+        onKeyDown={interactive ? handleKeyDown : undefined}
+        onPointerDown={interactive ? (event) => {
+          updateSelectedTime(event.currentTarget, event.clientX, event.clientY);
+          event.currentTarget.setPointerCapture(event.pointerId);
+        } : undefined}
+        onPointerMove={interactive ? (event) => updateSelectedTime(event.currentTarget, event.clientX, event.clientY) : undefined}
+        onPointerUp={interactive ? (event) => {
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }
+        } : undefined}
+        onPointerCancel={interactive ? (event) => {
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }
+        } : undefined}
+        onPointerLeave={interactive ? (event) => {
+          if (event.pointerType !== "touch") setHoverTime(null);
+        } : undefined}
       >
       <line x1="34" x2="318" y1="104" y2="104" stroke="currentColor" className="text-border" strokeWidth="1" />
       <line x1="34" x2="34" y1="16" y2="104" stroke="currentColor" className="text-border" strokeWidth="1" />
@@ -1200,7 +1254,7 @@ function TelemetryLineChart({
               rows={hoverRows.map(({ label, value, color }) => ({ label, value, color }))}
               viewBoxX={hoverX}
               viewBoxY={Math.min(...hoverRows.map((row) => row.y)) - 8}
-              viewBoxWidth={STD_CHART.width}
+              viewBoxWidth={LINE_CHART_VIEWBOX_WIDTH}
               viewBoxHeight={STD_CHART.height}
             />
           ) : null
@@ -1233,7 +1287,7 @@ function TelemetryLineChart({
           if (!open) setHoverTime(null);
         }}
       >
-        <DialogContent className="h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] gap-3 p-3 sm:max-w-[calc(100vw-2rem)]">
+        <DialogContent className="h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] gap-3 overflow-y-auto p-3 sm:max-w-[calc(100vw-2rem)]">
           <DialogTitle className="sr-only">{title}</DialogTitle>
           <div className="px-1">
             <h3 className="font-heading text-xl font-semibold tracking-tight">{title}</h3>
@@ -1241,10 +1295,19 @@ function TelemetryLineChart({
               {hasData ? rangeLabel : tx("vehicle.charts.noValues")}
             </p>
           </div>
-          {plot("h-[60dvh]", true)}
+          {plot("h-[46dvh]", true)}
           <div className="px-1 pt-1">
             <ChartSeriesLegend series={series} />
           </div>
+          {trackPoints?.length || mapPoints?.length ? (
+            <RouteMap
+              points={mapPoints}
+              trackPoints={trackPoints}
+              selectedTimeMs={hoverTime}
+              embedded
+              allowFullscreen={false}
+            />
+          ) : null}
         </DialogContent>
       </Dialog>
     </article>

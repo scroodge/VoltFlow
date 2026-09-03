@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "@/hooks/use-translation";
 import { isRouteTrackDisplayable } from "@/lib/voltflowmate/route-insights";
 import type { TranslationKey } from "@/lib/i18n";
+import { nearestRoutePointIndexByTime } from "./route-time-sync";
 import type {
   VoltflowMateLocation,
   VoltflowMateLiveSnapshotRow,
@@ -618,6 +619,8 @@ export function RouteMap({
   hasError = false,
   embedded = false,
   headingMode = "route",
+  selectedTimeMs = null,
+  allowFullscreen = true,
 }: {
   points?: VoltflowMateTelemetryPointRow[];
   trackPoints?: VoltflowMateTripTrackPointRow[];
@@ -626,6 +629,10 @@ export function RouteMap({
   embedded?: boolean;
   /** Location card shows last-known position, not a trip route browser. */
   headingMode?: "route" | "lastSeen";
+  /** Ephemeral graph selection used to highlight the nearest GPS track point. */
+  selectedTimeMs?: number | null;
+  /** Disable the map's own dialog when it is already rendered inside another dialog. */
+  allowFullscreen?: boolean;
 }) {
   const { t } = useTranslation();
   const tx = t as Translator;
@@ -704,9 +711,10 @@ export function RouteMap({
             onZoomIn={zoomIn}
             onZoomOut={zoomOut}
             onResetView={resetView}
-            onOpenFullscreen={() => setIsFullscreenOpen(true)}
+            onOpenFullscreen={allowFullscreen ? () => setIsFullscreenOpen(true) : undefined}
             selectedLayer={selectedLayer}
             onLayerChange={setSelectedLayer}
+            selectedTimeMs={selectedTimeMs}
             showLayerLegend={false}
             showToolbarControls={false}
             className="h-64"
@@ -722,8 +730,9 @@ export function RouteMap({
               OpenStreetMap contributors
             </a>
           </div>
-          <Dialog open={isFullscreenOpen} onOpenChange={setIsFullscreenOpen}>
-            <DialogContent className="h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] gap-3 p-3 sm:max-w-[calc(100vw-2rem)]">
+          {allowFullscreen ? (
+            <Dialog open={isFullscreenOpen} onOpenChange={setIsFullscreenOpen}>
+              <DialogContent className="h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] gap-3 p-3 sm:max-w-[calc(100vw-2rem)]">
               <DialogTitle className="sr-only">{tx(mapDialogTitleKey)}</DialogTitle>
               <InteractiveRouteCanvas
                 route={route}
@@ -735,6 +744,7 @@ export function RouteMap({
                 onResetView={resetView}
                 selectedLayer={selectedLayer}
                 onLayerChange={setSelectedLayer}
+                selectedTimeMs={selectedTimeMs}
                 onCloseFullscreen={() => setIsFullscreenOpen(false)}
                 showLayerLegend
                 className="min-h-0 flex-1 rounded-lg"
@@ -751,8 +761,9 @@ export function RouteMap({
                   OpenStreetMap contributors
                 </a>
               </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          ) : null}
         </div>
       )}
     </section>
@@ -868,6 +879,7 @@ function InteractiveRouteCanvas({
   showLayerLegend = true,
   showToolbarControls = true,
   markerMode = "trip",
+  selectedTimeMs = null,
 }: {
   route: ReturnType<typeof prepareRoute>;
   zoomOffset: number;
@@ -885,6 +897,7 @@ function InteractiveRouteCanvas({
   showLayerLegend?: boolean;
   showToolbarControls?: boolean;
   markerMode?: "trip" | "lastPoint";
+  selectedTimeMs?: number | null;
 }) {
   const { t } = useTranslation();
   const tx = t as Translator;
@@ -909,7 +922,19 @@ function InteractiveRouteCanvas({
   }, [route, routeMap, selectedLayer]);
   const mappedStart = route.start ? routeMap.mapPoint(route.start) : null;
   const mappedEnd = route.end ? routeMap.mapPoint(route.end) : null;
-  const activeRoutePoint = hoveredPoint ? route.points[hoveredPoint.index] ?? null : null;
+  const selectedPointIndex = useMemo(
+    () => nearestRoutePointIndexByTime(route.points, selectedTimeMs),
+    [route.points, selectedTimeMs],
+  );
+  const selectedMarker = useMemo(() => {
+    if (selectedPointIndex == null) return null;
+    const point = route.points[selectedPointIndex];
+    if (!point) return null;
+    const mapped = routeMap.mapPoint(point);
+    return { index: selectedPointIndex, x: mapped.x, y: mapped.y };
+  }, [route.points, routeMap, selectedPointIndex]);
+  const activeMarker = hoveredPoint ?? selectedMarker;
+  const activeRoutePoint = activeMarker ? route.points[activeMarker.index] ?? null : null;
 
   const updateRouteHover = (clientX: number, clientY: number, element: SVGSVGElement) => {
     if (dragRef.current) return;
@@ -1008,8 +1033,8 @@ function InteractiveRouteCanvas({
           </MapIconButton>
         ) : null}
       </div>
-      {activeRoutePoint && hoveredPoint ? (
-        <RoutePointTooltip point={activeRoutePoint} position={hoveredPoint} tx={tx} />
+      {activeRoutePoint && activeMarker ? (
+        <RoutePointTooltip point={activeRoutePoint} position={activeMarker} tx={tx} />
       ) : null}
       <svg
         className={`size-full touch-none ${allowMapInteraction ? "cursor-grab active:cursor-grabbing" : hoveredPoint ? "cursor-crosshair" : "cursor-default"}`}
@@ -1135,10 +1160,10 @@ function InteractiveRouteCanvas({
             <title>{tx("vehicle.route.end")}</title>
           </circle>
         ) : null}
-        {hoveredPoint ? (
+        {activeMarker ? (
           <circle
-            cx={hoveredPoint.x}
-            cy={hoveredPoint.y}
+            cx={activeMarker.x}
+            cy={activeMarker.y}
             r="4.5"
             fill="#ffffff"
             stroke={ROUTE_LINE_COLOR}
@@ -1281,4 +1306,3 @@ export function LiveLocationMap({
     </>
   );
 }
-
