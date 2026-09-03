@@ -12,6 +12,7 @@ import { resolveChargingSessionSampleWindow } from "./telemetry-session-window.t
 import { mapSohDailyRows, normalizeSohPercent } from "./soh-history-mapping.ts";
 import { mapDayTelemetryBucketRows, type DayTelemetryBucketRow } from "./telemetry-day-buckets.ts";
 import { mapWithConcurrency } from "../async/map-with-concurrency.ts";
+import { resolveSohHistoryWindow } from "../soh-history-request.ts";
 import type { VoltflowMateDiplus, VoltflowMateTelemetry, VoltflowMateTelemetrySampleRow } from "../../types/database.ts";
 
 type HourlyRow = {
@@ -378,14 +379,16 @@ async function fetchSohTelemetryHistoryFallback({
   supabase,
   userId,
   vehicleId,
+  range,
   anchorDate,
 }: {
   supabase: SupabaseClient;
   userId: string;
   vehicleId: string | null;
+  range: TelemetryHistoryRange;
   anchorDate: string;
 }): Promise<TelemetryHistoryPoint[]> {
-  const window = resolveTelemetryWindow("year", anchorDate);
+  const window = resolveSohHistoryWindow(range, anchorDate);
   const days = enumerateCalendarDays(window.from, window.to);
 
   const points = await mapWithConcurrency(days, SOH_FETCH_CONCURRENCY, (day) =>
@@ -395,19 +398,21 @@ async function fetchSohTelemetryHistoryFallback({
   return points.filter((point): point is TelemetryHistoryPoint => point != null);
 }
 
-/** Year-range SOH chart: one latest raw SOH point per UTC day, aggregated in Postgres. */
+/** Selected-range SOH chart: one latest valid SOH point per UTC day. */
 export async function fetchSohTelemetryHistory({
   supabase,
   userId,
   vehicleId,
+  range,
   anchorDate,
 }: {
   supabase: SupabaseClient;
   userId: string;
   vehicleId: string | null;
+  range: TelemetryHistoryRange;
   anchorDate: string;
 }): Promise<TelemetryHistoryPoint[]> {
-  const window = resolveTelemetryWindow("year", anchorDate);
+  const window = resolveSohHistoryWindow(range, anchorDate);
   const { data, error } = await supabase.rpc("bydmate_soh_daily", {
     p_user_id: userId,
     p_vehicle_id: vehicleId,
@@ -419,7 +424,7 @@ export async function fetchSohTelemetryHistory({
   // is applied. It is intentionally temporary: the RPC removes the 366-query fan-out.
   // Do not turn transient database/network failures into a 366-query amplification.
   if (error && isMissingSohRpc(error)) {
-    return fetchSohTelemetryHistoryFallback({ supabase, userId, vehicleId, anchorDate });
+    return fetchSohTelemetryHistoryFallback({ supabase, userId, vehicleId, range, anchorDate });
   }
   if (error) throw error;
 
