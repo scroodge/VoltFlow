@@ -952,6 +952,8 @@ export const dictionaries = {
         sohTitle: "Battery health (SOH)",
         sohSubtitle: "State-of-health trend from cloud telemetry.",
         sohNoData: "No SOH history available yet.",
+        sohLoadError: "Could not load SOH history. Please try again.",
+        sohRetry: "Try again",
         cellDeltaTitle: "Cell balance trend",
         cellDeltaSubtitle:
           "Peak cell delta at the top of each charge to 100% in this period — the only point where cells are comparable. Partial charges let imbalance build; charging to 100% lets the BMS work it back down.",
@@ -2384,6 +2386,8 @@ export const dictionaries = {
         sohTitle: "Здароўе батарэі (SOH)",
         sohSubtitle: "Тренд SOH з хмарнай тэлеметрыі.",
         sohNoData: "Гісторыя SOH пакуль недаступна.",
+        sohLoadError: "Не ўдалося загрузіць гісторыю SOH. Паспрабуйце яшчэ раз.",
+        sohRetry: "Паспрабаваць яшчэ раз",
         cellDeltaTitle: "Тренд балансу ячэек",
         cellDeltaSubtitle:
           "Пікавая дэльта ячэек на версе кожнай зарадкі да 100% за гэты перыяд — адзіны пункт, дзе ячэйкі параўнальныя. Няпоўныя зарадкі назапашваюць разбаланс, зарадка да 100% дае BMS яго прыбраць.",
@@ -3816,6 +3820,8 @@ export const dictionaries = {
         sohTitle: "Здоровье батареи (SOH)",
         sohSubtitle: "Тренд SOH из облачной телеметрии.",
         sohNoData: "История SOH пока недоступна.",
+        sohLoadError: "Не удалось загрузить историю SOH. Попробуйте ещё раз.",
+        sohRetry: "Попробовать ещё раз",
         cellDeltaTitle: "Тренд баланса ячеек",
         cellDeltaSubtitle:
           "Пиковая дельта ячеек на верху каждой зарядки до 100% за этот период — единственная точка, где ячейки сравнимы. Недозаряды копят разбаланс, зарядка до 100% даёт BMS его убрать.",

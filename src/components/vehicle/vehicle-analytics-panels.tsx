@@ -26,6 +26,7 @@ import { useVoltflowMateLiveQuery } from "@/hooks/use-voltflowmate-live-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useAuxVoltageHistoryQuery } from "@/hooks/use-aux-voltage-history-query";
 import { useVoltflowMateSohHistoryQuery } from "@/hooks/use-voltflowmate-soh-history-query";
+import { resolveSohPanelState } from "@/lib/soh-panel-state";
 import { useVoltflowMateTelemetryHistoryQuery } from "@/hooks/use-voltflowmate-telemetry-history-query";
 import type { TelemetryHistoryPoint } from "@/lib/voltflowmate/telemetry-history";
 import { useTranslation } from "@/hooks/use-translation";
@@ -426,8 +427,14 @@ export function VehicleAnalyticsPanels({
   }, [periodSummary]);
 
   const sohQuery = useVoltflowMateSohHistoryQuery({
+    range: historyRange,
     anchorDate,
     vehicleId,
+  });
+  const sohPanelState = resolveSohPanelState({
+    isLoading: sohQuery.isLoading,
+    hasError: sohQuery.isError,
+    pointCount: sohQuery.data?.length ?? 0,
   });
 
   const phantomQuery = useQuery({
@@ -690,9 +697,21 @@ export function VehicleAnalyticsPanels({
           ) : null}
         </div>
         <div className="mt-4">
-          {sohQuery.isLoading ? (
+          {sohPanelState === "loading" ? (
             <Skeleton className="h-40 rounded-2xl" />
-          ) : sohQuery.error || (sohQuery.data ?? []).length === 0 ? (
+          ) : sohPanelState === "error" ? (
+            <div className="rounded-2xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
+              <p className="text-destructive">{t("vehicle.analytics.sohLoadError")}</p>
+              <button
+                type="button"
+                className="mt-3 rounded-full border border-border px-3 py-1.5 font-semibold text-foreground transition hover:border-primary/40 disabled:opacity-50"
+                disabled={sohQuery.isFetching}
+                onClick={() => void sohQuery.refetch()}
+              >
+                {t("vehicle.analytics.sohRetry")}
+              </button>
+            </div>
+          ) : sohPanelState === "empty" ? (
             <p className="rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
               {t("vehicle.analytics.sohNoData")}
             </p>

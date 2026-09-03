@@ -16,8 +16,8 @@ export const queryKeys = {
   voltflowMateTripTrack: (tripId: string) => ["bydmate-trip-track", tripId] as const,
   voltflowMateTelemetryHistory: (range: string, date: string, vehicleId: string | null) =>
     ["bydmate-telemetry-history", range, date, vehicleId] as const,
-  voltflowMateSohHistory: (date: string, vehicleId: string | null) =>
-    ["bydmate-soh-history", date, vehicleId] as const,
+  voltflowMateSohHistory: (range: string, date: string, vehicleId: string | null) =>
+    ["bydmate-soh-history", range, date, vehicleId] as const,
   voltflowMateAuxVoltageHistory: (vehicleId: string, from: string, to: string) =>
     ["bydmate-aux-voltage-history", vehicleId, from, to] as const,
   vehicleCommands: (vehicleId: string | null) => ["vehicle-commands", vehicleId] as const,
