@@ -718,6 +718,7 @@ export function RouteMap({
             selectedLayer={selectedLayer}
             onLayerChange={setSelectedLayer}
             selectedTimeMs={selectedTimeMs}
+            showPointTooltip={!compact}
             showLayerLegend={false}
             showToolbarControls={false}
             className={compact ? "h-40 sm:h-48" : "h-64"}
@@ -883,6 +884,7 @@ function InteractiveRouteCanvas({
   showToolbarControls = true,
   markerMode = "trip",
   selectedTimeMs = null,
+  showPointTooltip = true,
 }: {
   route: ReturnType<typeof prepareRoute>;
   zoomOffset: number;
@@ -901,6 +903,7 @@ function InteractiveRouteCanvas({
   showToolbarControls?: boolean;
   markerMode?: "trip" | "lastPoint";
   selectedTimeMs?: number | null;
+  showPointTooltip?: boolean;
 }) {
   const { t } = useTranslation();
   const tx = t as Translator;
@@ -1036,7 +1039,7 @@ function InteractiveRouteCanvas({
           </MapIconButton>
         ) : null}
       </div>
-      {activeRoutePoint && activeMarker ? (
+      {showPointTooltip && activeRoutePoint && activeMarker ? (
         <RoutePointTooltip point={activeRoutePoint} position={activeMarker} tx={tx} />
       ) : null}
       <svg

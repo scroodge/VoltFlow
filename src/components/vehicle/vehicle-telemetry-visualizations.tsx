@@ -909,7 +909,7 @@ function RegenRecoveryChart({ chart }: { chart: RegenRecoveryChartModel }) {
           if (!open) setHoverIndex(null);
         }}
       >
-        <DialogContent className="h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] gap-3 overflow-y-auto p-3 sm:max-w-[calc(100vw-2rem)]">
+        <DialogContent className="h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] content-start gap-3 overflow-y-auto p-3 sm:max-w-[calc(100vw-2rem)]">
           <DialogTitle className="sr-only">{title}</DialogTitle>
           <div className="px-1">
             <h3 className="font-heading text-xl font-semibold tracking-tight">{title}</h3>
@@ -1323,7 +1323,7 @@ function TelemetryLineChart({
           }
         }}
       >
-        <DialogContent className="h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] gap-3 overflow-y-auto p-3 sm:max-w-[calc(100vw-2rem)]">
+        <DialogContent className="h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] content-start gap-3 overflow-y-auto p-3 sm:max-w-[calc(100vw-2rem)]">
           <DialogTitle className="sr-only">{title}</DialogTitle>
           <div className="flex items-start justify-between gap-3 px-1">
             <div>

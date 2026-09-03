@@ -21,7 +21,9 @@ the route remains visible.
 
 The PWA dialog no longer reserves a tall viewport-relative graph box: it follows the
 chart's real aspect ratio, removes the duplicate Route card heading, and uses a shorter
-responsive map. Time charts also provide accessible minus, plus, and reset controls for
+responsive map. Dialog rows stay packed at the top instead of stretching across the
+viewport, and the compact map suppresses its duplicate details tooltip because the
+selected values already appear over the graph. Time charts also provide accessible minus, plus, and reset controls for
 1x through 16x horizontal zoom. Each visible window recalculates its Y domains while
 preserving the aligned physical zero line on Speed & power.
 
