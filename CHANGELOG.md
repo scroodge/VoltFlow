@@ -27,6 +27,10 @@ selected values already appear over the graph. Time charts also provide accessib
 1x through 16x horizontal zoom. Each visible window recalculates its Y domains while
 preserving the aligned physical zero line on Speed & power.
 
+The dialog itself is now content-sized with a viewport maximum, removing the remaining
+empty panel below the map. Its close control sits explicitly in the same header row as
+the zoom controls instead of using the shared dialog's lower absolute position.
+
 GPS remains user-owned telemetry in Postgres. Selection and zoom are ephemeral UI state;
 no schema, API, retention, preference, or localStorage behavior changed.
 

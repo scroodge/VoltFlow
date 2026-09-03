@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Maximize2, Minus, Plus } from "lucide-react";
+import { Maximize2, Minus, Plus, X } from "lucide-react";
 
 import { ChartSeriesLegend, TelemetryBarChart, type BarChartModel } from "@/components/vehicle/telemetry-analytics-charts";
 import { RouteMap } from "@/components/vehicle/vehicle-route-map";
@@ -22,7 +22,7 @@ import {
 import { formatHistoryRangeSubtitle } from "@/lib/voltflowmate/telemetry-buckets";
 import type { TelemetryHistoryRange } from "@/lib/voltflowmate/telemetry-ranges";
 import { MAX_TELEMETRY_CHART_POINTS, medianSampleGapSeconds } from "@/lib/voltflowmate/telemetry-ranges";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "@/hooks/use-translation";
 import { calculateRegenRecoverySegments, prepareRegenRecoveryBars } from "@/lib/voltflowmate/trip-energy";
@@ -1323,7 +1323,10 @@ function TelemetryLineChart({
           }
         }}
       >
-        <DialogContent className="h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] content-start gap-3 overflow-y-auto p-3 sm:max-w-[calc(100vw-2rem)]">
+        <DialogContent
+          className="max-h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] content-start gap-3 overflow-y-auto p-3 sm:max-w-[calc(100vw-2rem)]"
+          showCloseButton={false}
+        >
           <DialogTitle className="sr-only">{title}</DialogTitle>
           <div className="flex items-start justify-between gap-3 px-1">
             <div>
@@ -1332,24 +1335,32 @@ function TelemetryLineChart({
                 {hasData ? rangeLabel : tx("vehicle.charts.noValues")}
               </p>
             </div>
-            {activeXAxis === "time" ? (
-              <div className="flex shrink-0 items-center gap-1" aria-label="Graph time scale">
-                <IconButton label="Zoom out graph" onClick={() => setTimeZoom((value) => Math.max(0, value - 1))} disabled={timeZoom === 0}>
-                  <Minus className="size-4" aria-hidden />
-                </IconButton>
-                <button
-                  type="button"
-                  onClick={() => setTimeZoom(0)}
-                  className="h-9 min-w-12 rounded-full border border-border bg-white/[0.03] px-2 text-xs text-muted-foreground"
-                  aria-label="Reset graph zoom"
-                >
-                  {2 ** timeZoom}×
-                </button>
-                <IconButton label="Zoom in graph" onClick={() => setTimeZoom((value) => Math.min(4, value + 1))} disabled={timeZoom === 4}>
-                  <Plus className="size-4" aria-hidden />
-                </IconButton>
-              </div>
-            ) : null}
+            <div className="flex shrink-0 items-center gap-1">
+              {activeXAxis === "time" ? (
+                <div className="flex items-center gap-1" aria-label="Graph time scale">
+                  <IconButton label="Zoom out graph" onClick={() => setTimeZoom((value) => Math.max(0, value - 1))} disabled={timeZoom === 0}>
+                    <Minus className="size-4" aria-hidden />
+                  </IconButton>
+                  <button
+                    type="button"
+                    onClick={() => setTimeZoom(0)}
+                    className="h-9 min-w-12 rounded-full border border-border bg-white/[0.03] px-2 text-xs text-muted-foreground"
+                    aria-label="Reset graph zoom"
+                  >
+                    {2 ** timeZoom}×
+                  </button>
+                  <IconButton label="Zoom in graph" onClick={() => setTimeZoom((value) => Math.min(4, value + 1))} disabled={timeZoom === 4}>
+                    <Plus className="size-4" aria-hidden />
+                  </IconButton>
+                </div>
+              ) : null}
+              <DialogClose
+                className="grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-white/[0.05] hover:text-foreground"
+                aria-label={tx("common.close")}
+              >
+                <X className="size-5" aria-hidden />
+              </DialogClose>
+            </div>
           </div>
           {plot("aspect-[360/158] max-h-[38dvh] w-full", true)}
           <div className="px-1 pt-1">
