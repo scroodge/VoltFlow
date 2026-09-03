@@ -316,12 +316,12 @@ begin
 end;
 $$;
 
-revoke all on function public.bydmate_soh_daily_raw_baseline(uuid, text, timestamptz, timestamptz) from public;
-revoke all on function public.bydmate_materialize_soh_day(uuid, text, date) from public;
-revoke all on function public.bydmate_enqueue_soh_day(date) from public;
-revoke all on function public.bydmate_enqueue_soh_backfill(uuid, text, date, date) from public;
-revoke all on function public.bydmate_process_soh_rollup_queue(integer) from public;
-revoke all on function public.purge_old_bydmate_soh_rollups() from public;
+revoke all on function public.bydmate_soh_daily_raw_baseline(uuid, text, timestamptz, timestamptz) from public, anon, authenticated;
+revoke all on function public.bydmate_materialize_soh_day(uuid, text, date) from public, anon, authenticated;
+revoke all on function public.bydmate_enqueue_soh_day(date) from public, anon, authenticated;
+revoke all on function public.bydmate_enqueue_soh_backfill(uuid, text, date, date) from public, anon, authenticated;
+revoke all on function public.bydmate_process_soh_rollup_queue(integer) from public, anon, authenticated;
+revoke all on function public.purge_old_bydmate_soh_rollups() from public, anon, authenticated;
 
 grant execute on function public.bydmate_soh_daily_raw_baseline(uuid, text, timestamptz, timestamptz) to service_role;
 grant execute on function public.bydmate_materialize_soh_day(uuid, text, date) to service_role;
