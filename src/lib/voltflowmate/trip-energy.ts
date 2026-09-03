@@ -195,13 +195,13 @@ export function prepareRegenRecoveryBars(
   maxBars = MAX_REGEN_RECOVERY_BARS,
 ): {
   xAxis: "distance" | "time";
-  segments: Array<{ x: number; regenKwh: number }>;
+  segments: Array<{ x: number; time: number; regenKwh: number }>;
   hasData: boolean;
 } {
   if (segments.length === 0) {
     return {
       xAxis: "time" as const,
-      segments: [] as Array<{ x: number; regenKwh: number }>,
+      segments: [] as Array<{ x: number; time: number; regenKwh: number }>,
       hasData: false,
     };
   }
@@ -211,6 +211,7 @@ export function prepareRegenRecoveryBars(
   const xAxis = useDistance ? "distance" : "time";
   const rawBars = segments.map((segment) => ({
     x: useDistance ? segment.distanceKm! : segment.time,
+    time: segment.time,
     regenKwh: segment.regenKwh,
   }));
 
@@ -222,17 +223,19 @@ export function prepareRegenRecoveryBars(
   const minX = Math.min(...xs);
   const maxX = Math.max(...xs);
   const span = Math.max(maxX - minX, useDistance ? 0.1 : 60_000);
-  const bins = Array.from({ length: maxBars }, () => 0);
+  const bins = Array.from({ length: maxBars }, () => ({ regenKwh: 0, weightedTime: 0 }));
 
   for (const bar of rawBars) {
     const ratio = (bar.x - minX) / span;
     const binIndex = Math.min(maxBars - 1, Math.max(0, Math.floor(ratio * maxBars)));
-    bins[binIndex] += bar.regenKwh;
+    bins[binIndex].regenKwh += bar.regenKwh;
+    bins[binIndex].weightedTime += bar.time * bar.regenKwh;
   }
 
   const binnedBars = bins
-    .map((regenKwh, index) => ({
+    .map(({ regenKwh, weightedTime }, index) => ({
       x: minX + ((index + 0.5) * span) / maxBars,
+      time: weightedTime / regenKwh,
       regenKwh,
     }))
     .filter((bar) => bar.regenKwh > MIN_REGEN_RECOVERY_KWH);

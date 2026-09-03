@@ -11,6 +11,23 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-09-03
 
+### Recovery energy graph synchronizes with the trip route
+
+The expanded Recovery energy chart now uses the same compact, content-sized graph and
+map design as Speed & power. Selecting a recovery bar with mouse, touch, or keyboard
+moves the route marker to the nearest GPS point. The chart supports 1x-16x horizontal
+zoom in both distance and time modes and rescales recovery energy for the visible bars.
+
+Recovery bars retain their source timestamp; aggregated bars use an energy-weighted
+representative timestamp so map synchronization remains meaningful after binning. GPS
+remains user-owned telemetry in Postgres, while selection and zoom remain ephemeral UI
+state. No schema, API, preference, retention, or localStorage behavior changed.
+
+#### Verification
+
+Focused recovery-bar and route-time tests passed (10 tests); full Node suite passed
+(156 tests); TypeScript and the production build passed.
+
 ### Expanded trip graphs synchronize with a compact route map
 
 Expanded trip telemetry charts now include the trip route directly below the graph.

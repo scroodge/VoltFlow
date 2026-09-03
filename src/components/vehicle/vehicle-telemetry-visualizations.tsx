@@ -76,7 +76,7 @@ type RegenRecoveryChartModel = {
   unit: string;
   valueDigits: number;
   xAxis: "distance" | "time";
-  segments: Array<{ x: number; regenKwh: number }>;
+  segments: Array<{ x: number; time: number; regenKwh: number }>;
   hasData: boolean;
 };
 
@@ -664,7 +664,11 @@ export function TelemetryHistoryCharts({
                         />
                       ))}
                       {history.regenRecoveryChart.hasData ? (
-                        <RegenRecoveryChart chart={history.regenRecoveryChart} />
+                        <RegenRecoveryChart
+                          chart={history.regenRecoveryChart}
+                          mapPoints={chartMode === "trip" ? mapPoints : undefined}
+                          trackPoints={chartMode === "trip" ? trackPoints : undefined}
+                        />
                       ) : null}
                     </div>
                     {history.deltaBySoc.points.length > 0 ? (
@@ -724,17 +728,40 @@ function formatRegenRecoveryXLabel(xAxis: "distance" | "time", value: number) {
   return formatClock(value);
 }
 
-function RegenRecoveryChart({ chart }: { chart: RegenRecoveryChartModel }) {
+function RegenRecoveryChart({
+  chart,
+  mapPoints,
+  trackPoints,
+}: {
+  chart: RegenRecoveryChartModel;
+  mapPoints?: VoltflowMateTelemetryPointRow[];
+  trackPoints?: VoltflowMateTripTrackPointRow[];
+}) {
   const { t } = useTranslation();
   const tx = t as Translator;
   const [isOpen, setIsOpen] = useState(false);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const { title, unit, valueDigits, xAxis, segments, hasData } = chart;
+  const [zoom, setZoom] = useState(0);
+  const { title, unit, valueDigits, xAxis, segments: fullSegments, hasData: fullHasData } = chart;
+  const fullMinX = fullSegments.length ? Math.min(...fullSegments.map((segment) => segment.x)) : 0;
+  const fullMaxX = fullSegments.length ? Math.max(...fullSegments.map((segment) => segment.x)) : 1;
+  const selectedFullSegment = hoverIndex == null ? null : fullSegments[hoverIndex] ?? null;
+  const zoomCenter = selectedFullSegment?.x ?? fullMinX + (fullMaxX - fullMinX) / 2;
+  const fullSpan = Math.max(fullMaxX - fullMinX, xAxis === "distance" ? 0.1 : 60_000);
+  const visibleSpan = fullSpan / 2 ** zoom;
+  const unclampedMinX = zoomCenter - visibleSpan / 2;
+  const windowMinX = Math.max(fullMinX, Math.min(unclampedMinX, fullMaxX - visibleSpan));
+  const windowMaxX = Math.min(fullMaxX, windowMinX + visibleSpan);
+  const visibleEntries = fullSegments
+    .map((segment, index) => ({ segment, index }))
+    .filter(({ segment }) => zoom === 0 || (segment.x >= windowMinX && segment.x <= windowMaxX));
+  const segments = visibleEntries.map(({ segment }) => segment);
+  const hasData = fullHasData && segments.length > 0;
   const regenColor = "#34d399";
   const totalRegen = segments.reduce((sum, segment) => sum + segment.regenKwh, 0);
   const maxRegen = segments.length ? Math.max(...segments.map((segment) => segment.regenKwh)) : 1;
-  const minX = segments.length ? Math.min(...segments.map((segment) => segment.x)) : 0;
-  const maxX = segments.length ? Math.max(...segments.map((segment) => segment.x)) : 1;
+  const minX = zoom > 0 ? windowMinX : fullMinX;
+  const maxX = zoom > 0 ? windowMaxX : fullMaxX;
   const xPad =
     xAxis === "distance"
       ? Math.max((maxX - minX) * 0.04, 0.1)
@@ -778,27 +805,59 @@ function RegenRecoveryChart({ chart }: { chart: RegenRecoveryChartModel }) {
   const barWidth = segments.length
     ? Math.min(10, Math.max(3, (284 / Math.max(segments.length, 1)) * 0.7))
     : 4;
-  const hoveredSegment = hoverIndex == null ? null : segments[hoverIndex] ?? null;
+  const hoveredSegment = selectedFullSegment;
 
   const plot = (heightClass: string, interactive = false) => {
-    const handleMouseMove = (event: React.MouseEvent<SVGSVGElement>) => {
-      const pointer = clientToSvg(event.currentTarget, event.clientX, event.clientY, STD_CHART.width, STD_CHART.height);
+    const updateSelectedSegment = (element: SVGSVGElement, clientX: number, clientY: number) => {
+      const pointer = clientToSvg(element, clientX, clientY, STD_CHART.width, STD_CHART.height);
       if (pointer.x < STD_CHART.plotLeft || pointer.x > STD_CHART.plotRight) {
         setHoverIndex(null);
         return;
       }
       const xPositions = segments.map((segment) => xScale(segment.x));
-      setHoverIndex(nearestIndexByX(pointer.x, xPositions));
+      const visibleIndex = nearestIndexByX(pointer.x, xPositions);
+      setHoverIndex(visibleEntries[visibleIndex]?.index ?? null);
+    };
+    const handleKeyDown = (event: React.KeyboardEvent<SVGSVGElement>) => {
+      if (!interactive || visibleEntries.length === 0) return;
+      const currentVisibleIndex = Math.max(
+        0,
+        visibleEntries.findIndex(({ index }) => index === hoverIndex),
+      );
+      let nextVisibleIndex = currentVisibleIndex;
+      if (event.key === "ArrowLeft") nextVisibleIndex = Math.max(0, currentVisibleIndex - 1);
+      else if (event.key === "ArrowRight") nextVisibleIndex = Math.min(visibleEntries.length - 1, currentVisibleIndex + 1);
+      else if (event.key === "Home") nextVisibleIndex = 0;
+      else if (event.key === "End") nextVisibleIndex = visibleEntries.length - 1;
+      else return;
+      event.preventDefault();
+      setHoverIndex(visibleEntries[nextVisibleIndex]?.index ?? null);
     };
 
     const svg = (
       <svg
-        className={interactive ? "size-full overflow-visible" : `${heightClass} w-full overflow-visible`}
+        className={interactive ? "size-full touch-none overflow-visible focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" : `${heightClass} w-full overflow-visible`}
         viewBox={`0 0 ${STD_CHART.width} ${STD_CHART.height}`}
-        role="img"
+        role={interactive ? "slider" : "img"}
         aria-label={tx("vehicle.charts.chartAria", { title })}
-        onMouseMove={interactive ? handleMouseMove : undefined}
-        onMouseLeave={interactive ? () => setHoverIndex(null) : undefined}
+        aria-orientation={interactive ? "horizontal" : undefined}
+        aria-valuemin={interactive ? 0 : undefined}
+        aria-valuemax={interactive ? Math.max(0, visibleEntries.length - 1) : undefined}
+        aria-valuenow={interactive && hoverIndex != null ? Math.max(0, visibleEntries.findIndex(({ index }) => index === hoverIndex)) : undefined}
+        aria-valuetext={interactive && hoveredSegment ? `${formatClock(hoveredSegment.time)}, ${fmt(hoveredSegment.regenKwh, valueDigits)} ${unit}` : undefined}
+        tabIndex={interactive ? 0 : undefined}
+        onKeyDown={interactive ? handleKeyDown : undefined}
+        onPointerDown={interactive ? (event) => {
+          updateSelectedSegment(event.currentTarget, event.clientX, event.clientY);
+          event.currentTarget.setPointerCapture(event.pointerId);
+        } : undefined}
+        onPointerMove={interactive ? (event) => updateSelectedSegment(event.currentTarget, event.clientX, event.clientY) : undefined}
+        onPointerUp={interactive ? (event) => {
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+        } : undefined}
+        onPointerLeave={interactive ? (event) => {
+          if (event.pointerType !== "touch") setHoverIndex(null);
+        } : undefined}
       >
       <line x1="34" x2="318" y1="104" y2="104" stroke="currentColor" className="text-border" strokeWidth="1" />
       <line x1="34" x2="34" y1="16" y2="104" stroke="currentColor" className="text-border" strokeWidth="1" />
@@ -824,7 +883,7 @@ function RegenRecoveryChart({ chart }: { chart: RegenRecoveryChartModel }) {
       <text x="6" y="60" textAnchor="middle" transform="rotate(-90 6 60)" className="fill-muted-foreground text-[9px]">
         {unit}
       </text>
-      {segments.map((segment, index) => {
+      {visibleEntries.map(({ segment, index }) => {
         const cx = xScale(segment.x);
         const baseline = yScale(yMin);
         const top = yScale(segment.regenKwh);
@@ -875,7 +934,7 @@ function RegenRecoveryChart({ chart }: { chart: RegenRecoveryChartModel }) {
               rows={[{ label: tx("vehicle.trips.regen"), value: `${fmt(hoveredSegment.regenKwh, valueDigits)} ${unit}`, color: regenColor }]}
               viewBoxX={xScale(hoveredSegment.x)}
               viewBoxY={STD_CHART.plotTop + 8}
-              viewBoxWidth={LINE_CHART_VIEWBOX_WIDTH}
+              viewBoxWidth={STD_CHART.width}
               viewBoxHeight={STD_CHART.height}
             />
           ) : null
@@ -906,16 +965,56 @@ function RegenRecoveryChart({ chart }: { chart: RegenRecoveryChartModel }) {
         open={isOpen}
         onOpenChange={(open) => {
           setIsOpen(open);
-          if (!open) setHoverIndex(null);
+          if (!open) {
+            setHoverIndex(null);
+            setZoom(0);
+          }
         }}
       >
-        <DialogContent className="h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] content-start gap-3 overflow-y-auto p-3 sm:max-w-[calc(100vw-2rem)]">
+        <DialogContent
+          className="max-h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] content-start gap-3 overflow-y-auto p-3 sm:max-w-[calc(100vw-2rem)]"
+          showCloseButton={false}
+        >
           <DialogTitle className="sr-only">{title}</DialogTitle>
-          <div className="px-1">
-            <h3 className="font-heading text-xl font-semibold tracking-tight">{title}</h3>
-            <p className="mt-1 text-xs text-muted-foreground">{rangeLabel}</p>
+          <div className="flex items-start justify-between gap-3 px-1">
+            <div>
+              <h3 className="font-heading text-xl font-semibold tracking-tight">{title}</h3>
+              <p className="mt-1 text-xs text-muted-foreground">{rangeLabel}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <IconButton label="Zoom out graph" onClick={() => setZoom((value) => Math.max(0, value - 1))} disabled={zoom === 0}>
+                <Minus className="size-4" aria-hidden />
+              </IconButton>
+              <button
+                type="button"
+                onClick={() => setZoom(0)}
+                className="h-9 min-w-12 rounded-full border border-border bg-white/[0.03] px-2 text-xs text-muted-foreground"
+                aria-label="Reset graph zoom"
+              >
+                {2 ** zoom}×
+              </button>
+              <IconButton label="Zoom in graph" onClick={() => setZoom((value) => Math.min(4, value + 1))} disabled={zoom === 4}>
+                <Plus className="size-4" aria-hidden />
+              </IconButton>
+              <DialogClose
+                className="grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-white/[0.05] hover:text-foreground"
+                aria-label={tx("common.close")}
+              >
+                <X className="size-5" aria-hidden />
+              </DialogClose>
+            </div>
           </div>
-          {plot("h-[60dvh]", true)}
+          {plot("aspect-[340/158] max-h-[38dvh] w-full", true)}
+          {trackPoints?.length || mapPoints?.length ? (
+            <RouteMap
+              points={mapPoints}
+              trackPoints={trackPoints}
+              selectedTimeMs={hoveredSegment?.time ?? null}
+              embedded
+              allowFullscreen={false}
+              compact
+            />
+          ) : null}
         </DialogContent>
       </Dialog>
     </article>

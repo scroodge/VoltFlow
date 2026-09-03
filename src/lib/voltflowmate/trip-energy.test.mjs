@@ -70,4 +70,19 @@ test("prepareRegenRecoveryBars prefers distance axis when km is available", () =
   assert.equal(prepared.xAxis, "distance");
   assert.equal(prepared.segments.length, 2);
   assert.equal(prepared.segments[0].x, 1.2);
+  assert.equal(prepared.segments[0].time, 1);
+});
+
+test("prepareRegenRecoveryBars retains an energy-weighted time for aggregated bars", () => {
+  const prepared = prepareRegenRecoveryBars(
+    [
+      { time: 1_000, distanceKm: 1, regenKwh: 0.25, powerKw: -10 },
+      { time: 3_000, distanceKm: 1.1, regenKwh: 0.75, powerKw: -12 },
+    ],
+    1,
+  );
+
+  assert.equal(prepared.segments.length, 1);
+  assert.equal(prepared.segments[0].time, 2_500);
+  assertClose(prepared.segments[0].regenKwh, 1);
 });
