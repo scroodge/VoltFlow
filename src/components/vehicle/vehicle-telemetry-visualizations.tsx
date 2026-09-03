@@ -110,6 +110,11 @@ const MAX_CHART_POINTS = 240;
 const MAX_TRIP_CHART_POINTS = MAX_TELEMETRY_CHART_POINTS;
 const MAX_CHART_MARKERS = 80;
 const MAX_DELTA_BY_SOC_POINTS = 240;
+const LINE_CHART_VIEWBOX_WIDTH = 360;
+const LEFT_AXIS_UNIT_X = 18;
+// Keep the right labels close to the axis so the rotated unit title has its own gutter.
+const RIGHT_AXIS_TICK_X = 323;
+const RIGHT_AXIS_UNIT_X = 342;
 
 function fmt(value: number | null | undefined, digits = 0) {
   return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
@@ -774,7 +779,7 @@ function RegenRecoveryChart({ chart }: { chart: RegenRecoveryChartModel }) {
     const svg = (
       <svg
         className={interactive ? "size-full overflow-visible" : `${heightClass} w-full overflow-visible`}
-        viewBox="0 0 340 158"
+        viewBox={`0 0 ${LINE_CHART_VIEWBOX_WIDTH} 158`}
         role="img"
         aria-label={tx("vehicle.charts.chartAria", { title })}
         onMouseMove={interactive ? handleMouseMove : undefined}
@@ -1079,7 +1084,7 @@ function TelemetryLineChart({
                   </text>
                 ) : null}
                 {seriesIndex === series.length - 1 ? (
-                  <text x="323" y={y(seriesIndex, tick.value) + 3} textAnchor="start" className="fill-muted-foreground text-[9px]">
+                  <text x={RIGHT_AXIS_TICK_X} y={y(seriesIndex, tick.value) + 3} textAnchor="start" className="fill-muted-foreground text-[9px]">
                     {tick.label}
                   </text>
                 ) : null}
@@ -1107,15 +1112,15 @@ function TelemetryLineChart({
       </text>
       {dualAxis ? (
         <>
-          <text x="6" y="60" textAnchor="middle" transform="rotate(-90 6 60)" className="fill-muted-foreground text-[9px]">
+          <text x={LEFT_AXIS_UNIT_X} y="60" textAnchor="middle" transform={`rotate(-90 ${LEFT_AXIS_UNIT_X} 60)`} className="fill-muted-foreground text-[9px]">
             {seriesUnit(series[0], unit)}
           </text>
-          <text x="334" y="60" textAnchor="middle" transform="rotate(90 334 60)" className="fill-muted-foreground text-[9px]">
+          <text x={RIGHT_AXIS_UNIT_X} y="60" textAnchor="middle" transform={`rotate(90 ${RIGHT_AXIS_UNIT_X} 60)`} className="fill-muted-foreground text-[9px]">
             {seriesUnit(series[series.length - 1], unit)}
           </text>
         </>
       ) : (
-        <text x="6" y="60" textAnchor="middle" transform="rotate(-90 6 60)" className="fill-muted-foreground text-[9px]">
+        <text x={LEFT_AXIS_UNIT_X} y="60" textAnchor="middle" transform={`rotate(-90 ${LEFT_AXIS_UNIT_X} 60)`} className="fill-muted-foreground text-[9px]">
           {unit}
         </text>
       )}

@@ -26,6 +26,15 @@ The follow-up visual refinement hides the synthetic negative-speed labels, draws
 shared zero gridline once instead of once per axis, and reduces the telemetry trace
 stroke from 3 to 2.
 
+The chart view box now provides additional right-side room for the power tick labels and
+rotated `kW` axis title, without changing the plotted data area.
+
+The side gutters are now tightened: `km/h` sits closer to the left axis and `kW` sits
+inside the right margin instead of being pushed toward the edge.
+
+Right-axis tick labels now start closer to the plot axis, leaving a dedicated gutter for
+the rotated `kW` title so the unit does not collide with the values.
+
 #### Verification
 
 Focused dual-axis scale test passed; full Node suite passed (152 tests); production build
