@@ -27,6 +27,7 @@ import { useTranslation } from "@/hooks/use-translation";
 import { calculateRegenRecoverySegments, prepareRegenRecoveryBars } from "@/lib/voltflowmate/trip-energy";
 import type { Locale, TranslationKey } from "@/lib/i18n";
 import type { VoltflowMateDiplus, VoltflowMateLocation, VoltflowMateTelemetry } from "@/types/database";
+import { buildZeroAlignedAxisScales } from "./dual-axis-scale";
 
 type Translator = (key: TranslationKey, values?: Record<string, string | number>) => string;
 
@@ -109,6 +110,7 @@ const MAX_CHART_POINTS = 240;
 const MAX_TRIP_CHART_POINTS = MAX_TELEMETRY_CHART_POINTS;
 const MAX_CHART_MARKERS = 80;
 const MAX_DELTA_BY_SOC_POINTS = 240;
+
 function fmt(value: number | null | undefined, digits = 0) {
   return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
 }
@@ -675,34 +677,6 @@ function chartUsesDualAxis(series: ChartSeries[], chartUnit: string) {
   return new Set(units).size > 1;
 }
 
-function buildSeriesScale(values: number[], valueDigits: number) {
-  if (values.length === 0) {
-    return {
-      minValue: 0,
-      maxValue: 1,
-      y: () => 60,
-      yTicks: [] as Array<{ label: string; value: number }>,
-    };
-  }
-
-  const minValue = Math.min(...values);
-  const maxValue = Math.max(...values);
-  const valuePad = Math.max((maxValue - minValue) * 0.12, maxValue === minValue ? 1 : 0);
-  const yMin = minValue - valuePad;
-  const yMax = maxValue + valuePad;
-  const y = (value: number) => {
-    if (yMax === yMin) return 60;
-    return 104 - ((value - yMin) / (yMax - yMin)) * 88;
-  };
-  const yTicks = [
-    { label: fmt(maxValue, valueDigits), value: maxValue },
-    { label: fmt((minValue + maxValue) / 2, valueDigits), value: (minValue + maxValue) / 2 },
-    { label: fmt(minValue, valueDigits), value: minValue },
-  ];
-
-  return { minValue, maxValue, y, yTicks };
-}
-
 function formatChartRange(
   series: ChartSeries[],
   chartUnit: string,
@@ -952,12 +926,17 @@ function TelemetryLineChart({
     if (yMax === yMin) return 60;
     return 104 - ((value - yMin) / (yMax - yMin)) * 88;
   };
-  const seriesScales = series.map((item) =>
-    buildSeriesScale(
-      item.points.map((point) => point.value),
-      item.valueDigits ?? valueDigits,
-    ),
-  );
+  const seriesScales = dualAxis
+    ? buildZeroAlignedAxisScales(series.map((item) => item.points.map((point) => point.value))).map(
+        (scale, seriesIndex) => ({
+          ...scale,
+          yTicks: scale.yTickValues.map((value) => ({
+            label: fmt(value, series[seriesIndex].valueDigits ?? valueDigits),
+            value,
+          })),
+        }),
+      )
+    : [];
   const rangeLabel = formatChartRange(series, unit, valueDigits, tx);
   const chartTimes = useMemo(
     () => [...new Set(series.flatMap((item) => item.points.map((point) => point.time)))].sort((a, b) => a - b),
@@ -1085,9 +1064,15 @@ function TelemetryLineChart({
       {dualAxis ? <line x1="318" x2="318" y1="16" y2="104" stroke="currentColor" className="text-border" strokeWidth="1" /> : null}
       {dualAxis
         ? series.map((item, seriesIndex) =>
-            seriesScales[seriesIndex].yTicks.map((tick, index) => (
+            seriesScales[seriesIndex].yTicks
+              // The speed scale may contain a synthetic negative range to align zero
+              // with regeneration. Negative speed is not a meaningful user-facing value.
+              .filter((tick) => seriesIndex !== 0 || tick.value >= 0)
+              .map((tick, index) => (
               <g key={`${title}-y-${seriesIndex}-${index}`}>
-                <line x1="34" x2="318" y1={y(seriesIndex, tick.value)} y2={y(seriesIndex, tick.value)} stroke="currentColor" className="text-border/40" strokeWidth="1" strokeDasharray="4 6" />
+                {tick.value !== 0 || seriesIndex === 0 ? (
+                  <line x1="34" x2="318" y1={y(seriesIndex, tick.value)} y2={y(seriesIndex, tick.value)} stroke="currentColor" className="text-border/40" strokeWidth="1" strokeDasharray="4 6" />
+                ) : null}
                 {seriesIndex === 0 ? (
                   <text x="29" y={y(seriesIndex, tick.value) + 3} textAnchor="end" className="fill-muted-foreground text-[9px]">
                     {tick.label}
@@ -1152,7 +1137,7 @@ function TelemetryLineChart({
                 d={d}
                 fill="none"
                 stroke={item.color}
-                strokeWidth="3"
+                strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />

@@ -9,6 +9,30 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-09-03
+
+### Speed and traction-power chart shares its physical zero line
+
+The Vehicle chart still uses two independently scaled axes because speed is `km/h` and
+traction power is `kW`. Its scale builder now includes zero in both domains and maps both
+zeroes to the same horizontal gridline. Positive speed and propulsion plot above that
+line; negative traction power (regeneration) remains below it. The empty region below a
+zero-speed line is intentional when the power scale needs room for regeneration — it
+communicates direction without implying that km/h and kW have a common magnitude.
+
+No telemetry storage, data model, or user preference changed.
+
+The follow-up visual refinement hides the synthetic negative-speed labels, draws the
+shared zero gridline once instead of once per axis, and reduces the telemetry trace
+stroke from 3 to 2.
+
+#### Verification
+
+Focused dual-axis scale test passed; full Node suite passed (152 tests); production build
+passed.
+
+---
+
 ## 2026-08-27
 
 ### User activity now follows every supported app entry path
