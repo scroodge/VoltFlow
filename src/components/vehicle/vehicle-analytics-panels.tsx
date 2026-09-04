@@ -560,17 +560,17 @@ export function VehicleAnalyticsPanels({
     return { value: `${sample.voltage.toFixed(2)} V`, hint: when };
   };
 
-  const latestSohPercent = useMemo(() => {
+  const latestSohReading = useMemo(() => {
     const points = (sohQuery.data ?? []).filter(
       (point) => typeof point.telemetry.soh_percent === "number",
     );
     if (points.length === 0) return null;
 
-    const latest = points.reduce((best, point) =>
+    return points.reduce((best, point) =>
       Date.parse(point.device_time) >= Date.parse(best.device_time) ? point : best,
     );
-    return latest.telemetry.soh_percent ?? null;
   }, [sohQuery.data]);
+  const latestSohPercent = latestSohReading?.telemetry.soh_percent ?? null;
 
   const exportBase = `/api/vehicle/export?format=csv&vehicle_id=${encodeURIComponent(vehicleId)}&from=${telemetryWindow.from}&to=${telemetryWindow.to}`;
   const exportUrl = isDevAppRoute() ? withDevApiParams(exportBase) : exportBase;
@@ -687,7 +687,17 @@ export function VehicleAnalyticsPanels({
             <h2 className="font-heading text-2xl font-semibold tracking-tight">
               {t("vehicle.analytics.sohTitle")}
             </h2>
-            <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.sohSubtitle")}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {sohPanelState === "single" && latestSohReading
+                ? t("vehicle.analytics.sohLatestReading", {
+                    date: new Date(latestSohReading.device_time).toLocaleString(locale, {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                    }),
+                  })
+                : t("vehicle.analytics.sohSubtitle")}
+            </p>
           </div>
           {latestSohPercent != null ? (
             <p className="font-heading text-4xl font-bold tabular-nums tracking-tight text-[var(--voltflow-cyan)]">
@@ -714,6 +724,10 @@ export function VehicleAnalyticsPanels({
           ) : sohPanelState === "empty" ? (
             <p className="rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
               {t("vehicle.analytics.sohNoData")}
+            </p>
+          ) : sohPanelState === "single" ? (
+            <p className="rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
+              {t("vehicle.analytics.sohSinglePoint")}
             </p>
           ) : (
             <SohTrendChart points={sohQuery.data ?? []} locale={locale} />
@@ -895,17 +909,7 @@ function SohTrendChart({
     .map((p) => ({ time: Date.parse(p.device_time), soh: p.telemetry.soh_percent as number }))
     .sort((a, b) => a.time - b.time);
 
-  if (validPoints.length < 2) {
-    if (validPoints.length === 1) {
-      return (
-        <p className="font-heading text-4xl font-bold tabular-nums tracking-tight text-[var(--voltflow-cyan)]">
-          {validPoints[0].soh.toFixed(1)}
-          <span className="ml-0.5 text-xl font-semibold text-muted-foreground">%</span>
-        </p>
-      );
-    }
-    return null;
-  }
+  if (validPoints.length < 2) return null;
 
   const minTime = validPoints[0].time;
   const maxTime = validPoints[validPoints.length - 1].time;
