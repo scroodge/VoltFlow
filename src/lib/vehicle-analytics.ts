@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { isMissingDatabaseFunction } from "@/lib/database-function-compatibility";
+
 import { enrichTripsWithEnergy } from "@/lib/voltflowmate/attach-trip-energy";
 import { dedupeTripsBySource } from "@/lib/voltflowmate/hero-drive-metrics";
 import {
@@ -275,12 +277,12 @@ export async function fetchPhantomDrain({
       p_to: to.toISOString(),
     });
 
-  // Keep the result correct if the web deployment arrives shortly before the matching
-  // migration. This is deliberately paginated; a one-page fallback reintroduces the
-  // production 1,000-row truncation that this RPC removes.
-  if (error) {
+  // Keep the deployment-order compatibility path, but never amplify a timeout or
+  // database failure into a paginated raw scan.
+  if (error && isMissingDatabaseFunction(error, "bydmate_phantom_drain_daily")) {
     return fetchPhantomDrainFallback({ supabase, userId, vehicleId, from, to });
   }
+  if (error) throw error;
 
   return ((data ?? []) as {
     date: string;

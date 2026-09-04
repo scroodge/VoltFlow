@@ -456,3 +456,36 @@ None reuses the broken `bydmate_enqueue_soh_backfill` `generate_series` shape.
   failures cannot become successful empty data.
 - Remeasure both isolated routes and one warm Analytics page with normal sibling
   load; isolated improvement alone is insufficient.
+
+## Approved steps 1–2 validation
+
+Implementation validation date: **2026-09-04**. No migration, schema change, or
+reader switch was made.
+
+The browser loaded the owner vehicle's year Analytics view through the local
+development proxy against production data. The capture was warm (the route and
+client chunks had already compiled) and retained the page's normal sibling
+requests. The critical requests all started at `12:31:25.101–12:31:25.104Z`;
+the deferred group did not start until `12:31:28.569–12:31:28.570Z`, after the
+last critical request settled.
+
+| Request | Before | After approved scheduling | Result |
+| --- | ---: | ---: | --- |
+| Selected-period telemetry | not separately captured | 0.912 s | HTTP 200 |
+| SOH | not separately captured | 2.517 s | HTTP 200 |
+| Period overview, year | 3.4 s | 3.284 s | HTTP 200 |
+| Phantom drain | 17.9 s, HTTP 200 after fallback | 9.013 s | HTTP 500; explicit panel error |
+| Route insights | 11.3 s | 12.453 s | HTTP 200 |
+| Lifetime map | 10.7 s | 10.459 s | HTTP 200 |
+
+The important scheduling result is the **3.465 s start separation** between
+the critical and noncritical groups. The lower-panel durations remain variable
+and slow when they run together; this change intentionally does not implement
+the unapproved query/schema work recommended later in this document.
+
+The phantom timeout now stops at the failed RPC instead of starting the raw
+compatibility scan. A fresh browser document showed the localized load-error
+message and retry action after the HTTP 500; it did not show the legitimate
+empty-state copy. Route insights returned normally in this capture. Automated
+tests separately exercise its HTTP 500, database-timeout, and empty-result
+states, along with the same three states for phantom drain and period overview.

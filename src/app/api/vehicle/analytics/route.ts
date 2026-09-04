@@ -14,6 +14,7 @@ import {
 } from "@/lib/vehicle-analytics";
 import { mapChargingSession } from "@/lib/db-map";
 import { devVehicleId, resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
+import { resolveCompletePeriodOverview } from "@/lib/period-overview";
 
 export async function GET(request: NextRequest) {
   const access = await resolveVehicleApiAccess(request);
@@ -111,8 +112,8 @@ export async function GET(request: NextRequest) {
       }
       const overlapWindow = params.get("overlap") === "1";
       const estimateNoCharge = params.get("estimateNoCharge") === "1";
-      const [tripsResult, sessionsResult, noChargePriceResult] = await Promise.allSettled([
-        fetchPeriodTripsEnriched({
+      const overview = await resolveCompletePeriodOverview({
+        trips: fetchPeriodTripsEnriched({
           supabase: access.supabase,
           userId: access.userId,
           vehicleId,
@@ -120,14 +121,14 @@ export async function GET(request: NextRequest) {
           to,
           overlapWindow,
         }),
-        fetchPeriodChargingSessions({
+        sessions: fetchPeriodChargingSessions({
           supabase: access.supabase,
           userId: access.userId,
           vehicleId,
           from,
           to,
         }),
-        estimateNoCharge
+        estimatedNoChargeDayPricePerKwh: estimateNoCharge
           ? estimateNoChargeDayPrice({
               supabase: access.supabase,
               userId: access.userId,
@@ -136,26 +137,15 @@ export async function GET(request: NextRequest) {
               dayToIso: to,
             })
           : Promise.resolve(null),
-      ]);
-      if (tripsResult.status === "rejected") {
-        console.error("period-overview trips fetch failed:", tripsResult.reason);
-      }
-      if (sessionsResult.status === "rejected") {
-        console.error("period-overview sessions fetch failed:", sessionsResult.reason);
-      }
-      if (noChargePriceResult.status === "rejected") {
-        console.error("period-overview no-charge price estimate failed:", noChargePriceResult.reason);
-      }
-      const trips = tripsResult.status === "fulfilled" ? tripsResult.value : [];
-      const sessionRows = sessionsResult.status === "fulfilled" ? sessionsResult.value : [];
-      const estimatedNoChargeDayPricePerKwh =
-        noChargePriceResult.status === "fulfilled" ? noChargePriceResult.value : null;
+      });
       return NextResponse.json({
-        trips,
-        sessions: sessionRows.map((row) =>
+        trips: overview.trips,
+        sessions: overview.sessions.map((row) =>
           mapChargingSession(row as Record<string, unknown>),
         ),
-        ...(estimateNoCharge ? { estimatedNoChargeDayPricePerKwh } : {}),
+        ...(estimateNoCharge
+          ? { estimatedNoChargeDayPricePerKwh: overview.estimatedNoChargeDayPricePerKwh }
+          : {}),
       });
     }
 
