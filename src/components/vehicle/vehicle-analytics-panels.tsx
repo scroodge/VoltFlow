@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { AnalyticsDayView } from "@/components/vehicle/analytics-day-view";
@@ -27,6 +27,9 @@ import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useAuxVoltageHistoryQuery } from "@/hooks/use-aux-voltage-history-query";
 import { useVoltflowMateSohHistoryQuery } from "@/hooks/use-voltflowmate-soh-history-query";
 import { resolveSohPanelState } from "@/lib/soh-panel-state";
+import { resolveAnalyticsPanelState } from "@/lib/analytics-panel-state";
+import { readAnalyticsResponse } from "@/lib/analytics-request";
+import { shouldEnableDeferredAnalyticsQuery } from "@/lib/analytics-query-scheduling";
 import { useVoltflowMateTelemetryHistoryQuery } from "@/hooks/use-voltflowmate-telemetry-history-query";
 import type { TelemetryHistoryPoint } from "@/lib/voltflowmate/telemetry-history";
 import { useTranslation } from "@/hooks/use-translation";
@@ -83,8 +86,64 @@ async function fetchAnalytics<T>(path: string): Promise<T> {
   const response = isDevAppRoute()
     ? await devFetch(path)
     : await fetch(path, { cache: "no-store" });
-  if (!response.ok) throw new Error("Failed to load analytics");
-  return response.json() as Promise<T>;
+  return readAnalyticsResponse<T>(response);
+}
+
+function useDeferredAnalyticsSection(criticalQueriesSettled: boolean) {
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const [nearViewport, setNearViewport] = useState(false);
+
+  useEffect(() => {
+    if (nearViewport) return;
+    const section = sectionRef.current;
+    if (!section) return;
+
+    if (typeof IntersectionObserver === "undefined") {
+      const timeout = window.setTimeout(() => setNearViewport(true), 0);
+      return () => window.clearTimeout(timeout);
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        setNearViewport(true);
+        observer.disconnect();
+      },
+      { rootMargin: "600px 0px" },
+    );
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, [nearViewport]);
+
+  return [
+    sectionRef,
+    shouldEnableDeferredAnalyticsQuery({ criticalQueriesSettled, nearViewport }),
+  ] as const;
+}
+
+function AnalyticsLoadError({
+  message,
+  retrying,
+  onRetry,
+}: {
+  message: string;
+  retrying: boolean;
+  onRetry: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="rounded-2xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
+      <p className="text-destructive">{message}</p>
+      <button
+        type="button"
+        className="mt-3 rounded-full border border-border px-3 py-1.5 font-semibold text-foreground transition hover:border-primary/40 disabled:opacity-50"
+        disabled={retrying}
+        onClick={onRetry}
+      >
+        {t("vehicle.analytics.retry")}
+      </button>
+    </div>
+  );
 }
 
 const anchorSelectClassName =
@@ -394,6 +453,7 @@ export function VehicleAnalyticsPanels({
         estimatedNoChargeDayPricePerKwh?: number | null;
       }>(`/api/vehicle/analytics?${params.toString()}`);
     },
+    retry: false,
   });
 
   const baselineQuery = useQuery({
@@ -437,12 +497,22 @@ export function VehicleAnalyticsPanels({
     pointCount: sohQuery.data?.length ?? 0,
   });
 
+  const criticalQueriesSettled =
+    !historyQuery.isFetching &&
+    !periodOverviewQuery.isFetching &&
+    !sohQuery.isFetching;
+  const [phantomSectionRef, phantomEnabled] = useDeferredAnalyticsSection(criticalQueriesSettled);
+  const [routeInsightsSectionRef, routeInsightsEnabled] = useDeferredAnalyticsSection(criticalQueriesSettled);
+  const [lifetimeMapSectionRef, lifetimeMapEnabled] = useDeferredAnalyticsSection(criticalQueriesSettled);
+
   const phantomQuery = useQuery({
     queryKey: ["vehicle-analytics", "phantom", vehicleId],
     queryFn: () =>
       fetchAnalytics<{ rows: { date: string; drainPercent: number; idleHours: number }[] }>(
         `/api/vehicle/analytics?type=phantom&vehicle_id=${encodeURIComponent(vehicleId)}`,
       ),
+    enabled: phantomEnabled,
+    retry: false,
   });
 
   const routeInsightsQuery = useQuery({
@@ -457,6 +527,8 @@ export function VehicleAnalyticsPanels({
       }
       return fetchAnalytics<RouteInsightsResult>(`/api/vehicle/analytics?${params.toString()}`);
     },
+    enabled: routeInsightsEnabled,
+    retry: false,
   });
 
   const mapQuery = useQuery({
@@ -465,6 +537,25 @@ export function VehicleAnalyticsPanels({
       fetchAnalytics<{ points: VoltflowMateTripTrackPointRow[] }>(
         `/api/vehicle/lifetime-map?vehicle_id=${encodeURIComponent(vehicleId)}`,
       ),
+    enabled: lifetimeMapEnabled,
+  });
+
+  const periodOverviewState = resolveAnalyticsPanelState({
+    isLoading: periodOverviewQuery.isLoading,
+    hasError: periodOverviewQuery.status === "error",
+    itemCount: periodTrips.length + periodSessions.length,
+  });
+  const phantomPanelState = resolveAnalyticsPanelState({
+    isLoading: !phantomEnabled || phantomQuery.isLoading,
+    hasError: phantomQuery.status === "error",
+    itemCount: phantomQuery.data?.rows.length ?? 0,
+  });
+  const routeInsightsPanelState = resolveAnalyticsPanelState({
+    isLoading: !routeInsightsEnabled || routeInsightsQuery.isLoading,
+    hasError: routeInsightsQuery.status === "error",
+    itemCount:
+      (routeInsightsQuery.data?.routes.length ?? 0) +
+      (routeInsightsQuery.data?.parkedRoutes.length ?? 0),
   });
 
   const historyPoints = historyQuery.data ?? EMPTY_HISTORY_POINTS;
@@ -625,15 +716,27 @@ export function VehicleAnalyticsPanels({
         />
 
         <div className="mt-4">
-          <HistoryDaySummaryCard
-            summary={periodSummary}
-            loading={periodSummaryLoading}
-            locale={locale as Locale}
-            currency={currency}
-            scope={historyRange}
-            requireCharging={false}
-            estimatedNoChargePricePerKwh={periodOverviewQuery.data?.estimatedNoChargeDayPricePerKwh ?? null}
-          />
+          {periodOverviewState === "error" ? (
+            <AnalyticsLoadError
+              message={tx("vehicle.analytics.periodOverviewLoadError")}
+              retrying={periodOverviewQuery.isFetching}
+              onRetry={() => void periodOverviewQuery.refetch()}
+            />
+          ) : periodOverviewState === "empty" ? (
+            <p className="rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
+              {t("vehicle.analytics.periodOverviewEmpty")}
+            </p>
+          ) : (
+            <HistoryDaySummaryCard
+              summary={periodSummary}
+              loading={periodSummaryLoading}
+              locale={locale as Locale}
+              currency={currency}
+              scope={historyRange}
+              requireCharging={false}
+              estimatedNoChargePricePerKwh={periodOverviewQuery.data?.estimatedNoChargeDayPricePerKwh ?? null}
+            />
+          )}
         </div>
 
         {isDayRange ? (
@@ -651,8 +754,14 @@ export function VehicleAnalyticsPanels({
           />
         ) : (
           <>
-            {historyQuery.isLoading || periodOverviewQuery.isLoading ? (
+            {historyQuery.isLoading || periodOverviewState === "loading" ? (
               <AnalyticsSummaryStatsLoading />
+            ) : periodOverviewState === "error" ? (
+              <AnalyticsLoadError
+                message={tx("vehicle.analytics.periodOverviewLoadError")}
+                retrying={periodOverviewQuery.isFetching}
+                onRetry={() => void periodOverviewQuery.refetch()}
+              />
             ) : (
               <AnalyticsSummaryStats summary={summary} chargedKwh={periodSummary.chargedKwh > 0 ? periodSummary.chargedKwh : null} />
             )}
@@ -760,9 +869,15 @@ export function VehicleAnalyticsPanels({
           ) : null}
         </div>
         <div className="mt-4">
-          {periodOverviewQuery.isLoading ? (
+          {periodOverviewState === "loading" ? (
             <Skeleton className="h-40 rounded-2xl" />
-          ) : periodOverviewQuery.error || chargeDeltaTrend.fullCharges.length === 0 ? (
+          ) : periodOverviewState === "error" ? (
+            <AnalyticsLoadError
+              message={tx("vehicle.analytics.periodOverviewLoadError")}
+              retrying={periodOverviewQuery.isFetching}
+              onRetry={() => void periodOverviewQuery.refetch()}
+            />
+          ) : chargeDeltaTrend.fullCharges.length === 0 ? (
             <p className="rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
               {t("vehicle.analytics.cellDeltaNoData")}
             </p>
@@ -826,12 +941,20 @@ export function VehicleAnalyticsPanels({
         </section>
       ) : null}
 
-      <section className="voltflow-card p-5">
+      <section ref={phantomSectionRef} className="voltflow-card p-5">
         <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.phantomTitle")}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.phantomSubtitle")}</p>
-        {phantomQuery.isLoading ? (
+        {phantomPanelState === "loading" ? (
           <Skeleton className="mt-4 h-52 rounded-2xl" />
-        ) : (phantomQuery.data?.rows.length ?? 0) === 0 ? (
+        ) : phantomPanelState === "error" ? (
+          <div className="mt-4">
+            <AnalyticsLoadError
+              message={tx("vehicle.analytics.phantomLoadError")}
+              retrying={phantomQuery.isFetching}
+              onRetry={() => void phantomQuery.refetch()}
+            />
+          </div>
+        ) : phantomPanelState === "empty" ? (
           <p className="mt-4 text-sm text-muted-foreground">{t("vehicle.analytics.phantomEmpty")}</p>
         ) : (
           <div className="mt-4">
@@ -852,24 +975,27 @@ export function VehicleAnalyticsPanels({
         </section>
       ) : null}
 
-      <section className="voltflow-card p-5">
+      <section ref={routeInsightsSectionRef} className="voltflow-card p-5">
         <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.routeInsightsTitle")}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.routeInsightsSubtitle")}</p>
         <RouteInsightsSection
           routes={routeInsightsQuery.data?.routes ?? []}
           parkedRoutes={routeInsightsQuery.data?.parkedRoutes ?? []}
-          isLoading={routeInsightsQuery.isLoading}
+          isLoading={routeInsightsPanelState === "loading"}
+          hasError={routeInsightsPanelState === "error"}
+          onRetry={() => void routeInsightsQuery.refetch()}
+          isRetrying={routeInsightsQuery.isFetching}
           vehicleId={vehicleId}
         />
       </section>
 
-      <section className="voltflow-card p-5">
+      <section ref={lifetimeMapSectionRef} className="voltflow-card p-5">
         <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.lifetimeMapTitle")}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.lifetimeMapSubtitle")}</p>
         <div className="mt-4">
           <RouteMap
             trackPoints={mapQuery.data?.points ?? []}
-            isLoading={mapQuery.isLoading}
+            isLoading={!lifetimeMapEnabled || mapQuery.isLoading}
             hasError={Boolean(mapQuery.error)}
             embedded
           />
