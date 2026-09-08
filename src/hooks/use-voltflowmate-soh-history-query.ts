@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { devFetch, isDevAppRoute } from "@/lib/dev/dev-fetch";
-import { buildSohHistoryPath } from "@/lib/soh-history-request";
+import { buildSohHistoryPath, readSohHistoryResponse } from "@/lib/soh-history-request";
 import type { TelemetryHistoryPoint } from "@/lib/voltflowmate/telemetry-history";
 import type { TelemetryHistoryRange } from "@/lib/voltflowmate/telemetry-ranges";
 import { queryKeys } from "@/lib/query-keys";
@@ -18,10 +18,7 @@ async function fetchSohHistory(
     ? await devFetch(path)
     : await fetch(path, { cache: "no-store" });
 
-  if (!response.ok) throw new Error("Failed to load SOH history");
-
-  const payload = (await response.json()) as { points: TelemetryHistoryPoint[] };
-  return payload.points ?? [];
+  return readSohHistoryResponse<TelemetryHistoryPoint>(response);
 }
 
 export function useVoltflowMateSohHistoryQuery({

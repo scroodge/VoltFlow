@@ -1,4 +1,4 @@
-export type SohPanelState = "loading" | "error" | "empty" | "ready";
+export type SohPanelState = "loading" | "error" | "empty" | "single" | "ready";
 
 export function resolveSohPanelState({
   isLoading,
@@ -12,5 +12,6 @@ export function resolveSohPanelState({
   if (isLoading) return "loading";
   if (hasError) return "error";
   if (pointCount === 0) return "empty";
+  if (pointCount === 1) return "single";
   return "ready";
 }

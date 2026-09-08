@@ -18,8 +18,14 @@ set search_path = public
 as $$
 declare
   v_today date := (statement_timestamp() at time zone 'UTC')::date;
+  v_effective_from timestamptz;
 begin
-  if p_to < p_from then
+  v_effective_from := case
+    when public.is_user_premium(p_user_id, statement_timestamp()) then p_from
+    else greatest(p_from, statement_timestamp() - interval '30 days')
+  end;
+
+  if p_to < v_effective_from then
     return;
   end if;
 
@@ -27,23 +33,23 @@ begin
     return query
     with raw_windows as (
       select
-        greatest(p_from, ((v_today - 1)::timestamp at time zone 'UTC')) as window_from,
+        greatest(v_effective_from, ((v_today - 1)::timestamp at time zone 'UTC')) as window_from,
         p_to as window_to
       where p_to >= ((v_today - 1)::timestamp at time zone 'UTC')
       union all
       select
-        p_from,
+        v_effective_from,
         least(
           p_to,
-          (((p_from at time zone 'UTC')::date + 1)::timestamp at time zone 'UTC')
+          (((v_effective_from at time zone 'UTC')::date + 1)::timestamp at time zone 'UTC')
             - interval '1 millisecond'
         )
-      where p_from > ((p_from at time zone 'UTC')::date::timestamp at time zone 'UTC')
-        and (p_from at time zone 'UTC')::date < v_today - 1
+      where v_effective_from > ((v_effective_from at time zone 'UTC')::date::timestamp at time zone 'UTC')
+        and (v_effective_from at time zone 'UTC')::date < v_today - 1
       union all
       select
         greatest(
-          p_from,
+          v_effective_from,
           ((p_to at time zone 'UTC')::date::timestamp at time zone 'UTC')
         ),
         p_to
@@ -52,7 +58,7 @@ begin
             - interval '1 millisecond'
         )
         and (p_to at time zone 'UTC')::date < v_today - 1
-        and (p_to at time zone 'UTC')::date <> (p_from at time zone 'UTC')::date
+        and (p_to at time zone 'UTC')::date <> (v_effective_from at time zone 'UTC')::date
     ),
     rolled_up as (
       select r.device_time, r.soh_percent
@@ -60,9 +66,9 @@ begin
       where r.user_id = p_user_id
         and r.vehicle_id = p_vehicle_id
         and r.date < v_today - 1
-        and (r.date::timestamp at time zone 'UTC') >= p_from
+        and (r.date::timestamp at time zone 'UTC') >= v_effective_from
         and (((r.date + 1)::timestamp at time zone 'UTC') - interval '1 millisecond') <= p_to
-        and r.device_time >= p_from
+        and r.device_time >= v_effective_from
         and r.device_time <= p_to
     ),
     raw_boundaries as (
@@ -95,23 +101,23 @@ begin
     return query
     with raw_windows as (
       select
-        greatest(p_from, ((v_today - 1)::timestamp at time zone 'UTC')) as window_from,
+        greatest(v_effective_from, ((v_today - 1)::timestamp at time zone 'UTC')) as window_from,
         p_to as window_to
       where p_to >= ((v_today - 1)::timestamp at time zone 'UTC')
       union all
       select
-        p_from,
+        v_effective_from,
         least(
           p_to,
-          (((p_from at time zone 'UTC')::date + 1)::timestamp at time zone 'UTC')
+          (((v_effective_from at time zone 'UTC')::date + 1)::timestamp at time zone 'UTC')
             - interval '1 millisecond'
         )
-      where p_from > ((p_from at time zone 'UTC')::date::timestamp at time zone 'UTC')
-        and (p_from at time zone 'UTC')::date < v_today - 1
+      where v_effective_from > ((v_effective_from at time zone 'UTC')::date::timestamp at time zone 'UTC')
+        and (v_effective_from at time zone 'UTC')::date < v_today - 1
       union all
       select
         greatest(
-          p_from,
+          v_effective_from,
           ((p_to at time zone 'UTC')::date::timestamp at time zone 'UTC')
         ),
         p_to
@@ -120,7 +126,7 @@ begin
             - interval '1 millisecond'
         )
         and (p_to at time zone 'UTC')::date < v_today - 1
-        and (p_to at time zone 'UTC')::date <> (p_from at time zone 'UTC')::date
+        and (p_to at time zone 'UTC')::date <> (v_effective_from at time zone 'UTC')::date
     ),
     vehicles as (
       select distinct c.vehicle_alias as vehicle_id
@@ -133,9 +139,9 @@ begin
       from public.bydmate_soh_daily_rollups r
       where r.user_id = p_user_id
         and r.date < v_today - 1
-        and (r.date::timestamp at time zone 'UTC') >= p_from
+        and (r.date::timestamp at time zone 'UTC') >= v_effective_from
         and (((r.date + 1)::timestamp at time zone 'UTC') - interval '1 millisecond') <= p_to
-        and r.device_time >= p_from
+        and r.device_time >= v_effective_from
         and r.device_time <= p_to
       order by r.date, r.device_time desc
     ),
@@ -170,5 +176,5 @@ begin
 end;
 $$;
 
-revoke all on function public.bydmate_soh_daily(uuid, text, timestamptz, timestamptz) from public;
+revoke all on function public.bydmate_soh_daily(uuid, text, timestamptz, timestamptz) from public, anon;
 grant execute on function public.bydmate_soh_daily(uuid, text, timestamptz, timestamptz) to authenticated, service_role;

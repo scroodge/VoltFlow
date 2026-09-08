@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { isMissingDatabaseFunction } from "@/lib/database-function-compatibility";
+
 import { enrichTripsWithEnergy } from "@/lib/voltflowmate/attach-trip-energy";
 import {
   haversineMeters,
@@ -377,9 +379,10 @@ async function fetchRouteInsightInputs({
     p_track_limit: 500,
   });
 
-  // Keep route insights available during the short window where the web deployment
-  // has landed ahead of its matching database migration.
-  if (error) return null;
+  // Keep the deployment-order compatibility path, but expose operational failures
+  // instead of silently replacing them with slower per-trip reads.
+  if (error && isMissingDatabaseFunction(error, "bydmate_route_insight_inputs")) return null;
+  if (error) throw error;
 
   const inputs = new Map<string, RouteInsightInput>();
   for (const row of (data ?? []) as {

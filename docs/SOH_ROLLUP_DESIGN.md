@@ -2,10 +2,14 @@
 
 ## Status and scope
 
-This design is approved and implemented in three separately applicable
-migrations. It does not authorize a production rollout: the scheduling and
-reader-switch migrations remain gated on the production parity and backfill
-checks below.
+This design is approved. Production rollout phases 1 through 4 completed on
+2026-09-04: the schema is installed, production parity is exact, all 404
+eligible retained vehicle-days are populated with zero gaps, the three cron
+jobs are active, and the premium-gated rollup reader is live. The reader switch
+includes the section 5 retention gate and passed its entitlement and production
+performance gates. Phase 5, the client range and error/empty-state change,
+remains outside this rollout phase and must not be inferred from the database
+reader status.
 
 The database performance change and the client error/range correction are two
 independently landable changes. The database reader keeps its existing public
@@ -13,9 +17,10 @@ interface, so neither change has to wait for the other.
 
 ## Context
 
-`bydmate_soh_daily` currently scans `bydmate_telemetry_samples`, parses
-`telemetry.soh_percent`, sorts raw rows by UTC date and descending device time,
-and takes one row per day. For the owner vehicle's rolling-year window, the
+Before the phase 4 reader switch, `bydmate_soh_daily` scanned
+`bydmate_telemetry_samples`, parsed
+`telemetry.soh_percent`, sorted raw rows by UTC date and descending device time,
+and took one row per day. For the owner vehicle's rolling-year window, the
 planner estimated 187,718 candidate index entries. The authenticated production
 call exceeded the 8-second `statement_timeout` and returned HTTP 500 instead of
 rows.
@@ -226,12 +231,39 @@ purge is separate, deletes only dates older than five years, and is safe to reru
 Changing five years later requires an explicit product decision backed by table
 and index size measurements.
 
-This policy also means access to historical SOH rollups is no longer equivalent
-to access to retained raw telemetry. If product policy intends history beyond 30
-days to remain premium-only, enforce that explicitly in the reader/interface;
-do not rely on accidental raw deletion. The recommendation is to let all vehicle
-owners retain their five-year derived SOH trend, matching auxiliary rollups,
-unless product states otherwise before implementation.
+### Premium read gate (decided)
+
+SOH history beyond the free-tier raw window is a premium feature. The rollup
+table still retains five years for every account, but retention and visibility
+are deliberately separate policies. `bydmate_soh_daily` must enforce the tier
+gate explicitly; raw telemetry deletion must never be the access-control
+mechanism.
+
+At the start of each statement, resolve entitlement with the existing
+`public.is_user_premium(p_user_id, statement_timestamp())`, which includes
+admins, permanent premium flags, and unexpired `premium_until` terms. Derive one
+effective lower bound and use it in **both** the rollup and bounded-raw branches:
+
+```sql
+v_effective_from := case
+  when public.is_user_premium(p_user_id, statement_timestamp()) then p_from
+  else greatest(p_from, statement_timestamp() - interval '30 days')
+end;
+```
+
+Return immediately when `p_to < v_effective_from`. Every timestamp and full-day
+eligibility predicate in the reader must use `v_effective_from`, not the
+caller-supplied `p_from`, so a free account cannot recover an older rollup row
+through a partial boundary or nullable-vehicle branch. RLS remains responsible
+for ownership; this lower bound is the separate product-entitlement gate.
+
+Reader-phase tests must cover free, permanent-premium, active-term, expired-term,
+and admin users. They must prove that free users receive no points older than
+the exact 30-day cutoff even while those rows remain stored, while entitled
+users can read the full requested range up to the five-year rollup retention.
+Production parity comparisons must distinguish intentional free-tier filtering
+from aggregation mismatches and still require exact timestamp/value parity
+inside the entitled window.
 
 ## 6. Chunked backfill
 
@@ -370,20 +402,17 @@ a stable user-safe error response. Tests must assert that an HTTP 500 reaches
 the error branch and that an empty `points` response reaches only the empty
 branch.
 
-### Selected range
+### Selected range (decided)
 
-The recommendation is to remove the hardcoded year and make SOH follow the
-Analytics range selection. Pass `range` through the hook, query key, route, and
-`fetchSohTelemetryHistory`, validate it with the existing range parser, and use
+SOH follows the Analytics range selection. Remove the hardcoded year; pass
+`range` through the hook, query key, route, and `fetchSohTelemetryHistory`,
+validate it with the existing range parser, and use
 `resolveTelemetryWindow(range, anchorDate)`.
 
 This makes the interface match what the page communicates, avoids surprising
-users, and makes cache entries range-correct. A day range may contain only one
-daily SOH point; the panel should present the latest value and avoid implying a
-trend when fewer than two points exist. If product instead wants SOH to always
-mean a rolling year, remove its dependence on the page selector and label the
-panel "Last 12 months" explicitly. Keeping an unlabeled hardcoded year is the
-bad option.
+users, and makes cache entries range-correct. When fewer than two points exist,
+the panel presents the latest value without trend language or a misleading
+single-point trend visualization.
 
 ## 10. Deliberate non-goals
 

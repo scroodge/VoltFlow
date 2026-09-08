@@ -20,3 +20,10 @@ export function buildSohHistoryPath({
   if (vehicleId) params.set("vehicle_id", vehicleId);
   return `/api/vehicle/telemetry/soh?${params.toString()}`;
 }
+
+export async function readSohHistoryResponse<T>(response: Response): Promise<T[]> {
+  if (!response.ok) throw new Error("Failed to load SOH history");
+
+  const payload = (await response.json()) as { points?: T[] };
+  return payload.points ?? [];
+}

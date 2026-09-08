@@ -338,11 +338,17 @@ export function RouteInsightsSection({
   routes,
   parkedRoutes,
   isLoading,
+  hasError,
+  onRetry,
+  isRetrying,
   vehicleId,
 }: {
   routes: RouteInsight[];
   parkedRoutes: ParkedRouteInsight[];
   isLoading: boolean;
+  hasError: boolean;
+  onRetry: () => void;
+  isRetrying: boolean;
   vehicleId: string;
 }) {
   const { t } = useTranslation();
@@ -351,6 +357,17 @@ export function RouteInsightsSection({
 
   if (isLoading) {
     return <RouteInsightsLoading tx={tx} />;
+  }
+
+  if (hasError) {
+    return (
+      <div className="mt-4 rounded-2xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
+        <p className="text-destructive">{tx("vehicle.analytics.routeInsightsLoadError")}</p>
+        <Button className="mt-3" size="sm" variant="outline" disabled={isRetrying} onClick={onRetry}>
+          {tx("vehicle.analytics.retry")}
+        </Button>
+      </div>
+    );
   }
 
   if (routes.length === 0 && parkedRoutes.length === 0) {
