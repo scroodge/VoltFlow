@@ -4,6 +4,173 @@ Per the agent workflow in [AGENTS.md](AGENTS.md): **plan first, build only on ex
 go-ahead.** These are researched but **not built**. Shipped work lives in
 [CHANGELOG.md](CHANGELOG.md).
 
+## 🔵 Knowledge-base import from an external parser (JSON in → draft articles)
+
+### Goal
+
+An external parser (currently DRIVE2 posts, see `research/article_parsed.json`) produces
+JSON per article. VoltFlow ingests it as `knowledge_articles` rows that are visible to
+semantic search, land as **drafts**, and are reviewed in `/admin/knowledge` before
+publication.
+
+### Evidence — what the current code requires
+
+- `validateArticle` (`src/actions/knowledge-admin.ts:542`) is the real gate:
+  `title`, `slug`, `category_id`, non-empty `content`, non-empty `model_generations`,
+  a valid `status`, and a slug unique in `knowledge_articles`.
+- `slugify` (`knowledge-admin.ts:705`) strips everything outside `a-z0-9`, so a Cyrillic
+  title yields an **empty** slug and fails validation. The parser must send a latin slug.
+- A plain SQL insert is not enough: semantic search reads `knowledge_items`, whose
+  1536-dim embedding is built in app code by `upsertArticleKnowledgeItem`
+  (`src/lib/supabase/knowledge.ts:680`). There is no DB trigger. This is the same reason
+  `scripts/seed-knowledge-articles.mjs` exists rather than a migration.
+- `summary`, section `heading`/`body`, and section image `alt` all feed the embedding
+  text — empty alts mean the photos contribute nothing to retrieval.
+- `createArticle` (`knowledge.ts:241`) uses the **user-scoped** client and relies on the
+  admin RLS policy, so it cannot serve a machine caller as-is; a machine path needs
+  `getSupabaseAdmin()` plus its own auth, the way
+  `src/app/api/admin/knowledge/reindex/route.ts` separates `requireAdmin` from the
+  service-role work.
+
+### Images — hotlink vs rehost (measured, 2026-09-08)
+
+- Every knowledge-base `<Image>` passes `unoptimized` (`ArticleRenderer.tsx:130,152,187`;
+  also `ArticleCard`, `SparePartsCatalog`, the spare-part and accessory pages). With
+  `unoptimized`, `generateImgAttrs` returns early
+  (`node_modules/next/dist/shared/lib/get-img-props.js:96-113`) and never calls the
+  loader, so the `remotePatterns` check at `image-loader.js:96` never runs. **External
+  image URLs render today with no `next.config.ts` change.**
+- `https://a1.drive-data.ru/...jpg` returns `206 image/jpeg` with no Referer and with a
+  `voltflow.life` Referer — no hotlink protection at present.
+- Costs of hotlinking: silent link rot (no `onError` handler anywhere in
+  `ArticleRenderer` — a deleted photo renders a broken-image icon in a published
+  article); the CDN can add Referer checking at any time and break every imported article
+  at once; `public/sw.js:56` skips cross-origin, so hotlinked photos are never cached for
+  the PWA / Mini App; each viewer's IP and Referer leak to drive-data.ru.
+- Copyright cuts the other way: rehosting copies and redistributes someone else's photos,
+  hotlinking does not. `source_label` + `source_url` carry attribution either way.
+
+**Recommendation: link-first, rehost on promotion.** Import with original URLs, and
+rehost only articles kept published long-term. Each image object carries `origin_url` and
+`hosted` so a later rehost is mechanical. `parseImages` (`knowledge.ts:977`) strips
+everything but `url`/`alt` for the UI, so the extra keys are inert in the app while
+Postgres preserves them in the `jsonb` column for the rehost script to read.
+
+### Data ownership and location — confirmation required before building
+
+- **App-owned editorial content, not user data.** Imported articles are VoltFlow's public
+  knowledge base, authored/curated by admins; no `auth.uid()` scoping applies.
+- **Lives in Postgres** (`knowledge_articles` + the derived `knowledge_items` search row),
+  which is where the knowledge base already lives. Nothing goes to localStorage.
+- Images stay at the origin CDN on import; only promoted articles move into the existing
+  `knowledge-articles` Supabase storage bucket.
+
+### Options and trade-offs
+
+**A. HTTP push endpoint — `POST /api/knowledge/import` (recommended).**
+Shared-secret header (`x-import-key`, hashed the way `voltflowmate/api-auth.ts` handles
+Mate keys), service-role writes, accepts one article or a batch, returns per-article
+results. Matches "the parser sends us JSON" literally: the parser fires and forgets, no
+machine access to the repo or the DB. Costs: a new public attack surface that must be
+rate-limited and secret-gated, and a Vercel function that calls OpenAI for embeddings
+(seconds per article — batch size must be capped).
+
+**B. CLI script — `scripts/import-knowledge-articles.mjs <file.json>`.**
+Mirrors `seed-knowledge-articles.mjs`; the parser drops JSON files somewhere and a human
+runs the import. No new attack surface, trivially auditable, easy dry-run. Costs: manual
+step, no automation, only works from a machine holding `SUPABASE_SERVICE_ROLE_KEY` and
+`OPENAI_API_KEY`.
+
+**C. Admin UI upload — paste/upload JSON in `/admin/knowledge`.**
+Reuses `requireAdmin` and the existing forms, gives a preview before writing. Costs: the
+most UI work; still manual; awkward for batches.
+
+**Recommendation: build B first, then A on top of the same core.** Extract one
+`importKnowledgeArticles(payload)` module used by both, so the endpoint is a thin
+authenticated wrapper. B proves the mapping and the embedding path against real parser
+output with zero exposure; A is a small addition once the shape is stable.
+
+### Contract — the JSON the parser sends
+
+```json
+{
+  "source": "drive2",
+  "articles": [
+    {
+      "slug": "side-trim-matte-black-film",
+      "title": "Закрыл пленкой боковой китайский орнамент",
+      "summary": "Матовая черная пленка на боковых вставках нижнего пластика.",
+      "category": "ownership",
+      "model_generations": ["gen1_2024", "gen2_2025"],
+      "status": "draft",
+      "tags": ["тюнинг", "пленка", "салон"],
+      "source_label": "DRIVE2",
+      "source_url": "https://www.drive2.ru/l/...",
+      "images": [],
+      "content": [
+        {
+          "heading": "Как затягивал вставки",
+          "body": "…",
+          "images": [
+            {
+              "url": "https://a1.drive-data.ru/hNtEbIuvXvPIJ9PxLIskirldadc-960.jpg",
+              "alt": "Боковая вставка, оклеенная матовой черной пленкой",
+              "origin_url": "https://a1.drive-data.ru/hNtEbIuvXvPIJ9PxLIskirldadc-960.jpg",
+              "hosted": false
+            }
+          ]
+        }
+      ],
+      "tips": ["Пленка заказывалась на Ozon: ozon.kz/t/TORTFDT"],
+      "warnings": ["Требуется полный демонтаж нижнего пластика."]
+    }
+  ]
+}
+```
+
+Rules: `category` is a **slug** resolved against `knowledge_categories`
+(`charging, ownership, maintenance, accessories, calculators, battery, winter, safety,
+costs, byd-yuan-up`) — an unknown slug rejects the article rather than guessing.
+`slug` must be latin and is the idempotency key. `status` is forced to `draft` on import
+regardless of what the parser sends; publication is a human decision in `/admin/knowledge`.
+A block with empty `heading`, empty `body`, and no images is dropped (`parseSections`).
+
+### Implementation phases after approval
+
+1. `src/lib/knowledge/import-article.ts` — zod schema (zod 4 is already a dependency)
+   mirroring `validateArticle`, plus `toArticleInput()` mapping the payload onto
+   `ArticleInput`. Pure module, unit-tested with `.test.mjs` alongside it.
+2. `importKnowledgeArticles()` — resolve category slug → id, upsert by slug via
+   `getSupabaseAdmin()`, then run the embedding upsert (the `upsertArticleKnowledgeItem`
+   path) so the article is searchable. Per-article results: `created` / `updated` /
+   `skipped` / `error` with a reason.
+3. `scripts/import-knowledge-articles.mjs` — `--dry-run` default-on reporting, `--file`,
+   loads env the way `seed-knowledge-articles.mjs` does.
+4. `POST /api/knowledge/import` — shared-secret auth, batch cap, rate limit, returns the
+   same per-article result array.
+5. Hardening for link-first images: `onError` fallback in `ArticleRenderer` so a dead
+   hotlink degrades to a placeholder instead of a broken icon, plus a link-check script
+   that reports rotted URLs.
+6. Optional later: `scripts/rehost-knowledge-images.mjs` — download `origin_url`, upload
+   to the `knowledge-articles` bucket, rewrite `url`, set `hosted: true`.
+
+### Verification
+
+- `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/knowledge/import-article.test.mjs`
+- `npm run test`, `npm run lint`, `npm run build`
+- Dry-run the script against `research/article_parsed.json` mapped to the contract above,
+  then a real import of one article, then `npm run search:eval` to confirm retrieval did
+  not regress.
+
+### Acceptance criteria
+
+- A parser payload imports as a **draft** article that is retrievable by semantic search
+  (a `knowledge_items` row with an embedding exists).
+- Re-importing the same payload updates the same row and creates no duplicate.
+- An unknown category slug, an empty/non-latin slug, or empty content rejects **that
+  article** with a reason and does not abort the batch.
+- No `next.config.ts` image change is required for hotlinked photos to render.
+
 ## ✅ A power-less telemetry sample must not reset the zero-power stall (approved 2026-08-28)
 
 ### Evidence
