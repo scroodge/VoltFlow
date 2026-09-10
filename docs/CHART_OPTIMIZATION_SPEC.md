@@ -167,9 +167,11 @@ type ChartDescriptor = {
 - The year SoH chart fetches one latest valid point per UTC day through its read RPC,
   rather than one client query per calendar day. Its partial telemetry index exists
   specifically for rows containing `soh_percent`.
-- Route insights use one bounded RPC for all displayed trips (tracks plus temperature
-  averages), instead of serial per-trip track and telemetry requests. The direct-query
-  fallback exists only while a web deployment waits for its matching migration.
+- Route insights use one bounded RPC over `bydmate_trip_insight_inputs`: a compact,
+  user-scoped per-trip projection written after a valid trip closes. The projection holds the
+  representative track and temperature averages that the reader would otherwise derive from
+  raw tables for up to 80 trips. Do not restore per-request raw track/telemetry fan-out; it
+  exceeded the production request budget as telemetry grew.
 - Analytics charging sessions always resolve `vehicle_id` through
   `cars.vehicle_alias` and filter `charging_sessions.car_id`. A user with two cars
   must never see another car's charging cost or sessions in a vehicle period summary.

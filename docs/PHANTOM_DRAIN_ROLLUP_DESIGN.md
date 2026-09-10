@@ -4,9 +4,12 @@
 
 Design date: **2026-09-04**.
 
-This is a design and proof plan only. No migration, table, function, queue row,
-cron job, backfill, or reader change has been applied to production. Each
-rollout phase below requires a separate approval and stops at its boundary.
+Shipped on **2026-09-10** after production parity proof and a bounded backfill.
+Schema migration `20260908120000` supplies the table, queue, materialiser, and
+frozen baseline; `20260910160000` activates the reader and maintenance schedule;
+`20260910161000` keeps the baseline private while inlining the same bounded raw
+boundary calculation for the security-invoker reader. Evidence is recorded in
+[`PHANTOM_DRAIN_ROLLUP_PARITY_EVIDENCE.md`](PHANTOM_DRAIN_ROLLUP_PARITY_EVIDENCE.md).
 
 ## Owner-decided product policies
 

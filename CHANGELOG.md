@@ -9,6 +9,44 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-09-10
+
+### Phantom Drain Analytics no longer times out
+
+Phantom Drain now reads user-scoped completed-day rollups instead of running the parked-SOC
+window calculation over fourteen days of raw telemetry for every Analytics request. The
+existing materialiser was parity-proven against its frozen raw baseline, the current window
+was populated in paced one-vehicle-day transactions, and three independent jobs now enqueue,
+process, and purge the rollups. Only the small timestamp boundary dates still read raw data.
+
+The public reader remains authenticated and `SECURITY INVOKER`; the raw baseline remains
+restricted to service role. A follow-up migration inlined the bounded boundary calculation
+after the first activation check caught the privilege boundary before user traffic.
+
+#### Verification
+
+The committed fixture and production `way` parity checks had zero mismatches. The final
+simulated authenticated owner read returned 15 rows in **450.915 ms**; a different
+authenticated user received zero rows. Production queue depth was 0 and all three maintenance
+jobs were registered. See [Phantom Drain parity evidence](docs/PHANTOM_DRAIN_ROLLUP_PARITY_EVIDENCE.md).
+
+### Route Insights no longer times out on `way`
+Route Insights now reads a compact, user-scoped per-trip projection instead of rebuilding
+GPS tracks and temperature averages from raw telemetry for the latest 80 trips on every
+Analytics load. The projection is refreshed by a deferred close trigger after junk-trip
+deletion, covers both legacy and client-owned trip finalization, is owner-readable under RLS,
+and is deleted automatically when its trip is discarded.
+
+The bounded production backfill created 80 inputs for `way`. The authenticated reader returned
+all 80 in **1.795 ms** / 250 buffer hits, down from **19.287 s** / roughly 2.0 million block
+reads; its five eligible, unparked repeat-route groups are now available to the API.
+
+#### Verification
+
+The idempotent migration was applied to self-hosted production. Authenticated production checks
+confirmed owner-scoped access and 80 usable projected tracks; `EXPLAIN ANALYZE` measured the
+new reader. The local dev server was not running, so a browser-level local API check was not run.
+
 ## 2026-09-03
 
 ### Recovery energy graph synchronizes with the trip route

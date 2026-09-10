@@ -18,6 +18,12 @@ samples, which are not tagged `client_trip`:
 - **Close** — the trip closes when a sample shows charging, gear **P** (with the
   `speed ≤ 5` guard, migration `20260612120000`), or the 5-minute gap elapses. On close the
   row is run through `bydmate_discard_trip_if_junk`; survivors get `bydmate_finalize_trip_energy`.
+- **Route-insight projection** — at transaction commit, every surviving closed trip with at
+  least two GPS points refreshes one compact `bydmate_trip_insight_inputs` row. It contains
+  the bounded representative track and the per-trip temperature averages already used by
+  Route Insights. The deferred trigger runs after junk-trip deletion, so discarded rows
+  have no projection; it moves this expensive derivation out of the interactive Analytics
+  request without changing trip facts or GPS collection.
 
 ### Client-owned trip finalization (`client_trip`)
 
@@ -32,6 +38,10 @@ next-boot finalizer closes a stale local trip after 20 minutes. The 5-minute ser
 is deliberately skipped for a `client_trip` row, because it could close an active client-owned
 trip while later cumulative blocks are still arriving. It remains the fallback for legacy APKs
 and untagged daemon traffic.
+
+A final client-owned trip also reaches the same deferred route-insight projection trigger when
+its `ended_at` is accepted. It therefore has the same compact route data when it contains GPS,
+while summary-only inputs with no track remain absent from route analytics.
 
 `bydmate_trip_finalization_audits` records the first server acceptance of each final client
 block (not an HTTP attempt): client end time, server acceptance time, and delivery delay. It
