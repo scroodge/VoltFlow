@@ -37,8 +37,10 @@ begin
     raise exception 'Queue RLS is disabled';
   end if;
   foreach role_name in array array['anon', 'authenticated'] loop
-    if has_table_privilege(role_name, 'public.bydmate_pending_charging_samples', 'SELECT,INSERT,UPDATE,DELETE')
-      or has_table_privilege(role_name, 'public.bydmate_auto_charging_session_state', 'INSERT,UPDATE,DELETE') then
+    if has_table_privilege(role_name, 'public.bydmate_pending_charging_samples',
+        'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      or has_table_privilege(role_name, 'public.bydmate_auto_charging_session_state',
+        'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') then
       raise exception 'Unexpected client table privilege for %', role_name;
     end if;
     for fn in select p.oid::regprocedure from pg_proc p join pg_namespace n on n.oid = p.pronamespace
