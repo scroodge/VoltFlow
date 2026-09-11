@@ -29,7 +29,14 @@ Verification: 15 new focused cases pass, including an in-memory optimistic-commi
 for overlapping workers and failure recovery. TypeScript passes. The full suite reports
 476 passes and the same three prior failures (charging-math expectation and two runtime
 alias imports). Actual Postgres atomicity, RLS and rollback checks remain outstanding.
-Remaining work: persist/review the new migration and SQL integration checks, connect
+Resume status (2026-09-11): draft migration
+`supabase/migrations/20260911140000_charging_atomic_progression.sql` now exists,
+but is NOT ready to apply. Its queue projection must preserve the Di+ gun-state
+context used by the sustained-charging predicate. The patch helper initially worked,
+then failed again with a missing vendor executable; the installed CLI correction was
+blocked by DCG, including escalation. No database changes or deployment were performed.
+
+Remaining work: correct/review the draft migration and add SQL integration checks, connect
 the atomic adapter, make charging-processing failure return a retryable application NACK,
 verify recovery/rollout behavior, and reconcile the final domain documentation.
 
