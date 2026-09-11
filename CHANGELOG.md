@@ -30,8 +30,11 @@ explicit `BEGIN READ ONLY` verification found RLS enabled, no privilege of any
 kind for `anon` or `authenticated`, and required service-role DML intact. The
 three atomic charging RPCs remain non-executable by browser roles and executable
 by `service_role`; pending queue depth remained zero. The rollback contract test
-was tightened to cover every table privilege but awaits an explicitly selected,
-empty test account. No application deployment was performed.
+then passed against the preflight-clean `way` account: it covered queue
+deduplication and projection, stale-version rejection, injected-operation rollback,
+atomic start/stop, replay rejection, and the complete table/RPC privilege boundary.
+The final read-only check confirmed zero open sessions and zero queued samples left
+by the test. No application deployment was performed.
 
 ### Review point 1 — safe trip preview and complete test discovery
 

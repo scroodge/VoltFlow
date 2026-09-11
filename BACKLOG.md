@@ -1,5 +1,331 @@
 # Backlog — proposed plans awaiting go-ahead
 
+## Whole-project audit — 2026-09-11 (proposed fixes, not implemented)
+
+Reviewed checkout `a9a7cbf` across authentication, database authorization, charging,
+telemetry/trip delivery, exports, notifications, service records/storage, browser
+state, public content, pairing, deployment and verification tooling. Preserved the
+pre-existing CHANGELOG edit. This is a broad risk-based review, not a claim that
+every line or every runtime combination was tested. No application fixes, migration
+applications, account mutations, deployments, builds, lint or test runs were made.
+Production checks were SELECT-only inside explicit `BEGIN READ ONLY` / `ROLLBACK`.
+No personal records, credentials, private endpoints or raw operational logs are
+retained here. Security paths were traced without exploiting them.
+
+Evidence labels: **DB verified** means current production catalogs were inspected;
+**source verified** means a concrete failure path exists in this checkout, but an
+incident or deployed-source parity is not asserted. P0 = immediate security priority;
+P1 = high-impact security/data integrity; P2 = correctness/reliability. These IDs are
+local to this audit and deliberately do not reuse the companion project's B-numbers.
+
+### AUD-01 — P0: Telegram session minting trusts a client-writable email
+
+**DB + source verified.** Authenticated users have UPDATE on `profiles.email` and
+`telegram_id`; profile UPDATE RLS checks only `auth.uid() = id`. The only attached
+profile triggers maintain lifecycle counts, not identity integrity.
+`src/app/api/telegram/auth/route.ts:67` takes the linked profile's email and at line
+118 uses it to generate/redeem a magic link without verifying that the resulting
+Auth user is the profile's user ID. The same trust boundary exists in
+`scripts/telegram-miniapp-server.py` (`handle_auth`). This permits cross-account
+session minting if an authenticated caller changes the email on their own linked
+profile. HMAC validation authenticates Telegram, not that email-to-Auth relationship.
+No account takeover was attempted and historical exploitation is unknown.
+
+**Options/recommendation:** bind login to the server-resolved Auth user ID, obtain
+its canonical email through the Auth admin API, and verify the redeemed session ID;
+also protect email/Telegram/credential columns from direct client writes. A UI-only
+restriction is insufficient because the database REST API remains accessible.
+Identity and credentials are app-managed in Auth/Postgres; existing user preference
+columns must retain their intended edit permissions. **Acceptance:** ordinary users
+cannot change identity columns; both auth implementations reject mismatched Auth IDs;
+normal Telegram linking, email login and preference changes remain functional.
+
+### AUD-02 — P1: users can self-grant Premium through profile writes
+
+**DB + source verified.** `profiles.is_premium` and `premium_until` are writable by
+`authenticated` under the same own-row policy, without a protective trigger.
+`is_user_premium(uuid,timestamptz)` directly trusts both columns, as does
+`src/lib/voltflowmate/dashboard-entitlement.ts:39`. Consequently server-side
+entitlement checks do not prevent a user from granting themselves extended access
+and retention. Admin-list membership is separate; self-granting admin was not found.
+**Recommendation:** explicit allowlisted preference-column grants plus server-only
+entitlement writes, or a reviewed role-aware protection trigger. Treat entitlement
+state as app-owned Postgres data; preserve user-owned preferences. **Acceptance:**
+authenticated attempts to set either entitlement field fail, while authorized
+administration and existing Premium users work. Coordinate the migration with AUD-01.
+
+### AUD-03 — P1: excess TRUNCATE grants remain on 47 public tables
+
+**DB verified.** Both API roles retain effective TRUNCATE on 47 public tables,
+including profiles, cars, charging sessions, telemetry, device credentials and admin
+membership. RLS is enabled but does not govern TRUNCATE. The just-hardened charging
+cursor and pending queue are excluded from this finding. This is an excessive SQL
+privilege boundary, NOT proof that a normal PostgREST DELETE can truncate a table or
+that an anonymously callable destructive RPC still exists. The current anonymous
+non-trigger SECURITY DEFINER inventory contains only the three documented public
+helpers. [PostgreSQL's RLS documentation](https://www.postgresql.org/docs/current/ddl-rowsecurity.html)
+explicitly excludes whole-table operations from RLS.
+**Recommendation:** inventory legitimate DML per table, remove unnecessary whole-table
+privileges from PUBLIC/anon/authenticated, and repair creator-specific default grants;
+do not blindly revoke all browser DML. App-owned authorization policy, no data move.
+**Acceptance:** effective privilege matrix passes for current and newly created objects,
+and legitimate browser/worker access remains intact.
+
+### AUD-04 — P1: query cache survives account changes with unscoped keys
+
+**Source verified.** `src/components/providers.tsx:25` owns a root-lifetime QueryClient;
+`src/lib/query-keys.ts` uses account-independent keys for profiles, cars, sessions and
+live telemetry. `settings-view.tsx` signs out through client navigation, while
+`src/lib/privacy/client.ts:15` clears localStorage/Cache Storage but not QueryClient.
+No query-cache clear/reset on auth change exists in source. A subsequent account in
+the same SPA can see prior cached private results, at least until refetch; RLS cannot
+remove data already in browser memory. Browser reproduction remains outstanding.
+**Recommendation:** cancel/remove private queries on user-ID changes and scope private
+keys by account; reset in-memory preferences as part of that transition. Full page
+navigation alone is a weaker alternative. Cache is temporary browser data for
+user-owned Postgres records. **Acceptance:** slow-network A-to-B login, sign-out and
+account deletion never render A's cached data for B or an unauthenticated view.
+
+### AUD-05 — P1: service receipts are public but ordinary users cannot upload them
+
+**DB + source verified.** The `service-attachments` bucket is public in production.
+Its INSERT/UPDATE/DELETE policies allow admins only, with no owner upload policy.
+`src/actions/service-records.ts:188` uploads with the ordinary authenticated client
+and stores `getPublicUrl()`: non-admin uploads fail, while an existing receipt URL
+is publicly accessible. `deleteServiceRecord` also leaves the storage object behind.
+**Options/recommendation:** private bucket with owner-path policies, authorized/signed
+downloads and storage cleanup; retaining public receipts requires an explicit product
+privacy decision and is not recommended. Receipts are user-owned files in Storage,
+with metadata in Postgres. Confirm private access and legacy-URL migration before
+building. **Acceptance:** non-admin owners can upload/view/delete their receipts;
+other users and anonymous downloads are denied; replacement/deletion cleans old files.
+
+### AUD-06 — P1: inactivity deletion ignores admin entitlement and fresh activity
+
+**Source verified.** `src/app/api/cron/inactivity-check/route.ts:57` selects deletion
+candidates by profile Premium fields, never by `admin_users` or `is_user_premium`.
+Line 74 permanently deletes the Auth user without rechecking activity, warning state
+or entitlement after selection. An admin without explicit profile Premium can qualify;
+a user who returns or upgrades while the loop runs can also be deleted from a stale
+candidate snapshot. No live deletion or affected-account enumeration was performed.
+**Recommendation:** use the canonical entitlement predicate and a durable, guarded
+deletion claim with final activity/entitlement revalidation and recovery semantics.
+An extra frontend check is insufficient. Lifecycle state is app-managed Postgres data.
+**Acceptance:** admins, upgraded users and users becoming active after selection cannot
+be deleted; only eligible, warned accounts proceed through the authorized lifecycle.
+
+### AUD-07 — P1: rollup RPC errors are acknowledged as successful application
+
+**Source verified.** `src/app/api/bydmate/telemetry/route.ts:372` and line 395 await
+Supabase RPC results but discard each result's `error`, then return the input block
+count as `hourly_rollup_applied`/`trip_rollup_applied`. Supabase database errors resolve
+as results, so the catch handlers do not catch them. Client-hourly inputs can skip
+server aggregation and client-trip inputs create stubs, so the comment promising an
+equivalent fallback row does not ensure the requested aggregates exist.
+**Recommendation:** inspect each result and define explicit per-block ACK/retry behavior
+with the Mate contract; preserve sample idempotency. Throwing on any error is simpler
+but requires a tested whole-batch retry contract. Rollups remain user-owned Postgres
+facts. **Acceptance:** injected DB errors never increment applied counts or cause a
+failed final block to be discarded; retry yields correct aggregates without duplicates.
+
+### AUD-08 — P1: production session-list reads bypass reconciliation
+
+**Source verified.** `src/hooks/use-sessions-query.ts:20` invokes the reconciling
+`/api/vehicle/sessions` route only in development mode; normal users SELECT directly
+from Supabase. The history UI uses this hook. Ingest only reconciles on an auto
+start/stop event (`telemetry/route.ts:448`). Thus reopening History after telemetry
+goes silent does not perform the documented repair, and broken/open rows can persist.
+**Recommendation:** add a bounded server reconciliation step to actual production
+list entry, or schedule repair independently; avoid turning every 1-Hz tail poll into
+a full reconciliation. No ownership/storage changes. **Acceptance:** reopening the
+production history path repairs a silence-ended session without new ingest, and
+normal polling does not repeatedly scan its whole telemetry history.
+
+### AUD-09 — P1: other session writers can overwrite a newer finalization
+
+**Source verified.** The live sync hook writes by session ID alone at
+`src/features/charging/_client/use-charging-session-live-sync.ts:173` and line 211;
+its async interval callbacks may overlap and in-flight callbacks survive effect cleanup.
+`charging-session-reconcile.ts:121` likewise updates a snapshot-derived patch without
+a status/version predicate. An auto/manual close or energy correction between read and
+write can therefore be overwritten by stale progress or repair. Atomic ingest CAS
+does not protect these later writers. This interleaving was not exercised in production.
+**Recommendation:** conditional status/version updates and affected-row checks on every
+writer; cancel/ignore stale UI generations and preserve correction flags. A client
+mutex alone does not cover other tabs or server writers. **Acceptance:** two-connection
+tests interleaving UI progress, manual stop, correction and reconciliation preserve
+the newer terminal values. User-owned session records remain in Postgres.
+
+### AUD-10 — P1: active pairing codes are not unique across users
+
+**DB + source verified.** `src/lib/voltflowmate/link-code.ts:47` generates a six-digit
+code without collision retry. Production has a non-unique active `code_hash` index.
+Redemption chooses the newest matching active code, rather than uniquely identifying
+one owner. Two equal active codes can therefore pair a device to the wrong account.
+No collision was induced. **Recommendation:** atomically reserve a unique unredeemed
+code hash with bounded generation retries and expiry cleanup. Merely increasing code
+length reduces but does not enforce uniqueness. Pairing credentials are app-owned
+Postgres data. **Acceptance:** forced collisions retry safely; concurrent creations
+never leave ambiguous redeemable codes or return another user's credential.
+
+### AUD-11 — P1: pairing changes credentials before it wins code consumption
+
+**Source verified.** `src/lib/voltflowmate/link-code.ts:214` upserts the device credential
+and may update the profile before line 253 conditionally consumes the link code.
+A concurrent losing redeemer or a failure in a later statement can change credentials
+despite returning failure; requests using different device kinds make the side effects
+especially significant. **Recommendation:** combine code validation, consumption,
+device update and any legacy mirror into one transaction; lock/claim the code before
+effects. Reordering separate calls alone changes which partial-failure case occurs.
+**Acceptance:** simultaneous redemptions produce one winner and zero loser side effects;
+injected failures leave the previous working credential intact. App-owned Postgres state.
+
+### AUD-12 — P2: public semantic search has no application abuse budget
+
+**Source verified.** `src/app/api/knowledge/search/route.ts` accepts anonymous arbitrary
+query lengths, invokes embedding generation via `src/lib/knowledge-search.ts`, and has
+no rate/concurrency limit. The five-minute in-process cache only helps repeated queries;
+unique strings still create paid external requests. Deployment WAF rules and actual
+abuse were not audited. **Recommendation:** bounded input plus a shared request budget
+and provider timeout; retain public search. A local Map-only limiter is insufficient
+across instances. Any limiter identifiers should be minimized app-owned operational
+data with expiry, not retained raw query/IP histories. **Acceptance:** oversized/over-
+budget requests are rejected before embedding work; ordinary public search still works.
+
+### AUD-13 — P2: JSON-LD serialization allows a script closing tag
+
+**Source verified, content-write prerequisite.** `src/lib/seo/json-ld.tsx:21` inserts
+plain JSON.stringify output into a script tag. Article titles/summaries and category
+labels come from stored CMS data, so a literal closing script tag is not escaped for
+HTML parsing. The enforced CSP does not restrict scripts. This is a stored injection
+sink if hostile text reaches a published CMS field; anonymous CMS write access was
+not established. **Recommendation:** escape less-than characters during safe JSON-LD
+serialization (or use a vetted serializer); do not assume JSON escaping is HTML safety.
+**Acceptance:** malicious title/summary fixtures render only data and preserve valid
+structured metadata. No data ownership or persistence change.
+
+### AUD-14 — P2: exports can silently omit data and mix vehicles
+
+**Source verified.** `src/app/api/vehicle/export/route.ts:35` ignores all three query
+errors and serializes missing results as empty successful sections. Its vehicle filter
+applies to trips/samples but not charging sessions. It also assumes a requested 10,000
+row limit is honored by PostgREST and has no paging; a lower server cap can silently
+truncate results without the flag. The current server cap was not measured.
+**Recommendation:** handle query failures explicitly, resolve the chosen alias to its
+car IDs, and page deterministically to an explicit export cap. **Acceptance:** a failed
+section cannot produce a misleading successful backup, vehicle A excludes B's sessions,
+and a mocked lower server page cap still yields complete/explicitly truncated output.
+User-owned exported records remain in Postgres; no storage change.
+
+### AUD-15 — P2: session-list projection drops manual/corrected/provider metadata
+
+**Source verified.** `src/hooks/use-sessions-query.ts:17` omits `manual_entry`,
+`energy_overridden`, correction timestamps, `user_provider_id` and end-delta fields
+that `src/lib/db-map.ts:92` reads. Missing booleans become false and IDs become null.
+The history list uses `manual_entry` for badges and messaging, so normal refetch loses
+that distinction. Dashboard bootstrap already selects a richer set, creating inconsistent
+views of the same session. **Recommendation:** use a shared, explicit mapper-complete
+projection. **Acceptance:** production list fetch and dashboard bootstrap preserve
+manual/corrected/provider/delta values identically. No ownership/storage change.
+
+### AUD-16 — P2: retention-status API still advertises a 365-day Premium cutoff
+
+**Source verified.** `src/app/api/vehicle/retention-status/route.ts:8` reports 365 days,
+an oldest-kept date and next deletion date for Premium, whereas `supabase/TELEMETRY.md`,
+`docs/PREMIUM_ADMIN.md` and `20260626130000_premium_admin_full_retention.sql` describe
+indefinite retention while active. **Recommendation:** represent unbounded retention
+explicitly in API/UI and reconcile its canonical documentation. Do not alter retention
+jobs merely to fit the old constant. **Acceptance:** Premium has no invented cutoff;
+free-tier cutoff remains accurate. User-owned records stay in Postgres.
+
+### AUD-17 — P2: service reminders diverge from edited records
+
+**Source verified.** `src/actions/service-records.ts:87` ignores reminder INSERT errors
+and returns record success. `updateServiceRecord` updates next-due fields but never
+updates/creates/removes the associated reminder. Users can see an old reminder after
+changing its due date, or lose a requested reminder without any error. **Recommendation:**
+transactional record/reminder synchronization, defining how completed/manual reminders
+behave; an explicit retryable partial result is a less atomic alternative.
+**Acceptance:** create failure is visible, due-date edits propagate, clearing due fields
+removes/deactivates only the linked pending reminder. User-owned Postgres service data.
+
+### AUD-18 — P1: webhook ACKs a failed durable event insert
+
+**Source verified.** `scripts/telegram-miniapp-server.py:221` catches failure of
+`upsert_telegram_group_event` and still returns HTTP 200. Telegram has no reason to retry
+an acknowledged update; the pending-events recovery function cannot recover a row that
+was never stored. The comment promising a later idempotent retry is insufficient.
+**Recommendation:** return retryable failure when durable acceptance fails, and ACK
+only after the event is persisted; keep downstream classification asynchronous.
+**Acceptance:** injected storage failure produces retry and exactly one eventual event.
+No webhook was called. Existing community-event ownership/storage remains unchanged.
+
+### AUD-19 — P2: remote command dispatch has no atomic claim or sent recovery
+
+**Source verified, gated feature.** `src/app/api/bydmate/commands/route.ts` SELECTs pending
+rows and separately marks them sent, ignoring update errors and not selecting claimed
+rows back. Concurrent polls can return the same command; a lost HTTP response leaves
+a sent command excluded from future polling and from the pending-only timeout logic.
+Commands are disabled by default; production enablement was not inspected.
+**Recommendation:** transactional claim with lease/ack recovery and device-side command-ID
+idempotency before enabling commands. **Acceptance:** simultaneous polls and dropped
+responses neither duplicate physical actions nor strand commands forever. User-scoped
+command state remains in Postgres; no device command was issued during this audit.
+
+### AUD-20 — P1: push subscriptions allow arbitrary server-side HTTPS destinations
+
+**Source verified, VAPID/runtime prerequisite.** `src/actions/push.ts:17` validates only
+nonempty subscription strings and exposes authenticated test sending. `web-push.ts`
+passes stored endpoints directly to the library; the installed library's
+`web-push-lib.js:348` uses the endpoint host/port for https.request. There is no destination
+restriction or send timeout in the caller. With valid generated subscription keys, this
+provides an authenticated arbitrary HTTPS POST/availability-abuse path. Internal network
+reachability was not tested and no request was sent. **Recommendation:** approved push-
+service destination policy or robust public-destination egress validation, plus timeouts,
+subscription quotas and send budgets. Validate at send time as direct DB writes also
+exist. **Acceptance:** private/loopback/unapproved destinations cannot be contacted and
+supported push providers still work. Subscription endpoints are user-owned Postgres data.
+
+### AUD-21 — P1: read-only helper does not enforce its promise through the pooler
+
+**Observed earlier in this same review thread.** `scripts/prod-psql-readonly.sh` sets
+startup PGOPTIONS, but live queries returned both default_transaction_read_only and
+transaction_read_only off; explicit `BEGIN READ ONLY` returned on. The helper's claim
+that accidental writes fail is therefore unsafe on this connection path. All database
+queries in the whole-project audit used explicit read-only transactions.
+**Recommendation:** a genuinely read-only DB role/session connection or a helper that
+establishes and verifies transaction-local read-only mode with a constrained interface;
+never repair this using leaked session SET through the transaction pooler.
+**Acceptance:** mode assertions pass on the actual target and a harmless forbidden-write
+probe fails in a disposable context. App-owned tooling; no user data changes required.
+
+### Previously tracked items and remaining validation
+
+- The Vercel ignore-build defect remains in `scripts/vercel-ignore-build.mjs`: only
+  HEAD's parent is compared, so a docs-only tip can suppress earlier app changes.
+  Keep the existing dedicated backlog plan; do not duplicate it here.
+- The three previously reported full-suite failures have not been rerun. The source
+  still has the math expectation and runtime alias imports called out in the existing
+  test-discovery follow-up. Do not label the current full suite green.
+- Point 2's single-connection rollback test passed earlier in this thread. Actual
+  simultaneous-connection contention and application deployment verification remain
+  distinct outstanding checks. Its older backlog text saying the SQL test never ran
+  is stale; see the later CHANGELOG entry for the verified result.
+- The Python webhook also accepts requests when its secret is unset; this is a
+  configuration-dependent fail-open risk. Production configuration was not inspected.
+- The public-content route move to `/knowledge/*` is not reflected in the worker's
+  `/telegram*` page-cache predicate. Offline navigation of the new URLs needs a focused
+  browser check before treating it as a verified product regression.
+
+### Recommended order and approval boundary
+
+First AUD-01/02 (identity and entitlement), then AUD-03/04/05/06/20 (authorization,
+privacy and destructive lifecycle), then AUD-07 through AUD-11 and AUD-18 (delivery
+and state integrity), followed by the P2 correctness work. Each fix should keep its
+own focused diff and verification. This audit authorizes recording findings only;
+implementation and production rollout are not authorized by this entry. Data/storage
+choices above are recommendations to confirm with each concrete implementation plan.
+
 ## Approved — charging replay, freshness, and atomic progression
 
 Approved in conversation for review point 2. Preserve charging predicates; add distinct
