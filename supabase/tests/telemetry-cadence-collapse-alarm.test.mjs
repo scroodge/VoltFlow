@@ -43,6 +43,14 @@ test("schedules the detector every ten minutes and delivers through the app", ()
   assert.doesNotMatch(detectorSql, /api\.telegram\.org/);
 });
 
+test("keeps the SECURITY DEFINER detector off the public API roles", async () => {
+  const revokeSql = await readMigration("20260911110000_revoke_cadence_detector_from_api_roles.sql");
+  assert.match(
+    revokeSql,
+    /revoke execute on function public\.bydmate_detect_telemetry_cadence_collapses\(\) from anon, authenticated;/,
+  );
+});
+
 test("keeps one open audit per vehicle and signal", () => {
   assert.match(installSql, /unique index[\s\S]*\(user_id, vehicle_id, signal\)[\s\S]*where resolved_at is null/i);
   assert.equal(

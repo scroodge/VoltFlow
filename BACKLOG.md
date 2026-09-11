@@ -4,6 +4,73 @@ Per the agent workflow in [AGENTS.md](AGENTS.md): **plan first, build only on ex
 go-ahead.** These are researched but **not built**. Shipped work lives in
 [CHANGELOG.md](CHANGELOG.md).
 
+## ✅ 19 server-only `SECURITY DEFINER` functions were callable with the public anon key (option 1 shipped 2026-09-11)
+
+**Shipped (option 1):** migrations `20260911120000` (revoke from `anon, authenticated`) and
+`20260911121000` (revoke from `PUBLIC`) are applied to prod. The second was needed because
+`bydmate_apply_diplus_columns` and `bydmate_prune_telemetry_samples` still carried Postgres's
+built-in EXECUTE-to-PUBLIC (`=X/postgres`). Verified: across the 20 overloads, `anon` and
+`authenticated` can execute 0, while `postgres` and `service_role` keep all 20. Anon-key RPC
+calls to `bydmate_prune_telemetry_samples` and `rdp_simplify_trip_track` return
+`401 permission denied`, and `is_admin` still answers. Ingest is live via service role
+(a sample landed 37 s after the revoke), and every pg_cron job succeeded afterwards.
+Test: `supabase/tests/api-role-function-privileges.test.mjs`. Options 2 and 3 below remain
+proposed.
+
+### Evidence (read-only, prod, 2026-09-11)
+
+Found while closing the same gap on the cadence detector. Supabase's default privileges
+grant `EXECUTE` on every new `public` function to `anon` and `authenticated`
+explicitly, and our migrations only `revoke … from public`, which does not remove those
+grants. PostgREST exposes every function a role can execute as `/rest/v1/rpc/<name>`, and
+the anon key ships in the PWA bundle. So these run **as their owner, bypassing RLS**, for
+anyone on the internet. None of them checks the caller (no `auth.uid()` or role test):
+
+| Function | What an anonymous caller can do |
+|---|---|
+| `bydmate_prune_telemetry_samples(p_keep_days)` | No lower bound. `p_keep_days => 0` deletes every rolled-up, non-charging raw sample for **all users**. |
+| `bydmate_apply_diplus_columns(p_table regclass, p_where text, …)` | The caller picks the table, and `p_where` is concatenated raw into dynamic SQL: arbitrary `WHERE` (including subqueries) on an `UPDATE` run as owner. Mass-overwrites telemetry and is an injection primitive. |
+| `bydmate_ingest_telemetry` ×2, `…_batch`, `bydmate_ingest_trip_summaries`, `bydmate_apply_client_trip`, `bydmate_apply_client_hourly`, `bydmate_apply_hourly_rollup_sample`, `bydmate_update_hourly_energy` | Take `p_user_id`: write forged telemetry, trips and energy into **any** user's account. |
+| `bydmate_discard_trip_if_junk`, `bydmate_finalize_trip_energy`, `rdp_simplify_trip_track`, `simplify_aged_bydmate_trip_tracks` | Mutate or delete trips by id / in bulk. |
+| `purge_old_bydmate_telemetry`, `purge_old_bydmate_aux_voltage_rollups`, `bydmate_enqueue_aux_voltage_backfill`, `bydmate_enqueue_aux_voltage_day`, `bydmate_materialize_aux_voltage_day`, `bydmate_process_aux_voltage_rollup_queue` | Trigger retention and rollup jobs on demand (heavy load; purges run early). |
+
+Nothing exploited them as far as we know; this is exposure, not an incident. Not tested
+against the live API, deliberately: the calls are destructive.
+
+### Who legitimately calls them
+
+- The ingest RPCs are called only from `src/app/api/bydmate/telemetry/route.ts` and
+  `…/trip-summaries/route.ts`, both via `createServiceClient()` (service role). The Deno
+  `bydmate-telemetry` edge function only forwards to that route and makes no RPC calls.
+- The purge/rollup functions are called by pg_cron jobs, all running as `postgres`.
+- Query over `pg_proc` (non-definer callers), `pg_policies` and `cron.job`: **no**
+  user-triggered function, trigger or RLS policy calls any of the 19. No `anon` or
+  `authenticated` caller exists, so revoking cannot break the app.
+
+Leave alone: `is_admin` (used by RLS on the KB/CMS tables),
+`increment_knowledge_article_view` (intentionally public, see AGENTS.md), and
+`is_user_premium` (used by the `bydmate_phantom_drain_daily_rollups` policy and by
+invoker functions `bydmate_soh_daily` / `bydmate_phantom_drain_daily`; it discloses only
+whether a given user id is premium). `handle_new_user` and
+`bydmate_queue_aux_voltage_chemistry_rebuild` return `trigger`, so PostgREST cannot call
+them.
+
+### Options
+
+1. **Revoke `EXECUTE` from `anon, authenticated` on the 19 (recommended, now).** One
+   idempotent migration. Callers are service role or `postgres`, so there is no app
+   change. Verify with `has_function_privilege` and one anon-key RPC call expecting 401.
+2. **Also stop it recurring:** `alter default privileges in schema public revoke execute
+   on functions from anon, authenticated`, then grant explicitly to the few
+   public-facing functions. That stops every *future* function from being born public,
+   but a missed grant breaks a feature silently, so it needs a full RPC inventory first.
+   Follow-up, not today.
+3. **Fix `bydmate_apply_diplus_columns` itself:** replace the raw `p_where` with typed
+   key parameters. Defense in depth even after 1; separate change.
+
+**Data boundary:** no data model change. These are privileges on app-owned Postgres
+functions.
+
 ## Proposed — failures exposed by complete test discovery
 
 Review point 1 is implemented; see CHANGELOG.md (2026-09-11). The expanded Node 22 run
@@ -145,15 +212,16 @@ alarm, (4) leave it on owners. **Chosen: 1.**
   **app-owned**, in **Postgres**. The change is route-only (no migration); the detector
   already hands each alarm to the route by id.
 
-### Open: detector is callable by `anon` / `authenticated`
+### Closed 2026-09-11: detector was callable by `anon` / `authenticated`
 
-`information_schema.routine_privileges` shows `EXECUTE` for `anon` and `authenticated` on
-`bydmate_detect_telemetry_cadence_collapses()`. The Sep 8 migration's
-`revoke all … from public` does not remove Supabase's explicit default grants to those
-roles. It is `SECURITY DEFINER`, so anyone with the public anon key can call it through the
-PostgREST RPC, spending a 3–30 s query per call and triggering alert delivery. It leaks no
-data. Fix: a migration with `revoke execute … from anon, authenticated`. **Awaiting
-go-ahead.**
+The Sep 8 migration's `revoke all … from public` did not remove Supabase's explicit
+default `EXECUTE` grants to `anon` and `authenticated`, so anyone with the public anon key
+could run the `SECURITY DEFINER` detector through the PostgREST RPC. Migration
+`20260911110000` revokes them. It is applied to prod; the remaining grantees are
+`postgres` (pg_cron) and `service_role`. Verified from outside: an anon-key
+`POST /rest/v1/rpc/bydmate_detect_telemetry_cadence_collapses` now returns
+`401 permission denied`. The same gap exists on 19 other functions; see the 🔴 entry at
+the top.
 
 ### Verification
 
