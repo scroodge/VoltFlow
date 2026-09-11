@@ -163,6 +163,11 @@ The acknowledged inserted and duplicate count must cover every submitted sample,
 `skipped_stale_count` must be zero. Network failures and server errors remain retryable;
 the client preserves the original `vehicle_id` for every queued sample.
 
+Automatic charging processing is part of application acknowledgement. If it fails after
+telemetry persistence, the endpoint returns HTTP `503` with `ok: false` and `retryable: true`.
+Keep and retry the complete batch; telemetry duplicates are safe, and pending charging work
+is committed through a versioned transaction. Snapshot-only requests skip charging processing.
+
 `hourly_rollup_applied` is informational and is not part of sample acknowledgement
 accounting.
 

@@ -28,7 +28,8 @@ begin
       'telemetry', jsonb_build_object(
         'soc', s->'telemetry'->'soc', 'charge_power_kw', s->'telemetry'->'charge_power_kw',
         'speed_kmh', s->'telemetry'->'speed_kmh', 'is_charging', s->'telemetry'->'is_charging',
-        'charge_type', s->'telemetry'->'charge_type', 'gun_state', s->'telemetry'->'gun_state'),
+        'charge_type', s->'telemetry'->'charge_type'),
+      'diplus', jsonb_build_object('charge_gun_state', s->'diplus'->'charge_gun_state'),
       'location', s->'location')
   from jsonb_array_elements(p_samples) s
   where s->>'vehicle_id' = p_vehicle_id and coalesce((s->>'live_only')::boolean, false) = false

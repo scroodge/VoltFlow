@@ -17,28 +17,27 @@ new GPS collection or preference storage; retain existing session-cardinality po
 Verify duplicate, delayed, out-of-order, skewed-clock, concurrent and failed-commit cases.
 Production migration application and deployment are separate from implementation.
 
-Implementation status (2026-09-11): partial, not ready to deploy. Measurement/receipt
-freshness checks and their server read projections are implemented. The new batch planner,
-version-conflict retry loop and atomic adapter are prepared; the adapter is deliberately
-not connected to the existing ingest entry point because its migration file could not be
-written. The standard patch helper refers to a removed executable; the installed patch
-CLI works for TypeScript, but DCG rejects the SQL patch as dynamic shell redirection,
-including an escalated request. Resume after the patch helper is restored.
+Implementation status (2026-09-11): local implementation connected, not shipped.
+The patch helper works again. The draft migration preserves Di+ gun state, the public
+server entry point uses the atomic adapter, and the old processor is a compatibility
+re-export. Charging failures now return HTTP 503 with `ok: false` / `retryable: true`.
+Canonical charging and API documentation describe queue recovery and rollout ordering.
 
-Verification: 15 new focused cases pass, including an in-memory optimistic-commit model
-for overlapping workers and failure recovery. TypeScript passes. The full suite reports
-476 passes and the same three prior failures (charging-math expectation and two runtime
-alias imports). Actual Postgres atomicity, RLS and rollback checks remain outstanding.
-Resume status (2026-09-11): draft migration
-`supabase/migrations/20260911140000_charging_atomic_progression.sql` now exists,
-but is NOT ready to apply. Its queue projection must preserve the Di+ gun-state
-context used by the sustained-charging predicate. The patch helper initially worked,
-then failed again with a missing vendor executable; the installed CLI correction was
-blocked by DCG, including escalation. No database changes or deployment were performed.
+Verification this resume: 39 focused charging/processor/delivery tests pass; TypeScript
+passes. Added explicit Di+ unplug and future-clock-boundary cases. Overlapping-worker
+and failure-recovery tests use an in-memory store, not Postgres. The previous full-suite
+result was 476 passes and three prior failures; the full suite was not rerun this resume.
 
-Remaining work: correct/review the draft migration and add SQL integration checks, connect
-the atomic adapter, make charging-processing failure return a retryable application NACK,
-verify recovery/rollout behavior, and reconcile the final domain documentation.
+Prepared `supabase/tests/charging_atomic_progression.sql` for an explicitly selected test
+account, with rollback, duplicate/projection checks, version-conflict checks, session
+start/stop, injected-operation failure and role privilege assertions. It has NOT run.
+Actual Postgres transaction/permission checks and simultaneous-connection locking checks
+remain outstanding. No database changes or deployment were performed.
+
+Rollout: verify/apply the migration before deploying the RPC-dependent app; drain old
+ingest requests during the switch because the old processor is not atomic. Database
+verification/application and deployment require their separate authorized rollout.
+Keep this plan here until shipped, then move the outcome to CHANGELOG.md.
 
 Per the agent workflow in [AGENTS.md](AGENTS.md): **plan first, build only on explicit
 go-ahead.** These are researched but **not built**. Shipped work lives in

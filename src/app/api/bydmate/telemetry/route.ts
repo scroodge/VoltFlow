@@ -427,6 +427,17 @@ export async function POST(request: Request) {
       tripRollupPromise,
     ]);
 
+    if ("error" in autoChargingSessions) {
+      // Persistence alone is not an ACK: Mate must retain and retry this batch.
+      // The queue and versioned commit make retries safe after a partial response.
+      return Response.json({
+        ok: false,
+        error: "Charging processing failed; retry delivery",
+        retryable: true,
+        persisted,
+      }, { status: 503 });
+    }
+
     // Only reconcile when auto-session processing actually opened/closed a row.
     // Reconcile reads sessions + samples back from Supabase, so running it on
     // every ~1Hz sample was a large, mostly-redundant CPU + egress cost. The

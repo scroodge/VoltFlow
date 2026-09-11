@@ -33,6 +33,30 @@ or receipt up to 30 seconds ahead is tolerated for clock skew; larger future jum
 invalid timestamps, and missing measurement timestamps are not fresh live evidence.
 Uploading an old measurement now therefore does not promote it to live SOC.
 
+## Replay and concurrent delivery
+
+Ordinary samples enter a tenant-and-vehicle-scoped pending queue in Postgres before
+automatic charging processing. The queue deduplicates measurement timestamps and retains
+only charging inputs, including Di+ gun state and the supplied tariff location. Snapshot-only
+samples skip this queue. Charging facts are user-owned; the queue and versioned processing
+cursor are app-managed operational data in Postgres. Consumed inputs are deleted on commit.
+
+The TypeScript planner orders measurements and ignores timestamps at or behind the committed
+cursor. Automatic starts require measurements within three minutes of server time; timestamps
+more than 30 seconds ahead cannot advance the cursor. Delayed measurements may close an open
+session only when measured at or after its start. They cannot create a historical session.
+
+A short database transaction compares the state version, car and open sessions before
+committing session changes, counters, cursor and queue consumption together. Conflicts reload
+and recompute, with bounded retries. Processing failures return a retryable application failure
+even if telemetry persistence succeeded. Mate retains the batch and resends it; an ordinary
+delivery for that vehicle also drains pending work. No separate background queue worker runs.
+
+Rollout requires migration `20260911140000_charging_atomic_progression.sql` before the app
+version using these RPCs. Drain old ingest requests during the switch: the previous processor
+writes state and sessions separately and must not run concurrently with the atomic processor.
+Rolling back the app requires the same drain; retain the queue for recovery on re-upgrade.
+
 ## Automatic session detection
 
 **Starting and staying open are two different questions, answered by two different

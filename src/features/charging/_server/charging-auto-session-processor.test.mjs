@@ -85,6 +85,21 @@ test("snapshot-only pushes and pre-session measurements do not stop a manual ses
   assert.equal(result.operations.length, 0);
 });
 
+test("Di+ explicit unplug overrides connected status after two distinct measurements", async () => {
+  const samples = [-20, -10].map((s) => ({
+    ...sample(s, { charge_power_kw: 0, is_charging: true }),
+    diplus: { charge_gun_state: 1 },
+  }));
+  assert.equal((await plan(snapshot(samples, null, [active()]))).stopped, 1);
+  const connected = samples.map((s) => ({ ...s, diplus: { charge_gun_state: 2 } }));
+  assert.equal((await plan(snapshot(connected, null, [active()]))).stopped, 0);
+});
+
+test("clock tolerance includes 30 seconds but excludes measurements beyond it", async () => {
+  assert.equal((await plan(snapshot([sample(30)]))).state.last_device_time, at(30));
+  assert.equal((await plan(snapshot([sample(31)]))).state.last_device_time, null);
+});
+
 // Models the store contract only. Actual Postgres transaction tests are separate.
 function memoryStore(samples) {
   let current = snapshot(samples);
