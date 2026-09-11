@@ -122,14 +122,38 @@ consecutive pair. Only the detector function changes.
   gaps readably ("4 min 25 s", "5 h 47 min") instead of "20838 seconds". A real hole can
   now be hours long.
 
-### Side finding (not in scope)
+**Status:** the detector rule shipped to prod 2026-09-11 (migration `20260911100000`; the
+07:13 UTC run took 3 s and opened no alarms).
 
-13 of the 14 alarms since install could not be delivered (`missing_telegram_id`: those
-owners never linked Telegram). The detector re-enqueues an undelivered open alarm every
-10 minutes, so each run makes a `pg_net` → Vercel call that can never succeed. `yuan up`'s
-`low_24h_count` alarm has been open since 2026-09-10 14:46, which is ~144 wasted
-invocations a day. The fix is to skip re-delivery while
-`delivery_error = 'missing_telegram_id'`. Leave it for a separate decision.
+### Delivery: operator-only (chosen 2026-09-11)
+
+The alarm's audience was wrong. An owner can't act on "telemetry cadence collapsed"
+(jargon, and a sender bug they can't fix), and 13 of the 14 alarms since install were
+undeliverable because those owners never linked Telegram. The only one delivered was a false
+alarm. The people who *can* act are the operators, who fix sender bugs in code. Options
+considered: (1) send to admins only, (2) audit table only with no Telegram, (3) remove the
+alarm, (4) leave it on owners. **Chosen: 1.**
+
+- **Recipients:** every `admin_users` member with a linked `profiles.telegram_id` (2 of 2
+  today). The owner is no longer messaged.
+- **Message:** names the owner (`profiles.email`) and vehicle, and the gap window
+  (`previous_moving_at` → `observed_at`), because an admin sees every user's alarms.
+- **Delivered** when at least one admin received it. With no reachable admin, record
+  `delivery_error = 'no_admin_telegram'`. This also ends the undeliverable-retry churn
+  (each open alarm re-called Vercel every 10 minutes forever): an admin is always reachable.
+- **Data boundary:** no user-facing data model change. Alarm rows and the admin list are
+  **app-owned**, in **Postgres**. The change is route-only (no migration); the detector
+  already hands each alarm to the route by id.
+
+### Open: detector is callable by `anon` / `authenticated`
+
+`information_schema.routine_privileges` shows `EXECUTE` for `anon` and `authenticated` on
+`bydmate_detect_telemetry_cadence_collapses()`. The Sep 8 migration's
+`revoke all … from public` does not remove Supabase's explicit default grants to those
+roles. It is `SECURITY DEFINER`, so anyone with the public anon key can call it through the
+PostgREST RPC, spending a 3–30 s query per call and triggering alert delivery. It leaks no
+data. Fix: a migration with `revoke execute … from anon, authenticated`. **Awaiting
+go-ahead.**
 
 ### Verification
 

@@ -10,6 +10,7 @@ type AlarmRow = {
   vehicle_id: string;
   signal: "moving_gap" | "low_24h_count";
   observed_at: string;
+  previous_moving_at: string | null;
   gap_seconds: number | null;
   sample_count_24h: number | null;
   notified_at: string | null;
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from("bydmate_telemetry_cadence_alarm_audits")
-    .select("id,user_id,vehicle_id,signal,observed_at,gap_seconds,sample_count_24h,notified_at,resolved_at")
+    .select("id,user_id,vehicle_id,signal,observed_at,previous_moving_at,gap_seconds,sample_count_24h,notified_at,resolved_at")
     .eq("id", alarmId)
     .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -38,27 +39,39 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, ignored: true });
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("telegram_id")
-    .eq("id", alarm.user_id)
-    .maybeSingle();
-  if (profileError) return NextResponse.json({ error: profileError.message }, { status: 500 });
+  // Operator alarm: the owner cannot act on a sender fault, so it goes to the admins.
+  const { data: admins, error: adminsError } = await supabase.from("admin_users").select("user_id");
+  if (adminsError) return NextResponse.json({ error: adminsError.message }, { status: 500 });
+  const adminIds = (admins ?? []).map((row) => row.user_id as string);
 
-  if (profile?.telegram_id == null) {
+  const { data: profiles, error: profilesError } = await supabase
+    .from("profiles")
+    .select("id,email,telegram_id")
+    .in("id", [...adminIds, alarm.user_id]);
+  if (profilesError) return NextResponse.json({ error: profilesError.message }, { status: 500 });
+
+  const ownerEmail = (profiles ?? []).find((row) => row.id === alarm.user_id)?.email ?? null;
+  const adminChatIds = (profiles ?? [])
+    .filter((row) => adminIds.includes(row.id) && row.telegram_id != null)
+    .map((row) => row.telegram_id as number | string);
+
+  if (adminChatIds.length === 0) {
     await supabase
       .from("bydmate_telemetry_cadence_alarm_audits")
-      .update({ delivery_error: "missing_telegram_id" })
+      .update({ delivery_error: "no_admin_telegram" })
       .eq("id", alarm.id)
       .is("notified_at", null);
-    return NextResponse.json({ ok: false, error: "missing_telegram_id" }, { status: 207 });
+    return NextResponse.json({ ok: false, error: "no_admin_telegram" }, { status: 207 });
   }
 
-  const delivery = await sendTelegramMessage(profile.telegram_id, cadenceAlarmMessage(alarm));
+  const text = cadenceAlarmMessage(alarm, ownerEmail);
+  const deliveries = await Promise.all(adminChatIds.map((chatId) => sendTelegramMessage(chatId, text)));
+  const failure = deliveries.find((delivery) => !delivery.ok);
+  const delivered = deliveries.some((delivery) => delivery.ok);
 
-  const update = delivery.ok
+  const update = delivered
     ? { notified_at: new Date().toISOString(), delivery_error: null }
-    : { delivery_error: delivery.error };
+    : { delivery_error: failure && !failure.ok ? failure.error : "send_failed" };
   const { error: updateError } = await supabase
     .from("bydmate_telemetry_cadence_alarm_audits")
     .update(update)
@@ -67,5 +80,5 @@ export async function POST(request: NextRequest) {
     .is("resolved_at", null);
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
 
-  return NextResponse.json({ ok: delivery.ok }, { status: delivery.ok ? 200 : 207 });
+  return NextResponse.json({ ok: delivered }, { status: delivered ? 200 : 207 });
 }
