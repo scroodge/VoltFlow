@@ -11,6 +11,28 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-09-11
 
+### Charging atomic progression cursor is server-only
+
+Post-apply verification of `20260911140000_charging_atomic_progression.sql`
+found inherited browser-role `SELECT`, `TRUNCATE`, `REFERENCES`, and `TRIGGER`
+privileges on its operational cursor table. The follow-up migration
+`20260911150000_harden_charging_state_privileges.sql` now revokes all table
+privileges from `PUBLIC`, `anon`, and `authenticated`, and explicitly grants
+`service_role`. No browser source reads this app-managed cursor directly; the
+service-role charging RPCs remain its only application access path. User charging
+facts remain user-owned in Postgres; no user-facing data model changed.
+
+#### Verification
+
+Applied once to self-hosted production with direct `psql` (SHA-256
+`d7f044990d4cc4771c2222289722106486f6aee4596288831d0c9c50c0a3e24a`). An
+explicit `BEGIN READ ONLY` verification found RLS enabled, no privilege of any
+kind for `anon` or `authenticated`, and required service-role DML intact. The
+three atomic charging RPCs remain non-executable by browser roles and executable
+by `service_role`; pending queue depth remained zero. The rollback contract test
+was tightened to cover every table privilege but awaits an explicitly selected,
+empty test account. No application deployment was performed.
+
 ### Review point 1 — safe trip preview and complete test discovery
 
 Implemented in the working tree after approval. `npm run test` now uses

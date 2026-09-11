@@ -39,23 +39,6 @@ ingest requests during the switch because the old processor is not atomic. Datab
 verification/application and deployment require their separate authorized rollout.
 Keep this plan here until shipped, then move the outcome to CHANGELOG.md.
 
-### Approved post-apply privilege hardening (2026-09-11)
-
-Production verification found that the applied atomic-progression migration correctly
-removed browser `INSERT`/`UPDATE`/`DELETE` access from the operational state table, but
-left inherited `SELECT`, `TRUNCATE`, `REFERENCES`, and `TRIGGER` privileges. The app has
-no direct browser reader of this table; the server-side, service-role RPC is its sole
-consumer. User charging data remains user-owned in Postgres, while this cursor is
-app-managed operational state in Postgres.
-
-Options: (1) new idempotent migration that revokes all table privileges from `PUBLIC`,
-`anon`, and `authenticated`, then explicitly grants `service_role` (recommended); or
-(2) revoke only `TRUNCATE`, retaining unused browser reads and ancillary privileges.
-Option 1 is approved: it closes every browser table path without altering the applied
-migration, policies, RPC API, or user-facing data. Extend the rollback contract test to
-assert the complete browser privilege boundary. Apply and verify separately in
-self-hosted production, then record the outcome in CHANGELOG.md.
-
 Per the agent workflow in [AGENTS.md](AGENTS.md): **plan first, build only on explicit
 go-ahead.** These are researched but **not built**. Shipped work lives in
 [CHANGELOG.md](CHANGELOG.md).
