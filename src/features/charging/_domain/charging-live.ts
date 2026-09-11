@@ -1,4 +1,5 @@
 import { isTelemetryCharging } from "./telemetry-charging.ts";
+import { snapshotMeasurementIsFresh } from "./measurement-freshness.ts";
 import {
   costFromGridEnergy,
   energyFromGridKwh,
@@ -181,8 +182,7 @@ export function isFreshLiveSnapshot(
   staleMs = LIVE_CHARGING_STALE_MS,
 ) {
   if (!snapshot) return false;
-  const receivedMs = Date.parse(snapshot.received_at);
-  return Number.isFinite(receivedMs) && nowMs - receivedMs <= staleMs;
+  return snapshotMeasurementIsFresh(snapshot, nowMs, staleMs);
 }
 
 export function findFreshChargingSnapshot(

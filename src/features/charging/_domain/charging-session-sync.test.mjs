@@ -30,6 +30,7 @@ test("live completion preferred when fresh SOC at target", () => {
   const bundle = deriveChargingSessionLiveBundle({
     snapshots: [
       {
+        device_time: new Date(nowMs).toISOString(),
         received_at: new Date(nowMs).toISOString(),
         vehicle_id: "way",
         telemetry: { soc: 100, is_charging: true, charge_power_kw: 4 },
@@ -48,6 +49,7 @@ test("no math completion while fresh live SOC below target", () => {
   const bundle = deriveChargingSessionLiveBundle({
     snapshots: [
       {
+        device_time: new Date(nowMs).toISOString(),
         received_at: new Date(nowMs).toISOString(),
         vehicle_id: "way",
         telemetry: { soc: 71, is_charging: true, charge_power_kw: 4 },

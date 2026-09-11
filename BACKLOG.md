@@ -1,8 +1,73 @@
 # Backlog — proposed plans awaiting go-ahead
 
+## Approved — charging replay, freshness, and atomic progression
+
+Approved in conversation for review point 2. Preserve charging predicates; add distinct
+measurement ordering, a three-minute start window and a 30-second future-clock tolerance.
+Live SOC must have fresh measurement and receipt times (90 seconds). Keep TypeScript
+decisions and commit sessions, counters and cursor atomically through a versioned RPC.
+A tenant-scoped pending queue retains minimal charging inputs until commit, and ingest
+returns retryable failure if charging processing fails. Snapshot-only pushes skip it.
+
+Timestamp checks alone miss overlapping requests; a SQL-only reducer duplicates tested
+logic. Prefer a short compare-and-commit transaction with bounded retries and recovery.
+Charging facts remain user-owned in Postgres; queue/cursor/version are app-managed,
+tenant-scoped operational state in Postgres. Pending inputs are deleted on commit. No
+new GPS collection or preference storage; retain existing session-cardinality policy.
+Verify duplicate, delayed, out-of-order, skewed-clock, concurrent and failed-commit cases.
+Production migration application and deployment are separate from implementation.
+
+Implementation status (2026-09-11): partial, not ready to deploy. Measurement/receipt
+freshness checks and their server read projections are implemented. The new batch planner,
+version-conflict retry loop and atomic adapter are prepared; the adapter is deliberately
+not connected to the existing ingest entry point because its migration file could not be
+written. The standard patch helper refers to a removed executable; the installed patch
+CLI works for TypeScript, but DCG rejects the SQL patch as dynamic shell redirection,
+including an escalated request. Resume after the patch helper is restored.
+
+Verification: 15 new focused cases pass, including an in-memory optimistic-commit model
+for overlapping workers and failure recovery. TypeScript passes. The full suite reports
+476 passes and the same three prior failures (charging-math expectation and two runtime
+alias imports). Actual Postgres atomicity, RLS and rollback checks remain outstanding.
+Remaining work: persist/review the new migration and SQL integration checks, connect
+the atomic adapter, make charging-processing failure return a retryable application NACK,
+verify recovery/rollout behavior, and reconcile the final domain documentation.
+
 Per the agent workflow in [AGENTS.md](AGENTS.md): **plan first, build only on explicit
 go-ahead.** These are researched but **not built**. Shipped work lives in
 [CHANGELOG.md](CHANGELOG.md).
+
+## 🟠 Vercel ignore-build step skips app changes when several commits are pushed at once
+
+### Evidence (2026-09-11)
+
+One push carried `63fc474` (test runner, message helper), `ffb8750` (cadence-alarm route →
+admins) and `d36ccf9` (migrations, tests, BACKLOG). Vercel made a single production
+deployment, `dpl_A9ioNmuZZMFSBJRJS8rN39hbmtqX` for `d36ccf9`, and it is **CANCELED**.
+Production still serves `067d0b8`: the pending `yuan up` alarm kept failing with the old
+route's `missing_telegram_id` after the push.
+
+**Cause:** `scripts/vercel-ignore-build.mjs` diffs `HEAD^..HEAD` only. Vercel builds just the
+tip of a push, and here the tip touched only `supabase/` and `*.md` (all "non-app"), so the
+step exited 0 ("ignore"). The app changes in the two earlier commits were never examined.
+Any multi-commit push whose *last* commit is docs/migrations-only is silently dropped.
+
+### Options
+
+1. **Diff against the last successful deployment (recommended).** Vercel sets
+   `VERCEL_GIT_PREVIOUS_SHA` to the SHA of the last successful deployment for the branch.
+   Diff `${VERCEL_GIT_PREVIOUS_SHA}..HEAD` and fall back to `HEAD^` when it is unset. If that
+   SHA is missing from Vercel's shallow clone, `git diff` throws and the existing `catch`
+   already builds, which fails safe. A one-line change plus a focused test of the decision.
+2. **Stop skipping builds entirely.** Simplest and never wrong, but migration- and doc-only
+   pushes build again (cost only; the project is on Vercel Pro).
+3. **Leave it, and push app commits last.** A process rule nobody will remember.
+
+**Immediate recovery, whichever option:** make a build happen. Committing option 1 does that
+by itself, because it touches `scripts/`, an app path. Otherwise push an empty commit (its
+diff is empty, so the step builds) or redeploy `d36ccf9` from the dashboard.
+
+**Data boundary:** none. Build tooling only.
 
 ## ✅ 19 server-only `SECURITY DEFINER` functions were callable with the public anon key (option 1 shipped 2026-09-11)
 

@@ -27,6 +27,12 @@ fresh live SOC (up to 90 seconds) > in-session telemetry > time-based estimate
 Time-based math is a fallback for display and persistence only. It must not replace fresh
 vehicle data or complete a session while fresh live SOC is available.
 
+Live SOC freshness requires both the measurement timestamp (`device_time`) and receipt
+timestamp (`received_at`) to be within 90 seconds of server/browser time. A measurement
+or receipt up to 30 seconds ahead is tolerated for clock skew; larger future jumps,
+invalid timestamps, and missing measurement timestamps are not fresh live evidence.
+Uploading an old measurement now therefore does not promote it to live SOC.
+
 ## Automatic session detection
 
 **Starting and staying open are two different questions, answered by two different

@@ -44,7 +44,7 @@ export async function resolveStopProgressForSession(
 
   const { data: live } = await supabase
     .from("bydmate_live_snapshots")
-    .select("received_at, telemetry, vehicle_id")
+    .select("device_time, received_at, telemetry, vehicle_id")
     .eq("user_id", userId)
     .eq("vehicle_id", vehicleId)
     .maybeSingle();

@@ -27,7 +27,7 @@ const CHARGING_PARAMS = {
 function chargingSnapshot({ soc = 49, kwhCharged } = {}) {
   const telemetry = { soc, speed_kmh: 0, charge_power_kw: 4 };
   if (kwhCharged !== undefined) telemetry.kwh_charged = kwhCharged;
-  return { received_at: new Date(NOW).toISOString(), telemetry };
+  return { device_time: new Date(NOW).toISOString(), received_at: new Date(NOW).toISOString(), telemetry };
 }
 
 test("display charging power prefers live DC power over the session fallback", () => {
