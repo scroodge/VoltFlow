@@ -231,7 +231,8 @@ Telegram Mini App (`/telegram`) сейчас является публичной
   этого добавляйте новую миграцию с guard.
 - **Тесты** используют встроенный Node runner с `--experimental-strip-types` (без Jest/Vitest).
   Тестируемые чистые модули должны использовать **относительные** `.ts` import, а не alias
-  `@/`. `npm run test` запускает `src/**/*.test.mjs`; `charging-auto-session.test.mjs` исключён
-  из glob и запускается явно.
+  `@/`. `npm run test` рекурсивно находит все `.test.mjs` внутри `src/`, включая charging
+  и вложенные telemetry suites. `npm run test -- --list` выводит список без запуска тестов;
+  поиск файлов не зависит от раскрытия glob в shell.
 - **При изменении поведения обновляйте соответствующий документ** (см. §6) и добавляйте/правьте
   тесты parser logic, charging completion, trip filtering, telemetry history или push thresholds.

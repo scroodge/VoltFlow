@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { sendTelegramMessage } from "@/lib/telegram/bot-send";
+import { cadenceAlarmMessage } from "@/lib/telegram/cadence-alarm-message";
 
 type AlarmRow = {
   id: string;
@@ -53,13 +54,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "missing_telegram_id" }, { status: 207 });
   }
 
-  const detail = alarm.signal === "moving_gap"
-    ? `Moving samples were ${Math.round(Number(alarm.gap_seconds))} seconds apart.`
-    : `Only ${alarm.sample_count_24h ?? 0} telemetry samples arrived in 24 hours.`;
-  const delivery = await sendTelegramMessage(
-    profile.telegram_id,
-    `⚠️ VoltFlow telemetry cadence collapsed for ${alarm.vehicle_id}.\n${detail}\nObserved: ${alarm.observed_at}`,
-  );
+  const delivery = await sendTelegramMessage(profile.telegram_id, cadenceAlarmMessage(alarm));
 
   const update = delivery.ok
     ? { notified_at: new Date().toISOString(), delivery_error: null }

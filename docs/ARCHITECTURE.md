@@ -231,7 +231,8 @@ ignored local documentation such as `OPS_LOCAL.md`.
   new, guarded migration instead.
 - **Tests** use Node's built-in runner with `--experimental-strip-types` (no Jest/Vitest).
   Tested pure modules must use **relative** `.ts` imports, not `@/` aliases.
-  `npm run test` runs `src/**/*.test.mjs`; `charging-auto-session.test.mjs` is excluded
-  from the glob and must be run explicitly.
+  `npm run test` recursively discovers every `.test.mjs` file under `src/`, including
+  charging and nested telemetry suites. `npm run test -- --list` lists files without
+  executing them; discovery does not depend on shell glob expansion.
 - **When behavior changes, update the matching doc** (see §6) and add/adjust tests for
   parser logic, charging completion, trip filtering, telemetry history, or push thresholds.

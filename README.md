@@ -57,8 +57,9 @@ npm run search:eval
 npm run db:migrations:status
 ```
 
-The charging auto-session suite is intentionally outside the default test glob; use the
-focused command documented in [AGENTS.md](AGENTS.md). Local migrations are applied one at a
+`npm run test` recursively includes all `.test.mjs` files under `src/`, including the charging
+auto-session suite. Use `npm run test -- --list` to inspect discovery without running tests.
+Focused charging commands are in [Charging sessions](docs/CHARGING_SESSIONS.md). Local migrations are applied one at a
 time. Self-hosted production uses the private `psql` procedure in `docs/OPS_LOCAL.md`, not
 the Supabase CLI pooler path.
 

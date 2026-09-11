@@ -4,6 +4,140 @@ Per the agent workflow in [AGENTS.md](AGENTS.md): **plan first, build only on ex
 go-ahead.** These are researched but **not built**. Shipped work lives in
 [CHANGELOG.md](CHANGELOG.md).
 
+## Proposed — failures exposed by complete test discovery
+
+Review point 1 is implemented; see CHANGELOG.md (2026-09-11). The expanded Node 22 run
+discovers 73 files and reports 456 passes and three failures in unchanged source/tests:
+
+- `src/features/charging/_domain/charging-math.test.mjs:15` expects the full-precision
+  result `41.943 / 0.92` to equal rounded `45.59` within `1e-9`.
+- `src/lib/push/live-status-notifications.test.mjs` and
+  `src/lib/voltflowmate/telemetry-history.test.mjs` cannot load because their source
+  modules import the runtime alias `@/features/charging/domain`, unsupported by the
+  plain Node test runner.
+
+Recommendation: correct the arithmetic expectation against the documented grid-energy
+formula and make the tested modules load through focused, relative imports. A general
+alias loader is an alternative but adds test-only resolution machinery and can hide
+production module-boundary issues. Trace transitive imports before changing them; do
+not round production energy or skip suites to make the command pass. No user-facing
+data ownership/storage changes. Acceptance: all discovered suites load and the full
+command passes. This follow-up is proposed, not part of point 1's implemented scope.
+
+## 🟡 Cadence-collapse alarm: the moving-gap rule fires on traffic stops, not collapses
+
+### Evidence
+
+On 2026-09-11 the owner of car `cl` got a Telegram alert: *"telemetry cadence collapsed for
+cl. Moving samples were 27 seconds apart. Observed: 2026-09-11T05:32:50Z"*. Read-only
+production checks show that telemetry was healthy the whole time:
+
+- Samples arrived every ~1.2 s straight through the "gap". Between the two moving samples
+  (05:32:23, 1 km/h and 05:32:50, 3 km/h) there are **21 samples at 0 km/h**. The car was
+  stopped in traffic, and uploads kept landing in normal ~18 s driving batches.
+- 05:00–05:40 UTC: 1,468 samples, 820 of them moving.
+
+**Cause.** `bydmate_detect_telemetry_cadence_collapses()`
+(migration `20260908130000`) compares only the **two latest samples with
+`diplus_speed_kmh > 0`**, and so skips every stationary sample between them. Any stop
+longer than 5 s reads as a 5+ s gap. It fires whenever a 10-minute run lands just after a
+batch that ends right after a stop, like a red light, a queue or a parking manoeuvre.
+
+**All 9 `moving_gap` alarms since install are false.** For each alarm, the largest gap
+between *consecutive* samples (any speed) inside its window:
+
+| Vehicle | Reported gap | Samples in between | Real max consecutive gap |
+|---|---|---|---|
+| BYD | 10.3 s | 8 | 1.2 s |
+| z_byd | 10.1 s | 5 | 1.8 s |
+| z_byd | 6.7 s | 4 | 1.4 s |
+| Bulbazavr | 5.0 s | 3 | 1.3 s |
+| yuan up | 29.7 s | 24 | 1.3 s |
+| Bulbazavr | 5.3 s | 2 | 2.1 s |
+| Yuan UP | 6.8 s | 5 | 1.2 s |
+| BYE Yuan Up | 12.5 s | 9 | 1.4 s |
+| cl | 27.2 s | 21 | 1.6 s |
+
+Every one closed itself on the next run. The rule also has a **blind spot**: it inspects a
+single pair per 10-minute run, so it missed both real mid-drive data holes in the same
+period (below).
+
+### Backtest of the replacement rule
+
+Rule: *two **consecutive** samples, **both** moving, more than N s apart.* A traffic stop
+then reads as ~1.2 s, because the stationary samples sit between the moving ones.
+Starting from parked is excluded because the earlier sample is stationary. All samples,
+2026-09-08 → 2026-09-11 (~3.5 days, 12 vehicles):
+
+| Gap | Hits | What they are |
+|---|---|---|
+| 5–8 s | 4 | Jitter: 5.2–5.4 s at 1–8 km/h, and one 7.3 s at 95 km/h (`way`). Noise. |
+| > 8 s | 2 | **Real holes:** `BYD Yuan Up` 18 → 72 km/h across **4 min 25 s** (2026-09-10 04:43, delivered 1.5 h late) and 18 → 55 km/h across **5 h 47 min** (2026-09-08 06:15, delivered 37 min late). |
+
+Healthy driving never exceeded 7.3 s. The slowest cadence mode the sender can fall into
+is the 10 s charging-bulk queue. So **8 s** sits above the noise and below every collapse
+mode. On this data it trades 9 false alarms and 0 real ones for 0 false alarms and 2 real.
+
+### Data boundary
+
+No user-facing data model change. The alarm rows are **app-owned** operational monitoring
+in **Postgres** (`bydmate_telemetry_cadence_alarm_audits`, service-role only). The table
+shape stays as it is: `observed_at` / `previous_moving_at` / `gap_seconds` already fit a
+consecutive pair. Only the detector function changes.
+
+### Options
+
+1. **Raise the threshold only (e.g. 30 s).** Rejected. A stop's length is arbitrary: red
+   lights run 60–90 s, and two of the nine false alarms were already 27–30 s.
+2. **Minimal patch: keep "one pair per run", but pair the latest moving sample with the
+   sample immediately before it (any speed), require that one to be moving too, and raise
+   N to 8 s.** This kills the false positives with a few-line diff. It keeps the blind
+   spot, though, and would have missed both real holes.
+3. **Scan every consecutive moving → moving pair delivered since the last run
+   (recommended).** For each live vehicle, take moving samples whose `received_at` falls
+   in the run window (~11 min, overlapping the 10-minute schedule; the open-alarm unique
+   index already de-duplicates). Look up each one's immediately preceding sample and open
+   an alarm on the largest gap over 8 s. The window is keyed on `received_at`, so a late
+   batch is judged when it arrives. That is how both real holes landed, 37 min and 1.5 h
+   late.
+   *Cost:* candidates come from the existing partial index
+   `bydmate_telemetry_samples_moving_time_idx` (`device_time` bounded to 24 h, index-only,
+   which the index's `INCLUDE (received_at, diplus_speed_kmh)` already covers). Each
+   predecessor is one probe on the `(user_id, vehicle_id, device_time)` unique index. That
+   is no heavier than the 24 h count the detector already does every run.
+   *Resolve rule:* close an open `moving_gap` alarm when a run sees moving samples in its
+   window and none of them qualify.
+4. **Drop the `moving_gap` signal and keep only the 24 h floor.** Rejected. It loses
+   mid-drive holes entirely; the floor only catches a car that goes quiet for a whole day.
+
+### Scope of the change (option 3)
+
+- New migration `create or replace function public.bydmate_detect_telemetry_cadence_collapses()`.
+  Never edit `20260908130000`, which is already applied. Keep it idempotent and apply
+  with `psql` per `docs/OPS_LOCAL.md`.
+- Update `supabase/tests/telemetry-cadence-collapse-alarm.test.mjs`. It pins
+  `moving_gap_seconds > 5` from the old file, so point it at the new migration and assert
+  the consecutive-pair rule and the 8 s threshold.
+- Optional, small: have `src/app/api/cron/telemetry-cadence-alarm/route.ts` format large
+  gaps readably ("4 min 25 s", "5 h 47 min") instead of "20838 seconds". A real hole can
+  now be hours long.
+
+### Side finding (not in scope)
+
+13 of the 14 alarms since install could not be delivered (`missing_telegram_id`: those
+owners never linked Telegram). The detector re-enqueues an undelivered open alarm every
+10 minutes, so each run makes a `pg_net` → Vercel call that can never succeed. `yuan up`'s
+`low_24h_count` alarm has been open since 2026-09-10 14:46, which is ~144 wasted
+invocations a day. The fix is to skip re-delivery while
+`delivery_error = 'missing_telegram_id'`. Leave it for a separate decision.
+
+### Verification
+
+`node --test supabase/tests/telemetry-cadence-collapse-alarm.test.mjs`, `npm run test`,
+and `npm run build` if the route changes. After applying: run the detector once by hand,
+check its JSON result, and re-run the backtest query above. It should reproduce the two
+real holes and none of the nine stop-bridged pairs.
+
 ## 🔵 Knowledge-base import from an external parser (JSON in → draft articles)
 
 ### Goal

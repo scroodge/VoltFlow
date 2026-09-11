@@ -81,25 +81,47 @@ Rule C is the decisive one for inherited-distance phantoms: it caught a `4.5 km 
 
 ### One-time historical cleanup
 
-The filter only fires on *new* closes, so rows created before a filter change persist. Backfill
-them by re-running the function over the candidate window, e.g.:
+The filter only fires on *new* closes, so rows created before a filter change persist.
+Preview candidates first. In `psql`, explicitly set `user_id`, `vehicle_id`, `from_time`,
+and `to_time` for the intended owner, vehicle, and timestamp window before running this
+query. The window includes `from_time` and excludes `to_time`; timestamps should include
+a time zone. The preview returns the first matching rule using the server's null handling.
 
 ```sql
--- dry run: list matches per vehicle for the current week
+begin read only;
+
 with cand as (
   select id, vehicle_id,
-    extract(epoch from (ended_at-started_at)) as dur_s, distance_km, max_speed_kmh,
-    case when extract(epoch from (ended_at-started_at))>0
-         then distance_km*3600.0/extract(epoch from (ended_at-started_at)) end as implied
-  from bydmate_trips where ended_at is not null and started_at >= date_trunc('week', now()))
-select vehicle_id, public.bydmate_discard_trip_if_junk(id) as discarded
-from cand
-where (distance_km<=0.1 and max_speed_kmh<=3)
-   or (dur_s<60 and max_speed_kmh<10)
-   or (dur_s>0 and distance_km>0.3 and implied > greatest(max_speed_kmh*1.5,80));
+    extract(epoch from (ended_at - started_at)) as dur_s,
+    distance_km, max_speed_kmh
+  from public.bydmate_trips
+  where user_id = :'user_id'::uuid
+    and vehicle_id = :'vehicle_id'
+    and ended_at is not null
+    and started_at >= :'from_time'::timestamptz
+    and started_at < :'to_time'::timestamptz
+), classified as (
+  select *, case
+    when coalesce(distance_km, 0) <= 0.1 and coalesce(max_speed_kmh, 0) <= 3 then 'A'
+    when coalesce(dur_s, 999) < 60 and coalesce(max_speed_kmh, 0) < 10 then 'B'
+    when coalesce(dur_s, 0) > 0 and coalesce(distance_km, 0) > 0.3
+      and distance_km * 3600.0 / nullif(dur_s, 0)
+        > greatest(coalesce(max_speed_kmh, 0) * 1.5, 80) then 'C'
+  end as discard_rule
+  from cand
+)
+select id, vehicle_id, dur_s, distance_km, max_speed_kmh, discard_rule
+from classified
+where discard_rule is not null
+order by vehicle_id, id;
+
+rollback;
 ```
 
-(A historical cleanup removed phantom records after the discard rules were introduced.)
+This preview never calls `bydmate_discard_trip_if_junk`: that function **deletes trips and
+track points**. Cleanup is a separate, explicitly authorized write operation against reviewed
+trip IDs, with owner and vehicle scope rechecked and a recovery copy prepared beforehand.
+Do not turn the preview SELECT into a function call and continue treating it as a dry run.
 
 ## Client display filter (`src/lib/voltflowmate/trip-filter.ts`)
 

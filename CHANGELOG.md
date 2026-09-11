@@ -9,6 +9,32 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-09-11
+
+### Review point 1 — safe trip preview and complete test discovery
+
+Implemented in the working tree after approval. `npm run test` now uses
+`scripts/run-tests.mjs` to recursively discover and sort every `.test.mjs` under `src/`,
+without shell glob expansion. It runs the current Node executable with the existing
+test flags, forwards optional runner arguments, propagates failure, and provides
+`--list` for discovery without execution. Explicit discovery was chosen over a quoted
+glob to avoid depending on runner/version glob support in the pinned Node 22 environment.
+
+The trip-cleanup preview is now a pure SELECT inside `BEGIN READ ONLY` / `ROLLBACK`,
+with explicit owner, vehicle, and timestamp-window parameters. It reports candidate IDs
+and the first matching A/B/C rule with the server's null handling; it never calls the
+deleting function. Cleanup is documented as a separate authorized operation. Test
+instructions were reconciled in the README, English/Russian architecture, charging doc,
+and local agent instructions. No data model or storage ownership changed.
+
+Verification: discovery exactly matches the independent `rg` inventory of 73 files
+(the prior default-shell expansion selected 30). Node 22.22.3 reports 456 passes and
+three failures; the runner exits 1 correctly. Direct focused runs reproduce the unchanged
+charging-math expectation failure and the two runtime-alias import failures. These are
+recorded separately in BACKLOG.md; the full suite is not green. The SQL was statically
+reviewed against the discard function, not executed against a database. No build, lint,
+migration, or deployment was performed.
+
 ## 2026-09-10
 
 ### Phantom Drain Analytics no longer times out
