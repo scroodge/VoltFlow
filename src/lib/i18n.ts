@@ -234,6 +234,7 @@ export const dictionaries = {
       next: "Next",
       back: "Back",
       reconnectBanner: "Connect your car to see live data",
+      connectCta: "Connect your car",
     },
     support: {
       title: "Support the project",
@@ -327,6 +328,10 @@ export const dictionaries = {
       addEvBody:
         "We need a battery size and onboard charger preset to simulate energy and time.",
       addVehicle: "Add vehicle",
+      demoExplainer: "A preview with sample numbers — add your car to see your real data.",
+      demoSoc: "Battery",
+      demoRange: "Range",
+      demoLastCharge: "Last charge",
       vehicle: "Vehicle",
       singleVehicle: "Saved vehicle",
       chooseCar: "Choose a car",
@@ -1073,6 +1078,9 @@ export const dictionaries = {
         nextMonth: "Next month",
         clear: "Clear · show all",
       },
+      demo: {
+        explainer: "This is sample data. Add your car to see your real charging and trip history here.",
+      },
       charging: {
         startEnd: "Start → End",
         target: "Target",
@@ -1709,6 +1717,7 @@ export const dictionaries = {
       next: "Далей",
       back: "Назад",
       reconnectBanner: "Падключыце аўто, каб бачыць дадзеныя",
+      connectCta: "Падключыць машыну",
     },
     support: {
       title: "Падтрымаць праект",
@@ -1803,6 +1812,10 @@ export const dictionaries = {
       addEvBody:
         "Патрэбны памер батарэі і магутнасць бартавой зарадкі, каб мадэляваць энергію і час.",
       addVehicle: "Дадаць аўто",
+      demoExplainer: "Прыклад лічбаў — дадайце сваю машыну, каб убачыць сапраўдныя дадзеныя.",
+      demoSoc: "Батарэя",
+      demoRange: "Запас ходу",
+      demoLastCharge: "Апошняя зарадка",
       vehicle: "Аўто",
       singleVehicle: "Захаванае аўто",
       chooseCar: "Выберыце аўто",
@@ -2551,6 +2564,9 @@ export const dictionaries = {
         nextMonth: "Наступны месяц",
         clear: "Скінуць · паказаць усё",
       },
+      demo: {
+        explainer: "Гэта прыклад дадзеных. Дадайце сваю машыну, каб убачыць тут сваю сапраўдную гісторыю зарадак і паездак.",
+      },
       charging: {
         startEnd: "Старт → Канец",
         target: "Мэта",
@@ -3188,6 +3204,7 @@ export const dictionaries = {
       next: "Далее",
       back: "Назад",
       reconnectBanner: "Подключите авто, чтобы видеть данные",
+      connectCta: "Подключить машину",
     },
     support: {
       title: "Поддержать проект",
@@ -3281,6 +3298,10 @@ export const dictionaries = {
       addEvBody:
         "Нужны размер батареи и мощность бортовой зарядки, чтобы моделировать энергию и время.",
       addVehicle: "Добавить авто",
+      demoExplainer: "Пример цифр — добавьте свою машину, чтобы увидеть настоящие данные.",
+      demoSoc: "Батарея",
+      demoRange: "Запас хода",
+      demoLastCharge: "Последняя зарядка",
       vehicle: "Авто",
       singleVehicle: "Сохраненное авто",
       chooseCar: "Выберите авто",
@@ -4028,6 +4049,9 @@ export const dictionaries = {
         prevMonth: "Предыдущий месяц",
         nextMonth: "Следующий месяц",
         clear: "Сбросить · показать всё",
+      },
+      demo: {
+        explainer: "Это пример данных. Добавьте свою машину, чтобы увидеть здесь свою настоящую историю зарядок и поездок.",
       },
       charging: {
         startEnd: "Старт → Итог",

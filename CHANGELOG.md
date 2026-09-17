@@ -9,6 +9,46 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-09-17 (2)
+
+### Watermarked demo data for explorer-mode users (0 cars)
+
+Users who pick "Explore first" during onboarding (`onboardingSkipped`) browse the app
+with 0 cars linked. Dashboard and Vehicle/Charging already had good zero-car handling;
+History (sessions + trips tabs) was the actual gap — a bare "no sessions"/"no trips"
+message with no context that the account has no car at all.
+
+Added a static, hardcoded fixture dataset (`src/lib/demo-data.ts`: one demo car, 2
+example charging sessions, 2 example trips — never written to Postgres, never fetched
+from an API, never persisted to localStorage) and a shared `DemoWatermark` component
+(diagonal "TEST" ribbon + slight opacity dip). Wired into History's charging and trips
+tabs (reusing the existing presentational `SessionCardHeader`/`SessionStatsBlock`/
+`TripCardHeader` sub-components for visual consistency, deliberately *not* the
+interactive `SessionCard`/`TripsTab` variants, since those carry live "view detail" /
+delete actions that would 404 or error against fixture IDs) and into the Dashboard's
+existing zero-car CTA card as a compact 3-stat preview strip.
+
+Gate extended same-day (user request): a car row that exists but has never streamed
+telemetry is treated identically to having no car at all, reusing the existing
+`useVehicleConnection()` hook (`profiles.vehicle_connected_at`, already the source for
+`OnboardingGate`/`ConnectCarBanner`) rather than inventing a second notion of
+"connected." Dashboard's real hero card and History's real session/trip lists now
+require both `cars.length > 0` **and** `connected !== false`.
+
+Two same-day fixes on top: (1) the watermark ribbon's diagonal text was clipped
+illegible -- the ribbon had no fixed-size clipping container, so its rotated `overflow-
+hidden` box collapsed around the (also rotated) span; fixed with the standard corner-
+ribbon recipe (fixed `h-20 w-20` clip box, ribbon absolutely positioned and sized to
+cross it). (2) the CTA now distinguishes "no car row yet" (→ `/cars/new`, unchanged)
+from "car exists but APK never paired" (→ `/onboarding` to pair Mate, new
+`onboarding.connectCta` copy) instead of always offering to add another car.
+
+#### Verification
+
+`npm run build` (type-check + production build) passed clean after each step.
+
+---
+
 ## 2026-09-17
 
 ### Premium monetization: visible entitlement, feature gating, and payment admin

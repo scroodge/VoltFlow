@@ -1,5 +1,71 @@
 # Backlog — proposed plans awaiting go-ahead
 
+## ~~🟠 Watermarked demo data for explorer-mode users (0 cars)~~ — SHIPPED 2026-09-17
+
+See [CHANGELOG.md](CHANGELOG.md) → "2026-09-17 · Watermarked demo data..." for what
+shipped. Kept below for its options/trade-off record.
+
+### Problem
+
+`OnboardingGate`/`onboarding/page.tsx` already let a new user pick "Explore first"
+(`onboardingSkipped`) and browse the app with 0 cars linked. Checked what each screen
+actually shows them today:
+- **Dashboard** (`dashboard-view.tsx`, `cars.length === 0` branch): already good — a
+  dedicated card with title, explanatory body, and an "Add vehicle" CTA button.
+- **Vehicle / Charging** (`/charging` redirects to `/vehicle?tab=charge`,
+  `vehicle-live-view.tsx`): already has its own zero-cars handling.
+- **History** (`history-view.tsx`, sessions tab ~line 740/1193, trips tab ~line 1036):
+  **the real gap.** Empty state there is generic ("no sessions"/"no trips" text keyed
+  only off `sessions.length === 0` / `filteredTrips.length === 0`), with no awareness
+  that the account has no car at all — reads as "the app is just empty," not "you
+  haven't connected a car yet."
+
+### Proposal (user-selected 2026-09-17: demo data with a distinctive "TEST" watermark)
+
+Show static, hardcoded example data (one demo car, 2-3 example charging sessions,
+2-3 example trips) in place of the empty History lists when `cars.length === 0`, each
+item visually marked as a sample (corner/diagonal "DEMO"/"ТЕСТ" watermark, reduced
+opacity or a tinted border — consistent treatment everywhere it appears) plus a
+persistent "Add your car to see your real data" CTA. Considered upgrading the
+Dashboard's already-good empty-state card to the same demo treatment too, for
+consistency, since the user's ask was general ("везде").
+
+**Not real data, ever:** the demo dataset is a hardcoded client-side fixture (a plain
+`.ts` module shipped in the bundle) — never written to Postgres, never fetched from an
+API, never persisted to localStorage. It is not app data or user data in any sense;
+it's UI-layer sample content, same category as placeholder copy.
+
+### Options considered
+
+1. **Full synthetic demo data + watermark everywhere** (Dashboard hero, History
+   sessions, History trips) — most persuasive, most consistent, but the largest
+   surface: needs one shared fixture dataset + a shared watermark treatment reused in
+   3 places, and care that the numbers look plausible (realistic SOC/kWh/km ranges)
+   without being mistaken for real figures.
+2. **History only** — closes the actual gap found above; Dashboard's existing CTA
+   card already does its job, so leave it alone. Smaller, faster, lower risk of the
+   "looks too real" confusion since Dashboard (the highest-traffic screen) keeps its
+   current honest, unambiguous empty state.
+3. **Plain empty-state text only, no fake numbers** (no longer preferred — user chose
+   demo data over this in the prior turn) — kept here only as the rejected alternative.
+
+### Recommendation
+
+Option 1, since the user asked for it broadly ("везде") after weighing the trade-off —
+but implement the shared fixture + watermark component once and reuse it in all three
+places rather than hand-rolling three variants. Gate purely on `cars.length === 0`
+(matches the existing Dashboard condition), independent of the `onboardingSkipped`
+flag — zero cars is zero cars regardless of why.
+
+### Data ownership and location
+
+No new data model, no Postgres, no localStorage: a static fixture module bundled with
+the client code. Nothing user-specific and nothing to migrate or scope by account.
+
+### Should I build this?
+
+---
+
 ## Whole-project audit — 2026-09-11 (proposed fixes, not implemented)
 
 Reviewed checkout `a9a7cbf` across authentication, database authorization, charging,

@@ -44,6 +44,9 @@ import {
 import { type Currency, type Locale, type TranslationKey } from "@/lib/i18n";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import type { VoltflowMateTripRow, ChargingSessionRow } from "@/types/database";
+import { DemoWatermark } from "@/components/demo/demo-watermark";
+import { demoChargingSessions, demoTrips } from "@/lib/demo-data";
+import { useVehicleConnection } from "@/hooks/use-vehicle-connection";
 
 const VehicleAnalyticsPanels = dynamic(() =>
   import("@/components/vehicle/vehicle-analytics-panels").then(
@@ -1089,6 +1092,81 @@ function LoadingSkeleton() {
   );
 }
 
+// ─── Demo preview (explorer mode, 0 cars linked) ──────────────────────────────
+
+/** Distinguishes "no car row yet" (send to /cars/new) from "car added, APK never
+ *  paired" (send to /onboarding to pair Mate). */
+function DemoCtaButton({ needsPairing }: { needsPairing: boolean }) {
+  const { t } = useTranslation();
+  const appPath = useAppPath();
+  return (
+    <Button asChild size="lg" className="h-11 w-full rounded-full text-sm font-semibold">
+      <Link href={appPath(needsPairing ? "/onboarding" : "/cars/new")}>
+        {needsPairing ? t("onboarding.connectCta") : t("dashboard.addVehicle")}
+      </Link>
+    </Button>
+  );
+}
+
+function DemoChargingPreview({
+  tx,
+  needsPairing,
+}: {
+  tx: HistoryTranslator;
+  needsPairing: boolean;
+}) {
+  const { locale } = useTranslation();
+  const currency = useAppPreferences((s) => s.currency);
+  const sessions = useMemo(() => demoChargingSessions(), []);
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="rounded-2xl border border-amber-300/30 bg-amber-400/5 p-3 text-center text-sm text-muted-foreground">
+        {tx("history.demo.explainer")}
+      </p>
+      {sessions.map((session) => (
+        <DemoWatermark key={session.id}>
+          <article className="overflow-hidden rounded-2xl border border-border bg-white/[0.02] shadow-[inset_0_1px_0_rgb(255_255_255/0.04)]">
+            <SessionCardHeader session={session} locale={locale} tx={tx} />
+            <SessionStatsBlock session={session} tx={tx} currency={currency} locale={locale} />
+          </article>
+        </DemoWatermark>
+      ))}
+      <DemoCtaButton needsPairing={needsPairing} />
+    </div>
+  );
+}
+
+function DemoTripsPreview({
+  tx,
+  needsPairing,
+}: {
+  tx: HistoryTranslator;
+  needsPairing: boolean;
+}) {
+  const trips = useMemo(() => demoTrips(), []);
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="rounded-2xl border border-amber-300/30 bg-amber-400/5 p-3 text-center text-sm text-muted-foreground">
+        {tx("history.demo.explainer")}
+      </p>
+      {trips.map((trip, index) => (
+        <DemoWatermark key={trip.id}>
+          <div className="overflow-hidden rounded-2xl border border-border bg-white/[0.02]">
+            <TripCardHeader
+              trip={trip}
+              label={tx("vehicle.trips.tripLabel", { value: trips.length - index })}
+              tx={tx}
+            />
+          </div>
+        </DemoWatermark>
+      ))}
+      <DemoCtaButton needsPairing={needsPairing} />
+    </div>
+  );
+}
+
 // ─── Main export ─────────────────────────────────────────────────────────────
 
 export function HistoryView() {
@@ -1100,6 +1178,13 @@ export function HistoryView() {
   const { t } = useTranslation();
   const tx = t as HistoryTranslator;
   useVoltflowMateTripRealtimeInvalidation();
+  const { data: carsResult } = useCarsQuery();
+  const { data: vehicleConnection } = useVehicleConnection();
+  // A car row that has never sent telemetry is treated the same as having no car.
+  const hasNoCars =
+    (carsResult?.cars?.length ?? 0) === 0 || vehicleConnection?.connected === false;
+  const needsPairing =
+    (carsResult?.cars?.length ?? 0) > 0 && vehicleConnection?.connected === false;
   const { data: sessions = [], isLoading: sessionsLoading } = useSessionsQuery();
   const { data: liveRows = [], isLoading: liveLoading } = useVoltflowMateLiveQuery();
   const tripVehicleId = liveRows[0]?.vehicle_id ?? null;
@@ -1190,6 +1275,8 @@ export function HistoryView() {
               <Skeleton key={i} className="h-12 rounded-2xl" />
             ))}
           </div>
+        ) : sessions.length === 0 && hasNoCars ? (
+          <DemoChargingPreview tx={tx} needsPairing={needsPairing} />
         ) : sessions.length === 0 ? (
           <p className="rounded-2xl border border-border bg-white/[0.02] p-6 text-center text-sm text-muted-foreground">
             {tx("history.charging.empty")}
@@ -1197,6 +1284,8 @@ export function HistoryView() {
         ) : (
           <ChargingTab sessions={sessions} vehicleId={vehicleId} />
         )
+      ) : hasNoCars ? (
+        <DemoTripsPreview tx={tx} needsPairing={needsPairing} />
       ) : (
         <TripsTab vehicleId={tripVehicleId ?? trips[0]?.vehicle_id ?? null} />
       )}

@@ -17,6 +17,7 @@ import { ChargingBolt } from "@/components/brand/ChargingBolt";
 import { LogoFull } from "@/components/brand/LogoFull";
 import { CurrencyAmount, currencyTextWithIcon } from "@/components/currency-amount";
 import { PremiumBadge } from "@/components/premium/premium-badge";
+import { DemoWatermark } from "@/components/demo/demo-watermark";
 import {
   useDashboardDevSnapshot,
   useDashboardDevSnapshotOverride,
@@ -49,6 +50,7 @@ import {
   useLatestVoltflowMateTripsQuery,
 } from "@/hooks/use-voltflowmate-trips-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
+import { useVehicleConnection } from "@/hooks/use-vehicle-connection";
 import { useUserProvidersQuery, useUserProviderMap } from "@/hooks/use-user-providers-query";
 import { usePageVisible } from "@/hooks/use-page-visible";
 import { chargingSessionsRefetchInterval, fetchSessions } from "@/hooks/use-sessions-query";
@@ -548,6 +550,13 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   );
   const cars = carsResult?.cars;
   const preferredCarId = carsResult?.preferredCarId ?? null;
+  // A car row with no telemetry ever received is treated the same as having no car:
+  // there is nothing real to show, so the demo preview applies here too.
+  const { data: vehicleConnection } = useVehicleConnection();
+  const treatAsNoCar = cars?.length === 0 || vehicleConnection?.connected === false;
+  // Distinguishes "no car row yet" (send to /cars/new) from "car added, APK never
+  // paired" (send to /onboarding to pair Mate) -- same demo treatment, different CTA.
+  const needsPairing = (cars?.length ?? 0) > 0 && vehicleConnection?.connected === false;
   const { data: userProviderRows = [] } = useUserProvidersQuery();
   const userProviderMap = useUserProviderMap();
   const allProviderOptions = useMemo(() => {
@@ -1308,30 +1317,61 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
         </Card>
       ) : null}
 
-      {!loadingCars && !carsError && cars && cars.length === 0 ? (
+      {!loadingCars && !carsError && cars && treatAsNoCar ? (
         <section className="voltflow-card p-5">
           <div className="flex items-start gap-3">
             <ChargingBolt className="size-10 shrink-0" aria-hidden />
             <div>
               <h1 className="font-heading text-2xl font-bold tracking-normal">
-                {t("dashboard.addEvTitle")}
+                {needsPairing ? t("onboarding.reconnectBanner") : t("dashboard.addEvTitle")}
               </h1>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                {t("dashboard.addEvBody")}
-              </p>
+              {needsPairing ? null : (
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  {t("dashboard.addEvBody")}
+                </p>
+              )}
             </div>
           </div>
+
+          <DemoWatermark className="mt-4">
+            <div className="grid grid-cols-3 gap-2 rounded-2xl border border-border bg-white/[0.03] p-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                  {t("dashboard.demoSoc")}
+                </p>
+                <p className="mt-0.5 font-heading text-lg font-bold tabular-nums">82%</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                  {t("dashboard.demoRange")}
+                </p>
+                <p className="mt-0.5 font-heading text-lg font-bold tabular-nums">270 km</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                  {t("dashboard.demoLastCharge")}
+                </p>
+                <p className="mt-0.5 font-heading text-lg font-bold tabular-nums">12.4 kWh</p>
+              </div>
+            </div>
+          </DemoWatermark>
+          <p className="mt-2 text-center text-xs text-muted-foreground">
+            {t("dashboard.demoExplainer")}
+          </p>
+
           <Button
             asChild
             size="lg"
-            className="mt-5 h-14 w-full rounded-full bg-[linear-gradient(90deg,#00E676_0%,#00D1FF_100%)] font-heading text-base font-bold text-[#06110B]"
+            className="mt-3 h-14 w-full rounded-full bg-[linear-gradient(90deg,#00E676_0%,#00D1FF_100%)] font-heading text-base font-bold text-[#06110B]"
           >
-            <Link href={appPath("/cars/new")}>{t("dashboard.addVehicle")}</Link>
+            <Link href={appPath(needsPairing ? "/onboarding" : "/cars/new")}>
+              {needsPairing ? t("onboarding.connectCta") : t("dashboard.addVehicle")}
+            </Link>
           </Button>
         </section>
       ) : null}
 
-      {!isPageLoading && !carsError && cars && cars.length > 0 ? (
+      {!isPageLoading && !carsError && cars && cars.length > 0 && !treatAsNoCar ? (
         <>
           <section className="dashboard-primary-card voltflow-card overflow-hidden p-4">
             <div className="flex items-start justify-between gap-3">
