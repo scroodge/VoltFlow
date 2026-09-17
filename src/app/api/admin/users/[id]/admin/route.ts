@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { writeAdminAuditLog } from "@/lib/admin-audit-log";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/supabase/knowledge";
 
@@ -47,6 +48,14 @@ export async function DELETE(
 
   if (deleteError) {
     return NextResponse.json({ error: deleteError.message }, { status: 500 });
+  }
+
+  if (guard.user) {
+    await writeAdminAuditLog({
+      actorAdminId: guard.user.id,
+      targetUserId: targetUserId,
+      action: "admin_role_revoked",
+    });
   }
 
   return NextResponse.json({ ok: true });

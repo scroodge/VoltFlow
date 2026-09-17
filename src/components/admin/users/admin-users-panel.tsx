@@ -555,13 +555,23 @@ function PremiumEditor({ user, onUpdated }: { user: AdminUser; onUpdated: () => 
     toDatetimeLocalValue(user.premium_until),
   );
   const [flagPremium, setFlagPremium] = useState(user.is_premium);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentCurrency, setPaymentCurrency] = useState("BYN");
+  const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
+  const [paymentNote, setPaymentNote] = useState("");
 
   const applyPreset = (days: number) => {
     const next = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
     setPremiumUntil(toDatetimeLocalValue(next.toISOString()));
   };
 
-  const submit = async (payload: { premiumUntil?: string | null; isPremium?: boolean }) => {
+  type PremiumUpdatePayload = {
+    premiumUntil?: string | null;
+    isPremium?: boolean;
+    payment?: { amount: number; currency: string; method: string; note?: string };
+  };
+
+  const submit = async (payload: PremiumUpdatePayload) => {
     setBusy(true);
     try {
       const response = await fetch(`/api/admin/users/${user.id}/premium`, {
@@ -574,13 +584,35 @@ function PremiumEditor({ user, onUpdated }: { user: AdminUser; onUpdated: () => 
       if (!response.ok || !body.ok) {
         throw new Error(body.error ?? "Could not update premium");
       }
-      toast.success("Premium updated");
+      toast.success(payload.payment ? "Premium updated · payment registered" : "Premium updated");
+      if (payload.payment) {
+        setPaymentAmount("");
+        setPaymentNote("");
+      }
       onUpdated();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not update premium");
     } finally {
       setBusy(false);
     }
+  };
+
+  const saveWithOptionalPayment = () => {
+    const amountNum = Number(paymentAmount);
+    const payment =
+      paymentAmount.trim().length > 0 && Number.isFinite(amountNum) && amountNum >= 0
+        ? {
+            amount: amountNum,
+            currency: paymentCurrency.trim() || "BYN",
+            method: paymentMethod,
+            note: paymentNote.trim() || undefined,
+          }
+        : undefined;
+    void submit({
+      isPremium: flagPremium,
+      premiumUntil: premiumUntil ? new Date(premiumUntil).toISOString() : null,
+      payment,
+    });
   };
 
   return (
@@ -641,17 +673,71 @@ function PremiumEditor({ user, onUpdated }: { user: AdminUser; onUpdated: () => 
           Manual flag
         </label>
       </div>
+
+      <div className="space-y-2 border-t border-white/10 pt-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+          Register payment (optional)
+        </p>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="w-24">
+            <Label htmlFor="payment-amount" className="text-[11px]">
+              Amount
+            </Label>
+            <Input
+              id="payment-amount"
+              type="number"
+              min="0"
+              step="0.01"
+              value={paymentAmount}
+              onChange={(e) => setPaymentAmount(e.target.value)}
+              className="mt-1 h-8 rounded-lg text-xs"
+              disabled={busy}
+            />
+          </div>
+          <div className="w-20">
+            <Label htmlFor="payment-currency" className="text-[11px]">
+              Currency
+            </Label>
+            <Input
+              id="payment-currency"
+              value={paymentCurrency}
+              onChange={(e) => setPaymentCurrency(e.target.value)}
+              className="mt-1 h-8 rounded-lg text-xs"
+              disabled={busy}
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <Label htmlFor="payment-method" className="text-[11px]">
+              Method
+            </Label>
+            <select
+              id="payment-method"
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+              disabled={busy}
+              className="mt-1 h-8 w-full rounded-lg border border-white/10 bg-transparent px-2 text-xs"
+            >
+              <option value="bank_transfer">Bank transfer</option>
+              <option value="cash">Cash</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+        <Input
+          placeholder="Note (optional)"
+          value={paymentNote}
+          onChange={(e) => setPaymentNote(e.target.value)}
+          className="h-8 rounded-lg text-xs"
+          disabled={busy}
+        />
+      </div>
+
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
           size="xs"
           className="rounded-full"
-          onClick={() =>
-            void submit({
-              isPremium: flagPremium,
-              premiumUntil: premiumUntil ? new Date(premiumUntil).toISOString() : null,
-            })
-          }
+          onClick={saveWithOptionalPayment}
           disabled={busy}
         >
           Save

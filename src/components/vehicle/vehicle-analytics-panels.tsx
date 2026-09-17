@@ -31,6 +31,7 @@ import { resolveAnalyticsPanelState } from "@/lib/analytics-panel-state";
 import { readAnalyticsResponse } from "@/lib/analytics-request";
 import { shouldEnableDeferredAnalyticsQuery } from "@/lib/analytics-query-scheduling";
 import { useVoltflowMateTelemetryHistoryQuery } from "@/hooks/use-voltflowmate-telemetry-history-query";
+import { PremiumFeatureGate } from "@/components/premium/premium-feature-gate";
 import type { TelemetryHistoryPoint } from "@/lib/voltflowmate/telemetry-history";
 import { useTranslation } from "@/hooks/use-translation";
 import { buildChargeDeltaTrend } from "@/lib/voltflowmate/charge-delta-trend";
@@ -452,7 +453,7 @@ export function VehicleAnalyticsPanels({
   });
   const retentionQuery = useQuery({
     queryKey: ["vehicle-retention-status"],
-    queryFn: () => fetchAnalytics<{ isPremium: boolean; retentionDays: number }>("/api/vehicle/retention-status"),
+    queryFn: () => fetchAnalytics<{ isPremium: boolean; retentionDays: number | null }>("/api/vehicle/retention-status"),
     staleTime: 5 * 60_000,
   });
 
@@ -868,8 +869,14 @@ export function VehicleAnalyticsPanels({
             <p className="rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
               {t("vehicle.analytics.sohSinglePoint")}
             </p>
-          ) : (
+          ) : retentionQuery.data?.isPremium ? (
             <SohTrendChart points={sohQuery.data ?? []} locale={locale} />
+          ) : (
+            <PremiumFeatureGate title={t("settings.premiumGates.diagnosticsTitle")}>
+              <p className="text-sm text-muted-foreground">
+                {t("settings.premiumGates.diagnosticsBody")}
+              </p>
+            </PremiumFeatureGate>
           )}
         </div>
       </section>
@@ -979,8 +986,14 @@ export function VehicleAnalyticsPanels({
             <p className="rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
               {t("vehicle.analytics.cellDeltaNoData")}
             </p>
-          ) : (
+          ) : retentionQuery.data?.isPremium ? (
             <ChargeDeltaTrendChart trend={chargeDeltaTrend} locale={locale} tx={tx} />
+          ) : (
+            <PremiumFeatureGate title={t("settings.premiumGates.diagnosticsTitle")}>
+              <p className="text-sm text-muted-foreground">
+                {t("settings.premiumGates.diagnosticsBody")}
+              </p>
+            </PremiumFeatureGate>
           )}
         </div>
       </section>

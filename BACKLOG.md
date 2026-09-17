@@ -40,7 +40,7 @@ columns must retain their intended edit permissions. **Acceptance:** ordinary us
 cannot change identity columns; both auth implementations reject mismatched Auth IDs;
 normal Telegram linking, email login and preference changes remain functional.
 
-### AUD-02 — P1: users can self-grant Premium through profile writes
+### AUD-02 — P1: users can self-grant Premium through profile writes — RESOLVED 2026-09-17
 
 **DB + source verified.** `profiles.is_premium` and `premium_until` are writable by
 `authenticated` under the same own-row policy, without a protective trigger.
@@ -53,6 +53,19 @@ entitlement writes, or a reviewed role-aware protection trigger. Treat entitleme
 state as app-owned Postgres data; preserve user-owned preferences. **Acceptance:**
 authenticated attempts to set either entitlement field fail, while authorized
 administration and existing Premium users work. Coordinate the migration with AUD-01.
+
+**Shipped 2026-09-17** (migration `20260917130000_harden_profiles_premium_columns.sql`,
+applied to self-hosted prod via `psql -f`): revoked table-level INSERT/UPDATE on
+`profiles` from `anon`/`authenticated` and re-granted both on an explicit column
+allowlist excluding `is_premium`/`premium_until`. Verified live with
+`has_column_privilege`: `authenticated` can no longer INSERT/UPDATE either entitlement
+column; every other tracked column (tariffs, locale, `live_fast_until` fast-mode
+trigger, telegram linking, aux battery alerts, etc.) remains writable exactly as
+before. Note for future privilege work: a bare `revoke update (col) ... from role` is a
+**no-op** when that role also holds the table-level grant for the same action —
+Postgres only restricts a column once the table-level privilege is revoked too; this
+tripped the first attempt at this fix and is worth remembering for AUD-03.
+AUD-01 (email/telegram_id trust) is untouched — separate, unapproved item.
 
 ### AUD-03 — P1: excess TRUNCATE grants remain on 47 public tables
 
@@ -228,7 +241,7 @@ views of the same session. **Recommendation:** use a shared, explicit mapper-com
 projection. **Acceptance:** production list fetch and dashboard bootstrap preserve
 manual/corrected/provider/delta values identically. No ownership/storage change.
 
-### AUD-16 — P2: retention-status API still advertises a 365-day Premium cutoff
+### AUD-16 — P2: retention-status API still advertises a 365-day Premium cutoff — RESOLVED 2026-09-17
 
 **Source verified.** `src/app/api/vehicle/retention-status/route.ts:8` reports 365 days,
 an oldest-kept date and next deletion date for Premium, whereas `supabase/TELEMETRY.md`,
@@ -237,6 +250,17 @@ indefinite retention while active. **Recommendation:** represent unbounded reten
 explicitly in API/UI and reconcile its canonical documentation. Do not alter retention
 jobs merely to fit the old constant. **Acceptance:** Premium has no invented cutoff;
 free-tier cutoff remains accurate. User-owned records stay in Postgres.
+
+**Shipped 2026-09-17** (no migration, code + copy only): `retention-status/route.ts` now
+returns `retentionDays: null` / `oldestKeptDate: null` / `nextDeletionDate: null` for
+premium/admin instead of the invented 365-day constant; the two client consumers
+(`free-retention-notice.tsx`, `vehicle-analytics-panels.tsx`) had their types widened to
+match (both only branch on `isPremium`, so no rendering logic changed). Also fixed the
+same "365 days" promise in `/support` page copy (`i18n.ts` `premiumPerkBody`, en/be/ru)
+to say "unlimited... instead of 30 days" — this was the actual user-facing privacy-text
+mismatch `docs/OPS_LOCAL.md` had flagged as an open compliance item; that note is now
+marked resolved there too. `PREMIUM_ADMIN.md` already said "retained while active" and
+needed no change.
 
 ### AUD-17 — P2: service reminders diverge from edited records
 
@@ -3015,7 +3039,90 @@ No new data model — app-owned telemetry pipeline, existing `bydmate_trips` tab
 
 ---
 
-## 🟠 Premium monetization: visible entitlement badge, feature-gating upsell, and a payment-registration admin (proposed, 2026-09-17)
+## 🔴 Hourly regen/traction rollup counts DC charging as regenerative braking (found 2026-09-17, user report)
+
+### Finding (DB verified, same account as the trip-phantom bug above)
+
+User pointed at History → Analytics → "Рекуперированная энергия" (regen) bar chart: several
+days show 40-60 kWh of daily "regen" against a normal baseline of 1-5 kWh on other days —
+physically implausible for regenerative braking alone (that's close to a full battery's worth
+of energy recovered from coasting/braking in one day).
+
+Drilled into `bydmate_telemetry_hourly` for `nikolayushak1998@gmail.com` / `Bulbazavr`: 2 Sep
+2026, hour 18:00-19:00 shows `regen_kwh_sum=37.2`, `traction_kwh_sum=0.46` — almost entirely
+"regen," almost no drive energy, in one hour. Raw `bydmate_telemetry_samples` for that hour:
+
+```
+device_time  power_kw  charge_power_kw  speed_kmh  soc
+18:06:24     -10       10               0          17
+18:06:46     -62       62               0          18
+18:07:09     -64       64               0          18
+18:08:04     -47       47               0          20
+```
+
+`power_kw` (traction power) is the exact negative mirror of `charge_power_kw` while parked and
+DC fast-charging (speed 0, SOC climbing fast). `docs/ARCHITECTURE.md` rule 5 — "auto-detect
+charging from `charge_power_kw`, never traction `power_kw`" — was applied to charging-session
+detection, but **not** to this energy rollup.
+
+### Root cause, live-DB-verified
+
+`bydmate_update_hourly_energy(p_user_id, p_vehicle_id, p_device_time, p_power)` (called from
+`bydmate_apply_hourly_rollup_sample`, itself invoked once per ingested sample) integrates
+`power_kw` between consecutive samples via `bydmate_interval_energy_kwh` with **no charging
+guard at all** — any interval where both endpoints are ≤0 is booked as `regen_kwh`, regardless
+of `charge_power_kw`. On this account's telemetry, `power_kw` isn't held at 0 while charging —
+it mirrors `-charge_power_kw` — so every DC/AC charging session gets fully counted as regen.
+
+### Options
+
+1. **(Recommended) Skip the interval when either endpoint shows real charging power.** Add a
+   `p_charge_power` parameter to `bydmate_update_hourly_energy` (the caller,
+   `bydmate_apply_hourly_rollup_sample`, already has `p_telemetry` and can extract
+   `charge_power_kw` the same way sibling ingest functions already do); look up the previous
+   sample's own `charge_power_kw` alongside its `power_kw` (already a single-row lookup by
+   `device_time`); return early (no `regen`/`traction` accumulation) when
+   `coalesce(charge_power_kw, 0) > 0.1` on either side — same 0.1 kW threshold already used
+   elsewhere in this codebase (`docs/CHARGING_SESSIONS.md`). Minimal, reuses existing data
+   already flowing through the call, no new telemetry storage.
+2. Detect and correct `power_kw` itself at ingest (zero it out when `charge_power_kw > 0`) so
+   every downstream consumer of `power_kw` is protected, not just this one rollup. Larger blast
+   radius — `power_kw` also feeds trip `traction_kwh_sum`/finalize-trip-energy, live power
+   display, and hero drive metrics; rewriting a raw telemetry field changes what's stored, not
+   just what's derived, and risks masking a real vehicle-side signal issue other code might
+   need to see un-modified.
+
+**Recommendation: option 1.** Scoped to the one function that's actually wrong, doesn't touch
+stored telemetry, matches the codebase's existing "guard the consumer, keep the raw signal"
+convention (see how `charge_power_kw` guards session detection while `power_kw` stays intact
+for trips).
+
+### Data ownership and location
+
+No new data model. Existing `bydmate_telemetry_hourly` app-owned rollup table; fix reads an
+already-ingested field (`charge_power_kw`) that's already passed to the affected function's
+caller. No user preference/tariff/location data touched.
+
+### Plan (user-approved 2026-09-17, "да" to fixing code + recomputing this user's already-stored
+sums + scanning for other affected accounts, same workflow as the trip-phantom fix above)
+
+1. Ship option 1 as a new migration: extend `bydmate_update_hourly_energy` with the charging
+   guard, update `bydmate_apply_hourly_rollup_sample` to pass `charge_power_kw` through. Apply
+   to self-hosted prod via `psql -f`.
+2. Recompute `nikolayushak1998@gmail.com`'s already-accumulated `bydmate_telemetry_hourly`
+   `regen_kwh_sum`/`traction_kwh_sum` from raw `bydmate_telemetry_samples` history using the
+   corrected (charging-excluded) integration, scoped to this one account.
+3. Read-only scan across all users/hours for the same signature (large `regen_kwh_sum` in an
+   hour that also contains `charge_power_kw > 0.1` samples) and report findings before touching
+   other accounts' historical rollups (separate go-ahead, same as the trip-phantom cleanup).
+
+---
+
+## ~~🟠 Premium monetization: visible entitlement badge, feature-gating upsell, and a payment-registration admin~~ — SHIPPED 2026-09-17
+
+See [CHANGELOG.md](CHANGELOG.md) → "2026-09-17 · Premium monetization..." for what shipped.
+Phase 5 (real payment gateway) was explicitly declined and remains not built. The
+proposal below is kept for its options/trade-off record.
 
 ### Current state (verified in this checkout)
 

@@ -9,6 +9,58 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-09-17
+
+### Premium monetization: visible entitlement, feature gating, and payment admin
+
+Full plan (BACKLOG.md, "Premium monetization...") built end to end after user go-ahead.
+
+**Security prerequisite shipped first:** AUD-02 (users could self-grant Premium via a
+raw REST write to their own `profiles` row — column-level `revoke` alone was a no-op
+against the pre-existing table-level grant; fixed by revoking table-level INSERT/UPDATE
+from `anon`/`authenticated` and re-granting on an explicit column allowlist excluding
+`is_premium`/`premium_until`) and AUD-16 (retention-status API and `/support` copy
+advertised an invented 365-day Premium cutoff; Premium/admin retention is actually
+indefinite — now reported as such, `docs/OPS_LOCAL.md`'s matching compliance note closed).
+
+**Visible entitlement:** new server-verified `/api/account/entitlement` (never trusts a
+client-held `profiles` row, per AUD-02) backs a `useEntitlementQuery` hook, a `PremiumBadge`
+shown in Settings' Account card, and a reusable `PremiumFeatureGate` upsell card (
+`FreeRetentionNotice` refactored onto it as the first consumer).
+
+**Free-tier gates added** (all four confirmed by the user): deep Battery Consistency / SOH
+diagnostics view gated, keeping the current SOH% visible; the viewer-gated "fast" 3-9s live
+refresh (`live_fast_until`) formalized as Premium-only; `/api/vehicle/export` clamped to the
+free 30-day retention window (sessions/trips were previously exportable in full regardless
+of tier, since only raw telemetry was ever purged by retention); new cars capped at 1 per
+free account, with existing multi-car free accounts grandfathered (cap blocks *adding*
+another car, never removes ones already linked).
+
+**Admin payment registration + audit log:** new `premium_payments` (amount/currency/method/
+note/recorded-by) and `admin_audit_log` tables, both created with **no** anon/authenticated
+grant at all (PostgREST exposes tables the same way it exposes functions — see the
+2026-09-11 SECURITY DEFINER incident this project already hit once). The admin premium
+editor gained an optional "Register payment" mini-form that writes the ledger row and logs
+the change in one action; admin-role revocation also logs to the audit table. A real payment
+gateway was explicitly declined for this pass — stays manual bank-transfer + admin
+registration.
+
+Data ownership: entitlement state was already app-owned Postgres data, unchanged. The two
+new tables are app-owned operational/administrative data in Postgres, admin-only.
+
+#### Verification
+
+`npm run build` (type-check + production build) passed clean. `npm run test`: 491/494
+passing; the 3 failures (`live-status-notifications.test.mjs`, `telemetry-history.test.mjs`,
+a charging battery-gain-vs-grid-energy case) are in files untouched by this work and were
+already failing before it — not investigated further here. Both migrations
+(`20260917130000_harden_profiles_premium_columns.sql`,
+`20260917140000_premium_payments_and_admin_audit_log.sql`) applied once each to self-hosted
+production via `psql -f`; privilege state verified live with `has_column_privilege` /
+`pg_class.relacl` after each apply.
+
+---
+
 ## 2026-09-11
 
 ### Charging atomic progression cursor is server-only

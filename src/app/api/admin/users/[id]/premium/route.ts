@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { writeAdminAuditLog } from "@/lib/admin-audit-log";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/supabase/knowledge";
 
 type PremiumUpdateBody = {
   premiumUntil?: string | null;
   isPremium?: boolean;
+  payment?: {
+    amount: number;
+    currency: string;
+    method: string;
+    note?: string | null;
+  };
 };
 
 export async function POST(
@@ -13,7 +20,7 @@ export async function POST(
   context: { params: Promise<{ id: string }> },
 ) {
   const guard = await requireAdmin();
-  if (!guard.ok) {
+  if (!guard.ok || !guard.user) {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   }
 
@@ -71,6 +78,27 @@ export async function POST(
     return NextResponse.json({ error: "No premium fields provided." }, { status: 400 });
   }
 
+  const payment = body.payment;
+  if (payment !== undefined) {
+    if (
+      typeof payment.amount !== "number" ||
+      !Number.isFinite(payment.amount) ||
+      payment.amount < 0 ||
+      typeof payment.currency !== "string" ||
+      payment.currency.trim().length === 0 ||
+      typeof payment.method !== "string" ||
+      payment.method.trim().length === 0
+    ) {
+      return NextResponse.json({ error: "Invalid payment details." }, { status: 400 });
+    }
+  }
+
+  const { data: before } = await getSupabaseAdmin()
+    .from("profiles")
+    .select("is_premium,premium_until")
+    .eq("id", userId)
+    .maybeSingle();
+
   const { data, error } = await getSupabaseAdmin()
     .from("profiles")
     .update(updatePayload)
@@ -83,6 +111,32 @@ export async function POST(
   }
   if (!data) {
     return NextResponse.json({ error: "User not found." }, { status: 404 });
+  }
+
+  await writeAdminAuditLog({
+    actorAdminId: guard.user.id,
+    targetUserId: userId,
+    action: "premium_update",
+    details: {
+      before: { is_premium: before?.is_premium ?? null, premium_until: before?.premium_until ?? null },
+      after: { is_premium: data.is_premium, premium_until: data.premium_until },
+      payment: payment ?? null,
+    },
+  });
+
+  if (payment !== undefined) {
+    const { error: paymentError } = await getSupabaseAdmin().from("premium_payments").insert({
+      user_id: userId,
+      amount: payment.amount,
+      currency: payment.currency.trim(),
+      method: payment.method.trim(),
+      note: payment.note?.trim() || null,
+      recorded_by_admin_id: guard.user.id,
+      applied_until: data.premium_until,
+    });
+    if (paymentError) {
+      console.error("Premium payment record failed:", paymentError.message);
+    }
   }
 
   return NextResponse.json({ ok: true, user: data });

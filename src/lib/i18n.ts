@@ -243,7 +243,7 @@ export const dictionaries = {
       fund3: "further development and new features",
       premiumPerkTitle: "A thank-you for supporters",
       premiumPerkBody:
-        "Supporters get Premium: 365 days of charging history instead of 30, and more.",
+        "Supporters get Premium: unlimited charging history instead of 30 days, and more.",
       cardTitle: "Bank card transfer",
       copy: "Copy",
       copied: "Copied",
@@ -607,6 +607,8 @@ export const dictionaries = {
         "Used for realtime kWh ramps and ETA math — everything stays scoped to your account.",
       editTitle: "Edit vehicle",
       editDescription: "Update generation, battery size, and AC limits for this EV.",
+      freeCarLimitError:
+        "Free plan supports 1 car. Upgrade to Premium to add more cars to your garage.",
       generationLabel: "Model generation",
       generation: {
         gen1_2024: "2024 · 1st generation",
@@ -1493,6 +1495,21 @@ export const dictionaries = {
         upgradeCta: "Upgrade to Premium",
         emailHelp: "To upgrade, email us at {email}.",
       },
+      premiumBadge: "Premium",
+      premiumGates: {
+        diagnosticsTitle: "Deep battery diagnostics is a Premium feature",
+        diagnosticsBody:
+          "Free plan shows your current battery health percentage. Premium unlocks the full Battery Consistency view: per-cell trends, degradation history, and early warnings.",
+        fastModeTitle: "Fast live updates is a Premium feature",
+        fastModeBody:
+          "Free plan refreshes live vehicle status at the normal pace. Premium watchers get 3-9 second updates while viewing the car.",
+        exportTitle: "Full-history export is a Premium feature",
+        exportBody:
+          "Free plan exports match the {days}-day free retention window. Premium exports your complete charging and trip history.",
+        multiCarTitle: "Multiple cars is a Premium feature",
+        multiCarBody:
+          "Free plan supports 1 car per account. Premium removes the limit for households and multi-car owners.",
+      },
       legal: {
         title: "Legal and privacy",
         description:
@@ -1701,7 +1718,7 @@ export const dictionaries = {
       fund3: "далейшае развіццё праекта і яго магчымасцяў",
       premiumPerkTitle: "Падзяка падтрымальнікам",
       premiumPerkBody:
-        "Падтрымальнікам даступны Premium: 365 дзён гісторыі зарадак замест 30 і не толькі.",
+        "Падтрымальнікам даступны Premium: неабмежаваная гісторыя зарадак замест 30 дзён і не толькі.",
       cardTitle: "Пераказ на банкаўскую карту",
       copy: "Скапіраваць",
       copied: "Скапіравана",
@@ -2068,6 +2085,8 @@ export const dictionaries = {
         "Для realtime росту кВт·г і разліку ETA — усё застаецца ў межах вашага акаўнта.",
       editTitle: "Рэдагаванне аўто",
       editDescription: "Абнавіце пакаленне, ёмістасць батарэі і ліміты AC.",
+      freeCarLimitError:
+        "У free-плане даступная 1 машына. Перайдзіце на Premium, каб дадаць яшчэ машыны ў гараж.",
       generationLabel: "Пакаленне мадэлі",
       generation: {
         gen1_2024: "2024 · 1-е пакаленне",
@@ -2955,6 +2974,21 @@ export const dictionaries = {
         upgradeCta: "Перайсці на Premium",
         emailHelp: "Каб абнавіцца, напішыце на {email}.",
       },
+      premiumBadge: "Premium",
+      premiumGates: {
+        diagnosticsTitle: "Паглыбленая дыягностыка батарэі — функцыя Premium",
+        diagnosticsBody:
+          "У free-плане паказваецца бягучы працэнт здароўя батарэі. Premium адкрывае поўны экран Battery Consistency: трэнды па ячэйках, гісторыю дэградацыі і раннія папярэджанні.",
+        fastModeTitle: "Хуткае абнаўленне статусу — функцыя Premium",
+        fastModeBody:
+          "У free-плане жывы статус машыны абнаўляецца ў звычайным тэмпе. Гледачы з Premium атрымліваюць абнаўленні кожныя 3-9 секунд.",
+        exportTitle: "Поўны экспарт гісторыі — функцыя Premium",
+        exportBody:
+          "У free-плане экспарт абмежаваны акном захоўвання ў {days} дзён. Premium экспартуе поўную гісторыю зарадак і паездак.",
+        multiCarTitle: "Некалькі машын — функцыя Premium",
+        multiCarBody:
+          "У free-плане даступная 1 машына на акаунт. Premium здымае гэта абмежаванне для сем'яў і ўладальнікаў некалькіх машын.",
+      },
       legal: {
         title: "Прававыя дакументы",
         description:
@@ -3163,7 +3197,7 @@ export const dictionaries = {
       fund3: "дальнейшее развитие проекта и его функциональных возможностей",
       premiumPerkTitle: "Благодарность поддержавшим",
       premiumPerkBody:
-        "Поддержавшим проект доступны дополнительные возможности — Premium: 365 дней истории зарядок вместо 30 и не только.",
+        "Поддержавшим проект доступны дополнительные возможности — Premium: неограниченная история зарядок вместо 30 дней и не только.",
       cardTitle: "Перевод на банковскую карту",
       copy: "Скопировать",
       copied: "Скопировано",
@@ -3529,6 +3563,8 @@ export const dictionaries = {
         "Для realtime роста кВт·ч и расчета ETA — все остается в пределах вашего аккаунта.",
       editTitle: "Редактирование авто",
       editDescription: "Обновите поколение, емкость батареи и лимиты AC.",
+      freeCarLimitError:
+        "В free-плане доступна 1 машина. Перейдите на Premium, чтобы добавить ещё машины в гараж.",
       generationLabel: "Поколение модели",
       generation: {
         gen1_2024: "2024 · 1-е поколение",
@@ -4415,6 +4451,21 @@ export const dictionaries = {
         nextDeletion: "Следующее окно очистки: {date}",
         upgradeCta: "Перейти на Premium",
         emailHelp: "Чтобы перейти на Premium, напишите на {email}.",
+      },
+      premiumBadge: "Premium",
+      premiumGates: {
+        diagnosticsTitle: "Углублённая диагностика батареи — функция Premium",
+        diagnosticsBody:
+          "В free-плане отображается текущий процент здоровья батареи. Premium открывает полный экран Battery Consistency: тренды по ячейкам, историю деградации и ранние предупреждения.",
+        fastModeTitle: "Быстрое обновление статуса — функция Premium",
+        fastModeBody:
+          "В free-плане живой статус машины обновляется в обычном темпе. Зрители с Premium получают обновления каждые 3-9 секунд.",
+        exportTitle: "Полный экспорт истории — функция Premium",
+        exportBody:
+          "В free-плане экспорт ограничен окном хранения в {days} дней. Premium экспортирует полную историю зарядок и поездок.",
+        multiCarTitle: "Несколько машин — функция Premium",
+        multiCarBody:
+          "В free-плане доступна 1 машина на аккаунт. Premium снимает это ограничение для семей и владельцев нескольких машин.",
       },
       legal: {
         title: "Правовые документы",

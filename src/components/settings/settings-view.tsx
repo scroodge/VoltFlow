@@ -28,6 +28,7 @@ import { LocaleSwitcher } from "@/components/locale-switcher";
 import { LegalSettingsRow } from "@/components/legal/legal-document-view";
 import { currencyTextWithIcon } from "@/components/currency-amount";
 import { FreeRetentionNotice } from "@/components/premium/free-retention-notice";
+import { PremiumBadge } from "@/components/premium/premium-badge";
 import { ClusterBackgroundsSettings } from "@/components/settings/cluster-backgrounds-settings";
 import { SettingsGroup, SettingsGroupDivider, SettingsPageHeader } from "@/components/settings/settings-section";
 import { createClient } from "@/lib/supabase/client";
@@ -1061,7 +1062,10 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
 
       <Card size="sm" className="border-white/[0.08]">
         <CardHeader>
-          <CardTitle>{t("settings.account")}</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            {t("settings.account")}
+            <PremiumBadge />
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm leading-relaxed">
           <div>

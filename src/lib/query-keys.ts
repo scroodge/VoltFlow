@@ -33,4 +33,5 @@ export const queryKeys = {
     ["charging-efficiency-suggestions", carId] as const,
   voltflowMateRecentChargeSamples: (vehicleId: string | null) =>
     ["bydmate-recent-charge-samples", vehicleId] as const,
+  accountEntitlement: ["account-entitlement"] as const,
 };

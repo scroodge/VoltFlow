@@ -10,6 +10,9 @@ import {
 } from "@/lib/charging-efficiency";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeFormDecimal } from "@/lib/number-input";
+import { resolveUserEffectivePremium } from "@/lib/premium-entitlement-server";
+
+const FREE_CAR_LIMIT = 1;
 
 const carSchema = z.object({
   name: z.string().min(1).max(120),
@@ -67,6 +70,21 @@ export async function createCar(formData: FormData) {
 
   if (!parsed.success) {
     return { ok: false as const, error: parsed.error.flatten().fieldErrors };
+  }
+
+  // Free plan is capped at 1 car (BACKLOG.md, Premium monetization plan). Existing
+  // free accounts that already have more than this from before the cap keep every car
+  // they have -- this only blocks *adding* another one, never removes what's there.
+  const isPremium = await resolveUserEffectivePremium(supabase, user.id);
+  if (!isPremium) {
+    const { count, error: countError } = await supabase
+      .from("cars")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id);
+    if (countError) return { ok: false as const, error: countError.message };
+    if ((count ?? 0) >= FREE_CAR_LIMIT) {
+      return { ok: false as const, error: "free_car_limit" };
+    }
   }
 
   const { error, data } = await supabase

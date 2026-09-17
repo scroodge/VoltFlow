@@ -71,6 +71,9 @@ export function useCreateCarMutation() {
     mutationFn: async (vals: FormData) => {
       const result = await createCar(vals);
       if (!result.ok) {
+        if (result.error === "free_car_limit") {
+          throw new Error(t("cars.freeCarLimitError") as string);
+        }
         throw new Error(typeof result.error === "string" ? result.error : "Could not save");
       }
       return result.carId;

@@ -16,6 +16,7 @@ import { BrandBadge } from "@/components/brand/BrandBadge";
 import { ChargingBolt } from "@/components/brand/ChargingBolt";
 import { LogoFull } from "@/components/brand/LogoFull";
 import { CurrencyAmount, currencyTextWithIcon } from "@/components/currency-amount";
+import { PremiumBadge } from "@/components/premium/premium-badge";
 import {
   useDashboardDevSnapshot,
   useDashboardDevSnapshotOverride,

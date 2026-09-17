@@ -15,6 +15,7 @@ import {
   OnboardingGate,
 } from "@/components/onboarding/onboarding-gate";
 import { touchUserActivity } from "@/actions/activity";
+import { useEntitlementQuery } from "@/hooks/use-entitlement-query";
 import { useVoltflowMateLiveQuery } from "@/hooks/use-voltflowmate-live-query";
 import { usePageVisible } from "@/hooks/use-page-visible";
 import { isDevAppRoute } from "@/lib/dev/dev-fetch";
@@ -46,6 +47,8 @@ async function requestLiveFastStatus(vehicleId: string) {
 
 function LiveStatusHost() {
   const { data: voltflowMateLive = [] } = useVoltflowMateLiveQuery();
+  const { data: entitlement } = useEntitlementQuery();
+  const isPremium = entitlement?.isPremium === true;
   const pageVisible = usePageVisible();
   const pathname = usePathname();
   const devRoute = isDevAppRoute();
@@ -63,7 +66,8 @@ function LiveStatusHost() {
   const watchedVehicleId = voltflowMateLive[0]?.vehicle_id ?? null;
 
   useEffect(() => {
-    if (devRoute || !isLiveView || !pageVisible || !watchedVehicleId) return;
+    // Fast live-status refresh is a Premium perk (BACKLOG.md, Premium monetization plan).
+    if (devRoute || !isLiveView || !pageVisible || !watchedVehicleId || !isPremium) return;
 
     const beat = () => {
       // Best-effort: a missed beat costs latency until the next one, never correctness.
@@ -73,7 +77,7 @@ function LiveStatusHost() {
     beat();
     const timer = setInterval(beat, LIVE_FAST_HEARTBEAT_MS);
     return () => clearInterval(timer);
-  }, [devRoute, isLiveView, pageVisible, watchedVehicleId]);
+  }, [devRoute, isLiveView, pageVisible, watchedVehicleId, isPremium]);
 
   return (
     <div className="px-6 pt-4">

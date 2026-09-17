@@ -1,18 +1,16 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { PremiumFeatureGate } from "@/components/premium/premium-feature-gate";
 import { useTranslation } from "@/hooks/use-translation";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type RetentionStatusPayload = {
   ok: boolean;
   isPremium: boolean;
-  retentionDays: number;
-  oldestKeptDate: string;
-  nextDeletionDate: string;
+  retentionDays: number | null;
+  oldestKeptDate: string | null;
+  nextDeletionDate: string | null;
   upgradeEmail: string;
 };
 
@@ -49,24 +47,16 @@ export function FreeRetentionNotice() {
   if (loading || status?.isPremium) return null;
 
   return (
-    <Card size="sm" className="border-amber-300/30 bg-amber-400/5">
-      <CardHeader>
-        <CardTitle>{t("settings.retentionNotice.title")}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <p className="text-sm text-muted-foreground">
-          {t("settings.retentionNotice.body", { days: status?.retentionDays ?? 30 })}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          {t("settings.retentionNotice.nextDeletion", { date: nextDeletionText })}
-        </p>
-        <Button asChild size="lg" className="h-11 w-full rounded-full text-sm font-semibold">
-          <Link href="/support">{t("settings.retentionNotice.upgradeCta")}</Link>
-        </Button>
-        <p className="text-xs text-muted-foreground">
-          {t("settings.retentionNotice.emailHelp", { email: status?.upgradeEmail ?? "" })}
-        </p>
-      </CardContent>
-    </Card>
+    <PremiumFeatureGate title={t("settings.retentionNotice.title")}>
+      <p className="text-sm text-muted-foreground">
+        {t("settings.retentionNotice.body", { days: status?.retentionDays ?? 30 })}
+      </p>
+      <p className="text-xs text-muted-foreground">
+        {t("settings.retentionNotice.nextDeletion", { date: nextDeletionText })}
+      </p>
+      <p className="text-xs text-muted-foreground">
+        {t("settings.retentionNotice.emailHelp", { email: status?.upgradeEmail ?? "" })}
+      </p>
+    </PremiumFeatureGate>
   );
 }

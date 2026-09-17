@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { devVehicleId, resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
+import { resolveUserEffectivePremium } from "@/lib/premium-entitlement-server";
 
 const MAX_EXPORT_RANGE_MS = 366 * 24 * 60 * 60 * 1000;
 const MAX_EXPORT_ROWS = 10_000;
+// Charging-session and trip summary rows are not purged by the retention jobs the way
+// raw telemetry/route-track points are (see docs/PREMIUM_ADMIN.md) -- unlike those, this
+// route had no free/premium distinction of its own, so a free user could already export
+// full multi-year session/trip history via ?from=. Clamp explicitly to match the free
+// retention window instead of relying on data having been purged.
+const FREE_EXPORT_RANGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 function csvEscape(value: unknown) {
   const text = value == null ? "" : String(value);
@@ -17,11 +24,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const isPremium = await resolveUserEffectivePremium(access.supabase, access.userId);
+
   const params = request.nextUrl.searchParams;
   const format = params.get("format") === "json" ? "json" : "csv";
-  const from = params.get("from") ?? new Date(Date.now() - 30 * 86400000).toISOString();
+  const requestedFrom = params.get("from") ?? new Date(Date.now() - 30 * 86400000).toISOString();
   const to = params.get("to") ?? new Date().toISOString();
-  const fromMs = Date.parse(from);
+  let fromMs = Date.parse(requestedFrom);
   const toMs = Date.parse(to);
   if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs < fromMs) {
     return NextResponse.json({ error: "Invalid export date range" }, { status: 400 });
@@ -29,6 +38,10 @@ export async function GET(request: NextRequest) {
   if (toMs - fromMs > MAX_EXPORT_RANGE_MS) {
     return NextResponse.json({ error: "Export range is limited to 366 days" }, { status: 413 });
   }
+  const freeCutoffMs = toMs - FREE_EXPORT_RANGE_MS;
+  const planLimited = !isPremium && fromMs < freeCutoffMs;
+  if (planLimited) fromMs = freeCutoffMs;
+  const from = new Date(fromMs).toISOString();
   const vehicleId = params.get("vehicle_id")?.trim() || devVehicleId(request);
   const vehicleFilter = vehicleId ? { vehicle_id: vehicleId } : {};
 
@@ -71,6 +84,7 @@ export async function GET(request: NextRequest) {
     trips: trips ?? [],
     telemetry_samples: samples ?? [],
     truncated,
+    plan_limited: planLimited,
   };
 
   if (format === "json") {
@@ -123,6 +137,7 @@ export async function GET(request: NextRequest) {
     );
   }
   if (truncated) lines.push("meta,,,,,truncated,true");
+  if (planLimited) lines.push("meta,,,,,plan_limited,true");
 
   return new NextResponse(lines.join("\n"), {
     headers: {
