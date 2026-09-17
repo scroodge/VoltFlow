@@ -3014,3 +3014,123 @@ No new data model — app-owned telemetry pipeline, existing `bydmate_trips` tab
    report findings before deleting anything for other accounts (separate go-ahead for those).
 
 ---
+
+## 🟠 Premium monetization: visible entitlement badge, feature-gating upsell, and a payment-registration admin (proposed, 2026-09-17)
+
+### Current state (verified in this checkout)
+
+- Entitlement already exists as two Postgres columns: `profiles.is_premium` (manual flag) and
+  `profiles.premium_until` (term expiry), combined with `admin_users` membership by the single
+  canonical predicate `resolveEffectivePremium()` (`src/lib/premium-entitlement.ts`). Every
+  server check (`isDashboardEntitled`, `retention-status`, `admin_users_*` RPCs) already goes
+  through it — good, keep doing that.
+  Only two features are actually gated today: (1) the car head-unit cluster/dashboard screen
+  projection (`isDashboardEntitled`), and (2) telemetry/trip/route retention — 30 days free vs.
+  retained while active for premium/admin (`docs/PREMIUM_ADMIN.md`).
+- The only free-tier "you're missing something" UI is one card, `FreeRetentionNotice`
+  (`src/components/premium/free-retention-notice.tsx`), shown in Settings only, only about
+  retention days. There is **no premium badge anywhere** — a premium user looks identical to a
+  free user everywhere in the app today.
+- "Buying" premium is fully manual: the free-tier card links to `/support` and shows a mailto
+  to the owner's personal inbox (`src/lib/premium-upgrade-mailto.ts`); there is no payment
+  gateway anywhere in this repo (checked — no Stripe/YooKassa/PayPal/etc.). The admin side
+  already has real tooling: `/admin/users` → `AdminUsersPanel` lets an admin filter by premium
+  state and grant/clear premium via a manual flag + `premium_until` date picker with +30/90/365d
+  presets (`src/app/api/admin/users/[id]/premium/route.ts`). That already covers most of "удобный
+  механизм... выключения premium функций" — it does not yet record *why* premium was granted
+  (no amount, method, or reason), only the resulting date.
+
+### Blocking prerequisite — do not build more gates on top of this
+
+**AUD-02** (logged above, unresolved): `profiles.is_premium` and `premium_until` are writable by
+the owning authenticated user through the normal own-row RLS policy, with no protective trigger.
+A user can currently self-grant premium with a raw REST `PATCH` to their own profile row —
+every entitlement check in the app (including the new badge/gates this plan proposes) trusts
+those same two columns. Shipping more visible premium gates before this is fixed makes the hole
+*more* attractive to find, not less. **AUD-16** (also logged above) is the same
+`FreeRetentionNotice` surface this plan extends, so fold its "unbounded retention, not 365 days"
+copy fix into the same pass rather than editing that card twice.
+**Recommendation: fix AUD-02 and AUD-16 first**, as their own approved backlog items, before any
+of the phases below touch `profiles`-derived UI.
+
+### Data ownership and location — confirmation required before implementation
+
+- Entitlement state (`is_premium`, `premium_until`, `admin_users`) is **unchanged**: already
+  app-owned Postgres data, not a user preference, not localStorage. This plan does not move it.
+- A new payment record (Phase 4 below) would also be **app-owned operational/administrative
+  data in Postgres**, admin-only RLS — never user-owned, never localStorage, and never written
+  by the client the payer uses.
+
+### Phase 1 — Visible premium badge (low risk, cheap, do first after the security fix)
+
+Show a small "Premium" badge wherever identity/account state already renders (Settings account
+header, and optionally the vehicle/dashboard header). Source it from the same server-resolved
+`resolveEffectivePremium()` result the app already computes for retention/dashboard checks
+(e.g. a small `/api/me/entitlement` read, or pass it down from a server component) — **not** a
+raw client read of `profiles.is_premium`, so the badge can't be spoofed the same way AUD-02
+describes and stays correct the moment that fix ships.
+
+### Phase 2 — Reusable "locked feature" upsell pattern
+
+Generalize `FreeRetentionNotice` into a shared `PremiumFeatureGate`/locked-card component:
+feature preview + lock icon + one-line benefit + upgrade CTA, reusing the existing `/support`
+flow. Every feature chosen in Phase 3 renders through this one component instead of bespoke
+copy per feature, so the tone stays consistent and the payment-flow decision in Phase 4/5 only
+has to change one place.
+
+### Phase 3 — What to gate (a menu, not a decision — needs your picks)
+
+Keep free (these build the trust/network effect that turns free users into buyers — gating them
+would cut the funnel that produces premium purchases, matching your ask not to kill interest in
+the app's unique features): core charging-session and trip tracking, live status, knowledge base
++ semantic search, community listings, service records/reminders themselves.
+
+Already gated, no change needed: cluster/dashboard car-screen projection; >30-day telemetry/
+trip/route retention.
+
+Candidates to add (pick some, not necessarily all):
+
+| Candidate | Why it's a safe cut for free | Why premium wants it |
+| --- | --- | --- |
+| Deep Battery Consistency / SOH diagnostics view (shipped 2026-09-17, commit `b97aa4d`) | New, not part of daily charging workflow; free keeps a basic SOH number | Enthusiast/long-term-ownership feature, high perceived value |
+| Formalize viewer-gated "fast" 3–9s live refresh (`profiles.live_fast_until`) as premium | Currently free for any viewer; not core to using the app day-to-day | Directly visible, tangible speed perk while watching the car |
+| Full-history data export (cap free export at the same 30-day free retention window) | Matches the retention tier that already exists — no new concept | Natural pairing with "your data disappears after 30 days" messaging |
+| Multiple cars in one garage (free = 1 car) | **Needs a check first** — confirm today's actual per-account car cap before committing to this; if currently unlimited for free, this is a very standard freemium lever, but changing it after users already added 2+ cars is disruptive | Households/multi-car owners are a natural paying segment |
+
+**User-confirmed 2026-09-17:** ship all four for v1 — diagnostics gate, fast-mode
+formalization, export cap, and multi-car cap (free = 1 car). Verified: there is currently **no**
+per-account car limit anywhere in `src/` (grepped for a cap/max-cars check — none exists), so
+this is a genuinely new restriction, not a relabeling. Because existing free accounts may
+already have 2+ cars, the multi-car cap needs a grandfather rule: **existing free accounts keep
+every car already linked at rollout** (no forced downgrade/deletion), the 1-car cap applies only
+to *adding a new* car from that point on. State this explicitly in the upsell copy so it doesn't
+read as a bait-and-switch.
+
+### Phase 4 — Admin payment registration + audit trail
+
+Today an admin grant is just "set `premium_until`," with no record of amount, method, or who
+processed it. Add a `premium_payments` table (app-owned Postgres, admin-only RLS): `user_id`,
+`amount`, `currency`, `method` (free-text/enum — bank transfer, cash, other; no gateway
+integration implied), `recorded_by_admin_id`, `note`, `created_at`, `applied_until`. The existing
+`PremiumEditor` in `AdminUsersPanel` gains a "Register payment" mini-form that inserts the ledger
+row and extends `premium_until` in one action instead of two. Build this together with the
+already-approved-but-unbuilt "Admin audit log" (this file, "Advanced admin workspace" section,
+phase 2) — same shape of data, one migration instead of two.
+
+### Phase 5 — Real payment gateway — declined for now
+
+**User-confirmed 2026-09-17:** stay with manual bank-transfer + admin registration (Phase 4).
+No payment gateway work in this pass; revisit only if asked later.
+
+### Confirmed scope (2026-09-17) — ready to build pending final go-ahead
+
+1. Fix **AUD-02** (self-grant hole) and **AUD-16** (stale 365-day retention copy) first.
+2. Phase 1 badge + Phase 2 reusable lock/upsell component.
+3. Phase 3 gates, all four: SOH/Battery-Consistency deep diagnostics, fast-mode (`live_fast_until`)
+   formalization, free export capped at the 30-day retention window, and a new 1-car free cap
+   with existing multi-car free accounts grandfathered.
+4. Phase 4 `premium_payments` ledger + admin "Register payment" form, built together with the
+   already-approved Admin audit log.
+5. Phase 5 (real payment gateway) — explicitly not building this pass.
+
+---
