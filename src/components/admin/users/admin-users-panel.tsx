@@ -549,6 +549,16 @@ function attentionTone(kind: AdminAttentionItem["kind"]) {
   }
 }
 
+type PremiumPayment = {
+  id: string;
+  amount: number;
+  currency: string;
+  method: string;
+  note: string | null;
+  applied_until: string | null;
+  created_at: string;
+};
+
 function PremiumEditor({ user, onUpdated }: { user: AdminUser; onUpdated: () => void }) {
   const [busy, setBusy] = useState(false);
   const [premiumUntil, setPremiumUntil] = useState<string>(
@@ -559,6 +569,23 @@ function PremiumEditor({ user, onUpdated }: { user: AdminUser; onUpdated: () => 
   const [paymentCurrency, setPaymentCurrency] = useState("BYN");
   const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
   const [paymentNote, setPaymentNote] = useState("");
+  const [payments, setPayments] = useState<PremiumPayment[] | null>(null);
+  const [paymentsRefreshTick, setPaymentsRefreshTick] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/admin/users/${user.id}/payments`, { credentials: "include" })
+      .then(async (response) => {
+        const body = (await response.json()) as { ok?: boolean; payments?: PremiumPayment[] };
+        if (active && response.ok && body.ok) setPayments(body.payments ?? []);
+      })
+      .catch(() => {
+        if (active) setPayments([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [user.id, paymentsRefreshTick]);
 
   const applyPreset = (days: number) => {
     const next = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
@@ -588,6 +615,7 @@ function PremiumEditor({ user, onUpdated }: { user: AdminUser; onUpdated: () => 
       if (payload.payment) {
         setPaymentAmount("");
         setPaymentNote("");
+        setPaymentsRefreshTick((v) => v + 1);
       }
       onUpdated();
     } catch (error) {
@@ -672,6 +700,32 @@ function PremiumEditor({ user, onUpdated }: { user: AdminUser; onUpdated: () => 
           />
           Manual flag
         </label>
+      </div>
+
+      <div className="space-y-2 border-t border-white/10 pt-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+          Payment history
+        </p>
+        {payments === null ? (
+          <p className="text-xs text-muted-foreground">Loading...</p>
+        ) : payments.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No payments recorded yet.</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {payments.map((payment) => (
+              <li
+                key={payment.id}
+                className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-2.5 py-1.5 text-xs"
+              >
+                <span className="font-semibold tabular-nums">
+                  {payment.amount} {payment.currency}
+                </span>
+                <span className="text-muted-foreground">{paymentMethodLabel(payment.method)}</span>
+                <span className="text-muted-foreground">{formatDate(payment.created_at)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className="space-y-2 border-t border-white/10 pt-3">
@@ -833,6 +887,17 @@ function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Unknown";
   return date.toLocaleDateString();
+}
+
+function paymentMethodLabel(method: string) {
+  switch (method) {
+    case "bank_transfer":
+      return "Bank transfer";
+    case "cash":
+      return "Cash";
+    default:
+      return "Other";
+  }
 }
 
 function formatMetricDate(value: string) {

@@ -1339,8 +1339,9 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                   {t("dashboard.vehicle")}
                 </p>
-                <h1 className="mt-1 truncate font-heading text-xl font-bold tracking-normal">
-                  {selectedCar?.name ?? "EV"}
+                <h1 className="mt-1 flex items-center gap-2 font-heading text-xl font-bold tracking-normal">
+                  <span className="truncate">{selectedCar?.name ?? "EV"}</span>
+                  <PremiumBadge />
                 </h1>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1">
