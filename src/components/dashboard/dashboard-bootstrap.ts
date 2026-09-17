@@ -13,7 +13,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { VoltflowMateLiveSnapshotRow } from "@/types/database";
 
 const SESSION_COLUMNS =
-  "id,user_id,car_id,start_percent,current_percent,target_percent,battery_capacity_kwh,charger_power_kw,efficiency_percent,tariff_type,provider_type,user_provider_id,tariff_manual,tariff_selected_at,price_per_kwh,energy_overridden,energy_corrected_at,manual_entry,charged_energy_kwh,estimated_cost,status,started_at,stopped_at,end_max_cell_delta_v,end_delta_soc,created_at,updated_at" as const;
+  "id,user_id,car_id,start_percent,current_percent,target_percent,battery_capacity_kwh,charger_power_kw,efficiency_percent,tariff_type,provider_type,user_provider_id,tariff_manual,tariff_selected_at,price_per_kwh,energy_overridden,energy_corrected_at,manual_entry,charged_energy_kwh,estimated_cost,status,started_at,stopped_at,end_max_cell_delta_v,end_delta_soc,end_median_cell_delta_v,created_at,updated_at" as const;
 
 /**
  * Reads only existing RLS-scoped dashboard facts. This starts the three independent

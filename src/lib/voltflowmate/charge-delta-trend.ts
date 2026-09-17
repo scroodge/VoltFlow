@@ -53,7 +53,8 @@ export type ChargeDeltaSession = Pick<
 
 const EMPTY_TREND: ChargeDeltaTrend = { fullCharges: [], partialCharges: [] };
 
-function nearestSohPercent(timeMs: number, sohPoints: TelemetryHistoryPoint[]): number | null {
+/** Shared with battery-consistency.ts so both trends match a session to SOH the same way. */
+export function nearestSohPercent(timeMs: number, sohPoints: TelemetryHistoryPoint[]): number | null {
   let best: { diff: number; soh: number } | null = null;
 
   for (const point of sohPoints) {

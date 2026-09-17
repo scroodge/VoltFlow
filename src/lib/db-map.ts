@@ -126,6 +126,7 @@ export function mapChargingSession(
     stopped_at: raw.stopped_at ? String(raw.stopped_at) : null,
     end_max_cell_delta_v: nullableNum(raw.end_max_cell_delta_v),
     end_delta_soc: nullableNum(raw.end_delta_soc),
+    end_median_cell_delta_v: nullableNum(raw.end_median_cell_delta_v),
     created_at: String(raw.created_at ?? ""),
     updated_at: String(raw.updated_at ?? ""),
   };

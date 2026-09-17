@@ -136,8 +136,9 @@ One row per charge event, live-updated during charging.
 | `tariff_selected_at` | timestamptz | When the user last manually picked a tariff/provider on this session; delays auto-saving a GPS tariff location until the pick "sticks" (`20260706020000`) |
 | `energy_overridden` | boolean | True when energy/cost were set from a non-SOC source |
 | `energy_corrected_at` | timestamptz | When a provider-billed energy/cost correction was applied |
-| `end_max_cell_delta_v` | numeric | Maximum cell-voltage delta measured near the session's peak charging SOC |
+| `end_max_cell_delta_v` | numeric | Maximum cell-voltage delta measured near the session's peak charging SOC (single sample, noise-sensitive) |
 | `end_delta_soc` | numeric | SOC at which `end_max_cell_delta_v` was measured |
+| `end_median_cell_delta_v` | numeric | Median cell-voltage delta over the same top-of-charge window (`20260914120000`) — noise-robust companion to `end_max_cell_delta_v`, the value Battery Consistency trends against. Null until a session closes under this definition; no backfill for older sessions |
 | `started_at` | timestamptz | |
 | `stopped_at` | timestamptz | |
 | `created_at` | timestamptz | |

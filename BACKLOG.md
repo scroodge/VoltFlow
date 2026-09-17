@@ -2642,3 +2642,284 @@ already in Postgres — no new ownership question. Option 1 needs a migration on
 `psql -f` per AGENTS.md (the CLI can't reach the pooler over TLS).
 
 ---
+
+## 🔵 Cell-voltage-spread (ΔV) health tracking — earlier bottleneck warning than SOH%
+
+### Idea (user proposal, 2026-09-14)
+
+Track per-cell voltage spread (ΔV) and its behavior under load/charging, plus signs of
+rising internal resistance in individual cells, as an earlier warning of a future pack
+bottleneck than an aggregate `SOH%` figure. Asked to check on-car whether Di+ actually
+provides this data before designing anything.
+
+### Evidence — checked against the running app, docs, and the actual car (2026-09-14)
+
+**ΔV is already captured and stored — no new capability needed.**
+`src/lib/voltflowmate/ingest-payload.ts` (`telemetrySchema` L29-62, `diplusSchema` L64-114)
+and `src/app/api/bydmate/telemetry/route.ts`'s `expectedCellVoltage()` (L77-99) already
+compute/store `telemetry.cell_voltage_min_v` / `cell_voltage_max_v` / `cell_delta_v` and
+`diplus_min_cell_voltage_v` / `diplus_max_cell_voltage_v` / `diplus_cell_delta_v`, flattened
+as columns on both `bydmate_telemetry_samples` and `bydmate_live_snapshots`
+(migrations `20260519120000`, `20260521120000`, `20260708130000`). Two further places
+already track it as a trend rather than an instant value: `charging_sessions
+.end_max_cell_delta_v` (peak ΔV reached by the end of each charge, `20260717120000`) and
+`bydmate_battery_snapshots.cell_delta_v` (a periodic snapshot alongside `soh_percent`,
+`20260708140000`). None of this is documented in `docs/CHARGING_SESSIONS.md` today despite
+living on `charging_sessions`.
+
+**Only pack min/max/delta reach us — no true per-cell array.** Every ingest schema uses
+Zod `.strip()`, so any key the Android app sends that isn't explicitly named is silently
+dropped before Postgres ever sees it (already bit us once per `ingest-payload.ts` L54-59,
+`soc_source` going missing on first on-car test). `diplusSchema` only names ~40 fields;
+nothing resembling a per-cell voltage array or an internal-resistance field is named
+anywhere in schema, sanitizer, DB columns, or docs.
+
+**Confirmed live on the car via wireless ADB** (head unit reachable at `192.168.43.71:5555`,
+`product:DiLink3.0 model:DiLink3_0_For_BYD_AUTO`, only while this Mac shares its tethered
+network — this link, and the on-car verification rules in memory `lsn_ed206bdb310ca51f`,
+came from agentmemory, not from this session's own history):
+- `com.van.diplus` (the third-party Di+ bridge app) is installed at `versionName=2.0.0b6`.
+  Its granted-permissions dump shows exactly two BMS-adjacent permission buckets:
+  `BYDAUTO_CHARGING_GET`/`_COMMON` and `BYDAUTO_ENERGY_GET`/`_COMMON`. No
+  `BYDAUTO_BMS_*` or `BYDAUTO_BATTERY_*` permission group exists at all in this Di+
+  version's manifest — BYD's own permission model has no discrete "battery health"
+  capability to request, only the two coarse buckets cell-voltage data already rides on.
+- Our own installed app (`dev.scroodge.cloudevmate`) requests **no** `BYDAUTO_*`
+  permissions itself; it must be reading through `com.van.diplus`'s already-granted
+  access rather than declaring its own, so a future Di+ signal is only reachable if that
+  bridge app exposes it.
+- Attempting to pull `dev.scroodge.cloudevmate`'s APK over the wireless link for a static
+  string search (to look for any `FID_`-style signal name suggesting a not-yet-wired
+  resistance field) produced a truncated, non-zippable file — the link was too slow/
+  unstable for that pull. Not re-attempted; not needed for the conclusion below.
+
+**No internal-resistance signal found anywhere** — not in this repo's schemas, sanitizer,
+migrations, or docs, and not as a named permission bucket in the currently-installed Di+
+app. This reads as a genuine capability gap at the current Di+ version rather than an
+unmapped field we already receive and discard.
+
+### Options
+
+1. **Build a ΔV trend view from data already stored (recommended first step).** Chart
+   `charging_sessions.end_max_cell_delta_v` (peak-of-charge trend) and
+   `bydmate_battery_snapshots.cell_delta_v` (periodic parked/idle trend) per vehicle over
+   time, flagging a rising trend. No new column, no ingest change, no migration — this is
+   the direct answer to "is my pack's cell spread getting worse," reusing exactly the
+   diagnostic idea's premise (a trend beats a point-in-time SOH number).
+2. **ΔV-under-load correlation.** Join `cell_delta_v` against `charge_power_kw` (or drive
+   power) at matching timestamps in `bydmate_telemetry_samples`, both already stored in the
+   same rows, to see whether spread widens disproportionately at high current — the closest
+   available proxy for rising internal resistance without a new raw signal. New
+   query/aggregation only, no new capture.
+3. **Chase a real internal-resistance signal.** Not pursued now — no evidence it exists at
+   the installed Di+ version. Would need a newer `com.van.diplus` release, BYD protocol
+   documentation, or a differently-scoped third-party bridge; premature to design storage
+   for a field we cannot currently observe.
+4. **Do nothing beyond recording availability here.**
+
+### Data ownership and location
+
+No new data model and no migration for options 1-2 — every field involved
+(`charging_sessions.end_max_cell_delta_v`, `bydmate_battery_snapshots.cell_delta_v`,
+`bydmate_telemetry_samples.cell_delta_v`/`charge_power_kw`) already exists as app-owned
+telemetry in Postgres, scoped by `user_id`/`vehicle_id` like the rest of the pipeline.
+Both are read/aggregation work only.
+
+### Recommendation
+
+Build option 1 first — cheap, uses history that already exists, and directly delivers the
+user's diagnostic idea (trend over point-in-time SOH%). Follow with option 2 if the trend
+view proves useful. Leave option 3 (internal resistance) parked until a raw signal is
+confirmed to exist on a newer Di+ release.
+
+**Superseded 2026-09-14** by the broader "Battery Consistency / Battery Health" proposal
+below, which subsumes option 2 (ΔV-under-load) as its phase 2 and supplies a canonical
+calculation layer instead of an ad-hoc per-chart toggle.
+
+---
+
+## 🔵 Battery Consistency / Battery Health diagnostics (spec proposal, 2026-09-14)
+
+### Goal (user-supplied spec)
+
+Diagnose **HV pack consistency** — not individual cells — using cell-voltage spread
+(`cellDeltaMv = (cell_voltage_max - cell_voltage_min) * 1000`), tracked as a **trend**
+across comparable operating contexts (top-of-charge first; mid-SOC-rest and under-load
+later), shown alongside (not merged with) vehicle-reported `SOH%`. Hard constraints from
+the spec: never claim to identify a specific weak cell, never compute fake per-cell
+internal resistance, never call ΔV "internal resistance", never treat missing telemetry
+as zero, never mix incompatible operating contexts into one trend line, keep thresholds
+provisional/centralized/documented.
+
+### Architecture assessment — what already exists vs. what's missing (verified 2026-09-14)
+
+**1. SOH source.** No `FID_SOH` (or any FID/autoservice SOH field) exists anywhere in the
+repo — `supabase/migrations/20260708130000_add_autoservice_fid_fields.sql` adds
+`autoservice_soc_percent`, `_power_kw`, `_gun_state`, `_bms_state`, `_charge_capacity_kwh`,
+`_charge_battery_volt`, `_battery_type`, `_lifetime_mileage_km`, `_lifetime_kwh` — no SOH.
+The only SOH anywhere is `telemetry.soh_percent` (`ingest-payload.ts:46`), the Mate
+Android app's own on-device estimate. **There is no more-authoritative "vehicle-reported"
+SOH to defer to.** The spec's "if FID_SOH exists, use it" branch does not apply; the UI
+must keep labeling this figure as an app-side estimate, not upgrade its wording.
+
+**2. Battery temperature.** Only a single average exists: `telemetry.battery_temp_c`
+(`ingest-payload.ts:34`, clamped `-50..90` in `telemetry-sanitizer.ts:51`), rolled up as
+`battery_temp_avg` (multiple migrations) and `diplus_avg_battery_temp_c`
+(`20260521120000:38`). **No min/max battery temperature exists anywhere in the ingest
+schema.** A dev-only fixtures page (`src/app/dev/bydmate-diplus/page.tsx:67,69`) lists
+`max_battery_temp_c`/`min_battery_temp_c` as *display keys with no column mapping* — the
+real Zod validator (`diplusSchema`, `ingest-payload.ts:64-114`, which `.strip()`s anything
+unnamed) has no such keys, so even if Di+ ever sent them today they'd be silently dropped.
+One migration (`20260826194941_telemetry_day_buckets.sql:64-65`) computes
+`battery_temp_min`/`battery_temp_max` as `MIN()`/`MAX()` of the **daily average across
+samples** — not a true simultaneous pack Tmin/Tmax. **`temperatureSpreadC` cannot be
+computed today — this is a confirmed capability gap**, the same shape of gap as the
+internal-resistance finding above. Per the spec's own rule ("do not force this metric if
+data isn't available"), this diagnostic must be omitted, with the UI/docs saying so
+explicitly rather than silently dropping it.
+
+**3. Threshold convention.** No central config file — constants are exported `const`s
+colocated with the logic that uses them, each with an explanatory comment, e.g.
+`export const CHARGING_DRIVE_SPEED_KMH = 5;` (`charging-live.ts:14`),
+`export const AUTO_CHARGING_ZERO_POWER_STALL_MS = 5 * 60_000;`
+(`charging-auto-session-step.ts:41`). New provisional ΔV/status thresholds should follow
+this exact pattern (one exported, commented constant per threshold), not a new config module.
+
+**4. Existing robust/median pattern.** The project already has the idiom needed for "a
+representative value over noisy samples":
+`percentile_cont(0.5) within group (order by voltage) filter (where voltage between 6 and
+18)` in `20260826210000_aux_voltage_resting_chemistry_ceiling.sql:78` (aux-voltage
+rollup). Reuse this verbatim rather than inventing a new robust-stat approach.
+
+**5. The key finding — a top-of-charge capture hook already exists and is already wired
+everywhere, but uses a raw single-sample max.** `bydmate_capture_session_end_delta(p_session_id
+uuid)` (current definition: `supabase/migrations/20260717130000_charge_end_delta_peak_soc.sql`,
+`create or replace`-idempotent) already builds a `charging_samples` CTE over
+`bydmate_telemetry_samples` bounded to the session's `[started_at, stopped_at]` window,
+finds `peak_soc`, and picks one row via `order by cs.delta desc limit 1` (lines 47-76) —
+**exactly the "single noisy measurement" problem the spec warns against, already shipped**.
+It's called from all three session-close paths: manual stop (`actions.ts:83,214`), atomic
+auto-close (`charging-auto-session-atomic.ts:83`), and reconciliation
+(`charging-session-reconcile.ts:131`), writing `end_max_cell_delta_v` / `end_delta_soc` on
+`charging_sessions`. **This is the natural, already-wired extension point**: add a
+`percentile_cont(0.5)` computation over the *same* CTE, into one new nullable column —
+zero new call sites needed, all three close paths get the new value for free.
+
+**6-8 (carried from earlier research this session).** `SohTrendChart` and
+`ChargeDeltaTrendChart` already render together in
+`src/components/vehicle/vehicle-analytics-panels.tsx:793-886` (History → Analytics tab) —
+the natural home for a cross-session "Cell consistency" section. The per-session chart
+(`charging-delta-card.tsx`, on `/history/[id]`) hardcodes English strings despite matching
+i18n keys already existing (`cellDeltaTitle`, `deltaBySoc`, `chargePower`, …) — a
+pre-existing inconsistency, not something this feature must fix. `docs/CHARGING_SESSIONS.md`
+documents neither `end_max_cell_delta_v` nor `end_delta_soc` today; `docs/DATABASE_SCHEMA.md:139-140`
+is the only canonical wording that exists.
+
+### Proposed smallest clean implementation (phase 1: top-of-charge only)
+
+1. **One additive migration.** Extend `bydmate_capture_session_end_delta()` (still
+   `create or replace`, still idempotent) to also compute
+   `percentile_cont(0.5) within group (order by cs.delta) filter (where cs.soc >= peak.peak_soc - 1)`
+   over its existing CTE and store it in a new nullable
+   `charging_sessions.end_median_cell_delta_v numeric` column. `end_max_cell_delta_v` is
+   left untouched (existing chart keeps working unchanged). No new table, no new trigger,
+   no new call site.
+2. **One canonical calculation module** (new file, e.g.
+   `src/lib/voltflowmate/battery-consistency.ts`), covering: `cellDeltaMv` conversion
+   (null-safe — missing Vmin/Vmax must stay `null`, never `0`), a trend comparison against
+   the previous comparable measurement, and a provisional status label
+   (`Excellent`/`Good`/`Watch`/`Poor`) via centrally-exported, commented threshold
+   constants per finding 3 — explicitly marked provisional in a code comment, not derived
+   from any external standard. `diagnostic_context` starts as a single literal
+   `"top_charge"` (mid-SOC-rest / under-load deferred to phase 2, see below) so nothing
+   ever mixes incompatible contexts on one trend line. SOH is passed through from
+   `telemetry.soh_percent` and always labeled as an app-side estimate (finding 1).
+   Temperature spread is not implemented (finding 2) — the module and UI say
+   "insufficient data" rather than a fabricated 0/omitted-silently value.
+3. **`db-map.ts` + selects.** Add `end_median_cell_delta_v: nullableNum(...)` next to the
+   existing `end_max_cell_delta_v` mapping (`db-map.ts:127`), and add the column to the
+   existing select lists that already carry `end_max_cell_delta_v`
+   (`dashboard-bootstrap.ts:16` and wherever `use-sessions-query.ts` is fixed per AUD-15
+   above — coordinate rather than duplicate that fix).
+4. **UI: one new "Battery Health" section** in `vehicle-analytics-panels.tsx`, beside the
+   existing SOH/ΔV sections, matching their custom-inline-SVG chart style (no new charting
+   library). Shows: SOH (labeled "estimated by app"), cell consistency
+   (`end_median_cell_delta_v` trend in mV, "Insufficient comparable measurements" when
+   fewer than N sessions qualify), and a short explainer plus one info-tooltip stating
+   plainly that VoltFlow cannot identify an individual weak cell because Di+ reports only
+   pack min/max, not per-cell voltages (reusing the finding already written into the ΔV
+   entry above).
+5. **Historical backfill:** leave pre-existing closed sessions' new column `null` rather
+   than backfilling — the median CTE only differs from the already-correct max capture in
+   aggregation, so a backfill is cheap and safe (same pattern as the `20260717130000`
+   migration's own recompute-every-closed-session `do $$ … $$` block) **if desired**, but
+   is not required for the feature to work going forward; flag as an explicit yes/no choice
+   before implementation rather than assuming it.
+6. **Docs.** Add `end_median_cell_delta_v` to `docs/DATABASE_SCHEMA.md`, and add the
+   missing `end_max_cell_delta_v`/`end_delta_soc`/new-column section to
+   `docs/CHARGING_SESSIONS.md`, plus the same "what Di+ does/doesn't give us" limitations
+   paragraph already drafted in the ΔV entry above (single source of truth for that
+   wording — do not restate it differently in two docs).
+7. **Tests.** Pure-function tests for the new module: `3.324 - 3.317 = 7mV` conversion;
+   missing Vmin → `null`; missing Vmax → `null`; negative voltage rejected; median vs. max
+   over a synthetic noisy window; contexts never mixed (a `"top_charge"` point and a
+   hypothetical future `"under_load"` point never appear on the same computed series).
+   Temperature-spread has no positive test — only a "returns unavailable, never fabricates
+   a spread" case, since finding 2 confirms there's nothing to compute.
+
+### Explicitly deferred (not phase 1)
+
+Mid-SOC-rest (`midSocRestDeltaMv`) and under-load (`loadedDeltaMv`) contexts are additional
+`WHERE`-clause variants of the same CTE shape (SOC and `charge_power_kw`/speed are already
+in every `bydmate_telemetry_samples` row) and can follow once the top-of-charge median
+ships and is validated — not built simultaneously, per the spec's own "do not force a
+metric" principle and to keep the first migration reviewable. Temperature-spread stays
+deferred indefinitely, pending an actual Tmin/Tmax field ever reaching the ingest schema.
+
+### Data ownership and location
+
+App-owned telemetry, no new ownership question. One new nullable column on the existing
+`charging_sessions` table (already app-owned, already in Postgres, already migrated via
+`psql -f` per AGENTS.md self-hosted rules) plus a client-side calculation module reading
+already-stored fields. No new raw telemetry storage (spec's own constraint honored) and no
+localStorage involved — this is diagnostic, not user preference, data.
+
+### Open question before building
+
+Backfill or not (see implementation point 5) — needs an explicit yes/no, since it changes
+whether historical sessions ever show a "Cell consistency" trend or only sessions closed
+after the migration ships.
+
+**Resolved 2026-09-14: build phase 1, no backfill.**
+
+### Implementation status (2026-09-14): local implementation complete, migration NOT applied to prod
+
+Built and verified locally:
+- `supabase/migrations/20260914120000_charge_end_delta_median.sql` — additive
+  `end_median_cell_delta_v` column + `create or replace` of `bydmate_capture_session_end_delta()`
+  to also compute the median. Not yet applied to the self-hosted production database (needs
+  `psql -f` per `docs/OPS_LOCAL.md`; a separate explicit go-ahead before running it, since it's
+  a production database write).
+- `src/lib/voltflowmate/battery-consistency.ts` — canonical calculation module (trend, provisional
+  status/trend classification, SOH-estimate labeling, temperature-spread "unavailable" result).
+- `src/lib/voltflowmate/battery-consistency.test.mjs` — 13 tests, all passing, covering the
+  spec's own minimum list (7mV conversion, missing/negative delta rejected, temperature always
+  unavailable, SOH always app-estimate, contexts not mixed, median-based trend resists a single
+  noisy session, empty-history honesty).
+- `db-map.ts`, `types/database.ts`, `dashboard-bootstrap.ts`'s select list, and the dev-only
+  `build-mock-charging-session.ts` fixture all updated for the new field.
+- New "Battery health" section in `vehicle-analytics-panels.tsx` (History → Analytics tab,
+  between the existing SOH and ΔV-chart sections): SOH (labeled as app estimate) + cell
+  consistency (median mV, status/trend badges) + the two limitation footnotes (no per-cell
+  diagnosis, temperature spread unavailable). i18n keys added to all three locales (en/be/ru).
+- `docs/DATABASE_SCHEMA.md` and `docs/CHARGING_SESSIONS.md` updated with the new column and a
+  "Battery Consistency diagnostics" section documenting the hard constraints.
+
+Verification: `npm run test` — 491 pass, 3 pre-existing documented failures unrelated to this
+change (see "Proposed — failures exposed by complete test discovery" above), including the 13
+new tests. `npm run build` — clean, exit 0.
+
+**Not done yet, needs a separate go-ahead:** applying the migration to the self-hosted
+production database, and committing/pushing (nothing has been committed this turn).
+
+---

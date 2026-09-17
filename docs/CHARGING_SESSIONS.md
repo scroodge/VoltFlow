@@ -206,6 +206,43 @@ car, since a duplicate would double-count in the day summary and every monthly t
 Manual rows carry `manual_entry = true`, which drives the "Manual" badge and scopes
 `deleteManualChargingSession` — auto-detected sessions can never be deleted through it.
 
+## Battery Consistency diagnostics
+
+`bydmate_capture_session_end_delta()` runs at every session-close path (manual stop, atomic
+auto-close, reconciliation) and writes three columns describing the top-of-charge cell-voltage
+spread — the difference between the pack's highest and lowest reported cell voltage, near the
+session's peak SOC:
+
+| Column | Meaning |
+| --- | --- |
+| `end_max_cell_delta_v` | A single raw sample's delta — noise-sensitive; kept for the existing per-session "Delta by SOC" chart. |
+| `end_delta_soc` | The SOC at which the above was measured. |
+| `end_median_cell_delta_v` | The median delta across the same top-of-charge window (migration `20260914120000`) — a noise-robust companion used for cross-session trending. Null on sessions closed before this migration shipped; there is no backfill. |
+
+`src/lib/voltflowmate/battery-consistency.ts` is the canonical calculation layer built on
+`end_median_cell_delta_v`: it classifies a provisional status (`excellent`/`good`/`watch`/`poor`,
+thresholds centralized and explicitly marked provisional, not derived from a battery-engineering
+standard) and a trend (`improving`/`stable`/`worsening`), comparing the latest top-of-charge
+reading against the median of prior comparable readings so one noisy session can't flip the
+label. Only the top-of-charge context ships today; mid-SOC-rest and under-load contexts are
+deferred (see BACKLOG.md).
+
+**Hard constraints, verified on-car (2026-09-14) and enforced by this module, not just by
+convention:**
+
+- **No per-cell diagnosis.** Di+ reports only the pack's minimum and maximum cell voltage, never
+  a per-cell array, a physical cell number for Vmin/Vmax, or per-cell internal resistance. Nothing
+  in the product may claim to identify a specific weak cell, invent a cell number, or call this
+  spread "internal resistance" — it is cell voltage spread / pack consistency only.
+- **SOH has no more-authoritative source.** There is no `FID_SOH` or any autoservice/FID SOH
+  field anywhere in the ingest pipeline — the only SOH is `telemetry.soh_percent`, the Mate
+  Android app's own on-device estimate. It must always be labeled as an app-side estimate, never
+  "vehicle-reported."
+- **Battery temperature spread is not computable today.** Only a single rolling average
+  (`telemetry.battery_temp_c`) exists; no simultaneous pack Tmin/Tmax field is ingested. The
+  module returns an explicit "unavailable" result rather than fabricating a spread — this is a
+  telemetry gap, not a bug, and must not be silently dropped or defaulted to zero.
+
 ## Verification
 
 The focused tests cover charging-signal interpretation, automatic start/stop logic, and

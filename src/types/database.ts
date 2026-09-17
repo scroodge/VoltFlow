@@ -86,6 +86,8 @@ export type ChargingSessionRow = {
   /** Max cell delta while charging near the session's end SOC; captured at close. */
   end_max_cell_delta_v: number | null;
   end_delta_soc: number | null;
+  /** Median cell delta over the same top-of-charge window; noise-robust companion to end_max_cell_delta_v. */
+  end_median_cell_delta_v: number | null;
   created_at: string;
   updated_at: string;
 };

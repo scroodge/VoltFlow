@@ -34,6 +34,7 @@ import { useVoltflowMateTelemetryHistoryQuery } from "@/hooks/use-voltflowmate-t
 import type { TelemetryHistoryPoint } from "@/lib/voltflowmate/telemetry-history";
 import { useTranslation } from "@/hooks/use-translation";
 import { buildChargeDeltaTrend } from "@/lib/voltflowmate/charge-delta-trend";
+import { buildBatteryConsistencySummary } from "@/lib/voltflowmate/battery-consistency";
 import { computeAuxVoltageBaseline, AUX_MIN_RESTING_DAYS } from "@/lib/voltflowmate/aux-voltage-baseline";
 import { normalizeAuxVoltage } from "@/lib/voltflowmate/aux-voltage-history";
 import { buildAnalyticsSummary, consumptionByOutsideTemp } from "@/lib/voltflowmate/telemetry-buckets";
@@ -70,6 +71,27 @@ const EMPTY_PERIOD_TRIPS: PeriodTripRow[] = [];
 const EMPTY_PERIOD_SESSIONS: ChargingSessionRow[] = [];
 const EMPTY_HISTORY_POINTS: TelemetryHistoryPoint[] = [];
 const EMPTY_AUX_DAILY_POINTS: import("@/lib/voltflowmate/aux-voltage-history").AuxVoltageDailyPoint[] = [];
+
+const BATTERY_HEALTH_STATUS_KEY: Record<
+  import("@/lib/voltflowmate/battery-consistency").ConsistencyStatus,
+  TranslationKey
+> = {
+  excellent: "vehicle.analytics.batteryHealthStatusExcellent",
+  good: "vehicle.analytics.batteryHealthStatusGood",
+  watch: "vehicle.analytics.batteryHealthStatusWatch",
+  poor: "vehicle.analytics.batteryHealthStatusPoor",
+  insufficient_data: "vehicle.analytics.batteryHealthStatusInsufficientData",
+};
+
+const BATTERY_HEALTH_TREND_KEY: Record<
+  import("@/lib/voltflowmate/battery-consistency").ConsistencyTrend,
+  TranslationKey
+> = {
+  improving: "vehicle.analytics.batteryHealthTrendImproving",
+  stable: "vehicle.analytics.batteryHealthTrendStable",
+  worsening: "vehicle.analytics.batteryHealthTrendWorsening",
+  insufficient_data: "vehicle.analytics.batteryHealthTrendInsufficientData",
+};
 
 function fmt(value: number | null | undefined, digits = 1) {
   return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
@@ -612,6 +634,14 @@ export function VehicleAnalyticsPanels({
     [periodSessions, sohQuery.data],
   );
 
+  // Same period-filtered sessions as chargeDeltaTrend, but reads the noise-robust
+  // end_median_cell_delta_v (median over the top-of-charge window) instead of the raw
+  // per-session max, and adds a provisional status/trend classification on top.
+  const batteryConsistency = useMemo(
+    () => buildBatteryConsistencySummary(periodSessions, sohQuery.data ?? []),
+    [periodSessions, sohQuery.data],
+  );
+
   const auxDailyPoints = auxVoltageQuery.data ?? EMPTY_AUX_DAILY_POINTS;
   const visibleAuxDailyPoints = useMemo(
     () => auxDailyPoints.filter((point) => {
@@ -842,6 +872,74 @@ export function VehicleAnalyticsPanels({
             <SohTrendChart points={sohQuery.data ?? []} locale={locale} />
           )}
         </div>
+      </section>
+
+      <section className="voltflow-card p-5">
+        <div>
+          <h2 className="font-heading text-2xl font-semibold tracking-tight">
+            {t("vehicle.analytics.batteryHealthTitle")}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("vehicle.analytics.batteryHealthSubtitle")}
+          </p>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="rounded-2xl border border-border bg-white/[0.03] p-4">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              {t("vehicle.analytics.batteryHealthSohLabel")}
+            </p>
+            {latestSohPercent != null ? (
+              <p className="mt-1 font-heading text-3xl font-bold tabular-nums tracking-tight text-[var(--voltflow-cyan)]">
+                {fmt(latestSohPercent, 1)}
+                <span className="ml-0.5 text-lg font-semibold text-muted-foreground">%</span>
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t("vehicle.analytics.batteryHealthStatusInsufficientData")}
+              </p>
+            )}
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("vehicle.analytics.batteryHealthSohEstimateNote")}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-white/[0.03] p-4">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              {t("vehicle.analytics.batteryHealthConsistencyLabel")}
+            </p>
+            {batteryConsistency.latest ? (
+              <>
+                <p className="mt-1 font-heading text-3xl font-bold tabular-nums tracking-tight text-[var(--voltflow-cyan)]">
+                  {fmt(batteryConsistency.latest.cellDeltaMv, 0)}
+                  <span className="ml-0.5 text-lg font-semibold text-muted-foreground">mV</span>
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t("vehicle.analytics.batteryHealthConsistencyAtSoc", {
+                    value: fmt(batteryConsistency.latest.deltaSoc, 0),
+                  })}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                  <span className="rounded-full border border-border px-2.5 py-1 font-semibold text-foreground">
+                    {t(BATTERY_HEALTH_STATUS_KEY[batteryConsistency.status])}
+                  </span>
+                  <span className="rounded-full border border-border px-2.5 py-1 text-muted-foreground">
+                    {t(BATTERY_HEALTH_TREND_KEY[batteryConsistency.trend])}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t("vehicle.analytics.batteryHealthNoData")}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <ul className="mt-4 space-y-1.5 border-t border-border/70 pt-3 text-xs text-muted-foreground">
+          <li>{t("vehicle.analytics.batteryHealthCannotIdentifyCell")}</li>
+          <li>{t("vehicle.analytics.batteryHealthTemperatureNote")}</li>
+        </ul>
       </section>
 
       <section className="voltflow-card p-5">
