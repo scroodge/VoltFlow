@@ -866,13 +866,6 @@ export const dictionaries = {
         lastSeen: "Last seen",
         lastSeenPoints: "{value} GPS points from last trip",
       },
-      empty: {
-        title: "No car data yet",
-        beforeEndpoint:
-          "Generate a VoltFlow Mate key in Settings, paste it into the Android app, and set the endpoint to",
-        afterEndpoint: "The first accepted payload will appear here.",
-        refresh: "The page refreshes every 5 seconds while open.",
-      },
       errors: {
         live: "Could not load VoltFlow Mate telemetry.",
         trips: "Could not load trip history.",
@@ -1308,7 +1301,6 @@ export const dictionaries = {
           "Open VoltFlow Mate, grant location and storage permissions, and in DiLink turn off background restriction: Settings → General → Disable background Apps → VoltFlow Mate = OFF.",
         ],
         installStepsGen1: [
-          "Activate ADB debugging on the DiLink head unit (required for battery health and auto charging journal).",
           "Install Di+ (D+) app on the head unit. Download the Di+ APK and run it according to the on-screen instructions.",
           "Download the latest VoltFlow-Mate APK from GitHub Releases and install it on the same tablet (allow unknown sources if asked).",
           "Open VoltFlow Mate, grant location and storage permissions, and in DiLink turn off background restriction: Settings → General → Disable background Apps → VoltFlow Mate = OFF.",
@@ -1517,6 +1509,9 @@ export const dictionaries = {
         multiCarTitle: "Multiple cars is a Premium feature",
         multiCarBody:
           "Free plan supports 1 car per account. Premium removes the limit for households and multi-car owners.",
+        clusterBgTitle: "Dashboard cluster backgrounds is a Premium feature",
+        clusterBgBody:
+          "Custom images for the VoltFlow Dashboard projection on your car's cluster screen are available to Premium and admin accounts.",
       },
       legal: {
         title: "Legal and privacy",
@@ -2352,13 +2347,6 @@ export const dictionaries = {
         lastSeen: "Апошні раз бачылі",
         lastSeenPoints: "{value} GPS-кропак з апошняй паездкі",
       },
-      empty: {
-        title: "Даных аўто пакуль няма",
-        beforeEndpoint:
-          "Стварыце VoltFlow Mate-ключ у наладах, устаўце яго ў Android-дадатак і задайце endpoint",
-        afterEndpoint: "Першы прыняты payload з'явіцца тут.",
-        refresh: "Старонка абнаўляецца кожныя 5 секунд, пакуль адкрытая.",
-      },
       errors: {
         live: "Не ўдалося загрузіць тэлеметрыю VoltFlow Mate.",
         trips: "Не ўдалося загрузіць гісторыю паездак.",
@@ -2794,7 +2782,6 @@ export const dictionaries = {
           "Запусціце VoltFlow Mate і дайце дазволы на геалакацыю і сховішча. У меню DiLink адключіце фонавую працу: Settings → General → Disable background Apps → VoltFlow Mate = OFF.",
         ],
         installStepsGen1: [
-          "Актывуйце ADB-адладку на планшэце DiLink (патрэбна для здароўя батарэі і аўтаматычнага журнала зарадак).",
           "Усталюйце Di+ (D+) дадатак на планшэце. Спампуйце Di+ APK і запусціце паводле інструкцыі на экране.",
           "Спампуйце апошні VoltFlow-Mate APK з рэлізаў GitHub і ўсталюйце на тым жа планшэце (дазвольце ўстаноўку з невядомых крыніц, калі сістэма запытае).",
           "Запусціце VoltFlow Mate і дайце дазволы на геалакацыю і сховішча. У меню DiLink адключіце фонавую працу: Settings → General → Disable background Apps → VoltFlow Mate = OFF.",
@@ -3004,6 +2991,9 @@ export const dictionaries = {
         multiCarTitle: "Некалькі машын — функцыя Premium",
         multiCarBody:
           "У free-плане даступная 1 машына на акаунт. Premium здымае гэта абмежаванне для сем'яў і ўладальнікаў некалькіх машын.",
+        clusterBgTitle: "Фоны прыборнай панэлі — функцыя Premium",
+        clusterBgBody:
+          "Уласныя выявы для праекцыі VoltFlow Dashboard на экране прыборнай панэлі даступныя для Premium і адмін-акаунтаў.",
       },
       legal: {
         title: "Прававыя дакументы",
@@ -3838,13 +3828,6 @@ export const dictionaries = {
         lastSeen: "Последнее местоположение",
         lastSeenPoints: "{value} GPS-точек с последней поездки",
       },
-      empty: {
-        title: "Данных авто пока нет",
-        beforeEndpoint:
-          "Создайте VoltFlow Mate-ключ в настройках, вставьте его в Android-приложение и задайте endpoint",
-        afterEndpoint: "Первый принятый payload появится здесь.",
-        refresh: "Страница обновляется каждые 5 секунд, пока открыта.",
-      },
       errors: {
         live: "Не удалось загрузить телеметрию VoltFlow Mate.",
         trips: "Не удалось загрузить историю поездок.",
@@ -4280,7 +4263,6 @@ export const dictionaries = {
           "Запустите VoltFlow Mate и выдайте разрешения на геолокацию и хранилище. В меню DiLink отключите фоновую работу: Settings → General → Disable background Apps → VoltFlow Mate = OFF.",
         ],
         installStepsGen1: [
-          "Активируйте ADB-отладку на планшете DiLink (нужно для здоровья батареи и автоматического журнала зарядок).",
           "Установите Di+ (D+) приложение на планшете. Скачайте Di+ APK и запустите согласно инструкции на экране.",
           "Скачайте последний VoltFlow-Mate APK из релизов GitHub и установите на том же планшете (разрешите установку из неизвестных источников, если система спросит).",
           "Запустите VoltFlow Mate и выдайте разрешения на геолокацию и хранилище. В меню DiLink отключите фоновую работу: Settings → General → Disable background Apps → VoltFlow Mate = OFF.",
@@ -4490,6 +4472,9 @@ export const dictionaries = {
         multiCarTitle: "Несколько машин — функция Premium",
         multiCarBody:
           "В free-плане доступна 1 машина на аккаунт. Premium снимает это ограничение для семей и владельцев нескольких машин.",
+        clusterBgTitle: "Фоны приборной панели — функция Premium",
+        clusterBgBody:
+          "Свои изображения для проекции VoltFlow Dashboard на экране приборной панели доступны для Premium и админ-аккаунтов.",
       },
       legal: {
         title: "Правовые документы",

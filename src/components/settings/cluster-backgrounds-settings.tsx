@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PremiumFeatureGate } from "@/components/premium/premium-feature-gate";
+import { useEntitlementQuery } from "@/hooks/use-entitlement-query";
 import { useTranslation } from "@/hooks/use-translation";
 
 type BackgroundRow = {
@@ -15,6 +17,7 @@ type BackgroundRow = {
 
 export function ClusterBackgroundsSettings() {
   const { t } = useTranslation();
+  const { data: entitlement, isLoading: entitlementLoading } = useEntitlementQuery();
   const [rows, setRows] = useState<BackgroundRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -60,6 +63,17 @@ export function ClusterBackgroundsSettings() {
     } finally {
       setUploading(false);
     }
+  }
+
+  if (entitlementLoading) return null;
+  if (!entitlement?.isPremium) {
+    return (
+      <PremiumFeatureGate title={t("settings.premiumGates.clusterBgTitle")}>
+        <p className="text-sm text-muted-foreground">
+          {t("settings.premiumGates.clusterBgBody")}
+        </p>
+      </PremiumFeatureGate>
+    );
   }
 
   return (

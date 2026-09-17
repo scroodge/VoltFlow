@@ -43,6 +43,31 @@ cross it). (2) the CTA now distinguishes "no car row yet" (→ `/cars/new`, unch
 from "car exists but APK never paired" (→ `/onboarding` to pair Mate, new
 `onboarding.connectCta` copy) instead of always offering to add another car.
 
+### Vehicle tab empty state, onboarding step fix, cluster-background gate (user feedback)
+
+- `vehicle-live-view.tsx`'s `EmptyVehicleState` showed a raw technical instruction
+  ("Generate a VoltFlow Mate key in Settings, paste it into the Android app, and set
+  the endpoint to /api/bydmate/telemetry...") -- flagged by the user as wrong for an
+  end-user screen. Replaced with the same Add-car/Connect-car CTA + demo stat preview
+  already shipped on Dashboard/History; removed the now-dead `vehicle.empty.*` i18n keys.
+- Onboarding's 2024-generation install steps (`installStepsGen1`) dropped the
+  ADB-debugging step per user correction ("не нужен"). The per-step special rendering
+  (ADB guide details / Di+ download link / Mate APK download link) was keyed to a
+  hardcoded step index, so removing step 0 would have silently misattached the Di+ link
+  to the ADB step and the Mate-APK link to the Di+ step. Fixed by computing
+  `diplusStepIndex`/`mateApkStepIndex` relative to an `adbStepIndex` that's `-1` for
+  2024 (never matches) instead of comparing against literal `0`/`1`/`2`.
+- Cluster-background upload in Settings (`ClusterBackgroundsSettings`) already required
+  Premium/admin server-side (`isDashboardEntitled`, both the browser route and the Mate
+  API-key route) but the Settings UI let any user interact with the upload form and
+  only surfaced a raw error string on submit. Wrapped it in the existing
+  `PremiumFeatureGate` so free users see the same upfront lock+explanation pattern as
+  every other gated feature, instead of a working-looking form that fails silently.
+
+#### Verification
+
+`npm run build` (type-check + production build) passed clean after each fix.
+
 #### Verification
 
 `npm run build` (type-check + production build) passed clean after each step.

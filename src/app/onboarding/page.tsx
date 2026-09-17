@@ -108,6 +108,13 @@ export default function OnboardingPage() {
   const installSteps = t("settings.cloud.installSteps") as readonly string[];
   const installStepsGen1 = t("settings.cloud.installStepsGen1") as readonly string[];
   const generationSteps = carGeneration === "gen1_2024" ? installStepsGen1 : installSteps;
+  // 2024 cars don't need the ADB-debugging step, so installStepsGen1 omits it and every
+  // later step shifts down by one -- these indices track that shift instead of assuming
+  // ADB is always step 0, so the special per-step rendering below (ADB guide / Di+
+  // download link / Mate APK download link) stays attached to the right step text.
+  const adbStepIndex = carGeneration === "gen1_2024" ? -1 : 0;
+  const diplusStepIndex = adbStepIndex + 1;
+  const mateApkStepIndex = adbStepIndex + 2;
 
   return (
     <main className="relative isolate min-h-dvh overflow-x-clip bg-background text-foreground">
@@ -211,7 +218,7 @@ export default function OnboardingPage() {
 
                   <ol className="space-y-3">
                     {generationSteps.map((stepText, index) => {
-                      if (index === 0) {
+                      if (index === adbStepIndex) {
                         return (
                           <li key={index} className="flex gap-3 text-sm leading-6">
                             <span className="grid size-6 shrink-0 place-items-center rounded-full border border-border text-xs font-bold text-[var(--voltflow-cyan)]">
@@ -263,7 +270,7 @@ export default function OnboardingPage() {
                           </li>
                         );
                       }
-                      if (index === 1) {
+                      if (index === diplusStepIndex) {
                         return (
                           <li key={index} className="flex gap-3 text-sm leading-6">
                             <span className="grid size-6 shrink-0 place-items-center rounded-full border border-border text-xs font-bold text-[var(--voltflow-cyan)]">
@@ -284,7 +291,7 @@ export default function OnboardingPage() {
                           </li>
                         );
                       }
-                      if (index === 2) {
+                      if (index === mateApkStepIndex) {
                         const apkParts = stepText.split("VoltFlow-Mate APK");
                         return (
                           <li key={index} className="flex gap-3 text-sm leading-6">

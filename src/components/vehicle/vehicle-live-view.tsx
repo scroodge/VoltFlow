@@ -31,6 +31,10 @@ import { BrandBadge } from "@/components/brand/BrandBadge";
 import { LogoFull } from "@/components/brand/LogoFull";
 import { CurrencyAmount } from "@/components/currency-amount";
 import { useVehicleDevSnapshotOverride } from "@/components/dev/vehicle-dev-snapshot-context";
+import { Button } from "@/components/ui/button";
+import { DemoWatermark } from "@/components/demo/demo-watermark";
+import { demoChargingSessions } from "@/lib/demo-data";
+import { useVehicleConnection } from "@/hooks/use-vehicle-connection";
 import { VehicleAnalyticsTeaser } from "@/components/vehicle/vehicle-analytics-teaser";
 import { VehicleControlPanel } from "@/components/vehicle/vehicle-control-panel";
 import { MetricExplainerSheet } from "@/components/vehicle/metric-explainer-sheet";
@@ -2076,6 +2080,12 @@ function LastTripDetail({
 function EmptyVehicleState() {
   const { t } = useTranslation();
   const tx = t as Translator;
+  const appPath = useAppPath();
+  const { data: carsResult } = useCarsQuery();
+  const { data: vehicleConnection } = useVehicleConnection();
+  const hasCar = (carsResult?.cars?.length ?? 0) > 0;
+  const needsPairing = hasCar && vehicleConnection?.connected === false;
+  const demoSession = useMemo(() => demoChargingSessions()[0], []);
 
   return (
     <div className="safe-bottom flex flex-col gap-3 px-4 pb-6 pt-4">
@@ -2083,18 +2093,49 @@ function EmptyVehicleState() {
       <section className="voltflow-card p-4">
         <CarFront className="size-10 text-primary" aria-hidden />
         <h1 className="mt-5 font-heading text-3xl font-bold tracking-normal">
-          {tx("vehicle.empty.title")}
+          {needsPairing ? tx("onboarding.reconnectBanner") : tx("dashboard.addEvTitle")}
         </h1>
-        <p className="mt-3 text-muted-foreground leading-7">
-          {tx("vehicle.empty.beforeEndpoint")}{" "}
-          <span className="font-mono">/api/bydmate/telemetry</span>.
-          {" "}
-          {tx("vehicle.empty.afterEndpoint")}
+        {needsPairing ? null : (
+          <p className="mt-3 text-muted-foreground leading-7">{tx("dashboard.addEvBody")}</p>
+        )}
+
+        <DemoWatermark className="mt-5">
+          <div className="grid grid-cols-3 gap-2 rounded-2xl border border-border bg-white/[0.03] p-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                {tx("dashboard.demoSoc")}
+              </p>
+              <p className="mt-0.5 font-heading text-lg font-bold tabular-nums">82%</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                {tx("dashboard.demoRange")}
+              </p>
+              <p className="mt-0.5 font-heading text-lg font-bold tabular-nums">270 km</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                {tx("dashboard.demoLastCharge")}
+              </p>
+              <p className="mt-0.5 font-heading text-lg font-bold tabular-nums">
+                {demoSession.charged_energy_kwh.toFixed(1)} kWh
+              </p>
+            </div>
+          </div>
+        </DemoWatermark>
+        <p className="mt-2 text-center text-xs text-muted-foreground">
+          {tx("dashboard.demoExplainer")}
         </p>
-        <div className="mt-5 rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
-          <Clock3 className="mb-2 size-4 text-primary" aria-hidden />
-          {tx("vehicle.empty.refresh")}
-        </div>
+
+        <Button
+          asChild
+          size="lg"
+          className="mt-4 h-14 w-full rounded-full bg-[linear-gradient(90deg,#00E676_0%,#00D1FF_100%)] font-heading text-base font-bold text-[#06110B]"
+        >
+          <Link href={appPath(needsPairing ? "/onboarding" : "/cars/new")}>
+            {needsPairing ? tx("onboarding.connectCta") : tx("dashboard.addVehicle")}
+          </Link>
+        </Button>
       </section>
     </div>
   );
