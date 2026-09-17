@@ -2919,7 +2919,98 @@ Verification: `npm run test` — 491 pass, 3 pre-existing documented failures un
 change (see "Proposed — failures exposed by complete test discovery" above), including the 13
 new tests. `npm run build` — clean, exit 0.
 
-**Not done yet, needs a separate go-ahead:** applying the migration to the self-hosted
-production database, and committing/pushing (nothing has been committed this turn).
+**Applied to production (2026-09-17):** `20260914120000_charge_end_delta_median.sql` is live
+— `end_median_cell_delta_v numeric` confirmed present on `charging_sessions`. Applying it
+surfaced an inherited privilege gap: `bydmate_capture_session_end_delta(uuid)` was callable
+by `anon` (its `revoke ... from public` line, unchanged since `20260717130000`, never
+explicitly revoked from `anon` — the same class of gap fixed for 19 other functions on
+2026-09-11). Practical risk was low (the function is `security invoker` and every table it
+touches is RLS-scoped to `auth.uid()`, null for anon), but closed anyway with
+`20260917110000_harden_charge_end_delta_privileges.sql`, also applied — verified
+`has_function_privilege` now returns `anon=false, authenticated=true, service_role=true`.
+
+**Not done yet, needs a separate go-ahead:** committing/pushing (nothing has been committed
+this turn).
+
+---
+
+## 🔴 Client-finalized trips bypass the junk filter — odometer-scale phantom `distance_km` (found 2026-09-17, user report)
+
+### Finding (DB + source verified)
+
+User `nikolayushak1998@gmail.com` reported History → Analytics → "Пробег" showing the whole
+day's odometer instead of the day's driving distance. Screenshot: 7 Sep 2026, day card and
+period-summary card both show **37709 km**.
+
+Traced in prod (`bydmate_trips`, read-only): that day has 6 normal trips summing to ~84.8 km,
+plus one row `370c4a6a-…`, `client_trip=true`, `distance_km=37624.6`, duration 341s, max speed
+64 km/h → **implied average speed 396,986 km/h**. 84.8 + 37624.6 = 37709.4 ≈ the value shown.
+A second one exists on the same account: `5f556b02-…`, 2026-08-02, `distance_km=33141.1`,
+duration 1652s, max speed 74 km/h → implied 72,218 km/h. Both are classic "inherited trip-meter
+phantom" values per `docs/TRIPS.md` Rule C (`distance*3600/duration_s > max(max_speed*1.5, 80)`),
+just at odometer scale instead of the smaller inflation the doc already describes — the Android
+app's own cumulative-block distance computation, not the server telemetry path, produced these.
+
+The UI aggregation (`src/lib/history-day-summary.ts`, `src/lib/voltflowmate/telemetry-buckets.ts`)
+is correct — it sums `trip.distance_km` for trips in range. The corruption is in the row itself.
+
+**Root cause, live-DB-verified** (`pg_get_functiondef('public.bydmate_apply_client_trip')`):
+this function (client-owned trip finalization from the Mate Android app's cumulative `trips[]`
+block, `docs/TRIPS.md` "Client-owned trip finalization") writes
+`distance_km = coalesce(nullif(p_block->>'distance_km','')::numeric, distance_km)` — the
+client-reported value verbatim, no baseline-delta recomputation — and **never calls
+`bydmate_discard_trip_if_junk`**. That filter only runs from the legacy/daemon telemetry
+Open→Extend→Close state machine (per `docs/TRIPS.md` "Lifecycle" → "Close"), not from the
+client-trip finalization path. So a bad reading from the app (reads the car's total odometer
+instead of a trip delta — same failure class the doc already names, but on the client this time)
+is persisted and displayed as-is, with no server-side sanity check at all on this path.
+
+Not a one-off: 2 occurrences on 1 account 5 weeks apart. Will recur for this user and plausibly
+for others (scan pending, see below).
+
+### Options
+
+1. **(Recommended) Run the existing `bydmate_discard_trip_if_junk(p_trip_id)` at the end of
+   `bydmate_apply_client_trip`, only when the block carries `ended_at` (i.e. the trip actually
+   closes) — same trigger condition already used for the finalization-audit insert.** Reuses the
+   already-tested Rules A/B/C (zero-distance jitter, short-low-speed maneuvers, physically
+   impossible implied speed) as the single source of truth for "is this trip junk," exactly the
+   check that would have caught both phantom rows here. Minimal diff: one `perform` call added
+   to an existing `CREATE OR REPLACE FUNCTION`, no schema change. Verified safe against the
+   deferred `bydmate_refresh_trip_insight_input_on_close` trigger and the
+   `bydmate_trip_finalization_audits` `ON DELETE CASCADE` FK — this is the same "audit region,
+   then possible delete" ordering the legacy Close path already relies on
+   (`docs/TRIPS.md`: "deferred trigger runs after junk-trip deletion, so discarded rows have no
+   projection").
+2. Add a separate plausibility clamp/reject inside `bydmate_apply_client_trip` (mirror Rule C's
+   formula inline, but fall back to the previous `distance_km` instead of deleting the trip).
+   Preserves the trip's real energy/SOC/GPS data for the ~4-30 min of genuine driving instead of
+   discarding the whole event. More new logic to maintain in parallel with the existing filter;
+   duplicates a threshold that already exists and is already documented as the fix for exactly
+   this phantom-distance class.
+
+**Recommendation: option 1.** It's the smallest change, reuses code the junk-filter docs already
+say is meant for this exact case, and keeps one authoritative definition of "junk trip" instead
+of two. Trade-off accepted: the ~4-6 min of genuine driving inside a junk-tagged client trip is
+discarded along with the corrupt distance (same as every other trip the filter already deletes
+today) — its energy/SOC data isn't separately recoverable without option 2's extra bookkeeping,
+which isn't justified for a handful of trips per incident.
+
+### Data ownership and location
+
+No new data model — app-owned telemetry pipeline, existing `bydmate_trips` table, existing
+`bydmate_discard_trip_if_junk` function. No user-facing preference/tariff/location data touched.
+
+### Plan (user-approved 2026-09-17: "исправь код... после этого надо будет пофиксить значения
+этого пользователя и в самом конце просканировать базу на наличие подобных багов у остальных")
+
+1. Ship option 1 as a new idempotent migration (`CREATE OR REPLACE FUNCTION`), applied to
+   self-hosted prod via `psql -f` per `docs/OPS_LOCAL.md`.
+2. Delete this user's 2 confirmed phantom rows (`370c4a6a-…`, `5f556b02-…`) via
+   `bydmate_discard_trip_if_junk`, the same function the fixed code now calls automatically —
+   not a manual ad hoc DELETE.
+3. Run the `docs/TRIPS.md` Rule A/B/C preview query (read-only, `begin read only … rollback`)
+   across **all** users to find any other already-stored junk rows the old code let through, and
+   report findings before deleting anything for other accounts (separate go-ahead for those).
 
 ---
