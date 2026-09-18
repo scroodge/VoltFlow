@@ -2,7 +2,9 @@
 export function getLegalOperator() {
   return {
     name: process.env.NEXT_PUBLIC_LEGAL_OPERATOR_NAME?.trim() || "VoltFlow",
-    email: process.env.NEXT_PUBLIC_LEGAL_CONTACT_EMAIL?.trim() || "support@voltflow.life",
+    email:
+      process.env.NEXT_PUBLIC_LEGAL_CONTACT_EMAIL?.trim() ||
+      "support@voltflow.life",
     address:
       process.env.NEXT_PUBLIC_LEGAL_OPERATOR_ADDRESS?.trim() ||
       "Republic of Belarus",

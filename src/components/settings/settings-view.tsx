@@ -30,7 +30,11 @@ import { currencyTextWithIcon } from "@/components/currency-amount";
 import { FreeRetentionNotice } from "@/components/premium/free-retention-notice";
 import { PremiumBadge } from "@/components/premium/premium-badge";
 import { ClusterBackgroundsSettings } from "@/components/settings/cluster-backgrounds-settings";
-import { SettingsGroup, SettingsGroupDivider, SettingsPageHeader } from "@/components/settings/settings-section";
+import {
+  SettingsGroup,
+  SettingsGroupDivider,
+  SettingsPageHeader,
+} from "@/components/settings/settings-section";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -94,6 +98,7 @@ import {
 } from "@/lib/push/client";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import { clearPrivateBrowserData } from "@/lib/privacy/client";
+import { VoltflowMateConnection } from "@/components/settings/voltflow-mate-connection";
 import type {
   Car,
   ChargingProviderType,
@@ -107,7 +112,9 @@ type NotifyChannel = "web_push" | "telegram" | "both";
 const notifyChannels = ["web_push", "telegram", "both"] as const;
 
 function isNotifyChannel(value: unknown): value is NotifyChannel {
-  return typeof value === "string" && notifyChannels.includes(value as NotifyChannel);
+  return (
+    typeof value === "string" && notifyChannels.includes(value as NotifyChannel)
+  );
 }
 
 type LiveStatusMode = "off" | "charging" | "charging_parked";
@@ -115,7 +122,10 @@ type LiveStatusMode = "off" | "charging" | "charging_parked";
 const liveStatusModes = ["off", "charging", "charging_parked"] as const;
 
 function isLiveStatusMode(value: unknown): value is LiveStatusMode {
-  return typeof value === "string" && liveStatusModes.includes(value as LiveStatusMode);
+  return (
+    typeof value === "string" &&
+    liveStatusModes.includes(value as LiveStatusMode)
+  );
 }
 
 function TariffLocationMapPreview({ lat, lng }: { lat: number; lng: number }) {
@@ -123,12 +133,9 @@ function TariffLocationMapPreview({ lat, lng }: { lat: number; lng: number }) {
   const latDelta = 0.006;
   const lngDelta = 0.012;
   const params = new URLSearchParams({
-    bbox: [
-      lng - lngDelta,
-      lat - latDelta,
-      lng + lngDelta,
-      lat + latDelta,
-    ].join(","),
+    bbox: [lng - lngDelta, lat - latDelta, lng + lngDelta, lat + latDelta].join(
+      ",",
+    ),
     layer: "mapnik",
     marker: `${lat},${lng}`,
   });
@@ -168,11 +175,14 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   const [telegramId, setTelegramId] = useState<number | null>(null);
   const [telegramUsername, setTelegramUsername] = useState<string | null>(null);
   const [notifyChannel, setNotifyChannel] = useState<NotifyChannel>("web_push");
-  const [liveStatusMode, setLiveStatusMode] = useState<LiveStatusMode>("charging");
+  const [liveStatusMode, setLiveStatusMode] =
+    useState<LiveStatusMode>("charging");
   const [auxBatteryAlertsEnabled, setAuxBatteryAlertsEnabled] = useState(true);
-  const [pressureUnit, setPressureUnit] = useState<PressureUnit>(defaultPressureUnit);
+  const [pressureUnit, setPressureUnit] =
+    useState<PressureUnit>(defaultPressureUnit);
   const [pressureUnitSaving, setPressureUnitSaving] = useState(false);
-  const [telegramInstructionsOpen, setTelegramInstructionsOpen] = useState(false);
+  const [telegramInstructionsOpen, setTelegramInstructionsOpen] =
+    useState(false);
   const [securityBusy, setSecurityBusy] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [deleteAccountText, setDeleteAccountText] = useState("");
@@ -184,14 +194,18 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   const [linkCreating, setLinkCreating] = useState(false);
   const newLocationNameInputRef = useRef<HTMLInputElement>(null);
   const homePricePerKwh = useAppPreferences((s) => s.homePricePerKwh);
-  const commercialAcPricePerKwh = useAppPreferences((s) => s.commercialAcPricePerKwh);
+  const commercialAcPricePerKwh = useAppPreferences(
+    (s) => s.commercialAcPricePerKwh,
+  );
   const fastDcPricePerKwh = useAppPreferences((s) => s.fastDcPricePerKwh);
   const setDefaultPrice = useAppPreferences((s) => s.setDefaultPricePerKwh);
   const setTariffPrices = useAppPreferences((s) => s.setTariffPrices);
   const currency = useAppPreferences((s) => s.currency);
   const setCurrency = useAppPreferences((s) => s.setCurrency);
   const setLocale = useAppPreferences((s) => s.setLocale);
-  const [tariffLocations, setTariffLocations] = useState<ChargingTariffLocationRow[]>([]);
+  const [tariffLocations, setTariffLocations] = useState<
+    ChargingTariffLocationRow[]
+  >([]);
   const [newLocationName, setNewLocationName] = useState("");
   const [newLocationNameError, setNewLocationNameError] = useState(false);
   const [newLocationLat, setNewLocationLat] = useState("");
@@ -202,10 +216,16 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
     useState<ChargingTariffType>("home");
   const [newLocationProviderType, setNewLocationProviderType] =
     useState<ChargingProviderType>("custom");
-  const [newLocationUserProviderId, setNewLocationUserProviderId] = useState<string | null>(null);
+  const [newLocationUserProviderId, setNewLocationUserProviderId] = useState<
+    string | null
+  >(null);
   const [newLocationOverridePrice, setNewLocationOverridePrice] = useState("");
-  const [tariffSaveState, setTariffSaveState] = useState<"idle" | "saving" | "saved">("idle");
-  const tariffSavedResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [tariffSaveState, setTariffSaveState] = useState<
+    "idle" | "saving" | "saved"
+  >("idle");
+  const tariffSavedResetRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const { t } = useTranslation();
   const qc = useQueryClient();
   const { data: userProviderRows = [] } = useUserProvidersQuery();
@@ -219,7 +239,10 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       label: p.label,
     }));
     return [
-      { value: "custom" as const, label: t(`charging.tariff.providers.custom` as TranslationKey) },
+      {
+        value: "custom" as const,
+        label: t(`charging.tariff.providers.custom` as TranslationKey),
+      },
       ...userOpts,
     ];
   }, [userProviderRows, t]);
@@ -231,7 +254,10 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
     if (typeof value === "string" && value.startsWith("up_")) {
       return { providerType: "user_provider", userProviderId: value.slice(3) };
     }
-    return { providerType: (value as ChargingProviderType) ?? "custom", userProviderId: null };
+    return {
+      providerType: (value as ChargingProviderType) ?? "custom",
+      userProviderId: null,
+    };
   }
   const [providerPricesSaving, setProviderPricesSaving] = useState(false);
   const [newProviderLabel, setNewProviderLabel] = useState("");
@@ -242,7 +268,8 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
 
   useEffect(() => {
     return () => {
-      if (tariffSavedResetRef.current) clearTimeout(tariffSavedResetRef.current);
+      if (tariffSavedResetRef.current)
+        clearTimeout(tariffSavedResetRef.current);
     };
   }, []);
 
@@ -274,7 +301,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         setEmail(payload.email ?? null);
         setProfileUserId(payload.profile?.id ?? null);
         setTelegramId(
-          typeof payload.profile?.telegram_id === "number" ? payload.profile.telegram_id : null,
+          typeof payload.profile?.telegram_id === "number"
+            ? payload.profile.telegram_id
+            : null,
         );
         setTelegramUsername(
           typeof payload.profile?.telegram_username === "string"
@@ -287,10 +316,15 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         if (isLiveStatusMode(payload.profile?.live_status_mode)) {
           setLiveStatusMode(payload.profile.live_status_mode);
         }
-        setAuxBatteryAlertsEnabled(payload.profile?.aux_battery_alerts_enabled !== false);
+        setAuxBatteryAlertsEnabled(
+          payload.profile?.aux_battery_alerts_enabled !== false,
+        );
 
         const preferredCurrency = payload.profile?.preferred_currency;
-        if (typeof preferredCurrency === "string" && isCurrency(preferredCurrency)) {
+        if (
+          typeof preferredCurrency === "string" &&
+          isCurrency(preferredCurrency)
+        ) {
           setCurrency(preferredCurrency);
         }
         if (isPressureUnit(payload.profile?.preferred_pressure_unit)) {
@@ -298,13 +332,16 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         }
 
         const homePrice = Number(
-          payload.profile?.home_price_per_kwh ?? payload.profile?.default_price_per_kwh,
+          payload.profile?.home_price_per_kwh ??
+            payload.profile?.default_price_per_kwh,
         );
         const commercialPrice = Number(
-          payload.profile?.commercial_ac_price_per_kwh ?? payload.profile?.default_price_per_kwh,
+          payload.profile?.commercial_ac_price_per_kwh ??
+            payload.profile?.default_price_per_kwh,
         );
         const dcPrice = Number(
-          payload.profile?.fast_dc_price_per_kwh ?? payload.profile?.default_price_per_kwh,
+          payload.profile?.fast_dc_price_per_kwh ??
+            payload.profile?.default_price_per_kwh,
         );
         if (
           Number.isFinite(homePrice) &&
@@ -325,8 +362,6 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             mapChargingTariffLocation(row),
           ),
         );
-
-
       });
 
       return () => {
@@ -344,20 +379,30 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       setProfileUserId(user?.id ?? null);
       if (!user) return;
 
-      const [{ data: profile, error }, { data: locationRows }] = await Promise.all([
-        supabase
-        .from("profiles")
-        .select("preferred_currency, preferred_pressure_unit, default_price_per_kwh, home_price_per_kwh, commercial_ac_price_per_kwh, fast_dc_price_per_kwh, telegram_id, telegram_username, notify_channel, live_status_mode, aux_battery_alerts_enabled")
-        .eq("id", user.id)
-        .single(),
-        supabase.from("charging_tariff_locations").select("*").eq("user_id", user.id),
-      ]);
+      const [{ data: profile, error }, { data: locationRows }] =
+        await Promise.all([
+          supabase
+            .from("profiles")
+            .select(
+              "preferred_currency, preferred_pressure_unit, default_price_per_kwh, home_price_per_kwh, commercial_ac_price_per_kwh, fast_dc_price_per_kwh, telegram_id, telegram_username, notify_channel, live_status_mode, aux_battery_alerts_enabled",
+            )
+            .eq("id", user.id)
+            .single(),
+          supabase
+            .from("charging_tariff_locations")
+            .select("*")
+            .eq("user_id", user.id),
+        ]);
 
       if (!mounted || error) return;
 
-      setTelegramId(typeof profile?.telegram_id === "number" ? profile.telegram_id : null);
+      setTelegramId(
+        typeof profile?.telegram_id === "number" ? profile.telegram_id : null,
+      );
       setTelegramUsername(
-        typeof profile?.telegram_username === "string" ? profile.telegram_username : null,
+        typeof profile?.telegram_username === "string"
+          ? profile.telegram_username
+          : null,
       );
       if (isNotifyChannel(profile?.notify_channel)) {
         setNotifyChannel(profile.notify_channel);
@@ -368,18 +413,25 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       setAuxBatteryAlertsEnabled(profile?.aux_battery_alerts_enabled !== false);
 
       const preferredCurrency = profile?.preferred_currency;
-      if (typeof preferredCurrency === "string" && isCurrency(preferredCurrency)) {
+      if (
+        typeof preferredCurrency === "string" &&
+        isCurrency(preferredCurrency)
+      ) {
         setCurrency(preferredCurrency);
       }
       if (isPressureUnit(profile?.preferred_pressure_unit)) {
         setPressureUnit(profile.preferred_pressure_unit);
       }
 
-      const homePrice = Number(profile?.home_price_per_kwh ?? profile?.default_price_per_kwh);
+      const homePrice = Number(
+        profile?.home_price_per_kwh ?? profile?.default_price_per_kwh,
+      );
       const commercialPrice = Number(
         profile?.commercial_ac_price_per_kwh ?? profile?.default_price_per_kwh,
       );
-      const dcPrice = Number(profile?.fast_dc_price_per_kwh ?? profile?.default_price_per_kwh);
+      const dcPrice = Number(
+        profile?.fast_dc_price_per_kwh ?? profile?.default_price_per_kwh,
+      );
       if (
         Number.isFinite(homePrice) &&
         Number.isFinite(commercialPrice) &&
@@ -400,7 +452,6 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
           mapChargingTariffLocation(row as Record<string, unknown>),
         ),
       );
-
     });
 
     return () => {
@@ -411,16 +462,25 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   const markTariffSaved = () => {
     setTariffSaveState("saved");
     if (tariffSavedResetRef.current) clearTimeout(tariffSavedResetRef.current);
-    tariffSavedResetRef.current = setTimeout(() => setTariffSaveState("idle"), 2_000);
+    tariffSavedResetRef.current = setTimeout(
+      () => setTariffSaveState("idle"),
+      2_000,
+    );
   };
 
   const handlePriceSave = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (tariffSaveState === "saving") return;
     const form = new FormData(event.currentTarget);
-    const homeNumeric = parseDecimalInput(String(form.get("pref-price-home") ?? ""));
-    const acNumeric = parseDecimalInput(String(form.get("pref-price-ac") ?? ""));
-    const dcNumeric = parseDecimalInput(String(form.get("pref-price-dc") ?? ""));
+    const homeNumeric = parseDecimalInput(
+      String(form.get("pref-price-home") ?? ""),
+    );
+    const acNumeric = parseDecimalInput(
+      String(form.get("pref-price-ac") ?? ""),
+    );
+    const dcNumeric = parseDecimalInput(
+      String(form.get("pref-price-dc") ?? ""),
+    );
     if (
       !Number.isFinite(homeNumeric) ||
       !Number.isFinite(acNumeric) ||
@@ -468,7 +528,8 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
     toast.promise(save, {
       loading: t("settings.tariffSaving") as string,
       success: t("settings.tariffSaved") as string,
-      error: (err: unknown) => (err instanceof Error ? err.message : String(err)),
+      error: (err: unknown) =>
+        err instanceof Error ? err.message : String(err),
     });
 
     void save
@@ -498,9 +559,18 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
     }[] = [];
 
     for (const provider of userProviderRows) {
-      const acInput = parseDecimalInput(String(form.get(`provider-${provider.id}-ac`) ?? ""));
-      const dcInput = parseDecimalInput(String(form.get(`provider-${provider.id}-dc`) ?? ""));
-      if (!Number.isFinite(acInput) || !Number.isFinite(dcInput) || acInput < 0 || dcInput < 0) {
+      const acInput = parseDecimalInput(
+        String(form.get(`provider-${provider.id}-ac`) ?? ""),
+      );
+      const dcInput = parseDecimalInput(
+        String(form.get(`provider-${provider.id}-dc`) ?? ""),
+      );
+      if (
+        !Number.isFinite(acInput) ||
+        !Number.isFinite(dcInput) ||
+        acInput < 0 ||
+        dcInput < 0
+      ) {
         toast.error(t("settings.providerTariffs.invalidPrice") as string);
         return;
       }
@@ -558,11 +628,20 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
     }
     const acInput = parseDecimalInput(newProviderAc);
     const dcInput = parseDecimalInput(newProviderDc);
-    if (!Number.isFinite(acInput) || !Number.isFinite(dcInput) || acInput < 0 || dcInput < 0) {
+    if (
+      !Number.isFinite(acInput) ||
+      !Number.isFinite(dcInput) ||
+      acInput < 0 ||
+      dcInput < 0
+    ) {
       toast.error(t("settings.providerTariffs.invalidPrice") as string);
       return;
     }
-    if (userProviderRows.some((p) => p.label.toLowerCase() === label.toLowerCase())) {
+    if (
+      userProviderRows.some(
+        (p) => p.label.toLowerCase() === label.toLowerCase(),
+      )
+    ) {
       toast.error(t("settings.providerTariffs.providerNameExists") as string);
       return;
     }
@@ -592,7 +671,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
 
   const handleToggleProvider = (providerId: string) => {
     setSelectedProviderIds((prev) =>
-      prev.includes(providerId) ? prev.filter((id) => id !== providerId) : [...prev, providerId],
+      prev.includes(providerId)
+        ? prev.filter((id) => id !== providerId)
+        : [...prev, providerId],
     );
   };
 
@@ -625,7 +706,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
 
   const handleUseCurrentGps = () => {
     if (!navigator.geolocation) {
-      toast.error(t("settings.locationTariffs.geolocationUnavailable") as string);
+      toast.error(
+        t("settings.locationTariffs.geolocationUnavailable") as string,
+      );
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -683,13 +766,19 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       .single()
       .then(({ data, error }) => {
         if (error || !data) {
-          toast.error(error?.message ?? (t("settings.toasts.saveLocationError") as string));
+          toast.error(
+            error?.message ??
+              (t("settings.toasts.saveLocationError") as string),
+          );
           return;
         }
-        const mapped = mapChargingTariffLocation(data as Record<string, unknown>);
-        setTariffLocations((prev) =>
-          [mapped, ...prev.filter((item) => item.id !== mapped.id)],
+        const mapped = mapChargingTariffLocation(
+          data as Record<string, unknown>,
         );
+        setTariffLocations((prev) => [
+          mapped,
+          ...prev.filter((item) => item.id !== mapped.id),
+        ]);
         setNewLocationName("");
         setNewLocationNameError(false);
         setNewLocationOverridePrice("");
@@ -717,13 +806,14 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   const parsedNewLocationLat = Number.parseFloat(newLocationLat);
   const parsedNewLocationLng = Number.parseFloat(newLocationLng);
   const hasNewLocationCoords =
-    Number.isFinite(parsedNewLocationLat) && Number.isFinite(parsedNewLocationLng);
+    Number.isFinite(parsedNewLocationLat) &&
+    Number.isFinite(parsedNewLocationLng);
   const tariffMapLat = hasNewLocationCoords
     ? parsedNewLocationLat
-    : tariffLocations[0]?.lat ?? 53.9023;
+    : (tariffLocations[0]?.lat ?? 53.9023);
   const tariffMapLng = hasNewLocationCoords
     ? parsedNewLocationLng
-    : tariffLocations[0]?.lng ?? 27.5619;
+    : (tariffLocations[0]?.lng ?? 27.5619);
 
   const handleCurrencyChange = (value: Currency | null) => {
     if (!value || !isCurrency(value)) return;
@@ -791,7 +881,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         if (error) {
           setPressureUnit(previous);
           qc.setQueryData<Profile | null>(queryKeys.profile, (profile) =>
-            profile ? { ...profile, preferred_pressure_unit: previous } : profile,
+            profile
+              ? { ...profile, preferred_pressure_unit: previous }
+              : profile,
           );
           toast.error(error.message);
           return;
@@ -837,7 +929,8 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   };
 
   const handleConnectTelegram = async () => {
-    const webApp = typeof window !== "undefined" ? window.Telegram?.WebApp : undefined;
+    const webApp =
+      typeof window !== "undefined" ? window.Telegram?.WebApp : undefined;
     const initData = webApp?.initData ?? "";
     if (!initData) {
       setTelegramInstructionsOpen(true);
@@ -860,18 +953,26 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         },
         body: JSON.stringify({ initData }),
       });
-      const payload = (await response.json().catch(() => null)) as
-        | { ok?: boolean; telegram_id?: number; error?: string }
-        | null;
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        telegram_id?: number;
+        error?: string;
+      } | null;
       if (!response.ok || !payload?.ok) {
         throw new Error(payload?.error ?? "link_failed");
       }
-      setTelegramId(payload.telegram_id ?? webApp?.initDataUnsafe?.user?.id ?? null);
+      setTelegramId(
+        payload.telegram_id ?? webApp?.initDataUnsafe?.user?.id ?? null,
+      );
       setTelegramUsername(webApp?.initDataUnsafe?.user?.username ?? null);
       setTelegramInstructionsOpen(false);
       toast.success(t("settings.telegramConnect.linked") as string);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(t("settings.telegramConnect.linkFailed")));
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : String(t("settings.telegramConnect.linkFailed")),
+      );
     } finally {
       setTelegramBusy(false);
     }
@@ -938,10 +1039,20 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
     const previous = auxBatteryAlertsEnabled;
     setAuxBatteryAlertsEnabled(enabled);
     if (!profileUserId) return;
-    void createClient().from("profiles").update({ aux_battery_alerts_enabled: enabled }).eq("id", profileUserId).then(({ error }) => {
-      if (error) { setAuxBatteryAlertsEnabled(previous); toast.error(error.message); return; }
-      toast.success(t("settings.telegramConnect.auxBatteryAlertsSaved") as string);
-    });
+    void createClient()
+      .from("profiles")
+      .update({ aux_battery_alerts_enabled: enabled })
+      .eq("id", profileUserId)
+      .then(({ error }) => {
+        if (error) {
+          setAuxBatteryAlertsEnabled(previous);
+          toast.error(error.message);
+          return;
+        }
+        toast.success(
+          t("settings.telegramConnect.auxBatteryAlertsSaved") as string,
+        );
+      });
   };
 
   useEffect(() => {
@@ -969,7 +1080,10 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
     setLinkCreating(true);
     const request = isDevAppRoute()
       ? devFetch("/api/bydmate/link-code", { method: "POST" })
-      : fetch("/api/bydmate/link-code", { method: "POST", credentials: "include" });
+      : fetch("/api/bydmate/link-code", {
+          method: "POST",
+          credentials: "include",
+        });
 
     void request
       .then(async (response) => {
@@ -979,8 +1093,15 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
           expires_at?: string;
           error?: string;
         };
-        if (!response.ok || !payload.ok || !payload.code || !payload.expires_at) {
-          throw new Error(payload.error ?? String(t("settings.cloud.linkCodeFailed")));
+        if (
+          !response.ok ||
+          !payload.ok ||
+          !payload.code ||
+          !payload.expires_at
+        ) {
+          throw new Error(
+            payload.error ?? String(t("settings.cloud.linkCodeFailed")),
+          );
         }
         setLinkCode(payload.code);
         setNowMs(Date.now());
@@ -988,7 +1109,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       })
       .catch((error: unknown) => {
         const message =
-          error instanceof Error ? error.message : String(t("settings.cloud.linkCodeFailed"));
+          error instanceof Error
+            ? error.message
+            : String(t("settings.cloud.linkCodeFailed"));
         toast.error(message);
         setLinkCode(null);
         setLinkExpiresAt(null);
@@ -1003,18 +1126,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         title={String(t("settings.title"))}
         subtitle={String(t("settings.subtitle"))}
       />
-
-      <Card size="sm" className="border-white/[0.08]">
-        <CardHeader>
-          <CardTitle>{t("locale.label")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <LocaleSwitcher onLocaleChange={handleLocaleChange} />
-          <p className="text-muted-foreground text-sm">{t("locale.helper")}</p>
-        </CardContent>
-      </Card>
-
-      <Card size="sm" className="border-white/[0.08]">
+      {/* <Card size="sm" className="border-white/[0.08]">
         <CardHeader>
           <CardTitle>{t("settings.pressureUnit.title")}</CardTitle>
         </CardHeader>
@@ -1023,18 +1135,27 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium">
               <span>{t("settings.pressureUnit.displayUnit")}</span>
               <span className="flex items-center gap-2 text-muted-foreground">
-                {t(`settings.pressureUnit.units.${pressureUnit}` as TranslationKey)}
-                <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden />
+                {t(
+                  `settings.pressureUnit.units.${pressureUnit}` as TranslationKey,
+                )}
+                <ChevronDown
+                  className="size-4 transition-transform group-open:rotate-180"
+                  aria-hidden
+                />
               </span>
             </summary>
             <div className="space-y-3 border-t border-white/[0.08] px-4 py-4">
-              <Label htmlFor="pref-pressure-unit">{t("settings.pressureUnit.displayUnit")}</Label>
+              <Label htmlFor="pref-pressure-unit">
+                {t("settings.pressureUnit.displayUnit")}
+              </Label>
               <Select
                 value={pressureUnit}
                 onValueChange={handlePressureUnitChange}
                 items={pressureUnits.map((unit) => ({
                   value: unit,
-                  label: t(`settings.pressureUnit.units.${unit}` as TranslationKey),
+                  label: t(
+                    `settings.pressureUnit.units.${unit}` as TranslationKey,
+                  ),
                 }))}
               >
                 <SelectTrigger
@@ -1047,7 +1168,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                 <SelectContent>
                   {pressureUnits.map((unit) => (
                     <SelectItem key={unit} value={unit}>
-                      {t(`settings.pressureUnit.units.${unit}` as TranslationKey)}
+                      {t(
+                        `settings.pressureUnit.units.${unit}` as TranslationKey,
+                      )}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1092,7 +1215,11 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             <p className="text-muted-foreground mb-2 text-sm">
               {t("settings.exportRecentBody")}
             </p>
-            <Button asChild variant="secondary" className="h-10 w-full rounded-full text-sm">
+            <Button
+              asChild
+              variant="secondary"
+              className="h-10 w-full rounded-full text-sm"
+            >
               <a href={appPath("/api/vehicle/export?format=json")}>
                 <ExternalLink className="mr-2 size-4" aria-hidden />
                 {t("settings.exportRecent")}
@@ -1186,7 +1313,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             disabled={securityBusy || !email}
             onClick={() => void handleAddPassword()}
           >
-            {securityBusy ? t("settings.security.sending") : t("settings.security.addPassword")}
+            {securityBusy
+              ? t("settings.security.sending")
+              : t("settings.security.addPassword")}
           </Button>
         </CardContent>
       </Card>
@@ -1206,7 +1335,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             <p className="mt-2 text-sm font-medium">
               {telegramId
                 ? t("settings.telegramConnect.connected", {
-                    username: telegramUsername ? `@${telegramUsername}` : String(telegramId),
+                    username: telegramUsername
+                      ? `@${telegramUsername}`
+                      : String(telegramId),
                   })
                 : t("settings.telegramConnect.notConnected")}
             </p>
@@ -1233,7 +1364,11 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                 {t("settings.telegramConnect.instructionsTitle")}
               </p>
               <ol className="text-muted-foreground list-decimal space-y-2 pl-5 text-sm leading-relaxed">
-                {(t("settings.telegramConnect.instructions") as readonly string[]).map((step) => (
+                {(
+                  t(
+                    "settings.telegramConnect.instructions",
+                  ) as readonly string[]
+                ).map((step) => (
                   <li key={step}>{step}</li>
                 ))}
               </ol>
@@ -1243,7 +1378,11 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                 size="lg"
                 className="h-11 w-full justify-between rounded-full px-4 text-sm font-semibold"
               >
-                <a href="https://t.me/Voltflowscr_bot" target="_blank" rel="noreferrer">
+                <a
+                  href="https://t.me/Voltflowscr_bot"
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   <span>{t("settings.telegramConnect.openBot")}</span>
                   <ExternalLink className="size-4" aria-hidden />
                 </a>
@@ -1260,16 +1399,23 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
               onValueChange={handleNotifyChannelChange}
               items={notifyChannels.map((channel) => ({
                 value: channel,
-                label: t(`settings.telegramConnect.channels.${channel}` as TranslationKey) as string,
+                label: t(
+                  `settings.telegramConnect.channels.${channel}` as TranslationKey,
+                ) as string,
               }))}
             >
-              <SelectTrigger id="notify-channel" className="h-11 w-full rounded-2xl text-sm">
+              <SelectTrigger
+                id="notify-channel"
+                className="h-11 w-full rounded-2xl text-sm"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {notifyChannels.map((channel) => (
                   <SelectItem key={channel} value={channel}>
-                    {t(`settings.telegramConnect.channels.${channel}` as TranslationKey)}
+                    {t(
+                      `settings.telegramConnect.channels.${channel}` as TranslationKey,
+                    )}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1280,16 +1426,23 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="live-status-mode">{t("settings.liveStatus.label")}</Label>
+            <Label htmlFor="live-status-mode">
+              {t("settings.liveStatus.label")}
+            </Label>
             <Select
               value={liveStatusMode}
               onValueChange={handleLiveStatusModeChange}
               items={liveStatusModes.map((mode) => ({
                 value: mode,
-                label: t(`settings.liveStatus.modes.${mode}` as TranslationKey) as string,
+                label: t(
+                  `settings.liveStatus.modes.${mode}` as TranslationKey,
+                ) as string,
               }))}
             >
-              <SelectTrigger id="live-status-mode" className="h-11 w-full rounded-2xl text-sm">
+              <SelectTrigger
+                id="live-status-mode"
+                className="h-11 w-full rounded-2xl text-sm"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1300,32 +1453,59 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-muted-foreground text-sm">{t("settings.liveStatus.help")}</p>
+            <p className="text-muted-foreground text-sm">
+              {t("settings.liveStatus.help")}
+            </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="aux-battery-alerts">{t("settings.telegramConnect.auxBatteryAlertsLabel")}</Label>
-            <Select value={auxBatteryAlertsEnabled ? "enabled" : "disabled"} onValueChange={handleAuxBatteryAlertsChange} items={["enabled", "disabled"].map((value) => ({ value, label: t(`settings.telegramConnect.${value}` as TranslationKey) as string }))}>
-              <SelectTrigger id="aux-battery-alerts" className="h-11 w-full rounded-2xl text-sm"><SelectValue /></SelectTrigger>
+            <Label htmlFor="aux-battery-alerts">
+              {t("settings.telegramConnect.auxBatteryAlertsLabel")}
+            </Label>
+            <Select
+              value={auxBatteryAlertsEnabled ? "enabled" : "disabled"}
+              onValueChange={handleAuxBatteryAlertsChange}
+              items={["enabled", "disabled"].map((value) => ({
+                value,
+                label: t(
+                  `settings.telegramConnect.${value}` as TranslationKey,
+                ) as string,
+              }))}
+            >
+              <SelectTrigger
+                id="aux-battery-alerts"
+                className="h-11 w-full rounded-2xl text-sm"
+              >
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                <SelectItem value="enabled">{t("settings.telegramConnect.enabled")}</SelectItem>
-                <SelectItem value="disabled">{t("settings.telegramConnect.disabled")}</SelectItem>
+                <SelectItem value="enabled">
+                  {t("settings.telegramConnect.enabled")}
+                </SelectItem>
+                <SelectItem value="disabled">
+                  {t("settings.telegramConnect.disabled")}
+                </SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-muted-foreground text-sm">{t("settings.telegramConnect.auxBatteryAlertsHelp")}</p>
+            <p className="text-muted-foreground text-sm">
+              {t("settings.telegramConnect.auxBatteryAlertsHelp")}
+            </p>
           </div>
         </CardContent>
-      </Card>
+      </Card> */}
 
       <FreeRetentionNotice />
-
+      {/* 
       {isAdmin ? <PushDiagnostics /> : null}
 
       {isAdmin ? (
         <Card size="sm" className="border-white/[0.08]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <ShieldCheck className="size-5 text-[var(--voltflow-green)]" aria-hidden />
+              <ShieldCheck
+                className="size-5 text-[var(--voltflow-green)]"
+                aria-hidden
+              />
               {t("settings.adminCms.title")}
             </CardTitle>
           </CardHeader>
@@ -1355,7 +1535,10 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         <Card size="sm" className="border-white/[0.08]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <ShieldCheck className="size-5 text-[var(--voltflow-cyan)]" aria-hidden />
+              <ShieldCheck
+                className="size-5 text-[var(--voltflow-cyan)]"
+                aria-hidden
+              />
               {t("settings.adminPremium.title")}
             </CardTitle>
           </CardHeader>
@@ -1379,109 +1562,38 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             </Button>
           </CardContent>
         </Card>
-      ) : null}
+      ) : null} */}
 
-      <Card size="sm" className="border-white/[0.08]">
+      {/* <Card size="sm" className="border-white/[0.08]">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <KeyRound className="size-5" aria-hidden />
-            {t("settings.cloud.name")} 
+            {t("settings.cloud.name")}
           </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        </CardHeader> */}
+      {/* <CardContent className="space-y-4">
           <p className="text-muted-foreground text-sm leading-relaxed">
             {t("settings.cloud.description")}
-          </p>
+          </p> */}
 
-          <details className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
-            <summary className="cursor-pointer list-none text-sm font-semibold tracking-tight">
-              {t("settings.cloud.installTitle")}
-            </summary>
-            <ol className="text-muted-foreground mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed">
-              {(t("settings.cloud.installSteps") as readonly string[]).map((step) => (
-                <li key={step}>{step}</li>
-              ))}
-            </ol>
-            <Button asChild variant="outline" className="mt-3 h-11 w-full rounded-full text-sm">
-              <a
-                href="https://github.com/scroodge/BYDMate-own/releases/latest"
-                target="_blank"
-                rel="noreferrer"
-              >
-                <span className="inline-flex items-center gap-2">
-                  {t("settings.cloud.downloadApk")}
-                  <ExternalLink className="size-4" aria-hidden />
-                </span>
-              </a>
-            </Button>
-          </details>
+      {/* <VoltflowMateInstallPanel />
 
           <MateVersionPanel />
+          <MateLinkButton
+            formatLinkCountdown={formatLinkCountdown}
+            linkCode={linkCode}
+            linkCountdownSec={linkCountdownSec}
+            linkCreating={linkCreating}
+            handleCreateVoltflowMateLinkCode={handleCreateVoltflowMateLinkCode}
+          /> */}
+      <VoltflowMateConnection />
 
-          <DashboardVersionPanel />
-
-          {linkCode && linkCountdownSec != null && linkCountdownSec > 0 ? (
-            <div className="space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
-              <p className="text-center font-mono text-4xl font-semibold tracking-[0.32em] tabular-nums">
-                {linkCode.slice(0, 3)} {linkCode.slice(3)}
-              </p>
-              <p className="text-muted-foreground text-center text-sm">
-                {t("settings.cloud.linkCodeHint")}
-              </p>
-              <p className="text-center text-sm text-[var(--voltflow-green)]">
-                {t("settings.cloud.linkCodeExpires", {
-                  time: formatLinkCountdown(linkCountdownSec),
-                })}
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                className="h-11 w-full rounded-full text-sm"
-                onClick={handleCreateVoltflowMateLinkCode}
-                disabled={linkCreating}
-              >
-                <RefreshCw className="mr-2 size-4" aria-hidden />
-                {t("settings.cloud.linkVoltflowMate")}
-              </Button>
-            </div>
-          ) : linkCode && linkCountdownSec === 0 ? (
-            <div className="space-y-3">
-              <p className="text-muted-foreground text-sm">{t("settings.cloud.linkCodeExpired")}</p>
-              <Button
-                type="button"
-                variant="secondary"
-                size="lg"
-                className="h-11 w-full rounded-full text-sm"
-                onClick={handleCreateVoltflowMateLinkCode}
-                disabled={linkCreating}
-              >
-                <RefreshCw className="mr-2 size-4" aria-hidden />
-                {linkCreating
-                  ? t("settings.cloud.linkCodeCreating")
-                  : t("settings.cloud.linkVoltflowMate")}
-              </Button>
-            </div>
-          ) : (
-            <Button
-              type="button"
-              variant="secondary"
-              size="lg"
-              className="h-11 w-full rounded-full text-sm"
-              onClick={handleCreateVoltflowMateLinkCode}
-              disabled={linkCreating}
-            >
-              <RefreshCw className="mr-2 size-4" aria-hidden />
-              {linkCreating
-                ? t("settings.cloud.linkCodeCreating")
-                : t("settings.cloud.linkVoltflowMate")}
-            </Button>
-          )}
-
-          <ClusterBackgroundsSettings />
-        </CardContent>
+      {/* </CardContent> */}
+      {/* </Card> */}
+      <Card>
+        <DashboardVersionPanel />
+        <ClusterBackgroundsSettings />
       </Card>
-
       <Card size="sm" className="border-white/[0.08]">
         <CardHeader>
           <CardTitle>{t("settings.economics")}</CardTitle>
@@ -1504,7 +1616,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                 >
                   <SelectValue>
                     {(value: Currency | null) =>
-                      value ? currencyTextWithIcon(currencyLabels[value], value) : null
+                      value
+                        ? currencyTextWithIcon(currencyLabels[value], value)
+                        : null
                     }
                   </SelectValue>
                 </SelectTrigger>
@@ -1524,7 +1638,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             <div className="space-y-2">
               <Label htmlFor="pref-price-home">
                 {currencyTextWithIcon(
-                  t("settings.locationTariffs.homeTariff", { currency: currencySymbols[currency] }) as string,
+                  t("settings.locationTariffs.homeTariff", {
+                    currency: currencySymbols[currency],
+                  }) as string,
                   currency,
                 )}
               </Label>
@@ -1545,7 +1661,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             <div className="space-y-2">
               <Label htmlFor="pref-price-ac">
                 {currencyTextWithIcon(
-                  t("settings.locationTariffs.acTariff", { currency: currencySymbols[currency] }) as string,
+                  t("settings.locationTariffs.acTariff", {
+                    currency: currencySymbols[currency],
+                  }) as string,
                   currency,
                 )}
               </Label>
@@ -1566,7 +1684,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             <div className="space-y-2">
               <Label htmlFor="pref-price-dc">
                 {currencyTextWithIcon(
-                  t("settings.locationTariffs.dcTariff", { currency: currencySymbols[currency] }) as string,
+                  t("settings.locationTariffs.dcTariff", {
+                    currency: currencySymbols[currency],
+                  }) as string,
                   currency,
                 )}
               </Label>
@@ -1641,7 +1761,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                       type="text"
                       inputMode="decimal"
                       pattern="[0-9]*[,.]?[0-9]*"
-                      defaultValue={String(provider.commercial_ac_price_per_kwh)}
+                      defaultValue={String(
+                        provider.commercial_ac_price_per_kwh,
+                      )}
                       className="h-11 rounded-2xl text-sm"
                     />
                     <Input
@@ -1674,7 +1796,8 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                     onClick={handleDeleteSelectedProviders}
                   >
                     <Trash2 className="mr-1 size-3.5" />
-                    {t("settings.providerTariffs.deleteSelected") as string} ({selectedProviderIds.length})
+                    {t("settings.providerTariffs.deleteSelected") as string} (
+                    {selectedProviderIds.length})
                   </Button>
                 </div>
               ) : (
@@ -1683,7 +1806,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                   type="submit"
                   disabled={providerPricesSaving}
                 >
-                  {providerPricesSaving ? <Loader2 className="animate-spin" /> : null}
+                  {providerPricesSaving ? (
+                    <Loader2 className="animate-spin" />
+                  ) : null}
                   {t("settings.providerTariffs.save") as string}
                 </Button>
               )}
@@ -1698,7 +1823,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                   <Input
                     value={newProviderLabel}
                     onChange={(e) => setNewProviderLabel(e.target.value)}
-                    placeholder={t("settings.providerTariffs.addProviderLabel") as string}
+                    placeholder={
+                      t("settings.providerTariffs.addProviderLabel") as string
+                    }
                     className="h-10 rounded-xl text-sm"
                   />
                 </div>
@@ -1739,7 +1866,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                   {newProviderSaving ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
                   ) : (
-                    t("settings.providerTariffs.addProviderSave") as string
+                    (t("settings.providerTariffs.addProviderSave") as string)
                   )}
                 </Button>
               </div>
@@ -1754,7 +1881,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
               <div className="space-y-1">
                 <Input
                   ref={newLocationNameInputRef}
-                  placeholder={t("settings.locationTariffs.namePlaceholder") as string}
+                  placeholder={
+                    t("settings.locationTariffs.namePlaceholder") as string
+                  }
                   value={newLocationName}
                   onChange={(event) => {
                     setNewLocationName(event.target.value);
@@ -1764,7 +1893,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                   }}
                   aria-invalid={newLocationNameError}
                   aria-describedby={
-                    newLocationNameError ? "tariff-location-name-error" : undefined
+                    newLocationNameError
+                      ? "tariff-location-name-error"
+                      : undefined
                   }
                   className="h-11 rounded-2xl text-sm"
                 />
@@ -1790,28 +1921,34 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                 variant={newLocationAutoGps ? "secondary" : "outline"}
                 className="h-11 rounded-full text-sm"
                 onClick={() => {
-                    const next = !newLocationAutoGps;
-                    setNewLocationAutoGps(next);
-                    if (next && navigator.geolocation) {
-                      navigator.geolocation.getCurrentPosition(
-                        (position) => {
-                          const lat = position.coords.latitude;
-                          const lon = position.coords.longitude;
-                          setNewLocationLat(String(lat));
-                          setNewLocationLng(String(lon));
-                        },
-                        () => {},
-                        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
-                      );
-                    }
-                  }}
+                  const next = !newLocationAutoGps;
+                  setNewLocationAutoGps(next);
+                  if (next && navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                      (position) => {
+                        const lat = position.coords.latitude;
+                        const lon = position.coords.longitude;
+                        setNewLocationLat(String(lat));
+                        setNewLocationLng(String(lon));
+                      },
+                      () => {},
+                      {
+                        enableHighAccuracy: true,
+                        timeout: 8000,
+                        maximumAge: 60000,
+                      },
+                    );
+                  }
+                }}
               >
                 {newLocationAutoGps
                   ? (t("settings.locationTariffs.autoGpsOn") as string)
                   : (t("settings.locationTariffs.autoGpsOff") as string)}
               </Button>
               <Input
-                placeholder={t("settings.locationTariffs.radiusPlaceholder") as string}
+                placeholder={
+                  t("settings.locationTariffs.radiusPlaceholder") as string
+                }
                 value={newLocationRadius}
                 onChange={(event) => setNewLocationRadius(event.target.value)}
                 className="h-11 rounded-2xl text-sm"
@@ -1821,24 +1958,34 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                 onValueChange={(value) =>
                   setNewLocationTariffType(value as ChargingTariffType)
                 }
-                items={(["home", "commercial_ac", "fast_dc"] as const).map((value) => ({
-                  value,
-                  label: t(`charging.tariff.types.${value}` as TranslationKey),
-                }))}
+                items={(["home", "commercial_ac", "fast_dc"] as const).map(
+                  (value) => ({
+                    value,
+                    label: t(
+                      `charging.tariff.types.${value}` as TranslationKey,
+                    ),
+                  }),
+                )}
               >
                 <SelectTrigger className="h-11 rounded-2xl text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {(["home", "commercial_ac", "fast_dc"] as const).map((value) => (
-                    <SelectItem key={value} value={value}>
-                      {t(`charging.tariff.types.${value}` as TranslationKey)}
-                    </SelectItem>
-                  ))}
+                  {(["home", "commercial_ac", "fast_dc"] as const).map(
+                    (value) => (
+                      <SelectItem key={value} value={value}>
+                        {t(`charging.tariff.types.${value}` as TranslationKey)}
+                      </SelectItem>
+                    ),
+                  )}
                 </SelectContent>
               </Select>
               <Select
-                value={newLocationUserProviderId ? `up_${newLocationUserProviderId}` : newLocationProviderType}
+                value={
+                  newLocationUserProviderId
+                    ? `up_${newLocationUserProviderId}`
+                    : newLocationProviderType
+                }
                 onValueChange={(value) => {
                   const parsed = parseLocationProviderValue(value);
                   setNewLocationProviderType(parsed.providerType);
@@ -1877,11 +2024,15 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
               </p>
             )}
             <Input
-              placeholder={t("settings.locationTariffs.optionalPrice", {
-                currency: currencySymbols[currency],
-              }) as string}
+              placeholder={
+                t("settings.locationTariffs.optionalPrice", {
+                  currency: currencySymbols[currency],
+                }) as string
+              }
               value={newLocationOverridePrice}
-              onChange={(event) => setNewLocationOverridePrice(event.target.value)}
+              onChange={(event) =>
+                setNewLocationOverridePrice(event.target.value)
+              }
               className="h-11 rounded-2xl text-sm"
             />
             <Button
@@ -1905,7 +2056,8 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                     <div>
                       <p className="text-sm font-medium">{location.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {location.provider_type} · {location.tariff_type} · {location.radius_m} m · {location.lat.toFixed(5)},{" "}
+                        {location.provider_type} · {location.tariff_type} ·{" "}
+                        {location.radius_m} m · {location.lat.toFixed(5)},{" "}
                         {location.lng.toFixed(5)}
                       </p>
                     </div>
@@ -1935,19 +2087,24 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                   {t("settings.housekeepingBody")}
                 </p>
               </div>
-              <Button asChild variant="secondary" className="h-10 rounded-full text-sm">
+              <Button
+                asChild
+                variant="secondary"
+                className="h-10 rounded-full text-sm"
+              >
                 <Link href={appPath("/cars/new")}>{t("settings.addEv")}</Link>
               </Button>
             </div>
             <div className="space-y-5">
               {isLoading &&
                 Array.from({ length: 2 }).map((_, index) => (
-                  <Skeleton key={index} className="h-[120px] w-full rounded-3xl" />
+                  <Skeleton
+                    key={index}
+                    className="h-[120px] w-full rounded-3xl"
+                  />
                 ))}
               {!isLoading &&
-                cars?.map((car) => (
-                  <CarRow key={car.id} car={car} />
-                ))}
+                cars?.map((car) => <CarRow key={car.id} car={car} />)}
               {!isLoading && !(cars ?? []).length ? (
                 <p className="text-muted-foreground text-base leading-relaxed">
                   {t("settings.noRides")}
@@ -1979,6 +2136,15 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
           </SettingsGroup>
         </CardContent>
       </Card>
+      <Card size="sm" className="border-white/[0.08]">
+        <CardHeader>
+          <CardTitle>{t("locale.label")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <LocaleSwitcher onLocaleChange={handleLocaleChange} />
+          <p className="text-muted-foreground text-sm">{t("locale.helper")}</p>
+        </CardContent>
+      </Card>
       <AboutSection />
     </div>
   );
@@ -1996,16 +2162,22 @@ function MateVersionPanel() {
 
   // Snapshots come back newest-first; take the most recent one that reports a version.
   const installedVersion =
-    voltflowMateLive.find((snapshot) => snapshot.mate_version)?.mate_version ?? null;
+    voltflowMateLive.find((snapshot) => snapshot.mate_version)?.mate_version ??
+    null;
   const latestVersion = release?.version ?? null;
-  const updateAvailable = isMateUpdateAvailable(installedVersion, latestVersion);
+  const updateAvailable = isMateUpdateAvailable(
+    installedVersion,
+    latestVersion,
+  );
   const installedNewerThanLatest =
     !!installedVersion &&
     !!latestVersion &&
     compareMateVersions(installedVersion, latestVersion) > 0;
   const releaseSummary =
     summarizeReleaseNotes(release?.release_notes) ??
-    (updateAvailable ? t("settings.cloud.versionReleaseSummaryFallback") : null);
+    (updateAvailable
+      ? t("settings.cloud.versionReleaseSummaryFallback")
+      : null);
   const releaseUrl = release?.apk_url ?? MATE_GITHUB_RELEASES_LATEST_URL;
 
   return (
@@ -2039,7 +2211,9 @@ function MateVersionPanel() {
               {t("settings.cloud.versionUpdateAvailable")}
             </p>
             {releaseSummary ? (
-              <p className="text-muted-foreground text-sm leading-relaxed">{releaseSummary}</p>
+              <p className="text-muted-foreground text-sm leading-relaxed">
+                {releaseSummary}
+              </p>
             ) : null}
             <a
               href={releaseUrl}
@@ -2066,7 +2240,116 @@ function MateVersionPanel() {
     </div>
   );
 }
+function MateLinkButton({
+  formatLinkCountdown,
+  linkCode,
+  linkCountdownSec,
+  linkCreating,
+  handleCreateVoltflowMateLinkCode,
+}: {
+  formatLinkCountdown: (seconds: number) => string;
+  linkCode: string | null;
+  linkCountdownSec: number | null;
+  linkCreating: boolean;
+  handleCreateVoltflowMateLinkCode: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      {linkCode && linkCountdownSec != null && linkCountdownSec > 0 ? (
+        <div className="space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
+          <p className="text-center font-mono text-4xl font-semibold tracking-[0.32em] tabular-nums">
+            {linkCode.slice(0, 3)} {linkCode.slice(3)}
+          </p>
+          <p className="text-muted-foreground text-center text-sm">
+            {t("settings.cloud.linkCodeHint")}
+          </p>
+          <p className="text-center text-sm text-[var(--voltflow-green)]">
+            {t("settings.cloud.linkCodeExpires", {
+              time: formatLinkCountdown(linkCountdownSec),
+            })}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="h-11 w-full rounded-full text-sm"
+            onClick={handleCreateVoltflowMateLinkCode}
+            disabled={linkCreating}
+          >
+            <RefreshCw className="mr-2 size-4" aria-hidden />
+            {t("settings.cloud.linkVoltflowMate")}
+          </Button>
+        </div>
+      ) : linkCode && linkCountdownSec === 0 ? (
+        <div className="space-y-3">
+          <p className="text-muted-foreground text-sm">
+            {t("settings.cloud.linkCodeExpired")}
+          </p>
+          <Button
+            type="button"
+            variant="secondary"
+            size="lg"
+            className="h-11 w-full rounded-full text-sm"
+            onClick={handleCreateVoltflowMateLinkCode}
+            disabled={linkCreating}
+          >
+            <RefreshCw className="mr-2 size-4" aria-hidden />
+            {linkCreating
+              ? t("settings.cloud.linkCodeCreating")
+              : t("settings.cloud.linkVoltflowMate")}
+          </Button>
+        </div>
+      ) : (
+        <Button
+          type="button"
+          variant="secondary"
+          size="lg"
+          className="h-11 w-full rounded-full text-sm"
+          onClick={handleCreateVoltflowMateLinkCode}
+          disabled={linkCreating}
+        >
+          <RefreshCw className="mr-2 size-4" aria-hidden />
+          {linkCreating
+            ? t("settings.cloud.linkCodeCreating")
+            : t("settings.cloud.linkVoltflowMate")}
+        </Button>
+      )}
+    </>
+  );
+}
 
+function VoltflowMateInstallPanel() {
+  const { t } = useTranslation();
+  return (
+    <details className="rounded-2xl border border-white/[0.08] bg-white/[0.2] p-4">
+      <summary className="cursor-pointer list-none text-sm font-semibold tracking-tight">
+        {t("settings.cloud.installTitle")}
+      </summary>
+      <ol className="text-muted-foreground mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed">
+        {(t("settings.cloud.installSteps") as readonly string[]).map((step) => (
+          <li key={step}>{step}</li>
+        ))}
+      </ol>
+      <Button
+        asChild
+        variant="secondary"
+        className="mt-3 h-11 w-full rounded-full text-sm"
+      >
+        <a
+          href="https://github.com/scroodge/BYDMate-own/releases/latest"
+          target="_blank"
+          rel="noreferrer"
+        >
+          <span className="inline-flex items-center gap-2">
+            {t("settings.cloud.downloadApk")}
+            <ExternalLink className="size-4" aria-hidden />
+          </span>
+        </a>
+      </Button>
+    </details>
+  );
+}
 /**
  * Which VoltFlow Dashboard build is linked to this account.
  *
@@ -2079,7 +2362,8 @@ function DashboardVersionPanel() {
   const { t, locale } = useTranslation();
   const { data: devices = [] } = usePairedDevicesQuery();
 
-  const dashboard = devices.find((device) => device.kind === "dashboard") ?? null;
+  const dashboard =
+    devices.find((device) => device.kind === "dashboard") ?? null;
   const linkedOn = dashboard
     ? new Date(dashboard.created_at).toLocaleDateString(locale)
     : null;
@@ -2096,7 +2380,8 @@ function DashboardVersionPanel() {
               {t("settings.cloud.dashboardVersionLabel")}
             </p>
             <p className="mt-2 font-mono text-sm">
-              {dashboard.app_version ?? t("settings.cloud.dashboardVersionUnknown")}
+              {dashboard.app_version ??
+                t("settings.cloud.dashboardVersionUnknown")}
               {dashboard.app_version && dashboard.version_code != null
                 ? ` (${dashboard.version_code})`
                 : ""}
@@ -2142,7 +2427,11 @@ function PushDiagnostics() {
       refresh();
       toast.success(t("settings.push.refreshed") as string);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : (t("settings.push.syncError") as string));
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : (t("settings.push.syncError") as string),
+      );
     } finally {
       setBusy(null);
     }
@@ -2156,7 +2445,9 @@ function PushDiagnostics() {
       toast.success(t("settings.push.localRequested") as string);
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : (t("settings.push.localError") as string),
+        err instanceof Error
+          ? err.message
+          : (t("settings.push.localError") as string),
       );
     } finally {
       setBusy(null);
@@ -2169,11 +2460,15 @@ function PushDiagnostics() {
       await ensurePushSubscription();
       const result = await sendTestPush();
       if (!result.ok) throw new Error(result.error);
-      toast.success(t("settings.push.serverSent", { count: result.sent ?? 0 }) as string);
+      toast.success(
+        t("settings.push.serverSent", { count: result.sent ?? 0 }) as string,
+      );
       refresh();
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : (t("settings.push.serverError") as string),
+        err instanceof Error
+          ? err.message
+          : (t("settings.push.serverError") as string),
       );
     } finally {
       setBusy(null);
@@ -2192,15 +2487,23 @@ function PushDiagnostics() {
         <div className="grid gap-3 text-sm sm:grid-cols-2">
           <PushStatusRow
             label={t("settings.push.supported") as string}
-            value={(status?.supported ? t("settings.push.yes") : t("settings.push.no")) as string}
+            value={
+              (status?.supported
+                ? t("settings.push.yes")
+                : t("settings.push.no")) as string
+            }
           />
           <PushStatusRow
             label={t("settings.push.permission") as string}
-            value={status?.permission ?? (t("settings.push.checking") as string)}
+            value={
+              status?.permission ?? (t("settings.push.checking") as string)
+            }
           />
           <PushStatusRow
             label={t("settings.push.serviceWorker") as string}
-            value={status?.serviceWorker ?? (t("settings.push.checking") as string)}
+            value={
+              status?.serviceWorker ?? (t("settings.push.checking") as string)
+            }
           />
           <PushStatusRow
             label={t("settings.push.subscription") as string}
@@ -2224,7 +2527,9 @@ function PushDiagnostics() {
             disabled={busy !== null}
             onClick={handleSync}
           >
-            {busy === "sync" ? t("settings.push.checkingBtn") : t("settings.push.checkBtn")}
+            {busy === "sync"
+              ? t("settings.push.checkingBtn")
+              : t("settings.push.checkBtn")}
           </Button>
           <Button
             type="button"
@@ -2234,7 +2539,9 @@ function PushDiagnostics() {
             disabled={busy !== null}
             onClick={handleLocalTest}
           >
-            {busy === "local" ? t("settings.push.sendingBtn") : t("settings.push.localBtn")}
+            {busy === "local"
+              ? t("settings.push.sendingBtn")
+              : t("settings.push.localBtn")}
           </Button>
           <Button
             type="button"
@@ -2244,7 +2551,9 @@ function PushDiagnostics() {
             disabled={busy !== null}
             onClick={handleServerTest}
           >
-            {busy === "server" ? t("settings.push.sendingBtn") : t("settings.push.serverBtn")}
+            {busy === "server"
+              ? t("settings.push.sendingBtn")
+              : t("settings.push.serverBtn")}
           </Button>
         </div>
       </CardContent>
@@ -2255,7 +2564,9 @@ function PushDiagnostics() {
 function PushStatusRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-3">
-      <p className="text-muted-foreground text-xs uppercase tracking-[0.25em]">{label}</p>
+      <p className="text-muted-foreground text-xs uppercase tracking-[0.25em]">
+        {label}
+      </p>
       <p className="mt-2 break-words font-mono text-sm">{value}</p>
     </div>
   );
@@ -2266,12 +2577,15 @@ function CarRow({ car }: { car: Car }) {
   const appPath = useAppPath();
   const qc = useQueryClient();
   const [chemistrySaving, setChemistrySaving] = useState(false);
-  const generationLabel = t(`cars.generation.${car.model_generation}`) as string;
+  const generationLabel = t(
+    `cars.generation.${car.model_generation}`,
+  ) as string;
   const derivedChemistry = deriveAuxBatteryChemistry(car.model_generation);
 
   const handleChemistryChange = async (value: string | null) => {
     if (value == null) return;
-    const batteryChemistry = value === "auto" ? null : value as AuxBatteryChemistry;
+    const batteryChemistry =
+      value === "auto" ? null : (value as AuxBatteryChemistry);
     setChemistrySaving(true);
     const { error } = await createClient()
       .from("cars")
@@ -2288,11 +2602,14 @@ function CarRow({ car }: { car: Car }) {
   };
 
   const handleDelete = async () => {
-    if (!confirm(t("settings.removeConfirm", { name: car.name }) as string)) return;
+    if (!confirm(t("settings.removeConfirm", { name: car.name }) as string))
+      return;
     const res = await deleteCar(car.id);
     if (!res.ok) {
       toast.error(
-        typeof res.error === "string" ? res.error : (t("settings.deleteError") as string),
+        typeof res.error === "string"
+          ? res.error
+          : (t("settings.deleteError") as string),
       );
       return;
     }
@@ -2311,23 +2628,40 @@ function CarRow({ car }: { car: Car }) {
           })}
         </p>
         <div className="mt-3 max-w-sm space-y-1.5">
-          <Label htmlFor={`battery-chemistry-${car.id}`}>{t("settings.auxBattery.label")}</Label>
-          <Select value={car.battery_chemistry ?? "auto"} onValueChange={(value) => void handleChemistryChange(value)} disabled={chemistrySaving}>
-            <SelectTrigger id={`battery-chemistry-${car.id}`} className="w-full">
+          <Label htmlFor={`battery-chemistry-${car.id}`}>
+            {t("settings.auxBattery.label")}
+          </Label>
+          <Select
+            value={car.battery_chemistry ?? "auto"}
+            onValueChange={(value) => void handleChemistryChange(value)}
+            disabled={chemistrySaving}
+          >
+            <SelectTrigger
+              id={`battery-chemistry-${car.id}`}
+              className="w-full"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="auto">
-                {t("settings.auxBattery.derived", { chemistry: t(`settings.auxBattery.options.${derivedChemistry}` as TranslationKey) as string })}
+                {t("settings.auxBattery.derived", {
+                  chemistry: t(
+                    `settings.auxBattery.options.${derivedChemistry}` as TranslationKey,
+                  ) as string,
+                })}
               </SelectItem>
               {auxBatteryChemistries.map((chemistry) => (
                 <SelectItem key={chemistry} value={chemistry}>
-                  {t(`settings.auxBattery.options.${chemistry}` as TranslationKey)}
+                  {t(
+                    `settings.auxBattery.options.${chemistry}` as TranslationKey,
+                  )}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">{t("settings.auxBattery.help")}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("settings.auxBattery.help")}
+          </p>
         </div>
       </div>
       <div className="flex flex-wrap gap-2">

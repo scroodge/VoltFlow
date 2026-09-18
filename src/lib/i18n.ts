@@ -52,7 +52,8 @@ export function formatCurrencyParts(
   locale: Locale,
   options?: { minimumFractionDigits?: number; maximumFractionDigits?: number },
 ): Intl.NumberFormatPart[] {
-  const localeCode = locale === "be" ? "be-BY" : locale === "ru" ? "ru-RU" : "en-US";
+  const localeCode =
+    locale === "be" ? "be-BY" : locale === "ru" ? "ru-RU" : "en-US";
   const minimumFractionDigits = options?.minimumFractionDigits ?? 2;
   const maximumFractionDigits = options?.maximumFractionDigits ?? 2;
 
@@ -116,7 +117,8 @@ export const dictionaries = {
       loginError: "Could not sign in. Please try again.",
       haveAccount: "Already have a VoltFlow account? Sign in",
       haveAccountHint: "Use this after adding a password to a Google account.",
-      loginExistingHint: "If you added a password to a Google account, sign in with email and password.",
+      loginExistingHint:
+        "If you added a password to a Google account, sign in with email and password.",
       loginExistingAction: "Sign in",
     },
     locale: {
@@ -184,7 +186,8 @@ export const dictionaries = {
         "Charging math derives from anchored timestamps stored in Postgres — reopen the PWA anytime and timelines stay truthful.",
       stack: "Stack · Next.js · Supabase auth · Postgres · Realtime broadcast",
       installTitle: "Install VoltFlow",
-      installSubtitle: "Add it to your home screen — works offline, sends charge alerts.",
+      installSubtitle:
+        "Add it to your home screen — works offline, sends charge alerts.",
       installAction: "Install app",
       installIosStep1: "Tap the Share button in Safari",
       installIosStep2: "Choose “Add to Home Screen”",
@@ -262,7 +265,8 @@ export const dictionaries = {
     },
     auth: {
       title: "VoltFlow identity",
-      description: "Sign in to track your EV's charging, trips and battery health.",
+      description:
+        "Sign in to track your EV's charging, trips and battery health.",
       login: "Login",
       register: "Register",
       continue: "Continue",
@@ -328,7 +332,8 @@ export const dictionaries = {
       addEvBody:
         "We need a battery size and onboard charger preset to simulate energy and time.",
       addVehicle: "Add vehicle",
-      demoExplainer: "A preview with sample numbers — add your car to see your real data.",
+      demoExplainer:
+        "A preview with sample numbers — add your car to see your real data.",
       demoSoc: "Battery",
       demoRange: "Range",
       demoLastCharge: "Last charge",
@@ -353,7 +358,8 @@ export const dictionaries = {
       statusStale: "Last seen",
       statusAsleep: "Asleep",
       statusLiveCharging: "Charging (live)",
-      cannotChargeWhileDriving: "Park the car before starting a charging session.",
+      cannotChargeWhileDriving:
+        "Park the car before starting a charging session.",
       trackCharge: "Track this charge",
       packShort: "Pack",
       ringTogglePercent: "Show state of charge in percent",
@@ -373,17 +379,43 @@ export const dictionaries = {
       chargingCostToFull: "Price to 100%",
       explain: {
         metrics: {
-          parkChargeTime: { title: "Time to full", formula: "sum of energy in each charge band ÷ its capped power" },
-          parkChargeEnergy: { title: "Energy to full", formula: "battery energy needed ÷ charging efficiency" },
-          parkChargeCost: { title: "Cost to full", formula: "grid energy × price per kWh" },
-          activeChargeTime: { title: "Time left", formula: "remaining grid energy ÷ current charge power", fallbackFormula: "live session remaining time" },
-          activeChargeEnergy: { title: "Charged energy", formula: "battery gain from start SOC ÷ charging efficiency" },
-          activeChargeCost: { title: "Price to 100%", formula: "session grid energy to 100% × price per kWh" },
+          parkChargeTime: {
+            title: "Time to full",
+            formula: "sum of energy in each charge band ÷ its capped power",
+          },
+          parkChargeEnergy: {
+            title: "Energy to full",
+            formula: "battery energy needed ÷ charging efficiency",
+          },
+          parkChargeCost: {
+            title: "Cost to full",
+            formula: "grid energy × price per kWh",
+          },
+          activeChargeTime: {
+            title: "Time left",
+            formula: "remaining grid energy ÷ current charge power",
+            fallbackFormula: "live session remaining time",
+          },
+          activeChargeEnergy: {
+            title: "Charged energy",
+            formula: "battery gain from start SOC ÷ charging efficiency",
+          },
+          activeChargeCost: {
+            title: "Price to 100%",
+            formula: "session grid energy to 100% × price per kWh",
+          },
         },
         rows: {
-          efficiency: "Charging efficiency", chargePower: "Charge power", startSoc: "Starting SOC",
-          gridEnergy: "Grid energy", remainingGridEnergy: "Remaining grid energy", pricePerKwh: "Price per kWh",
-          dcBand70: "DC to 70%", dcBand90: "DC 70–90%", dcBand95: "DC 90–95%", dcBand100: "DC 95–100%",
+          efficiency: "Charging efficiency",
+          chargePower: "Charge power",
+          startSoc: "Starting SOC",
+          gridEnergy: "Grid energy",
+          remainingGridEnergy: "Remaining grid energy",
+          pricePerKwh: "Price per kWh",
+          dcBand70: "DC to 70%",
+          dcBand90: "DC 70–90%",
+          dcBand95: "DC 90–95%",
+          dcBand100: "DC 95–100%",
         },
       },
       parkEstimateEyebrow: "Park mode",
@@ -399,7 +431,8 @@ export const dictionaries = {
       estimateDetail: "{energy} kWh from grid at {price}/kWh.",
       estimateDetailCompact: "{energy} kWh · {price}/kWh",
       estimateDcTaper: "DC taper",
-      estimateUnavailable: "Add battery size, SOC, and charger power to calculate.",
+      estimateUnavailable:
+        "Add battery size, SOC, and charger power to calculate.",
       syncing: "Syncing",
       lastSeen: "Data from car {value}",
       walkToCar: "Walk to my car",
@@ -423,7 +456,8 @@ export const dictionaries = {
       noCharge: "No charges yet",
       noLiveData: "No live data",
       mateUpdateTitle: "VoltFlow Mate update available",
-      mateUpdateBody: "Version {version} is ready to install on your car (running {installed}).",
+      mateUpdateBody:
+        "Version {version} is ready to install on your car (running {installed}).",
       mateUpdateInstall: "Open VoltFlow Mate on your car to install",
       mateUpdateDismiss: "Dismiss",
       openVehicle: "Open vehicle telemetry",
@@ -453,13 +487,16 @@ export const dictionaries = {
       targetError: "Target must exceed current battery level",
       percentError: "Percent must stay 0–100",
       startChargeError: "Enter a current charge from 0 to 99.",
-      targetChargeError: "Enter a target charge from 1 to 100 and above the current charge.",
-      powerOverrideError: "Enter a charger power above 0 and up to 350 kW, or leave it blank.",
+      targetChargeError:
+        "Enter a target charge from 1 to 100 and above the current charge.",
+      powerOverrideError:
+        "Enter a charger power above 0 and up to 350 kW, or leave it blank.",
       priceError: "Enter an electricity price from 0 to 999.",
       started: "Charging started",
       couldNotStart: "Could not start",
       sessionUnauthorized: "Your session has expired. Sign in again and retry.",
-      sessionCarUnavailable: "This car is no longer available. Choose another car and retry.",
+      sessionCarUnavailable:
+        "This car is no longer available. Choose another car and retry.",
       sessionSaveError: "Could not save the charging session. Please retry.",
       liveCockpit: "Live cockpit",
       hydrating: "Hydrating realtime row…",
@@ -543,7 +580,8 @@ export const dictionaries = {
         invalidPrice: "Invalid tariff price",
         updated: "Tariff updated",
         appliedFrom: "Tariff applied from {name}",
-        locationSaved: "Saved “{name}” — this provider will apply here automatically next time",
+        locationSaved:
+          "Saved “{name}” — this provider will apply here automatically next time",
         types: {
           home: "Home",
           commercial_ac: "Commercial AC",
@@ -572,7 +610,8 @@ export const dictionaries = {
           "Correction saved, but the measured efficiency looks unusual — double check the numbers",
         alreadyCorrected: "This session has been corrected with provider data",
         invalidInput: "Enter a valid kWh and amount paid",
-        measuredEfficiency: "Measured efficiency: {percent}% (configured: {configured}%)",
+        measuredEfficiency:
+          "Measured efficiency: {percent}% (configured: {configured}%)",
       },
       manualEntry: {
         add: "Add missing charge",
@@ -587,7 +626,8 @@ export const dictionaries = {
         submit: "Add",
         cancel: "Cancel",
         added: "Charging session added",
-        addedUnanchored: "Session added — no telemetry nearby, so the battery level is unknown",
+        addedUnanchored:
+          "Session added — no telemetry nearby, so the battery level is unknown",
         badge: "Manual",
         socGain: "Charge added",
         socUnknown: "Battery level unknown",
@@ -600,7 +640,8 @@ export const dictionaries = {
           invalid_energy: "Enter the billed kWh",
           invalid_cost: "Enter the amount paid",
           invalid_car: "This vehicle has no battery capacity set",
-          implausible_power: "Those figures imply an impossibly slow charge — check the times",
+          implausible_power:
+            "Those figures imply an impossibly slow charge — check the times",
           overlap: "A charging session already covers this time range",
           future: "The session cannot be in the future",
         },
@@ -611,7 +652,8 @@ export const dictionaries = {
       description:
         "Used for realtime kWh ramps and ETA math — everything stays scoped to your account.",
       editTitle: "Edit vehicle",
-      editDescription: "Update generation, battery size, and AC limits for this EV.",
+      editDescription:
+        "Update generation, battery size, and AC limits for this EV.",
       freeCarLimitError:
         "Free plan supports 1 car. Upgrade to Premium to add more cars to your garage.",
       generationLabel: "Model generation",
@@ -630,14 +672,16 @@ export const dictionaries = {
       wallboxHelp: "Matches your AC pedestal limit.",
       homePrice: "Home charging price (optional)",
       homePricePlaceholder: "e.g. 0.15",
-      homePriceHelp: "Only you know your local rate — leave blank to set it later in Settings.",
+      homePriceHelp:
+        "Only you know your local rate — leave blank to set it later in Settings.",
       efficiency: "AC efficiency",
       efficiencyHelp:
         "Grid-to-battery loss factor for cost math. Leave at the default unless you've measured your own.",
       dcEfficiency: "Fast DC efficiency",
       dcEfficiencyHelp:
         "Fast DC loses more than AC — the charger meters before its own cable and cooling. Default 90%.",
-      efficiencySuggestion: "Measured {percent}% from {count} corrected sessions (spread {spread} pts)",
+      efficiencySuggestion:
+        "Measured {percent}% from {count} corrected sessions (spread {spread} pts)",
       efficiencySuggestionApply: "Apply",
       efficiencyApplied: "Efficiency updated",
       advanced: "Advanced",
@@ -647,7 +691,8 @@ export const dictionaries = {
       updated: "Vehicle updated",
       notFound: "Vehicle not found or no longer in your garage.",
       homeGeofence: "Home charger geofence",
-      homeGeofenceHelp: "When charging starts inside this radius, VoltFlow applies your default home tariff.",
+      homeGeofenceHelp:
+        "When charging starts inside this radius, VoltFlow applies your default home tariff.",
       homeLat: "Home latitude",
       homeLon: "Home longitude",
       homeRadius: "Radius (m)",
@@ -658,14 +703,31 @@ export const dictionaries = {
     },
     tripExplain: {
       metrics: {
-        traction: { title: "Traction energy", formula: "Reported traction energy, or distance × reported consumption ÷ 100" },
-        energyPerKm: { title: "Energy per kilometre", formula: "Traction energy ÷ distance" },
-        netConsumption: { title: "Net consumption", formula: "(traction energy − recovered energy) ÷ distance × 100" },
-        cost: { title: "Trip cost", formula: "Traction energy × electricity price" },
+        traction: {
+          title: "Traction energy",
+          formula:
+            "Reported traction energy, or distance × reported consumption ÷ 100",
+        },
+        energyPerKm: {
+          title: "Energy per kilometre",
+          formula: "Traction energy ÷ distance",
+        },
+        netConsumption: {
+          title: "Net consumption",
+          formula: "(traction energy − recovered energy) ÷ distance × 100",
+        },
+        cost: {
+          title: "Trip cost",
+          formula: "Traction energy × electricity price",
+        },
       },
       rows: {
-        reportedTraction: "Reported traction energy", reportedConsumption: "Reported consumption", distance: "Distance",
-        tractionEnergy: "Traction energy", regenEnergy: "Recovered energy", pricePerKwh: "Price per kWh",
+        reportedTraction: "Reported traction energy",
+        reportedConsumption: "Reported consumption",
+        distance: "Distance",
+        tractionEnergy: "Traction energy",
+        regenEnergy: "Recovered energy",
+        pricePerKwh: "Price per kWh",
       },
     },
     vehicle: {
@@ -696,9 +758,11 @@ export const dictionaries = {
         recentEnergyContext: "Last 50 km",
         power: "Power",
         aiRange: "AI Range",
-        aiRangeHint: "Blended estimate from your last ~50 km of driving, temperature, and speed",
+        aiRangeHint:
+          "Blended estimate from your last ~50 km of driving, temperature, and speed",
         mathRange: "Math Range",
-        mathRangeHint: "Distance left at your measured efficiency over the last ~50 km",
+        mathRangeHint:
+          "Distance left at your measured efficiency over the last ~50 km",
         sinceLastCharge: "Since last charge",
         kmPerPercent: "km per 1%",
       },
@@ -708,20 +772,47 @@ export const dictionaries = {
         updatedAgo: "Updated {value}",
         unavailable: "Unavailable",
         metrics: {
-          aiRange: { title: "AI Range", formula: "usable energy ÷ blended consumption × 100" },
-          mathRange: { title: "Math Range", formula: "SOC × measured km per 1%" },
-          kmPerPercent: { title: "km per 1%", formula: "distance in recent window ÷ SOC used" },
-          sinceCharge: { title: "Since last charge", formula: "sum of trip distances after charging ended" },
-          recentEnergy: { title: "Recent energy", formula: "average consumption × 50 km ÷ 100" },
+          aiRange: {
+            title: "AI Range",
+            formula: "usable energy ÷ blended consumption × 100",
+          },
+          mathRange: {
+            title: "Math Range",
+            formula: "SOC × measured km per 1%",
+          },
+          kmPerPercent: {
+            title: "km per 1%",
+            formula: "distance in recent window ÷ SOC used",
+          },
+          sinceCharge: {
+            title: "Since last charge",
+            formula: "sum of trip distances after charging ended",
+          },
+          recentEnergy: {
+            title: "Recent energy",
+            formula: "average consumption × 50 km ÷ 100",
+          },
         },
         rows: {
-          batteryCapacity: "Battery capacity", soh: "Battery health (SOH)", soc: "State of charge",
-          usableBattery: "Usable battery", usableEnergy: "Usable energy", environmentFactor: "Environment factor",
-          consumption: "Blended consumption", fallbackConsumption: "Fallback consumption", tripWindowDistance: "Trip window distance",
-          socDelta: "SOC used", kmPerPercent: "Measured km per 1%", lastChargeEnded: "Last charge ended",
-          liveTripDistance: "Current trip distance", result: "Result",
+          batteryCapacity: "Battery capacity",
+          soh: "Battery health (SOH)",
+          soc: "State of charge",
+          usableBattery: "Usable battery",
+          usableEnergy: "Usable energy",
+          environmentFactor: "Environment factor",
+          consumption: "Blended consumption",
+          fallbackConsumption: "Fallback consumption",
+          tripWindowDistance: "Trip window distance",
+          socDelta: "SOC used",
+          kmPerPercent: "Measured km per 1%",
+          lastChargeEnded: "Last charge ended",
+          liveTripDistance: "Current trip distance",
+          result: "Result",
         },
-        notes: { defaultCapacity: "Default — no vehicle capacity", noCharge: "No completed charge found" },
+        notes: {
+          defaultCapacity: "Default — no vehicle capacity",
+          noCharge: "No completed charge found",
+        },
       },
       staleTitle: "Car data hidden",
       staleBody:
@@ -758,11 +849,13 @@ export const dictionaries = {
       },
       tirePressure: {
         title: "Tyre pressure",
-        guidance: "Check against the vehicle pressure label when the tyres are cold.",
+        guidance:
+          "Check against the vehicle pressure label when the tyres are cold.",
       },
       trips: {
         title: "Trips",
-        subtitle: "Trips are split when telemetry is silent for more than 5 minutes.",
+        subtitle:
+          "Trips are split when telemetry is silent for more than 5 minutes.",
         date: "Date",
         dateHasTelemetry: "Telemetry data exists on {date}",
         count: "Trips",
@@ -797,7 +890,8 @@ export const dictionaries = {
         regenTotal: "total",
         cellDelta: "Cell delta",
         deltaBySoc: "Cell delta by SOC",
-        deltaBySocSubtitle: "{value} points. X is SOC, Y is cell voltage delta.",
+        deltaBySocSubtitle:
+          "{value} points. X is SOC, Y is cell voltage delta.",
         battery: "Battery",
         outside: "Outside",
         cabin: "Cabin",
@@ -814,7 +908,8 @@ export const dictionaries = {
         medianGap: "median {value}s gap",
         refresh: "15s refresh",
         empty: "History will appear after CloudEV Mate sends telemetry points.",
-        onePoint: "One point received. Charts will turn into lines after the next cloud payload.",
+        onePoint:
+          "One point received. Charts will turn into lines after the next cloud payload.",
         noValues: "No values",
         chartAria: "{title} history chart",
         diagnosticsLabel: "Diagnostics",
@@ -823,7 +918,8 @@ export const dictionaries = {
       route: {
         title: "Route",
         gpsPoints: "{value} GPS points in the selected trip",
-        empty: "No GPS points in this trip. Check location permission in CloudEV Gateway.",
+        empty:
+          "No GPS points in this trip. Check location permission in CloudEV Gateway.",
         mapData: "Map data",
         start: "Start",
         end: "End",
@@ -873,7 +969,8 @@ export const dictionaries = {
       },
       analytics: {
         historyTitle: "Telemetry history",
-        historySubtitle: "Week, month, quarter, and year views use hourly rollups plus recent raw samples.",
+        historySubtitle:
+          "Week, month, quarter, and year views use hourly rollups plus recent raw samples.",
         daySubtitle:
           "Day view: compare to your norm, review each trip, and optionally open the full-day timeline.",
         dayTripsTitle: "Trips this day",
@@ -894,14 +991,17 @@ export const dictionaries = {
             "{day} kWh/100 today — {percent}% above your 30-day median ({baseline} kWh/100).",
           tripBest: "Most efficient: {time} · {value} kWh/100 · {km} km",
           tripWorst: "Highest consumption: {time} · {value} kWh/100 · {km} km",
-          regenShare: "Regen recovered {regen} kWh — {percent}% of traction energy",
+          regenShare:
+            "Regen recovered {regen} kWh — {percent}% of traction energy",
           regenCompare:
             "Trips with more regen averaged {high} kWh/100 vs {low} on others ({highCount} vs {lowCount} trips)",
-          regenInsufficient: "Not enough trips today to compare regen and consumption.",
+          regenInsufficient:
+            "Not enough trips today to compare regen and consumption.",
         },
         telemetryChartsTitle: "Telemetry charts",
         teaserTitle: "Analytics & trends",
-        teaserSubtitle: "Weekly bars, phantom drain, route insights, and exports live in History.",
+        teaserSubtitle:
+          "Weekly bars, phantom drain, route insights, and exports live in History.",
         teaserLink: "Open analytics",
         anchorWeek: "Week",
         anchorMonth: "Month",
@@ -911,8 +1011,10 @@ export const dictionaries = {
         summaryTitle: "Period summary",
         summaryLoading: "Summarizing period…",
         summaryLoadingHint: "Trips and telemetry for the selected range.",
-        periodOverviewEmpty: "No trips or charging sessions are available for this period.",
-        periodOverviewLoadError: "Could not load the period overview. Please try again.",
+        periodOverviewEmpty:
+          "No trips or charging sessions are available for this period.",
+        periodOverviewLoadError:
+          "Could not load the period overview. Please try again.",
         summary: {
           trips: "Trips",
           distance: "Distance",
@@ -930,14 +1032,18 @@ export const dictionaries = {
         periodAverage: "Period average",
         inBar: "in bar",
         consumptionVsTemp: "Consumption vs outside temp",
-        consumptionVsTempSubtitle: "Average kWh/100 km grouped by outside temperature.",
+        consumptionVsTempSubtitle:
+          "Average kWh/100 km grouped by outside temperature.",
         phantomDrain: "Drain",
         routeInsightsTitle: "Route insights",
-        routeInsightsSubtitle: "Repeat routes unlock after three trips on the same path.",
-        routeInsightsEmpty: "Drive a few repeat routes to unlock consumption insights.",
+        routeInsightsSubtitle:
+          "Repeat routes unlock after three trips on the same path.",
+        routeInsightsEmpty:
+          "Drive a few repeat routes to unlock consumption insights.",
         routeInsightsLoading: "Analyzing repeat routes…",
         routeInsightsLoadingHint: "Matching GPS tracks from recent trips.",
-        routeInsightsLoadError: "Could not load route insights. Please try again.",
+        routeInsightsLoadError:
+          "Could not load route insights. Please try again.",
         routeTripCount: "{value} trips on this route",
         routeUnlock: "{value} more trips to unlock",
         routeNamePlaceholder: "Route name, e.g. Home → Work",
@@ -947,9 +1053,11 @@ export const dictionaries = {
         routeExpand: "Show route map and insights",
         routeCollapse: "Hide route details",
         routeMarkPark: "Mark as parking (not a trip)",
-        routeParkHint: "Parking spots are GPS drift or idle locations — exclude them from route insights.",
+        routeParkHint:
+          "Parking spots are GPS drift or idle locations — exclude them from route insights.",
         routeParkedTitle: "Parking spots ({value})",
-        routeParkedNote: "Excluded from route insights — future trips here won't count.",
+        routeParkedNote:
+          "Excluded from route insights — future trips here won't count.",
         routeUnmarkPark: "Include again",
         routePrediction: "Today: {low}–{high} kWh/100 estimated",
         sohTitle: "Battery health (SOH)",
@@ -972,11 +1080,14 @@ export const dictionaries = {
         batteryHealthSubtitle:
           "Cell voltage delta is the difference between the highest and lowest cell voltage reported by the battery management system, at the top of each full charge. A growing difference under similar conditions may indicate increasing pack imbalance or uneven cell ageing.",
         batteryHealthSohLabel: "SOH",
-        batteryHealthSohEstimateNote: "Estimated by the app, not reported directly by the vehicle.",
+        batteryHealthSohEstimateNote:
+          "Estimated by the app, not reported directly by the vehicle.",
         batteryHealthConsistencyLabel: "Cell consistency",
         batteryHealthConsistencyAtSoc: "At {value}% SOC",
-        batteryHealthNoData: "Insufficient comparable measurements yet — charge to 100% at least a few times.",
-        batteryHealthTemperatureNote: "Battery temperature spread isn't available from current telemetry.",
+        batteryHealthNoData:
+          "Insufficient comparable measurements yet — charge to 100% at least a few times.",
+        batteryHealthTemperatureNote:
+          "Battery temperature spread isn't available from current telemetry.",
         batteryHealthCannotIdentifyCell:
           "VoltFlow cannot identify an individual weak cell because Di+ currently reports only the pack's minimum and maximum cell voltage, not every physical cell.",
         batteryHealthStatusExcellent: "Excellent",
@@ -989,7 +1100,8 @@ export const dictionaries = {
         batteryHealthTrendWorsening: "Increasing",
         batteryHealthTrendInsufficientData: "Not enough history yet",
         aux12vTitle: "12V auxiliary battery",
-        aux12vSubtitle: "Resting-voltage trend while parked and unplugged; charging plateaus are excluded from the health signal.",
+        aux12vSubtitle:
+          "Resting-voltage trend while parked and unplugged; charging plateaus are excluded from the health signal.",
         aux12vNoData: "No 12V readings are available for this period.",
         aux12vRestingNow: "Resting now",
         aux12vBaseline: "90-day baseline",
@@ -999,16 +1111,27 @@ export const dictionaries = {
         aux12vResting: "Resting",
         aux12vMax: "Maximum",
         aux12vStateLabel: "Vehicle state",
-        aux12vState: { driving: "Driving", charging: "Charging", parked: "Parked", resting: "Resting window", noResting: "No resting window" },
+        aux12vState: {
+          driving: "Driving",
+          charging: "Charging",
+          parked: "Parked",
+          resting: "Resting window",
+          noResting: "No resting window",
+        },
         aux12vLowVoltageMarker: "Low-voltage reference",
-        aux12vNotEnough: "Not enough history yet — {count} of {required} days with resting readings.",
+        aux12vNotEnough:
+          "Not enough history yet — {count} of {required} days with resting readings.",
         aux12vBasedOn: "Based on {count} days with resting readings.",
-        aux12vLowDays: "Resting voltage fell below 11.8 V on {count} day(s) in this period.",
-        aux12vPremiumHistory: "Longer 12V history needs Premium; free-plan raw samples are retained for 30 days.",
+        aux12vLowDays:
+          "Resting voltage fell below 11.8 V on {count} day(s) in this period.",
+        aux12vPremiumHistory:
+          "Longer 12V history needs Premium; free-plan raw samples are retained for 30 days.",
         monthlyTitle: "Monthly summary",
-        monthlySubtitle: "Distance, charging, regen, and consumption for the selected month.",
+        monthlySubtitle:
+          "Distance, charging, regen, and consumption for the selected month.",
         chargingTrendsTitle: "Charging trends",
-        chargingTrendsSubtitle: "Energy, cost, and speed per period from completed sessions.",
+        chargingTrendsSubtitle:
+          "Energy, cost, and speed per period from completed sessions.",
         chargingEnergyTitle: "Energy charged",
         chargingEnergyLabel: "kWh charged",
         chargingCostChartTitle: "Charging cost",
@@ -1027,7 +1150,8 @@ export const dictionaries = {
         lifetimeMapTitle: "Lifetime map",
         lifetimeMapSubtitle: "Aggregated GPS track points from saved trips.",
         exportTitle: "Export your data",
-        exportSubtitle: "Download sessions, trips, and samples for the selected period.",
+        exportSubtitle:
+          "Download sessions, trips, and samples for the selected period.",
         exportCsv: "Download CSV",
         exportJson: "Download JSON",
         range: {
@@ -1072,7 +1196,8 @@ export const dictionaries = {
         clear: "Clear · show all",
       },
       demo: {
-        explainer: "This is sample data. Add your car to see your real charging and trip history here.",
+        explainer:
+          "This is sample data. Add your car to see your real charging and trip history here.",
       },
       charging: {
         startEnd: "Start → End",
@@ -1102,12 +1227,16 @@ export const dictionaries = {
         drive: "On trips",
         avgConsumption: "Avg. consumption",
         balanceTitle: "Day balance",
-        balanceExplainSurplus: "More from the charger than used on trips (AC kWh).",
-        balanceExplainDeficit: "More used on trips than added from the charger today.",
+        balanceExplainSurplus:
+          "More from the charger than used on trips (AC kWh).",
+        balanceExplainDeficit:
+          "More used on trips than added from the charger today.",
         balanceExplainBalanced: "Charging and trips roughly match.",
         noTrips: "No trips recorded this day.",
-        acFootnote: "AC kWh from the charger; battery intake depends on efficiency.",
-        estimatedCostFootnote: "≈ Estimated from your last charge price — not money spent today.",
+        acFootnote:
+          "AC kWh from the charger; battery intake depends on efficiency.",
+        estimatedCostFootnote:
+          "≈ Estimated from your last charge price — not money spent today.",
         surplus: "Charged {delta} kWh more than used on trips today.",
         deficit: "Used {delta} kWh more on trips than charged today.",
         balanced: "Charging and trips are roughly balanced today.",
@@ -1119,16 +1248,20 @@ export const dictionaries = {
         titleQuarter: "Quarter at a glance",
         titleYear: "Year at a glance",
         balanceTitle: "Period balance",
-        balanceExplainSurplus: "More from the charger than used on trips in this period (AC kWh).",
-        balanceExplainDeficit: "More used on trips than added from the charger in this period.",
-        balanceExplainBalanced: "Charging and trips roughly match for this period.",
+        balanceExplainSurplus:
+          "More from the charger than used on trips in this period (AC kWh).",
+        balanceExplainDeficit:
+          "More used on trips than added from the charger in this period.",
+        balanceExplainBalanced:
+          "Charging and trips roughly match for this period.",
         noTrips: "No trips in this period.",
       },
     },
     service: {
       eyebrow: "Service",
       title: "Service log",
-      subtitle: "Every repair, maintenance, and upgrade — with costs and parts.",
+      subtitle:
+        "Every repair, maintenance, and upgrade — with costs and parts.",
       tab: {
         timeline: "Timeline",
         categories: "Categories",
@@ -1142,7 +1275,8 @@ export const dictionaries = {
       recordUpdated: "Service record updated",
       recordDeleted: "Service record deleted",
       emptyTitle: "No service records yet",
-      emptyBody: "Tap + to log your first repair, maintenance, or parts purchase.",
+      emptyBody:
+        "Tap + to log your first repair, maintenance, or parts purchase.",
       form: {
         title: "Title",
         category: "Category",
@@ -1307,7 +1441,8 @@ export const dictionaries = {
         ],
         downloadApk: "Download APK (GitHub)",
         linkVoltflowMate: "Link VoltFlow Mate",
-        linkCodeHint: "Enter this 6-digit code in VoltFlow Mate → VoltFlow sync, then tap Connect.",
+        linkCodeHint:
+          "Enter this 6-digit code in VoltFlow Mate → VoltFlow sync, then tap Connect.",
         linkCodeExpires: "Code expires in {time}",
         linkCodeExpired: "Code expired — generate a new one.",
         linkCodeCreating: "Creating code…",
@@ -1328,7 +1463,8 @@ export const dictionaries = {
         versionViewOnGitHub: "View release on GitHub",
         versionUnknown: "No data from car yet",
         dashboardTitle: "VoltFlow Dashboard",
-        dashboardNotLinked: "Not linked — redeem a code above on the head unit.",
+        dashboardNotLinked:
+          "Not linked — redeem a code above on the head unit.",
         dashboardVersionLabel: "Version on head unit",
         dashboardVersionUnknown: "Not reported yet",
         dashboardLinkedOn: "Linked {date}",
@@ -1341,9 +1477,11 @@ export const dictionaries = {
       signOut: "Sign out",
       signedOut: "Signed out cleanly.",
       exportRecent: "Download recent data (JSON)",
-      exportRecentBody: "Download your most recent 30 days of vehicle, trip, charging, and GPS data.",
+      exportRecentBody:
+        "Download your most recent 30 days of vehicle, trip, charging, and GPS data.",
       deleteAccount: "Delete account",
-      deleteAccountBody: "Permanently delete your account and all associated data. This action cannot be undone.",
+      deleteAccountBody:
+        "Permanently delete your account and all associated data. This action cannot be undone.",
       deleteAccountConfirm: "Type DELETE to confirm",
       deleteAccountConfirming: "Deleting...",
       deleteAccountDone: "Account deleted successfully.",
@@ -1365,8 +1503,10 @@ export const dictionaries = {
         connecting: "Connecting...",
         linked: "Telegram connected.",
         linkFailed: "Could not connect Telegram",
-        openInTelegram: "Open this from the Telegram Mini App to connect automatically.",
-        connectFirst: "Connect Telegram before selecting Telegram notifications.",
+        openInTelegram:
+          "Open this from the Telegram Mini App to connect automatically.",
+        connectFirst:
+          "Connect Telegram before selecting Telegram notifications.",
         instructionsTitle: "How to connect",
         instructions: [
           "Open @Voltflowscr_bot in Telegram.",
@@ -1380,9 +1520,11 @@ export const dictionaries = {
           "Telegram delivery works after you have started the bot at least once.",
         channelSaved: "Notification channel saved.",
         auxBatteryAlertsLabel: "12V battery health alerts",
-        auxBatteryAlertsHelp: "Acute low-voltage warnings and a silent weekly decline digest. Charging alerts are unaffected.",
+        auxBatteryAlertsHelp:
+          "Acute low-voltage warnings and a silent weekly decline digest. Charging alerts are unaffected.",
         auxBatteryAlertsSaved: "12V battery alerts setting saved.",
-        enabled: "On", disabled: "Off",
+        enabled: "On",
+        disabled: "Off",
         channels: {
           web_push: "Web push",
           telegram: "Telegram",
@@ -1391,8 +1533,7 @@ export const dictionaries = {
       },
       liveStatus: {
         label: "Live status on lock screen (Android)",
-        help:
-          "A silently updating notification with charging progress or parked battery status. Android only — iPhone keeps the milestone notifications.",
+        help: "A silently updating notification with charging progress or parked battery status. Android only — iPhone keeps the milestone notifications.",
         saved: "Live status setting saved.",
         modes: {
           off: "Off",
@@ -1455,7 +1596,8 @@ export const dictionaries = {
         saved: "Provider tariffs saved",
         invalidPrice: "Prices must be zero or positive",
         userProvidersTitle: "Your providers",
-        userProvidersBody: "Home plus built-in providers are ready to use — edit prices or remove any except Home. Add your own below.",
+        userProvidersBody:
+          "Home plus built-in providers are ready to use — edit prices or remove any except Home. Add your own below.",
         addProvider: "Add provider",
         addProviderLabel: "Provider name",
         addProviderAc: "AC price",
@@ -1483,9 +1625,7 @@ export const dictionaries = {
       privacy:
         "VoltFlow never talks to chargers directly — timers are deterministic modeling for trip planning · always confirm hardware states on the pedestal.",
       privacyTitle: "Telemetry privacy",
-      privacyItems: [
-        "All data saved in Supabase ·  no cross-driver leakage",
-      ],
+      privacyItems: ["All data saved in Supabase ·  no cross-driver leakage"],
       retentionNotice: {
         title: "Free plan data retention",
         body: "Free plan keeps telemetry for {days} days. Older records are automatically deleted.",
@@ -1527,7 +1667,7 @@ export const dictionaries = {
       },
       about: "About",
       aboutBody:
-        "VoltFlow is a small planning cockpit for EV charging sessions, costs, and history.",
+        "VoltFlow is an app for EV owners that helps plan charging, calculate charging costs, and track charging session history.",
       telegram: "Telegram",
       github: "GitHub",
       license:
@@ -1536,7 +1676,12 @@ export const dictionaries = {
         "© 2026 VoltFlow. Third-party packages and services remain under their respective licenses.",
     },
     telegramLiveWidget: {
-      state: { charging: "Charging", parked: "Parked", driving: "Driving", offline: "Offline" },
+      state: {
+        charging: "Charging",
+        parked: "Parked",
+        driving: "Driving",
+        offline: "Offline",
+      },
       mileage: "Mileage {value} km",
       vehicle: "Vehicle",
       timeHoursMinutes: "~{hours}h {minutes}m",
@@ -1545,7 +1690,17 @@ export const dictionaries = {
       openMap: "Open map",
       openVoltFlow: "Open VoltFlow",
     },
-    auxBatteryAlerts: { open: "Open VoltFlow", acute: { title: "12V battery needs attention", body: "{vehicle}: resting voltage has stayed low for two days ({voltage} V). Check or charge the auxiliary battery." }, digest: { title: "12V battery is declining", body: "{vehicle}: resting voltage is {voltage} V versus the 90-day baseline of {baseline} V. Consider checking the battery." } },
+    auxBatteryAlerts: {
+      open: "Open VoltFlow",
+      acute: {
+        title: "12V battery needs attention",
+        body: "{vehicle}: resting voltage has stayed low for two days ({voltage} V). Check or charge the auxiliary battery.",
+      },
+      digest: {
+        title: "12V battery is declining",
+        body: "{vehicle}: resting voltage is {voltage} V versus the 90-day baseline of {baseline} V. Consider checking the battery.",
+      },
+    },
     auxVoltageStats: {
       minimum: "Minimum",
       maximum: "Maximum",
@@ -1590,7 +1745,8 @@ export const dictionaries = {
       openingApp: "Адкрываем дадатак…",
       loginError: "Не атрымалася ўвайсці. Паспрабуйце яшчэ раз.",
       haveAccount: "Ужо ёсць акаўнт VoltFlow? Увайсці",
-      haveAccountHint: "Выкарыстоўвайце гэта пасля дадання пароля да Google-акаўнта.",
+      haveAccountHint:
+        "Выкарыстоўвайце гэта пасля дадання пароля да Google-акаўнта.",
       loginExistingHint:
         "Калі вы дадалі пароль да Google-акаўнта, увайдзіце праз email і пароль.",
       loginExistingAction: "Увайсці",
@@ -1660,7 +1816,8 @@ export const dictionaries = {
         "Разлікі зарадкі ідуць ад часавых метак у Postgres — адкрыйце PWA зноў, і лінія часу застанецца дакладнай.",
       stack: "Стэк · Next.js · Supabase auth · Postgres · Realtime broadcast",
       installTitle: "Усталяваць VoltFlow",
-      installSubtitle: "Дадайце на хатні экран — працуе афлайн, дасылае апавяшчэнні аб зарадцы.",
+      installSubtitle:
+        "Дадайце на хатні экран — працуе афлайн, дасылае апавяшчэнні аб зарадцы.",
       installAction: "Усталяваць праграму",
       installIosStep1: "Націсніце кнопку «Падзяліцца» ў Safari",
       installIosStep2: "Выберыце «На галоўны экран»",
@@ -1714,7 +1871,8 @@ export const dictionaries = {
     },
     support: {
       title: "Падтрымаць праект",
-      intro: "Вы можаце падтрымаць VoltFlow фінансава. Сабраныя сродкі пойдуць на:",
+      intro:
+        "Вы можаце падтрымаць VoltFlow фінансава. Сабраныя сродкі пойдуць на:",
       fund1: "штомесячную аплату хостынгу і сервераў",
       fund2: "аплату даменаў і SSL-сертыфікатаў да іх",
       fund3: "далейшае развіццё праекта і яго магчымасцяў",
@@ -1738,7 +1896,8 @@ export const dictionaries = {
     },
     auth: {
       title: "Ідэнтыфікацыя Charge VoltFlow",
-      description: "Увайдзіце, каб сачыць за зарадкай, паездкамі і станам батарэі вашага электрамабіля.",
+      description:
+        "Увайдзіце, каб сачыць за зарадкай, паездкамі і станам батарэі вашага электрамабіля.",
       login: "Увайсці",
       register: "Рэгістрацыя",
       continue: "Працягнуць",
@@ -1751,8 +1910,7 @@ export const dictionaries = {
       email: "Email",
       password: "Пароль",
       weakPassword: "Выкарыстайце пароль мінімум з 8 сімвалаў.",
-      confirmEmail:
-        "Пацвердзіце email · потым вярніцеся сюды, каб увайсці.",
+      confirmEmail: "Пацвердзіце email · потым вярніцеся сюды, каб увайсці.",
       confirmSent: "Спасылка для пацверджання адпраўлена на {email}.",
       confirmSentTitle: "Праверце пошту",
       confirmSentBody:
@@ -1805,7 +1963,8 @@ export const dictionaries = {
       addEvBody:
         "Патрэбны памер батарэі і магутнасць бартавой зарадкі, каб мадэляваць энергію і час.",
       addVehicle: "Дадаць аўто",
-      demoExplainer: "Прыклад лічбаў — дадайце сваю машыну, каб убачыць сапраўдныя дадзеныя.",
+      demoExplainer:
+        "Прыклад лічбаў — дадайце сваю машыну, каб убачыць сапраўдныя дадзеныя.",
       demoSoc: "Батарэя",
       demoRange: "Запас ходу",
       demoLastCharge: "Апошняя зарадка",
@@ -1850,17 +2009,43 @@ export const dictionaries = {
       chargingCostToFull: "Кошт да 100%",
       explain: {
         metrics: {
-          parkChargeTime: { title: "Час да 100%", formula: "сума энергіі ў кожным дыяпазоне ÷ абмежаваная магутнасць" },
-          parkChargeEnergy: { title: "Энергія да 100%", formula: "патрэбная энергія батарэі ÷ эфектыўнасць зарадкі" },
-          parkChargeCost: { title: "Кошт да 100%", formula: "энергія з сеткі × кошт за кВт·г" },
-          activeChargeTime: { title: "Засталося часу", formula: "астатняя энергія з сеткі ÷ бягучая магутнасць", fallbackFormula: "астатні час жывой сесіі" },
-          activeChargeEnergy: { title: "Зараджана энергіі", formula: "прырост батарэі ад пачатковага SOC ÷ эфектыўнасць" },
-          activeChargeCost: { title: "Кошт да 100%", formula: "энергія сесіі да 100% × кошт за кВт·г" },
+          parkChargeTime: {
+            title: "Час да 100%",
+            formula: "сума энергіі ў кожным дыяпазоне ÷ абмежаваная магутнасць",
+          },
+          parkChargeEnergy: {
+            title: "Энергія да 100%",
+            formula: "патрэбная энергія батарэі ÷ эфектыўнасць зарадкі",
+          },
+          parkChargeCost: {
+            title: "Кошт да 100%",
+            formula: "энергія з сеткі × кошт за кВт·г",
+          },
+          activeChargeTime: {
+            title: "Засталося часу",
+            formula: "астатняя энергія з сеткі ÷ бягучая магутнасць",
+            fallbackFormula: "астатні час жывой сесіі",
+          },
+          activeChargeEnergy: {
+            title: "Зараджана энергіі",
+            formula: "прырост батарэі ад пачатковага SOC ÷ эфектыўнасць",
+          },
+          activeChargeCost: {
+            title: "Кошт да 100%",
+            formula: "энергія сесіі да 100% × кошт за кВт·г",
+          },
         },
         rows: {
-          efficiency: "Эфектыўнасць зарадкі", chargePower: "Магутнасць зарадкі", startSoc: "Пачатковы SOC",
-          gridEnergy: "Энергія з сеткі", remainingGridEnergy: "Астатняя энергія з сеткі", pricePerKwh: "Кошт за кВт·г",
-          dcBand70: "DC да 70%", dcBand90: "DC 70–90%", dcBand95: "DC 90–95%", dcBand100: "DC 95–100%",
+          efficiency: "Эфектыўнасць зарадкі",
+          chargePower: "Магутнасць зарадкі",
+          startSoc: "Пачатковы SOC",
+          gridEnergy: "Энергія з сеткі",
+          remainingGridEnergy: "Астатняя энергія з сеткі",
+          pricePerKwh: "Кошт за кВт·г",
+          dcBand70: "DC да 70%",
+          dcBand90: "DC 70–90%",
+          dcBand95: "DC 90–95%",
+          dcBand100: "DC 95–100%",
         },
       },
       parkEstimateEyebrow: "Рэжым паркоўкі",
@@ -1876,7 +2061,8 @@ export const dictionaries = {
       estimateDetail: "{energy} кВт·г з сеткі па {price}/кВт·г.",
       estimateDetailCompact: "{energy} кВт·г · {price}/кВт·г",
       estimateDcTaper: "DC-зніжэнне",
-      estimateUnavailable: "Дадайце ёмістасць батарэі, SOC і магутнасць зарадкі для разліку.",
+      estimateUnavailable:
+        "Дадайце ёмістасць батарэі, SOC і магутнасць зарадкі для разліку.",
       syncing: "Сінхранізацыя",
       lastSeen: "Дадзеныя з аўто {value}",
       walkToCar: "Дайсці да аўто",
@@ -1890,8 +2076,7 @@ export const dictionaries = {
       batteryPack: "Батарэя",
       chargerPower: "Магутнасць зарадкі",
       activeRingBody: "Разумная зарадка. Поўны кантроль. Кожны раз.",
-      idleRingBody:
-        "Энергія ў руху. Задайце мэту, і VoltFlow адсочыць сесію.",
+      idleRingBody: "Энергія ў руху. Задайце мэту, і VoltFlow адсочыць сесію.",
       latestTrip: "Апошняя паездка",
       latestCharge: "Апошняя зарадка",
       liveVehicle: "Жывое аўто",
@@ -1900,7 +2085,8 @@ export const dictionaries = {
       noCharge: "Зарадак пакуль няма",
       noLiveData: "Няма live-даных",
       mateUpdateTitle: "Даступнае абнаўленне VoltFlow Mate",
-      mateUpdateBody: "Версія {version} гатовая да ўстаноўкі на ваша аўто (зараз {installed}).",
+      mateUpdateBody:
+        "Версія {version} гатовая да ўстаноўкі на ваша аўто (зараз {installed}).",
       mateUpdateInstall: "Адкрыйце VoltFlow Mate на аўто для ўстаноўкі",
       mateUpdateDismiss: "Схаваць",
       openVehicle: "Адкрыць тэлеметрыю аўто",
@@ -1924,19 +2110,23 @@ export const dictionaries = {
       manualTariffHome: "Дом",
       manualTariffCommercialAc: "Камерцыйная AC",
       manualTariffFastDc: "Хуткая DC",
-      manualTariffAutoHelp: "Аўтаправіла: AC 4,0–9,99 кВт, хуткая DC ад 10,0 кВт.",
+      manualTariffAutoHelp:
+        "Аўтаправіла: AC 4,0–9,99 кВт, хуткая DC ад 10,0 кВт.",
       starting: "Запуск...",
       startSession: "Пачаць сесію",
       targetError: "Мэта павінна быць вышэй за бягучы ўзровень батарэі",
       percentError: "Працэнты павінны быць у межах 0–100",
       startChargeError: "Увядзіце бягучы зарад ад 0 да 99.",
       targetChargeError: "Увядзіце мэтавы зарад ад 1 да 100, вышэй за бягучы.",
-      powerOverrideError: "Увядзіце магутнасць зарадкі больш за 0 і да 350 кВт або пакіньце поле пустым.",
+      powerOverrideError:
+        "Увядзіце магутнасць зарадкі больш за 0 і да 350 кВт або пакіньце поле пустым.",
       priceError: "Увядзіце кошт электрычнасці ад 0 да 999.",
       started: "Зарадка пачалася",
       couldNotStart: "Не ўдалося пачаць",
-      sessionUnauthorized: "Тэрмін вашай сесіі скончыўся. Увайдзіце зноў і паўтарыце спробу.",
-      sessionCarUnavailable: "Гэта аўто больш недаступнае. Абярыце іншае і паўтарыце спробу.",
+      sessionUnauthorized:
+        "Тэрмін вашай сесіі скончыўся. Увайдзіце зноў і паўтарыце спробу.",
+      sessionCarUnavailable:
+        "Гэта аўто больш недаступнае. Абярыце іншае і паўтарыце спробу.",
       sessionSaveError: "Не ўдалося захаваць сесію зарадкі. Паўтарыце спробу.",
       liveCockpit: "Жывая кабіна",
       hydrating: "Падцягваем радок realtime…",
@@ -2020,7 +2210,8 @@ export const dictionaries = {
         invalidPrice: "Няверная цана тарыфу",
         updated: "Тарыф абноўлены",
         appliedFrom: "Тарыф прымянены з «{name}»",
-        locationSaved: "Захавана «{name}» — гэты правайдар будзе прымяняцца тут аўтаматычна наступным разам",
+        locationSaved:
+          "Захавана «{name}» — гэты правайдар будзе прымяняцца тут аўтаматычна наступным разам",
         types: {
           home: "Домашні",
           commercial_ac: "Камерцыйны AC",
@@ -2049,7 +2240,8 @@ export const dictionaries = {
           "Карэкцыя захавана, але вымераная эфектыўнасць выглядае незвычайна — праверце лічбы",
         alreadyCorrected: "Гэтая сесія скарэктавана паводле даных правайдара",
         invalidInput: "Увядзіце карэктныя кВт·г і суму аплаты",
-        measuredEfficiency: "Вымераная эфектыўнасць: {percent}% (наладжана: {configured}%)",
+        measuredEfficiency:
+          "Вымераная эфектыўнасць: {percent}% (наладжана: {configured}%)",
       },
       manualEntry: {
         add: "Дадаць прапушчаную зарадку",
@@ -2059,7 +2251,8 @@ export const dictionaries = {
         endTime: "Канец",
         billedKwh: "Аплачана кВт·г",
         totalPaid: "Заплачана ўсяго ({currency})",
-        preview: "≈ {currency}{price} за кВт·г · ≈ {power} кВт · +{soc}% зараду",
+        preview:
+          "≈ {currency}{price} за кВт·г · ≈ {power} кВт · +{soc}% зараду",
         previewUnanchored: "≈ {currency}{price} за кВт·г · ≈ {power} кВт",
         submit: "Дадаць",
         cancel: "Скасаваць",
@@ -2109,14 +2302,16 @@ export const dictionaries = {
       wallboxHelp: "Адпавядае ліміту вашай AC-стойкі.",
       homePrice: "Цана хатняй зарадкі (неабавязкова)",
       homePricePlaceholder: "напр. 0.15",
-      homePriceHelp: "Толькі вы ведаеце свой мясцовы тарыф — можна пакінуць пустым і задаць пазней у Наладах.",
+      homePriceHelp:
+        "Толькі вы ведаеце свой мясцовы тарыф — можна пакінуць пустым і задаць пазней у Наладах.",
       efficiency: "AC-эфектыўнасць",
       efficiencyHelp:
         "Каэфіцыент страт сетка-батарэя для разліку кошту. Пакіньце па змаўчанні, калі не вымяралі свой.",
       dcEfficiency: "Эфектыўнасць хуткай DC",
       dcEfficiencyHelp:
         "На хуткай DC страт больш, чым на AC — зарадка лічыць да свайго кабеля і ахаладжэння. Па змаўчанні 90%.",
-      efficiencySuggestion: "Вымерана {percent}% з {count} скарэктаваных сесій (разброс {spread} пт)",
+      efficiencySuggestion:
+        "Вымерана {percent}% з {count} скарэктаваных сесій (разброс {spread} пт)",
       efficiencySuggestionApply: "Ужыць",
       efficiencyApplied: "Эфектыўнасць абноўлена",
       advanced: "Дадаткова",
@@ -2126,7 +2321,8 @@ export const dictionaries = {
       updated: "Аўто абноўлена",
       notFound: "Аўто не знойдзена або ўжо выдалена.",
       homeGeofence: "Геазона домашняй зарадкі",
-      homeGeofenceHelp: "Калі зарадка пачынаецца ў гэтай зоне, VoltFlow прымяняе ваш домашні тарыф.",
+      homeGeofenceHelp:
+        "Калі зарадка пачынаецца ў гэтай зоне, VoltFlow прымяняе ваш домашні тарыф.",
       homeLat: "Шырата дома",
       homeLon: "Даўгата дома",
       homeRadius: "Радыус (м)",
@@ -2137,14 +2333,30 @@ export const dictionaries = {
     },
     tripExplain: {
       metrics: {
-        traction: { title: "Энергія руху", formula: "Перададзеная энергія руху або адлегласць × расход ÷ 100" },
-        energyPerKm: { title: "Энергія на кіламетр", formula: "Энергія руху ÷ адлегласць" },
-        netConsumption: { title: "Чысты расход", formula: "(энергія руху − вернутая энергія) ÷ адлегласць × 100" },
-        cost: { title: "Кошт паездкі", formula: "Энергія руху × цана электраэнергіі" },
+        traction: {
+          title: "Энергія руху",
+          formula: "Перададзеная энергія руху або адлегласць × расход ÷ 100",
+        },
+        energyPerKm: {
+          title: "Энергія на кіламетр",
+          formula: "Энергія руху ÷ адлегласць",
+        },
+        netConsumption: {
+          title: "Чысты расход",
+          formula: "(энергія руху − вернутая энергія) ÷ адлегласць × 100",
+        },
+        cost: {
+          title: "Кошт паездкі",
+          formula: "Энергія руху × цана электраэнергіі",
+        },
       },
       rows: {
-        reportedTraction: "Перададзеная энергія руху", reportedConsumption: "Перададзены расход", distance: "Адлегласць",
-        tractionEnergy: "Энергія руху", regenEnergy: "Вернутая энергія", pricePerKwh: "Цана за кВт·г",
+        reportedTraction: "Перададзеная энергія руху",
+        reportedConsumption: "Перададзены расход",
+        distance: "Адлегласць",
+        tractionEnergy: "Энергія руху",
+        regenEnergy: "Вернутая энергія",
+        pricePerKwh: "Цана за кВт·г",
       },
     },
     vehicle: {
@@ -2175,9 +2387,11 @@ export const dictionaries = {
         recentEnergyContext: "Апошнія 50 км",
         power: "Магутнасць",
         aiRange: "AI запас ходу",
-        aiRangeHint: "Ацэнка на аснове апошніх ~50 км язды, тэмпературы і хуткасці",
+        aiRangeHint:
+          "Ацэнка на аснове апошніх ~50 км язды, тэмпературы і хуткасці",
         mathRange: "Мат. запас ходу",
-        mathRangeHint: "Адлегласць пры вымеранай эфектыўнасці за апошнія ~50 км",
+        mathRangeHint:
+          "Адлегласць пры вымеранай эфектыўнасці за апошнія ~50 км",
         sinceLastCharge: "Пасля зарадцы",
         kmPerPercent: "км за 1%",
       },
@@ -2187,20 +2401,47 @@ export const dictionaries = {
         updatedAgo: "Абноўлена {value}",
         unavailable: "Няма даных",
         metrics: {
-          aiRange: { title: "AI запас ходу", formula: "даступная энергія ÷ змешаны расход × 100" },
-          mathRange: { title: "Мат. запас ходу", formula: "SOC × вымераныя км за 1%" },
-          kmPerPercent: { title: "км за 1%", formula: "адлегласць апошняга акна ÷ выкарыстаны SOC" },
-          sinceCharge: { title: "Пасля зарадкі", formula: "сума адлегласцяў пасля заканчэння зарадкі" },
-          recentEnergy: { title: "Нядаўняя энергія", formula: "сярэдні расход × 50 км ÷ 100" },
+          aiRange: {
+            title: "AI запас ходу",
+            formula: "даступная энергія ÷ змешаны расход × 100",
+          },
+          mathRange: {
+            title: "Мат. запас ходу",
+            formula: "SOC × вымераныя км за 1%",
+          },
+          kmPerPercent: {
+            title: "км за 1%",
+            formula: "адлегласць апошняга акна ÷ выкарыстаны SOC",
+          },
+          sinceCharge: {
+            title: "Пасля зарадкі",
+            formula: "сума адлегласцяў пасля заканчэння зарадкі",
+          },
+          recentEnergy: {
+            title: "Нядаўняя энергія",
+            formula: "сярэдні расход × 50 км ÷ 100",
+          },
         },
         rows: {
-          batteryCapacity: "Ёмістасць батарэі", soh: "Здароўе батарэі (SOH)", soc: "Узровень зараду",
-          usableBattery: "Даступная батарэя", usableEnergy: "Даступная энергія", environmentFactor: "Каэфіцыент асяроддзя",
-          consumption: "Змешаны расход", fallbackConsumption: "Рэзервовы расход", tripWindowDistance: "Адлегласць акна",
-          socDelta: "Выкарыстаны SOC", kmPerPercent: "Вымераныя км за 1%", lastChargeEnded: "Апошняя зарадка завершана",
-          liveTripDistance: "Адлегласць бягучай паездкі", result: "Вынік",
+          batteryCapacity: "Ёмістасць батарэі",
+          soh: "Здароўе батарэі (SOH)",
+          soc: "Узровень зараду",
+          usableBattery: "Даступная батарэя",
+          usableEnergy: "Даступная энергія",
+          environmentFactor: "Каэфіцыент асяроддзя",
+          consumption: "Змешаны расход",
+          fallbackConsumption: "Рэзервовы расход",
+          tripWindowDistance: "Адлегласць акна",
+          socDelta: "Выкарыстаны SOC",
+          kmPerPercent: "Вымераныя км за 1%",
+          lastChargeEnded: "Апошняя зарадка завершана",
+          liveTripDistance: "Адлегласць бягучай паездкі",
+          result: "Вынік",
         },
-        notes: { defaultCapacity: "Прадвызначана — няма ёмістасці аўто", noCharge: "Завершаная зарадка не знойдзена" },
+        notes: {
+          defaultCapacity: "Прадвызначана — няма ёмістасці аўто",
+          noCharge: "Завершаная зарадка не знойдзена",
+        },
       },
       staleTitle: "Даныя аўто схаваныя",
       staleBody:
@@ -2241,7 +2482,8 @@ export const dictionaries = {
       },
       trips: {
         title: "Паездкі",
-        subtitle: "Паездкі падзяляюцца, калі тэлеметрыя маўчыць больш за 5 хвілін.",
+        subtitle:
+          "Паездкі падзяляюцца, калі тэлеметрыя маўчыць больш за 5 хвілін.",
         date: "Дата",
         dateHasTelemetry: "За {date} ёсць даныя тэлеметрыі",
         count: "Паездкі",
@@ -2260,7 +2502,7 @@ export const dictionaries = {
         maxSpeed: "Макс. хуткасць",
         avgSpeed: "Сярэд. хуткасць",
         empty: "За гэтую дату яшчэ няма паездак з тэлеметрыяй.",
-         duration: "Працягласць",
+        duration: "Працягласць",
         energy: "Энергія",
         cost: "Кошт",
         fuel: "Паліва",
@@ -2276,7 +2518,8 @@ export const dictionaries = {
         regenTotal: "усяго",
         cellDelta: "Дэльта ячэек",
         deltaBySoc: "Дэльта ячэек па SOC",
-        deltaBySocSubtitle: "{value} кропак. X — SOC, Y — дэльта напружання ячэек.",
+        deltaBySocSubtitle:
+          "{value} кропак. X — SOC, Y — дэльта напружання ячэек.",
         battery: "Батарэя",
         outside: "Звонку",
         cabin: "Салон",
@@ -2293,7 +2536,8 @@ export const dictionaries = {
         medianGap: "медiana {value} s",
         refresh: "абнаўленне 15 с",
         empty: "Гісторыя з'явіцца, калі CloudEV Mate дашле кропкі тэлеметрыі.",
-        onePoint: "Адна кропка атрымана. Графікі стануць лініямі пасля наступнага payload.",
+        onePoint:
+          "Адна кропка атрымана. Графікі стануць лініямі пасля наступнага payload.",
         noValues: "Няма значэнняў",
         chartAria: "Графік гісторыі {title}",
         diagnosticsLabel: "Дыягностыка",
@@ -2302,7 +2546,8 @@ export const dictionaries = {
       route: {
         title: "Маршрут",
         gpsPoints: "{value} GPS-кропак у выбранай паездцы",
-        empty: "У гэтай паездцы няма GPS-кропак. Праверце дазвол лакацыі ў CloudEV Gateway.",
+        empty:
+          "У гэтай паездцы няма GPS-кропак. Праверце дазвол лакацыі ў CloudEV Gateway.",
         mapData: "Даныя карты",
         start: "Старт",
         end: "Фініш",
@@ -2352,11 +2597,13 @@ export const dictionaries = {
       },
       analytics: {
         historyTitle: "Гісторыя тэлеметрыі",
-        historySubtitle: "Тыдзень, месяц, квартал і год — гадzinnyя зводкі плюс нядаўнія сырыя выбіркі.",
+        historySubtitle:
+          "Тыдзень, месяц, квартал і год — гадzinnyя зводкі плюс нядаўнія сырыя выбіркі.",
         daySubtitle:
           "Дзень: параўнанне з нормай, разбор паездак і опцыянальны графік за ўвесь дзень.",
         dayTripsTitle: "Паездкі за дзень",
-        dayTripsSubtitle: "Сярэдняе за дзень {value} kWh/100 · сартаванне па расходе",
+        dayTripsSubtitle:
+          "Сярэдняе за дзень {value} kWh/100 · сартаванне па расходе",
         dayTripsEmpty: "Няма паездак на гэту дату.",
         dayShowFullTimeline: "Паказаць графік за ўвесь дзень",
         dayHideFullTimeline: "Схаваць графік за ўвесь дзень",
@@ -2376,11 +2623,13 @@ export const dictionaries = {
           regenShare: "Рэкуперацыя {regen} kWh — {percent}% ад энергіі на цяг",
           regenCompare:
             "Паездкі з больш рэкуп.: у сярэннім {high} kWh/100, іншыя — {low} ({highCount} vs {lowCount})",
-          regenInsufficient: "Замала паездак, каб параўнаць рэкуперацыю і расход.",
+          regenInsufficient:
+            "Замала паездак, каб параўнаць рэкуперацыю і расход.",
         },
         telemetryChartsTitle: "Графікі тэлеметрыі",
         teaserTitle: "Аналітыка і тренды",
-        teaserSubtitle: "Тыднёвыя слупкі, фантомны расход, маршруты і экспарт — у Гісторыі.",
+        teaserSubtitle:
+          "Тыднёвыя слупкі, фантомны расход, маршруты і экспарт — у Гісторыі.",
         teaserLink: "Адкрыць аналітыку",
         anchorWeek: "Тыдзень",
         anchorMonth: "Месяц",
@@ -2391,7 +2640,8 @@ export const dictionaries = {
         summaryLoading: "Фарміруем зводку…",
         summaryLoadingHint: "Паездкі і тэлеметрыя за выбраны перыяд.",
         periodOverviewEmpty: "За гэты перыяд няма паездак або зарадных сесій.",
-        periodOverviewLoadError: "Не ўдалося загрузіць зводку за перыяд. Паспрабуйце яшчэ раз.",
+        periodOverviewLoadError:
+          "Не ўдалося загрузіць зводку за перыяд. Паспрабуйце яшчэ раз.",
         summary: {
           trips: "Паездкі",
           distance: "Прабег",
@@ -2409,14 +2659,18 @@ export const dictionaries = {
         periodAverage: "Сярэдняе за перыяд",
         inBar: "у слупку",
         consumptionVsTemp: "Расход vs t° знеш",
-        consumptionVsTempSubtitle: "Сярэдні kWh/100 па тэмпературы знешняга паветра.",
+        consumptionVsTempSubtitle:
+          "Сярэдні kWh/100 па тэмпературы знешняга паветра.",
         phantomDrain: "Расход",
         routeInsightsTitle: "Інсайты маршрутаў",
-        routeInsightsSubtitle: "Паўторныя маршруты адкрываюцца пасля трох паездак.",
-        routeInsightsEmpty: "Падарожніча па паўторных маршрутах, каб адкрыць інсайты.",
+        routeInsightsSubtitle:
+          "Паўторныя маршруты адкрываюцца пасля трох паездак.",
+        routeInsightsEmpty:
+          "Падарожніча па паўторных маршрутах, каб адкрыць інсайты.",
         routeInsightsLoading: "Аналіз паўторных маршрутаў…",
         routeInsightsLoadingHint: "Збігаем GPS-трэкі апошніх паездак.",
-        routeInsightsLoadError: "Не ўдалося загрузіць інсайты маршрутаў. Паспрабуйце яшчэ раз.",
+        routeInsightsLoadError:
+          "Не ўдалося загрузіць інсайты маршрутаў. Паспрабуйце яшчэ раз.",
         routeTripCount: "{value} паездак на гэтым маршруце",
         routeUnlock: "Яшчэ {value} паездак для разблакіроўкі",
         routeNamePlaceholder: "Назва маршруту, напр. Дом → Праца",
@@ -2426,9 +2680,11 @@ export const dictionaries = {
         routeExpand: "Паказаць карту і інсайты",
         routeCollapse: "Схаваць дэталі маршруту",
         routeMarkPark: "Пазначыць як стаянку (не паездка)",
-        routeParkHint: "Стоянкі — GPS-дрыфт або стоянне на месцы; выключыць з інсайтаў маршрутаў.",
+        routeParkHint:
+          "Стоянкі — GPS-дрыфт або стоянне на месцы; выключыць з інсайтаў маршрутаў.",
         routeParkedTitle: "Стоянкі ({value})",
-        routeParkedNote: "Выключана з інсайтаў — будучыя паездкі тут не будуць улічвацца.",
+        routeParkedNote:
+          "Выключана з інсайтаў — будучыя паездкі тут не будуць улічвацца.",
         routeUnmarkPark: "Включыць зноў",
         routePrediction: "Сёння: {low}–{high} kWh/100 ацэна",
         sohTitle: "Здароўе батарэі (SOH)",
@@ -2436,7 +2692,8 @@ export const dictionaries = {
         sohLatestReading: "Апошняе вымярэнне: {date}",
         sohSinglePoint: "За гэты перыяд даступна адно вымярэнне SOH.",
         sohNoData: "Гісторыя SOH пакуль недаступна.",
-        sohLoadError: "Не ўдалося загрузіць гісторыю SOH. Паспрабуйце яшчэ раз.",
+        sohLoadError:
+          "Не ўдалося загрузіць гісторыю SOH. Паспрабуйце яшчэ раз.",
         sohRetry: "Паспрабаваць яшчэ раз",
         retry: "Паспрабаваць яшчэ раз",
         cellDeltaTitle: "Тренд балансу ячэек",
@@ -2451,11 +2708,14 @@ export const dictionaries = {
         batteryHealthSubtitle:
           "Дэльта напругі ячэек — розніца паміж найвышэйшай і найніжэйшай напругай ячэйкі, якую паведамляе BMS, на версе кожнай поўнай зарадкі. Рост гэтай розніцы пры падобных умовах можа сведчыць пра нарастаючы дысбаланс пакета або нераўнамернае старэнне ячэек.",
         batteryHealthSohLabel: "SOH",
-        batteryHealthSohEstimateNote: "Ацэнка праграмы, а не прамое паведамленне ад аўтамабіля.",
+        batteryHealthSohEstimateNote:
+          "Ацэнка праграмы, а не прамое паведамленне ад аўтамабіля.",
         batteryHealthConsistencyLabel: "Аднастайнасць ячэек",
         batteryHealthConsistencyAtSoc: "Пры {value}% SOC",
-        batteryHealthNoData: "Пакуль недастаткова параўнальных вымярэнняў — зарадзіце да 100% хаця б некалькі разоў.",
-        batteryHealthTemperatureNote: "Разбег тэмпературы батарэі недаступны з бягучай тэлеметрыі.",
+        batteryHealthNoData:
+          "Пакуль недастаткова параўнальных вымярэнняў — зарадзіце да 100% хаця б некалькі разоў.",
+        batteryHealthTemperatureNote:
+          "Разбег тэмпературы батарэі недаступны з бягучай тэлеметрыі.",
         batteryHealthCannotIdentifyCell:
           "VoltFlow не можа вызначыць канкрэтную слабую ячэйку, бо Di+ зараз паведамляе толькі мінімальную і максімальную напругу ячэйкі пакета, а не кожную фізічную ячэйку.",
         batteryHealthStatusExcellent: "Выдатна",
@@ -2468,7 +2728,8 @@ export const dictionaries = {
         batteryHealthTrendWorsening: "Расце",
         batteryHealthTrendInsufficientData: "Пакуль мала гісторыі",
         aux12vTitle: "Дапаможная батарэя 12 В",
-        aux12vSubtitle: "Трэнд напружання ў спакоі на стаянцы без падключанай зарадкі; зарадныя плато выключаны.",
+        aux12vSubtitle:
+          "Трэнд напружання ў спакоі на стаянцы без падключанай зарадкі; зарадныя плато выключаны.",
         aux12vNoData: "За гэты перыяд няма паказанняў 12 В.",
         aux12vRestingNow: "Цяпер у спакоі",
         aux12vBaseline: "База за 90 дзён",
@@ -2478,12 +2739,21 @@ export const dictionaries = {
         aux12vResting: "У спакоі",
         aux12vMax: "Максімум",
         aux12vStateLabel: "Стан аўтамабіля",
-        aux12vState: { driving: "Рух", charging: "Зарадка", parked: "Стаянка", resting: "Акно спакою", noResting: "Няма акна спакою" },
+        aux12vState: {
+          driving: "Рух",
+          charging: "Зарадка",
+          parked: "Стаянка",
+          resting: "Акно спакою",
+          noResting: "Няма акна спакою",
+        },
         aux12vLowVoltageMarker: "Мяжа нізкага напружання",
-        aux12vNotEnough: "Гісторыі пакуль недастаткова — {count} з {required} дзён з паказаннямі ў спакоі.",
+        aux12vNotEnough:
+          "Гісторыі пакуль недастаткова — {count} з {required} дзён з паказаннямі ў спакоі.",
         aux12vBasedOn: "На аснове {count} дзён з паказаннямі ў спакоі.",
-        aux12vLowDays: "Напружанне ў спакоі было ніжэй за 11,8 В у {count} дзень(дні) гэтага перыяду.",
-        aux12vPremiumHistory: "Больш доўгая гісторыя 12 В патрабуе Premium; на бясплатным плане сырыя даныя захоўваюцца 30 дзён.",
+        aux12vLowDays:
+          "Напружанне ў спакоі было ніжэй за 11,8 В у {count} дзень(дні) гэтага перыяду.",
+        aux12vPremiumHistory:
+          "Больш доўгая гісторыя 12 В патрабуе Premium; на бясплатным плане сырыя даныя захоўваюцца 30 дзён.",
         monthlyTitle: "Месячная зводка",
         monthlySubtitle: "Пrabег, зарадка, рэген і расход за выбраны месяц.",
         chargingTrendsTitle: "Трэнды зарадкі",
@@ -2496,8 +2766,10 @@ export const dictionaries = {
         chargingSessionsInBar: "сесій",
         phantomTitle: "Фантомны расход",
         phantomSubtitle: "Страта SOC на стаянцы (4+ гадзіны idle).",
-        phantomEmpty: "За апошнія два тыдні не знойдзена дзён з расходам на стаянцы.",
-        phantomLoadError: "Не ўдалося загрузіць фантомны расход. Паспрабуйце яшчэ раз.",
+        phantomEmpty:
+          "За апошнія два тыдні не знойдзена дзён з расходам на стаянцы.",
+        phantomLoadError:
+          "Не ўдалося загрузіць фантомны расход. Паспрабуйце яшчэ раз.",
         costPerKmTitle: "Кошт за км",
         costPerKm: "Кошт / км",
         cost: "Кошт зарадкі",
@@ -2551,7 +2823,8 @@ export const dictionaries = {
         clear: "Скінуць · паказаць усё",
       },
       demo: {
-        explainer: "Гэта прыклад дадзеных. Дадайце сваю машыну, каб убачыць тут сваю сапраўдную гісторыю зарадак і паездак.",
+        explainer:
+          "Гэта прыклад дадзеных. Дадайце сваю машыну, каб убачыць тут сваю сапраўдную гісторыю зарадак і паездак.",
       },
       charging: {
         startEnd: "Старт → Канец",
@@ -2581,14 +2854,19 @@ export const dictionaries = {
         drive: "На паездкі",
         avgConsumption: "Сярэдні расход",
         balanceTitle: "Баланс за дзень",
-        balanceExplainSurplus: "З зарадкі больш, чым патрачана на паездкі (кВт·г AC).",
-        balanceExplainDeficit: "На паездкі патрачана больш, чым дададзена з зарадкі.",
+        balanceExplainSurplus:
+          "З зарадкі больш, чым патрачана на паездкі (кВт·г AC).",
+        balanceExplainDeficit:
+          "На паездкі патрачана больш, чым дададзена з зарадкі.",
         balanceExplainBalanced: "Зарадка і паездкі прыкладна супадаюць.",
         noTrips: "За гэты дзень паездак няма.",
         acFootnote: "кВт·г AC з зарадкі; у батарэю ўваходзіць з улікам КПД.",
-        estimatedCostFootnote: "≈ Ацэнка па цане апошняй зарадкі — не траты за сёння.",
-        surplus: "За дзень зарядзілі на {delta} кВт·г больш, чым патрацілі на паездкі.",
-        deficit: "На паездкі патрацілі на {delta} кВт·г больш, чым зарядзілі за дзень.",
+        estimatedCostFootnote:
+          "≈ Ацэнка па цане апошняй зарадкі — не траты за сёння.",
+        surplus:
+          "За дзень зарядзілі на {delta} кВт·г больш, чым патрацілі на паездкі.",
+        deficit:
+          "На паездкі патрацілі на {delta} кВт·г больш, чым зарядзілі за дзень.",
         balanced: "Зарадка і паездкі за дзень прыкладна ў балансе.",
         regenNote: "Рэкуп. {value} кВт·г",
       },
@@ -2598,16 +2876,20 @@ export const dictionaries = {
         titleQuarter: "Квартал у лічах",
         titleYear: "Год у лічах",
         balanceTitle: "Баланс за перыяд",
-        balanceExplainSurplus: "З зарадкі больш, чым патрачана на паездкі за перыяд (кВт·г AC).",
-        balanceExplainDeficit: "На паездкі патрачана больш, чым дададзена з зарадкі за перыяд.",
-        balanceExplainBalanced: "Зарадка і паездкі за перыяд прыкладна супадаюць.",
+        balanceExplainSurplus:
+          "З зарадкі больш, чым патрачана на паездкі за перыяд (кВт·г AC).",
+        balanceExplainDeficit:
+          "На паездкі патрачана больш, чым дададзена з зарадкі за перыяд.",
+        balanceExplainBalanced:
+          "Зарадка і паездкі за перыяд прыкладна супадаюць.",
         noTrips: "За перыяд паездак няма.",
       },
     },
     service: {
       eyebrow: "Сэрвіс",
       title: "Журнал сэрвісу",
-      subtitle: "Рамонт, абслугоўванне і мадэрнізацыі — з коштамі і запчасткамі.",
+      subtitle:
+        "Рамонт, абслугоўванне і мадэрнізацыі — з коштамі і запчасткамі.",
       tab: {
         timeline: "Стужка",
         categories: "Катэгорыі",
@@ -2808,7 +3090,8 @@ export const dictionaries = {
         versionViewOnGitHub: "Паглядзець рэліз на GitHub",
         versionUnknown: "Пакуль няма даных з аўто",
         dashboardTitle: "VoltFlow Dashboard",
-        dashboardNotLinked: "Не злучана — увядзіце код вышэй на галоўным экране аўто.",
+        dashboardNotLinked:
+          "Не злучана — увядзіце код вышэй на галоўным экране аўто.",
         dashboardVersionLabel: "Версія на галоўным экране",
         dashboardVersionUnknown: "Пакуль не паведамлена",
         dashboardLinkedOn: "Злучана {date}",
@@ -2821,9 +3104,11 @@ export const dictionaries = {
       signOut: "Выйсці",
       signedOut: "Выхад выкананы.",
       exportRecent: "Спампаваць апошнія даныя (JSON)",
-      exportRecentBody: "Спампуйце апошнія 30 дзён даных аўто, паездак, зарадкі і GPS.",
+      exportRecentBody:
+        "Спампуйце апошнія 30 дзён даных аўто, паездак, зарадкі і GPS.",
       deleteAccount: "Выдаліць акаўнт",
-      deleteAccountBody: "Назаўжды выдаліце акаўнт і ўсе звязаныя даныя. Гэта дзеянне нельга адмяніць.",
+      deleteAccountBody:
+        "Назаўжды выдаліце акаўнт і ўсе звязаныя даныя. Гэта дзеянне нельга адмяніць.",
       deleteAccountConfirm: "Увядзіце DELETE для пацвярджэння",
       deleteAccountConfirming: "Выдаленне...",
       deleteAccountDone: "Акаўнт паспяхова выдалены.",
@@ -2845,8 +3130,10 @@ export const dictionaries = {
         connecting: "Злучэнне...",
         linked: "Telegram злучаны.",
         linkFailed: "Не ўдалося злучыць Telegram",
-        openInTelegram: "Адкрыйце гэта з Telegram Mini App, каб злучыць аўтаматычна.",
-        connectFirst: "Спачатку злучыце Telegram, потым выбірайце Telegram-апавяшчэнні.",
+        openInTelegram:
+          "Адкрыйце гэта з Telegram Mini App, каб злучыць аўтаматычна.",
+        connectFirst:
+          "Спачатку злучыце Telegram, потым выбірайце Telegram-апавяшчэнні.",
         instructionsTitle: "Як злучыць",
         instructions: [
           "Адкрыйце @Voltflowscr_bot у Telegram.",
@@ -2860,9 +3147,11 @@ export const dictionaries = {
           "Дастаўка ў Telegram працуе пасля таго, як вы хаця б раз запусцілі бота.",
         channelSaved: "Канал апавяшчэнняў захаваны.",
         auxBatteryAlertsLabel: "Апавяшчэнні пра стан 12V акумулятара",
-        auxBatteryAlertsHelp: "Тэрміновыя папярэджанні пра нізкае напружанне і ціхая штотыднёвая зводка. Апавяшчэнні пра зарадку не змяняюцца.",
+        auxBatteryAlertsHelp:
+          "Тэрміновыя папярэджанні пра нізкае напружанне і ціхая штотыднёвая зводка. Апавяшчэнні пра зарадку не змяняюцца.",
         auxBatteryAlertsSaved: "Налада апавяшчэнняў 12V акумулятара захавана.",
-        enabled: "Укл.", disabled: "Выкл.",
+        enabled: "Укл.",
+        disabled: "Выкл.",
         channels: {
           web_push: "Web push",
           telegram: "Telegram",
@@ -2871,8 +3160,7 @@ export const dictionaries = {
       },
       liveStatus: {
         label: "Жывы статус на экране блакіроўкі (Android)",
-        help:
-          "Ціха абнаўляльнае апавяшчэнне з прагрэсам зарадкі або станам батарэі на стаянцы. Толькі Android — на iPhone застаюцца апавяшчэнні пра ўзроўні зараду.",
+        help: "Ціха абнаўляльнае апавяшчэнне з прагрэсам зарадкі або станам батарэі на стаянцы. Толькі Android — на iPhone застаюцца апавяшчэнні пра ўзроўні зараду.",
         saved: "Налада жывога статусу захавана.",
         modes: {
           off: "Выключана",
@@ -2915,7 +3203,8 @@ export const dictionaries = {
         save: "Захаваць тарыф лакацыі",
         empty: "Захаваных лакацый пакуль няма.",
         delete: "Выдаліць",
-        pointCoords: "Кропка: {lat}, {lon}. Націсніце на карту або перацягніце маркер.",
+        pointCoords:
+          "Кропка: {lat}, {lon}. Націсніце на карту або перацягніце маркер.",
         gpsPending:
           "GPS-кропка яшчэ не вызначана. Уключыце аўта-рэжым або націсніце «Бягучы GPS».",
         autoTierHint: "AC аўтатып 4,0–9,99 кВт, хуткі DC — 10,0+ кВт.",
@@ -2935,7 +3224,8 @@ export const dictionaries = {
         saved: "Тарыфы правайдараў захаваны",
         invalidPrice: "Цэны павінны быць нулявымі або дадатнымі",
         userProvidersTitle: "Вашы правайдары",
-        userProvidersBody: "Home і ўбудаваныя правайдары ўжо гатовыя — рэдагуйце цэны або выдаляйце любога, акрамя Home. Дадавайце ўласных ніжэй.",
+        userProvidersBody:
+          "Home і ўбудаваныя правайдары ўжо гатовыя — рэдагуйце цэны або выдаляйце любога, акрамя Home. Дадавайце ўласных ніжэй.",
         addProvider: "Дадаць правайдара",
         addProviderLabel: "Назва правайдара",
         addProviderAc: "Цана AC",
@@ -3007,7 +3297,7 @@ export const dictionaries = {
       },
       about: "Пра дадатак",
       aboutBody:
-        "VoltFlow — невялікая панэль для планавання EV-зарадкі, коштаў і гісторыі сесій.",
+        "VoltFlow — праграма для ўладальнікаў электрамабіляў, якая дапамагае планаваць зарадку, разлічваць яе кошт і адсочваць гісторыю зарадных сесій.",
       telegram: "Telegram",
       github: "GitHub",
       license:
@@ -3016,7 +3306,12 @@ export const dictionaries = {
         "© 2026 VoltFlow. Пакеты і сэрвісы трэціх бакоў застаюцца пад сваімі ліцэнзіямі.",
     },
     telegramLiveWidget: {
-      state: { charging: "Зарадка", parked: "Прыпаркаваны", driving: "У руху", offline: "Афлайн" },
+      state: {
+        charging: "Зарадка",
+        parked: "Прыпаркаваны",
+        driving: "У руху",
+        offline: "Афлайн",
+      },
       mileage: "Прабег {value} км",
       vehicle: "Аўтамабіль",
       timeHoursMinutes: "~{hours}г {minutes}хв",
@@ -3025,7 +3320,17 @@ export const dictionaries = {
       openMap: "Адкрыць карту",
       openVoltFlow: "Адкрыць VoltFlow",
     },
-    auxBatteryAlerts: { open: "Адкрыць VoltFlow", acute: { title: "12V акумулятар патрабуе ўвагі", body: "{vehicle}: напружанне ў спакоі застаецца нізкім два дні ({voltage} В). Праверце або зарадзіце дапаможны акумулятар." }, digest: { title: "Стан 12V акумулятара пагаршаецца", body: "{vehicle}: напружанне ў спакоі {voltage} В пры базавым значэнні за 90 дзён {baseline} В. Варта праверыць акумулятар." } },
+    auxBatteryAlerts: {
+      open: "Адкрыць VoltFlow",
+      acute: {
+        title: "12V акумулятар патрабуе ўвагі",
+        body: "{vehicle}: напружанне ў спакоі застаецца нізкім два дні ({voltage} В). Праверце або зарадзіце дапаможны акумулятар.",
+      },
+      digest: {
+        title: "Стан 12V акумулятара пагаршаецца",
+        body: "{vehicle}: напружанне ў спакоі {voltage} В пры базавым значэнні за 90 дзён {baseline} В. Варта праверыць акумулятар.",
+      },
+    },
     auxVoltageStats: {
       minimum: "Мінімум",
       maximum: "Максімум",
@@ -3070,7 +3375,8 @@ export const dictionaries = {
       openingApp: "Открываем приложение…",
       loginError: "Не удалось войти. Попробуйте ещё раз.",
       haveAccount: "Уже есть аккаунт VoltFlow? Войти",
-      haveAccountHint: "Используйте это после добавления пароля к Google-аккаунту.",
+      haveAccountHint:
+        "Используйте это после добавления пароля к Google-аккаунту.",
       loginExistingHint:
         "Если вы добавили пароль к Google-аккаунту, войдите через email и пароль.",
       loginExistingAction: "Войти",
@@ -3140,7 +3446,8 @@ export const dictionaries = {
         "Расчеты зарядки идут от временных меток в Postgres — откройте PWA снова, и таймлайн останется точным.",
       stack: "Стек · Next.js · Supabase auth · Postgres · Realtime broadcast",
       installTitle: "Установить VoltFlow",
-      installSubtitle: "Добавьте на главный экран — работает офлайн, шлёт уведомления о зарядке.",
+      installSubtitle:
+        "Добавьте на главный экран — работает офлайн, шлёт уведомления о зарядке.",
       installAction: "Установить приложение",
       installIosStep1: "Нажмите кнопку «Поделиться» в Safari",
       installIosStep2: "Выберите «На экран „Домой“»",
@@ -3194,7 +3501,8 @@ export const dictionaries = {
     },
     support: {
       title: "Поддержать проект",
-      intro: "Вы можете поддержать проект финансово. Собранные средства пойдут на:",
+      intro:
+        "Вы можете поддержать проект финансово. Собранные средства пойдут на:",
       fund1: "ежемесячную оплату хостинга и серверов",
       fund2: "оплату доменов и SSL-сертификатов к ним",
       fund3: "дальнейшее развитие проекта и его функциональных возможностей",
@@ -3218,7 +3526,8 @@ export const dictionaries = {
     },
     auth: {
       title: "Идентификация VoltFlow",
-      description: "Войдите, чтобы следить за зарядкой, поездками и состоянием батареи вашего электромобиля.",
+      description:
+        "Войдите, чтобы следить за зарядкой, поездками и состоянием батареи вашего электромобиля.",
       login: "Войти",
       register: "Регистрация",
       continue: "Продолжить",
@@ -3255,8 +3564,7 @@ export const dictionaries = {
         "Введите email аккаунта, и VoltFlow отправит безопасную ссылку для сброса.",
       sendResetLink: "Отправить ссылку",
       resetEmailSent: "Письмо для сброса пароля отправлено.",
-      resetEmailHelp:
-        "Проверьте почту. Ссылка может прийти через минуту.",
+      resetEmailHelp: "Проверьте почту. Ссылка может прийти через минуту.",
       backToLogin: "Назад ко входу",
       resetTitle: "Создайте новый пароль",
       resetDescription: "Выберите новый пароль, чтобы открыть свой кокпит.",
@@ -3284,7 +3592,8 @@ export const dictionaries = {
       addEvBody:
         "Нужны размер батареи и мощность бортовой зарядки, чтобы моделировать энергию и время.",
       addVehicle: "Добавить авто",
-      demoExplainer: "Пример цифр — добавьте свою машину, чтобы увидеть настоящие данные.",
+      demoExplainer:
+        "Пример цифр — добавьте свою машину, чтобы увидеть настоящие данные.",
       demoSoc: "Батарея",
       demoRange: "Запас хода",
       demoLastCharge: "Последняя зарядка",
@@ -3329,17 +3638,43 @@ export const dictionaries = {
       chargingCostToFull: "Цена до 100%",
       explain: {
         metrics: {
-          parkChargeTime: { title: "Время до 100%", formula: "сумма энергии в каждом диапазоне ÷ ограниченная мощность" },
-          parkChargeEnergy: { title: "Энергия до 100%", formula: "нужная энергия батареи ÷ эффективность зарядки" },
-          parkChargeCost: { title: "Цена до 100%", formula: "энергия из сети × цена за кВт·ч" },
-          activeChargeTime: { title: "Осталось времени", formula: "оставшаяся энергия из сети ÷ текущая мощность", fallbackFormula: "оставшееся время живой сессии" },
-          activeChargeEnergy: { title: "Заряжено энергии", formula: "прирост батареи от начального SOC ÷ эффективность" },
-          activeChargeCost: { title: "Цена до 100%", formula: "энергия сессии до 100% × цена за кВт·ч" },
+          parkChargeTime: {
+            title: "Время до 100%",
+            formula: "сумма энергии в каждом диапазоне ÷ ограниченная мощность",
+          },
+          parkChargeEnergy: {
+            title: "Энергия до 100%",
+            formula: "нужная энергия батареи ÷ эффективность зарядки",
+          },
+          parkChargeCost: {
+            title: "Цена до 100%",
+            formula: "энергия из сети × цена за кВт·ч",
+          },
+          activeChargeTime: {
+            title: "Осталось времени",
+            formula: "оставшаяся энергия из сети ÷ текущая мощность",
+            fallbackFormula: "оставшееся время живой сессии",
+          },
+          activeChargeEnergy: {
+            title: "Заряжено энергии",
+            formula: "прирост батареи от начального SOC ÷ эффективность",
+          },
+          activeChargeCost: {
+            title: "Цена до 100%",
+            formula: "энергия сессии до 100% × цена за кВт·ч",
+          },
         },
         rows: {
-          efficiency: "Эффективность зарядки", chargePower: "Мощность зарядки", startSoc: "Начальный SOC",
-          gridEnergy: "Энергия из сети", remainingGridEnergy: "Оставшаяся энергия из сети", pricePerKwh: "Цена за кВт·ч",
-          dcBand70: "DC до 70%", dcBand90: "DC 70–90%", dcBand95: "DC 90–95%", dcBand100: "DC 95–100%",
+          efficiency: "Эффективность зарядки",
+          chargePower: "Мощность зарядки",
+          startSoc: "Начальный SOC",
+          gridEnergy: "Энергия из сети",
+          remainingGridEnergy: "Оставшаяся энергия из сети",
+          pricePerKwh: "Цена за кВт·ч",
+          dcBand70: "DC до 70%",
+          dcBand90: "DC 70–90%",
+          dcBand95: "DC 90–95%",
+          dcBand100: "DC 95–100%",
         },
       },
       parkEstimateEyebrow: "Режим парковки",
@@ -3355,7 +3690,8 @@ export const dictionaries = {
       estimateDetail: "{energy} кВт·ч из сети по {price}/кВт·ч.",
       estimateDetailCompact: "{energy} кВт·ч · {price}/кВт·ч",
       estimateDcTaper: "DC-снижение",
-      estimateUnavailable: "Добавьте емкость батареи, SOC и мощность зарядки для расчета.",
+      estimateUnavailable:
+        "Добавьте емкость батареи, SOC и мощность зарядки для расчета.",
       syncing: "Синхронизация",
       lastSeen: "Данные с авто {value}",
       walkToCar: "Дойти до авто",
@@ -3379,7 +3715,8 @@ export const dictionaries = {
       noCharge: "Зарядок пока нет",
       noLiveData: "Нет live-данных",
       mateUpdateTitle: "Доступно обновление VoltFlow Mate",
-      mateUpdateBody: "Версия {version} готова к установке на ваш авто (сейчас {installed}).",
+      mateUpdateBody:
+        "Версия {version} готова к установке на ваш авто (сейчас {installed}).",
       mateUpdateInstall: "Откройте VoltFlow Mate на авто для установки",
       mateUpdateDismiss: "Скрыть",
       openVehicle: "Открыть телеметрию авто",
@@ -3403,20 +3740,25 @@ export const dictionaries = {
       manualTariffHome: "Дом",
       manualTariffCommercialAc: "Коммерческая AC",
       manualTariffFastDc: "Быстрая DC",
-      manualTariffAutoHelp: "Авторежим: AC 4,0–9,99 кВт, быстрая DC от 10,0 кВт.",
+      manualTariffAutoHelp:
+        "Авторежим: AC 4,0–9,99 кВт, быстрая DC от 10,0 кВт.",
       starting: "Запуск...",
       startSession: "Начать сессию",
       targetError: "Цель должна быть выше текущего уровня батареи",
       percentError: "Проценты должны оставаться в пределах 0–100",
       startChargeError: "Введите текущий заряд от 0 до 99.",
       targetChargeError: "Введите целевой заряд от 1 до 100, выше текущего.",
-      powerOverrideError: "Введите мощность зарядки больше 0 и до 350 кВт или оставьте поле пустым.",
+      powerOverrideError:
+        "Введите мощность зарядки больше 0 и до 350 кВт или оставьте поле пустым.",
       priceError: "Введите цену электричества от 0 до 999.",
       started: "Зарядка началась",
       couldNotStart: "Не удалось начать",
-      sessionUnauthorized: "Срок вашей сессии истёк. Войдите снова и повторите попытку.",
-      sessionCarUnavailable: "Этот автомобиль больше недоступен. Выберите другой и повторите попытку.",
-      sessionSaveError: "Не удалось сохранить сессию зарядки. Повторите попытку.",
+      sessionUnauthorized:
+        "Срок вашей сессии истёк. Войдите снова и повторите попытку.",
+      sessionCarUnavailable:
+        "Этот автомобиль больше недоступен. Выберите другой и повторите попытку.",
+      sessionSaveError:
+        "Не удалось сохранить сессию зарядки. Повторите попытку.",
       liveCockpit: "Живой кокпит",
       hydrating: "Подтягиваем realtime-строку…",
       timestampMath: "Расчеты по временным меткам переживают обновление",
@@ -3499,7 +3841,8 @@ export const dictionaries = {
         invalidPrice: "Неверная цена тарифа",
         updated: "Тариф обновлён",
         appliedFrom: "Тариф применён из «{name}»",
-        locationSaved: "Сохранено «{name}» — этот провайдер применится здесь автоматически в следующий раз",
+        locationSaved:
+          "Сохранено «{name}» — этот провайдер применится здесь автоматически в следующий раз",
         types: {
           home: "Домашний",
           commercial_ac: "Коммерческий AC",
@@ -3528,7 +3871,8 @@ export const dictionaries = {
           "Коррекция сохранена, но измеренная эффективность выглядит необычно — проверьте цифры",
         alreadyCorrected: "Эта сессия скорректирована по данным провайдера",
         invalidInput: "Введите корректные кВт·ч и сумму оплаты",
-        measuredEfficiency: "Измеренная эффективность: {percent}% (настроено: {configured}%)",
+        measuredEfficiency:
+          "Измеренная эффективность: {percent}% (настроено: {configured}%)",
       },
       manualEntry: {
         add: "Добавить пропущенную зарядку",
@@ -3538,7 +3882,8 @@ export const dictionaries = {
         endTime: "Конец",
         billedKwh: "Оплачено кВт·ч",
         totalPaid: "Заплачено всего ({currency})",
-        preview: "≈ {currency}{price} за кВт·ч · ≈ {power} кВт · +{soc}% заряда",
+        preview:
+          "≈ {currency}{price} за кВт·ч · ≈ {power} кВт · +{soc}% заряда",
         previewUnanchored: "≈ {currency}{price} за кВт·ч · ≈ {power} кВт",
         submit: "Добавить",
         cancel: "Отмена",
@@ -3588,14 +3933,16 @@ export const dictionaries = {
       wallboxHelp: "Соответствует лимиту вашей AC-стойки.",
       homePrice: "Цена домашней зарядки (необязательно)",
       homePricePlaceholder: "напр. 0.15",
-      homePriceHelp: "Только вы знаете свой локальный тариф — можно оставить пустым и задать позже в Настройках.",
+      homePriceHelp:
+        "Только вы знаете свой локальный тариф — можно оставить пустым и задать позже в Настройках.",
       efficiency: "AC-эффективность",
       efficiencyHelp:
         "Коэффициент потерь сеть-батарея для расчёта стоимости. Оставьте по умолчанию, если не измеряли свой.",
       dcEfficiency: "Эффективность быстрой DC",
       dcEfficiencyHelp:
         "На быстрой DC потерь больше, чем на AC — зарядка считает до своего кабеля и охлаждения. По умолчанию 90%.",
-      efficiencySuggestion: "Измерено {percent}% из {count} скорректированных сессий (разброс {spread} пт)",
+      efficiencySuggestion:
+        "Измерено {percent}% из {count} скорректированных сессий (разброс {spread} пт)",
       efficiencySuggestionApply: "Применить",
       efficiencyApplied: "Эффективность обновлена",
       advanced: "Дополнительно",
@@ -3605,7 +3952,8 @@ export const dictionaries = {
       updated: "Авто обновлено",
       notFound: "Авто не найдено или уже удалено.",
       homeGeofence: "Геозона домашней зарядки",
-      homeGeofenceHelp: "Если зарядка начинается в этой зоне, VoltFlow применит ваш домашний тариф.",
+      homeGeofenceHelp:
+        "Если зарядка начинается в этой зоне, VoltFlow применит ваш домашний тариф.",
       homeLat: "Широта дома",
       homeLon: "Долгота дома",
       homeRadius: "Радиус (м)",
@@ -3616,14 +3964,31 @@ export const dictionaries = {
     },
     tripExplain: {
       metrics: {
-        traction: { title: "Энергия движения", formula: "Переданная энергия движения или расстояние × расход ÷ 100" },
-        energyPerKm: { title: "Энергия на километр", formula: "Энергия движения ÷ расстояние" },
-        netConsumption: { title: "Чистый расход", formula: "(энергия движения − возвращённая энергия) ÷ расстояние × 100" },
-        cost: { title: "Стоимость поездки", formula: "Энергия движения × цена электроэнергии" },
+        traction: {
+          title: "Энергия движения",
+          formula: "Переданная энергия движения или расстояние × расход ÷ 100",
+        },
+        energyPerKm: {
+          title: "Энергия на километр",
+          formula: "Энергия движения ÷ расстояние",
+        },
+        netConsumption: {
+          title: "Чистый расход",
+          formula:
+            "(энергия движения − возвращённая энергия) ÷ расстояние × 100",
+        },
+        cost: {
+          title: "Стоимость поездки",
+          formula: "Энергия движения × цена электроэнергии",
+        },
       },
       rows: {
-        reportedTraction: "Переданная энергия движения", reportedConsumption: "Переданный расход", distance: "Расстояние",
-        tractionEnergy: "Энергия движения", regenEnergy: "Возвращённая энергия", pricePerKwh: "Цена за кВт·ч",
+        reportedTraction: "Переданная энергия движения",
+        reportedConsumption: "Переданный расход",
+        distance: "Расстояние",
+        tractionEnergy: "Энергия движения",
+        regenEnergy: "Возвращённая энергия",
+        pricePerKwh: "Цена за кВт·ч",
       },
     },
     vehicle: {
@@ -3654,9 +4019,11 @@ export const dictionaries = {
         recentEnergyContext: "Последние 50 км",
         power: "Мощность",
         aiRange: "AI запас хода",
-        aiRangeHint: "Оценка на основе последних ~50 км езды, температуры и скорости",
+        aiRangeHint:
+          "Оценка на основе последних ~50 км езды, температуры и скорости",
         mathRange: "Мат. запас хода",
-        mathRangeHint: "Расстояние при измеренной эффективности за последние ~50 км",
+        mathRangeHint:
+          "Расстояние при измеренной эффективности за последние ~50 км",
         sinceLastCharge: "Пройдено после зарядки",
         kmPerPercent: "км за 1%",
       },
@@ -3666,20 +4033,47 @@ export const dictionaries = {
         updatedAgo: "Обновлено {value}",
         unavailable: "Нет данных",
         metrics: {
-          aiRange: { title: "AI запас хода", formula: "доступная энергия ÷ смешанный расход × 100" },
-          mathRange: { title: "Мат. запас хода", formula: "SOC × измеренные км за 1%" },
-          kmPerPercent: { title: "км за 1%", formula: "расстояние последнего окна ÷ использованный SOC" },
-          sinceCharge: { title: "После зарядки", formula: "сумма расстояний после окончания зарядки" },
-          recentEnergy: { title: "Недавняя энергия", formula: "средний расход × 50 км ÷ 100" },
+          aiRange: {
+            title: "AI запас хода",
+            formula: "доступная энергия ÷ смешанный расход × 100",
+          },
+          mathRange: {
+            title: "Мат. запас хода",
+            formula: "SOC × измеренные км за 1%",
+          },
+          kmPerPercent: {
+            title: "км за 1%",
+            formula: "расстояние последнего окна ÷ использованный SOC",
+          },
+          sinceCharge: {
+            title: "После зарядки",
+            formula: "сумма расстояний после окончания зарядки",
+          },
+          recentEnergy: {
+            title: "Недавняя энергия",
+            formula: "средний расход × 50 км ÷ 100",
+          },
         },
         rows: {
-          batteryCapacity: "Ёмкость батареи", soh: "Здоровье батареи (SOH)", soc: "Уровень заряда",
-          usableBattery: "Доступная батарея", usableEnergy: "Доступная энергия", environmentFactor: "Коэффициент среды",
-          consumption: "Смешанный расход", fallbackConsumption: "Резервный расход", tripWindowDistance: "Расстояние окна",
-          socDelta: "Использованный SOC", kmPerPercent: "Измеренные км за 1%", lastChargeEnded: "Последняя зарядка завершена",
-          liveTripDistance: "Расстояние текущей поездки", result: "Результат",
+          batteryCapacity: "Ёмкость батареи",
+          soh: "Здоровье батареи (SOH)",
+          soc: "Уровень заряда",
+          usableBattery: "Доступная батарея",
+          usableEnergy: "Доступная энергия",
+          environmentFactor: "Коэффициент среды",
+          consumption: "Смешанный расход",
+          fallbackConsumption: "Резервный расход",
+          tripWindowDistance: "Расстояние окна",
+          socDelta: "Использованный SOC",
+          kmPerPercent: "Измеренные км за 1%",
+          lastChargeEnded: "Последняя зарядка завершена",
+          liveTripDistance: "Расстояние текущей поездки",
+          result: "Результат",
         },
-        notes: { defaultCapacity: "По умолчанию — нет ёмкости авто", noCharge: "Завершённая зарядка не найдена" },
+        notes: {
+          defaultCapacity: "По умолчанию — нет ёмкости авто",
+          noCharge: "Завершённая зарядка не найдена",
+        },
       },
       staleTitle: "Данные авто скрыты",
       staleBody:
@@ -3716,7 +4110,8 @@ export const dictionaries = {
       },
       tirePressure: {
         title: "Давление в шинах",
-        guidance: "Сверяйте с табличкой давления на автомобиле, когда шины холодные.",
+        guidance:
+          "Сверяйте с табличкой давления на автомобиле, когда шины холодные.",
       },
       trips: {
         title: "Поездки",
@@ -3739,7 +4134,7 @@ export const dictionaries = {
         maxSpeed: "Максимальная",
         avgSpeed: "Средняя",
         empty: "За эту дату пока нет поездок с телеметрией.",
-         duration: "Длительность",
+        duration: "Длительность",
         energy: "Энергия",
         cost: "Стоимость",
         fuel: "Топливо",
@@ -3755,7 +4150,8 @@ export const dictionaries = {
         regenTotal: "всего",
         cellDelta: "Дельта ячеек",
         deltaBySoc: "Дельта ячеек по SOC",
-        deltaBySocSubtitle: "{value} точек. X — SOC, Y — дельта напряжения ячеек.",
+        deltaBySocSubtitle:
+          "{value} точек. X — SOC, Y — дельта напряжения ячеек.",
         battery: "Батарея",
         outside: "Снаружи",
         cabin: "Салон",
@@ -3771,8 +4167,10 @@ export const dictionaries = {
         cloudPoints: "{value} облачных точек",
         medianGap: "медiana {value} с",
         refresh: "обновление 15 с",
-        empty: "История появится после того, как CloudEV Mate отправит точки телеметрии.",
-        onePoint: "Получена одна точка. Графики станут линиями после следующего payload.",
+        empty:
+          "История появится после того, как CloudEV Mate отправит точки телеметрии.",
+        onePoint:
+          "Получена одна точка. Графики станут линиями после следующего payload.",
         noValues: "Нет значений",
         chartAria: "График истории {title}",
         diagnosticsLabel: "Диагностика",
@@ -3781,7 +4179,8 @@ export const dictionaries = {
       route: {
         title: "Маршрут",
         gpsPoints: "{value} GPS-точек в выбранной поездке",
-        empty: "В этой поездке нет GPS-точек. Проверьте разрешение геолокации в CloudEV Gateway.",
+        empty:
+          "В этой поездке нет GPS-точек. Проверьте разрешение геолокации в CloudEV Gateway.",
         mapData: "Данные карты",
         start: "Старт",
         end: "Финиш",
@@ -3831,11 +4230,13 @@ export const dictionaries = {
       },
       analytics: {
         historyTitle: "История телеметрии",
-        historySubtitle: "Неделя, месяц, квартал и год — почасовые сводки плюс свежие сырые выборки.",
+        historySubtitle:
+          "Неделя, месяц, квартал и год — почасовые сводки плюс свежие сырые выборки.",
         daySubtitle:
           "День: сравнение с нормой, разбор поездок и опционально график за весь день.",
         dayTripsTitle: "Поездки за день",
-        dayTripsSubtitle: "Среднее за день {value} kWh/100 · сортировка по расходу",
+        dayTripsSubtitle:
+          "Среднее за день {value} kWh/100 · сортировка по расходу",
         dayTripsEmpty: "Нет поездок на эту дату.",
         dayShowFullTimeline: "Показать график за весь день",
         dayHideFullTimeline: "Скрыть график за весь день",
@@ -3855,11 +4256,13 @@ export const dictionaries = {
           regenShare: "Рекуперация {regen} kWh — {percent}% от энергии на тягу",
           regenCompare:
             "Поездки с большим regen в среднем {high} kWh/100, остальные — {low} ({highCount} vs {lowCount})",
-          regenInsufficient: "Мало поездок, чтобы сравнить рекуперацию и расход.",
+          regenInsufficient:
+            "Мало поездок, чтобы сравнить рекуперацию и расход.",
         },
         telemetryChartsTitle: "Графики телеметрии",
         teaserTitle: "Аналитика и тренды",
-        teaserSubtitle: "Недельные столбцы, фантомный разряд, маршруты и экспорт — в Истории.",
+        teaserSubtitle:
+          "Недельные столбцы, фантомный разряд, маршруты и экспорт — в Истории.",
         teaserLink: "Открыть аналитику",
         anchorWeek: "Неделя",
         anchorMonth: "Месяц",
@@ -3870,7 +4273,8 @@ export const dictionaries = {
         summaryLoading: "Формируем сводку…",
         summaryLoadingHint: "Поездки и телеметрия за выбранный период.",
         periodOverviewEmpty: "За этот период нет поездок или зарядных сессий.",
-        periodOverviewLoadError: "Не удалось загрузить сводку за период. Попробуйте ещё раз.",
+        periodOverviewLoadError:
+          "Не удалось загрузить сводку за период. Попробуйте ещё раз.",
         summary: {
           trips: "Поездки",
           distance: "Пробег",
@@ -3888,14 +4292,18 @@ export const dictionaries = {
         periodAverage: "Среднее за период",
         inBar: "в столбце",
         consumptionVsTemp: "Расход vs t° снаружи",
-        consumptionVsTempSubtitle: "Средний kWh/100 по температуре наружного воздуха.",
+        consumptionVsTempSubtitle:
+          "Средний kWh/100 по температуре наружного воздуха.",
         phantomDrain: "Разряд",
         routeInsightsTitle: "Инсайты маршрутов",
-        routeInsightsSubtitle: "Повторные маршруты открываются после трёх поездок.",
-        routeInsightsEmpty: "Поездите по повторным маршрутам, чтобы открыть инсайты.",
+        routeInsightsSubtitle:
+          "Повторные маршруты открываются после трёх поездок.",
+        routeInsightsEmpty:
+          "Поездите по повторным маршрутам, чтобы открыть инсайты.",
         routeInsightsLoading: "Анализ повторных маршрутов…",
         routeInsightsLoadingHint: "Сопоставляем GPS-треки недавних поездок.",
-        routeInsightsLoadError: "Не удалось загрузить инсайты маршрутов. Попробуйте ещё раз.",
+        routeInsightsLoadError:
+          "Не удалось загрузить инсайты маршрутов. Попробуйте ещё раз.",
         routeTripCount: "{value} поездок на этом маршруте",
         routeUnlock: "Ещё {value} поездок для разблокировки",
         routeNamePlaceholder: "Название маршрута, напр. Дом → Работа",
@@ -3905,9 +4313,11 @@ export const dictionaries = {
         routeExpand: "Показать карту и инсайты",
         routeCollapse: "Скрыть детали маршрута",
         routeMarkPark: "Отметить как стоянку (не поездка)",
-        routeParkHint: "Стоянки — GPS-дрейф или простой на месте; исключить из инсайтов маршрутов.",
+        routeParkHint:
+          "Стоянки — GPS-дрейф или простой на месте; исключить из инсайтов маршрутов.",
         routeParkedTitle: "Стоянки ({value})",
-        routeParkedNote: "Исключено из инсайтов — будущие поездки здесь не будут учитываться.",
+        routeParkedNote:
+          "Исключено из инсайтов — будущие поездки здесь не будут учитываться.",
         routeUnmarkPark: "Включить снова",
         routePrediction: "Сегодня: {low}–{high} kWh/100 оценка",
         sohTitle: "Здоровье батареи (SOH)",
@@ -3930,11 +4340,14 @@ export const dictionaries = {
         batteryHealthSubtitle:
           "Дельта напряжения ячеек — разница между наибольшим и наименьшим напряжением ячейки, которую сообщает BMS, на пике каждой полной зарядки. Рост этой разницы при похожих условиях может говорить о нарастающем дисбалансе пакета или неравномерном старении ячеек.",
         batteryHealthSohLabel: "SOH",
-        batteryHealthSohEstimateNote: "Оценка приложения, а не прямое сообщение от автомобиля.",
+        batteryHealthSohEstimateNote:
+          "Оценка приложения, а не прямое сообщение от автомобиля.",
         batteryHealthConsistencyLabel: "Однородность ячеек",
         batteryHealthConsistencyAtSoc: "При {value}% SOC",
-        batteryHealthNoData: "Пока недостаточно сравнимых измерений — зарядите до 100% хотя бы несколько раз.",
-        batteryHealthTemperatureNote: "Разброс температуры батареи недоступен из текущей телеметрии.",
+        batteryHealthNoData:
+          "Пока недостаточно сравнимых измерений — зарядите до 100% хотя бы несколько раз.",
+        batteryHealthTemperatureNote:
+          "Разброс температуры батареи недоступен из текущей телеметрии.",
         batteryHealthCannotIdentifyCell:
           "VoltFlow не может определить конкретную слабую ячейку, потому что Di+ сейчас сообщает только минимальное и максимальное напряжение ячейки пакета, а не каждую физическую ячейку.",
         batteryHealthStatusExcellent: "Отлично",
@@ -3947,7 +4360,8 @@ export const dictionaries = {
         batteryHealthTrendWorsening: "Растёт",
         batteryHealthTrendInsufficientData: "Пока мало истории",
         aux12vTitle: "Вспомогательная батарея 12 В",
-        aux12vSubtitle: "Тренд напряжения покоя на стоянке без подключённой зарядки; зарядные плато исключены.",
+        aux12vSubtitle:
+          "Тренд напряжения покоя на стоянке без подключённой зарядки; зарядные плато исключены.",
         aux12vNoData: "За этот период нет показаний 12 В.",
         aux12vRestingNow: "Сейчас в покое",
         aux12vBaseline: "База за 90 дней",
@@ -3957,12 +4371,21 @@ export const dictionaries = {
         aux12vResting: "В покое",
         aux12vMax: "Максимум",
         aux12vStateLabel: "Состояние автомобиля",
-        aux12vState: { driving: "Движение", charging: "Зарядка", parked: "Стоянка", resting: "Окно покоя", noResting: "Нет окна покоя" },
+        aux12vState: {
+          driving: "Движение",
+          charging: "Зарядка",
+          parked: "Стоянка",
+          resting: "Окно покоя",
+          noResting: "Нет окна покоя",
+        },
         aux12vLowVoltageMarker: "Граница низкого напряжения",
-        aux12vNotEnough: "Истории пока недостаточно — {count} из {required} дней с показаниями в покое.",
+        aux12vNotEnough:
+          "Истории пока недостаточно — {count} из {required} дней с показаниями в покое.",
         aux12vBasedOn: "На основе {count} дней с показаниями в покое.",
-        aux12vLowDays: "Напряжение покоя было ниже 11,8 В в {count} день(дни) этого периода.",
-        aux12vPremiumHistory: "Более длинная история 12 В требует Premium; на бесплатном плане сырые данные хранятся 30 дней.",
+        aux12vLowDays:
+          "Напряжение покоя было ниже 11,8 В в {count} день(дни) этого периода.",
+        aux12vPremiumHistory:
+          "Более длинная история 12 В требует Premium; на бесплатном плане сырые данные хранятся 30 дней.",
         monthlyTitle: "Месячная сводка",
         monthlySubtitle: "Пробег, зарядка, реген и расход за выбранный месяц.",
         chargingTrendsTitle: "Тренды зарядки",
@@ -3975,8 +4398,10 @@ export const dictionaries = {
         chargingSessionsInBar: "сессий",
         phantomTitle: "Фантомный разряд",
         phantomSubtitle: "Потеря SOC на стоянке (4+ часа idle).",
-        phantomEmpty: "За последние две недели дней с разрядом на стоянке не найдено.",
-        phantomLoadError: "Не удалось загрузить фантомный разряд. Попробуйте ещё раз.",
+        phantomEmpty:
+          "За последние две недели дней с разрядом на стоянке не найдено.",
+        phantomLoadError:
+          "Не удалось загрузить фантомный разряд. Попробуйте ещё раз.",
         costPerKmTitle: "Стоимость за км",
         costPerKm: "Стоимость / км",
         cost: "Стоимость зарядки",
@@ -4030,7 +4455,8 @@ export const dictionaries = {
         clear: "Сбросить · показать всё",
       },
       demo: {
-        explainer: "Это пример данных. Добавьте свою машину, чтобы увидеть здесь свою настоящую историю зарядок и поездок.",
+        explainer:
+          "Это пример данных. Добавьте свою машину, чтобы увидеть здесь свою настоящую историю зарядок и поездок.",
       },
       charging: {
         startEnd: "Старт → Итог",
@@ -4060,14 +4486,19 @@ export const dictionaries = {
         drive: "На поездки",
         avgConsumption: "Средний расход",
         balanceTitle: "Баланс за день",
-        balanceExplainSurplus: "С зарядки больше, чем потрачено на поездки (кВт·ч AC).",
-        balanceExplainDeficit: "На поездки потрачено больше, чем добавлено с зарядки.",
+        balanceExplainSurplus:
+          "С зарядки больше, чем потрачено на поездки (кВт·ч AC).",
+        balanceExplainDeficit:
+          "На поездки потрачено больше, чем добавлено с зарядки.",
         balanceExplainBalanced: "Зарядка и поездки примерно совпадают.",
         noTrips: "За этот день поездок нет.",
         acFootnote: "кВт·ч AC от зарядки; в батарею — с учётом КПД.",
-        estimatedCostFootnote: "≈ Оценка по цене последней зарядки — не траты за сегодня.",
-        surplus: "За день зарядили на {delta} кВт·ч больше, чем потратили на поездки.",
-        deficit: "На поездки потратили на {delta} кВт·ч больше, чем зарядили за день.",
+        estimatedCostFootnote:
+          "≈ Оценка по цене последней зарядки — не траты за сегодня.",
+        surplus:
+          "За день зарядили на {delta} кВт·ч больше, чем потратили на поездки.",
+        deficit:
+          "На поездки потратили на {delta} кВт·ч больше, чем зарядили за день.",
         balanced: "Зарядка и поездки за день в балансе.",
         regenNote: "Рекуп. {value} кВт·ч",
       },
@@ -4077,9 +4508,12 @@ export const dictionaries = {
         titleQuarter: "Квартал в цифрах",
         titleYear: "Год в цифрах",
         balanceTitle: "Баланс за период",
-        balanceExplainSurplus: "С зарядки больше, чем потрачено на поездки за период (кВт·ч AC).",
-        balanceExplainDeficit: "На поездки потрачено больше, чем добавлено с зарядки за период.",
-        balanceExplainBalanced: "Зарядка и поездки за период примерно совпадают.",
+        balanceExplainSurplus:
+          "С зарядки больше, чем потрачено на поездки за период (кВт·ч AC).",
+        balanceExplainDeficit:
+          "На поездки потрачено больше, чем добавлено с зарядки за период.",
+        balanceExplainBalanced:
+          "Зарядка и поездки за период примерно совпадают.",
         noTrips: "За период поездок нет.",
       },
     },
@@ -4287,7 +4721,8 @@ export const dictionaries = {
         versionViewOnGitHub: "Открыть релиз на GitHub",
         versionUnknown: "Пока нет данных с авто",
         dashboardTitle: "VoltFlow Dashboard",
-        dashboardNotLinked: "Не подключено — введите код выше на головном устройстве.",
+        dashboardNotLinked:
+          "Не подключено — введите код выше на головном устройстве.",
         dashboardVersionLabel: "Версия на головном устройстве",
         dashboardVersionUnknown: "Пока не сообщено",
         dashboardLinkedOn: "Подключено {date}",
@@ -4300,9 +4735,11 @@ export const dictionaries = {
       signOut: "Выйти",
       signedOut: "Выход выполнен.",
       exportRecent: "Скачать последние данные (JSON)",
-      exportRecentBody: "Скачайте последние 30 дней данных автомобиля, поездок, зарядок и GPS.",
+      exportRecentBody:
+        "Скачайте последние 30 дней данных автомобиля, поездок, зарядок и GPS.",
       deleteAccount: "Удалить аккаунт",
-      deleteAccountBody: "Навсегда удалите аккаунт и все связанные данные. Это действие нельзя отменить.",
+      deleteAccountBody:
+        "Навсегда удалите аккаунт и все связанные данные. Это действие нельзя отменить.",
       deleteAccountConfirm: "Введите DELETE для подтверждения",
       deleteAccountConfirming: "Удаление...",
       deleteAccountDone: "Аккаунт успешно удалён.",
@@ -4324,8 +4761,10 @@ export const dictionaries = {
         connecting: "Подключаем...",
         linked: "Telegram подключен.",
         linkFailed: "Не удалось подключить Telegram",
-        openInTelegram: "Откройте это из Telegram Mini App, чтобы подключить автоматически.",
-        connectFirst: "Сначала подключите Telegram, затем выбирайте Telegram-уведомления.",
+        openInTelegram:
+          "Откройте это из Telegram Mini App, чтобы подключить автоматически.",
+        connectFirst:
+          "Сначала подключите Telegram, затем выбирайте Telegram-уведомления.",
         instructionsTitle: "Как подключить",
         instructions: [
           "Откройте @Voltflowscr_bot в Telegram.",
@@ -4339,9 +4778,12 @@ export const dictionaries = {
           "Доставка в Telegram работает после того, как вы хотя бы раз запустили бота.",
         channelSaved: "Канал уведомлений сохранен.",
         auxBatteryAlertsLabel: "Уведомления о состоянии 12V аккумулятора",
-        auxBatteryAlertsHelp: "Срочные предупреждения о низком напряжении и тихая еженедельная сводка. Уведомления о зарядке не меняются.",
-        auxBatteryAlertsSaved: "Настройка уведомлений 12V аккумулятора сохранена.",
-        enabled: "Вкл.", disabled: "Выкл.",
+        auxBatteryAlertsHelp:
+          "Срочные предупреждения о низком напряжении и тихая еженедельная сводка. Уведомления о зарядке не меняются.",
+        auxBatteryAlertsSaved:
+          "Настройка уведомлений 12V аккумулятора сохранена.",
+        enabled: "Вкл.",
+        disabled: "Выкл.",
         channels: {
           web_push: "Web push",
           telegram: "Telegram",
@@ -4350,8 +4792,7 @@ export const dictionaries = {
       },
       liveStatus: {
         label: "Живой статус на экране блокировки (Android)",
-        help:
-          "Тихо обновляющееся уведомление с прогрессом зарядки или статусом батареи на стоянке. Только Android — на iPhone остаются уведомления об уровнях заряда.",
+        help: "Тихо обновляющееся уведомление с прогрессом зарядки или статусом батареи на стоянке. Только Android — на iPhone остаются уведомления об уровнях заряда.",
         saved: "Настройка живого статуса сохранена.",
         modes: {
           off: "Выключено",
@@ -4394,7 +4835,8 @@ export const dictionaries = {
         save: "Сохранить тариф локации",
         empty: "Сохранённых локаций пока нет.",
         delete: "Удалить",
-        pointCoords: "Точка: {lat}, {lon}. Нажмите на карту или перетащите маркер.",
+        pointCoords:
+          "Точка: {lat}, {lon}. Нажмите на карту или перетащите маркер.",
         gpsPending:
           "GPS-точка ещё не определена. Включите авто-режим или нажмите «Текущий GPS».",
         autoTierHint: "AC автотип 4,0–9,99 кВт, быстрый DC — 10,0+ кВт.",
@@ -4414,7 +4856,8 @@ export const dictionaries = {
         saved: "Тарифы провайдеров сохранены",
         invalidPrice: "Цены должны быть неотрицательными",
         userProvidersTitle: "Ваши провайдеры",
-        userProvidersBody: "Home и встроенные провайдеры уже готовы — редактируйте цены или удаляйте любого, кроме Home. Добавляйте своих ниже.",
+        userProvidersBody:
+          "Home и встроенные провайдеры уже готовы — редактируйте цены или удаляйте любого, кроме Home. Добавляйте своих ниже.",
         addProvider: "Добавить провайдера",
         addProviderLabel: "Название провайдера",
         addProviderAc: "Цена AC",
@@ -4450,7 +4893,8 @@ export const dictionaries = {
         body: "В бесплатной версии телеметрия хранится {days} дней. Более старые записи автоматически удаляются.",
         nextDeletion: "Следующее окно очистки: {date}",
         upgradeCta: "Поддержать проект",
-        emailHelp: "Чтобы поддержать проект, напишите на {email} или нажмите на кнопку ниже.",
+        emailHelp:
+          "Чтобы поддержать проект, напишите на {email} или нажмите на кнопку ниже.",
       },
       premiumBadge: "Premium",
       premiumGates: {
@@ -4486,7 +4930,7 @@ export const dictionaries = {
       },
       about: "О приложении",
       aboutBody:
-        "VoltFlow — небольшая панель для планирования EV-зарядки, стоимости и истории сессий.",
+        "VoltFlow — приложение для владельцев электромобилей, которое помогает планировать зарядку, рассчитывать её стоимость и отслеживать историю зарядных сессий.",
       telegram: "Telegram",
       github: "GitHub",
       license:
@@ -4495,7 +4939,12 @@ export const dictionaries = {
         "© 2026 VoltFlow. Пакеты и сервисы третьих сторон остаются под своими лицензиями.",
     },
     telegramLiveWidget: {
-      state: { charging: "Зарядка", parked: "Припаркован", driving: "В движении", offline: "Офлайн" },
+      state: {
+        charging: "Зарядка",
+        parked: "Припаркован",
+        driving: "В движении",
+        offline: "Офлайн",
+      },
       mileage: "Пробег {value} км",
       vehicle: "Автомобиль",
       timeHoursMinutes: "~{hours}ч {minutes}м",
@@ -4504,7 +4953,17 @@ export const dictionaries = {
       openMap: "Открыть карту",
       openVoltFlow: "Открыть VoltFlow",
     },
-    auxBatteryAlerts: { open: "Открыть VoltFlow", acute: { title: "12V аккумулятор требует внимания", body: "{vehicle}: напряжение покоя остаётся низким два дня ({voltage} В). Проверьте или зарядите вспомогательный аккумулятор." }, digest: { title: "Состояние 12V аккумулятора ухудшается", body: "{vehicle}: напряжение покоя {voltage} В при базовом значении за 90 дней {baseline} В. Стоит проверить аккумулятор." } },
+    auxBatteryAlerts: {
+      open: "Открыть VoltFlow",
+      acute: {
+        title: "12V аккумулятор требует внимания",
+        body: "{vehicle}: напряжение покоя остаётся низким два дня ({voltage} В). Проверьте или зарядите вспомогательный аккумулятор.",
+      },
+      digest: {
+        title: "Состояние 12V аккумулятора ухудшается",
+        body: "{vehicle}: напряжение покоя {voltage} В при базовом значении за 90 дней {baseline} В. Стоит проверить аккумулятор.",
+      },
+    },
     auxVoltageStats: {
       minimum: "Минимум",
       maximum: "Максимум",
@@ -4512,7 +4971,9 @@ export const dictionaries = {
   },
 } as const;
 
-export type TranslationKey = NestedKeys<(typeof dictionaries)[typeof defaultLocale]>;
+export type TranslationKey = NestedKeys<
+  (typeof dictionaries)[typeof defaultLocale]
+>;
 
 type NestedKeys<T> = {
   [K in keyof T & string]: T[K] extends readonly string[]
@@ -4527,7 +4988,8 @@ export function translate(
   key: TranslationKey,
   values?: Record<string, string | number>,
 ) {
-  const text = getValue(dictionaries[locale], key) ?? getValue(dictionaries.en, key);
+  const text =
+    getValue(dictionaries[locale], key) ?? getValue(dictionaries.en, key);
 
   if (Array.isArray(text)) return text;
   if (typeof text !== "string") return key;

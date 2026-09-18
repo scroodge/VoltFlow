@@ -15,7 +15,9 @@ type PageProps = {
   params: Promise<{ document: string; region: string }>;
 };
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
   const { document, region } = await params;
   if (!isLegalDocument(document) || !isLegalRegion(region)) {
     return { title: "Legal" };
@@ -54,11 +56,13 @@ export default async function LegalDocumentPage({ params }: PageProps) {
   };
 
   return (
-    <LegalDocumentView
-      document={docType}
-      region={docRegion}
-      contentByLocale={contentByLocale}
-      operatorEmail={operator.email}
-    />
+    <div className="flex flex-col gap-4">
+      <LegalDocumentView
+        document={docType}
+        region={docRegion}
+        contentByLocale={contentByLocale}
+        operatorEmail={operator.email}
+      />
+    </div>
   );
 }
