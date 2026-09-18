@@ -84,7 +84,8 @@ export async function proxy(request: NextRequest) {
 
     const isDevRewriteAuthPath = DEV_AUTH_PREFIXES.some(
       (prefix) =>
-        rewriteUrl.pathname === prefix || rewriteUrl.pathname.startsWith(`${prefix}/`),
+        rewriteUrl.pathname === prefix ||
+        rewriteUrl.pathname.startsWith(`${prefix}/`),
     );
 
     if (!isDevRewriteAuthPath) {
@@ -115,7 +116,7 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  if (isDevelopment && !isPublic && isDevAuthPath) {
+  const grantDevAuthBypass = () => {
     const requestHeaders = new Headers(request.headers);
     requestHeaders.set("x-voltflow-dev-auth-bypass", "1");
 
@@ -124,12 +125,15 @@ export async function proxy(request: NextRequest) {
         headers: requestHeaders,
       },
     });
-  }
+  };
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !key) {
+    if (isDevelopment && !isPublic && isDevAuthPath) {
+      return grantDevAuthBypass();
+    }
     return response;
   }
 
@@ -154,11 +158,21 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user && !isPublic) {
-    const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/login";
-    redirectUrl.searchParams.set("next", pathname);
-    return NextResponse.redirect(redirectUrl);
+  // The dev bypass is only for unauthenticated local/demo traffic hitting a
+  // protected path directly (e.g. QA without a real login). A real session
+  // must always see its own true admin/premium status, never the bypass —
+  // granting it unconditionally here previously made isCurrentUserAdmin()
+  // report every signed-in dev-mode visitor as an admin.
+  if (!user) {
+    if (isDevelopment && !isPublic && isDevAuthPath) {
+      return grantDevAuthBypass();
+    }
+    if (!isPublic) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = "/login";
+      redirectUrl.searchParams.set("next", pathname);
+      return NextResponse.redirect(redirectUrl);
+    }
   }
 
   if (user && pathname === "/login") {

@@ -9,55 +9,23 @@ import {
 } from "@/components/ui/select";
 import { ChevronDown } from "lucide-react";
 import { useTranslation } from "@/hooks/use-translation";
-import type { Profile } from "@/types/database";
 import { type TranslationKey } from "@/lib/i18n";
 import type { PressureUnit } from "@/lib/pressure-units";
 
 export function PressureUnitSelector({
   profileUserId,
-  profile,
   pressureUnit,
-  isPressureUnit,
+  pressureUnits,
+  pressureUnitSaving,
+  onPressureUnitChange,
 }: {
   profileUserId: string | null;
-  profile: Profile | null;
-  pressureUnit: PressureUnit | null;
-  isPressureUnit: string | null;
+  pressureUnit: PressureUnit;
+  pressureUnits: readonly PressureUnit[];
+  pressureUnitSaving: boolean;
+  onPressureUnitChange: (value: PressureUnit | null) => void;
 }) {
   const { t } = useTranslation();
-  const handlePressureUnitChange = (value: PressureUnit | null) => {
-    if (!value || !isPressureUnit(value) || !profileUserId) return;
-
-    const previous = pressureUnit;
-    setPressureUnit(value);
-    setPressureUnitSaving(true);
-    qc.setQueryData<Profile | null>(queryKeys.profile, (profile) =>
-      profile ? { ...profile, preferred_pressure_unit: value } : profile,
-    );
-
-    void (async () => {
-      try {
-        const { error } = await createClient()
-          .from("profiles")
-          .update({ preferred_pressure_unit: value })
-          .eq("id", profileUserId);
-
-        if (error) {
-          setPressureUnit(previous);
-          qc.setQueryData<Profile | null>(queryKeys.profile, (profile) =>
-            profile
-              ? { ...profile, preferred_pressure_unit: previous }
-              : profile,
-          );
-          toast.error(error.message);
-          return;
-        }
-        toast.success(t("settings.pressureUnit.saved") as string);
-      } finally {
-        setPressureUnitSaving(false);
-      }
-    })();
-  };
   return (
     <Card size="sm" className="border-white/[0.08]">
       <CardHeader>
@@ -83,7 +51,7 @@ export function PressureUnitSelector({
             </Label>
             <Select
               value={pressureUnit}
-              onValueChange={handlePressureUnitChange}
+              onValueChange={onPressureUnitChange}
               items={pressureUnits.map((unit) => ({
                 value: unit,
                 label: t(

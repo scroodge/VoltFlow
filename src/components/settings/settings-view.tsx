@@ -91,6 +91,7 @@ import { useAppPreferences } from "@/stores/use-app-preferences";
 import { clearPrivateBrowserData } from "@/lib/privacy/client";
 import { VoltflowMateConnection } from "@/components/settings/voltflow-mate-connection";
 import { PressureUnitSelector } from "@/components/settings/pressure-unit-selector";
+import { UserSettings } from "@/components/settings/user-settings";
 import type {
   Car,
   ChargingProviderType,
@@ -883,6 +884,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
   };
 
   const handleSignOut = async () => {
+    debugger;
     if (isDevAppRoute()) {
       toast.message(t("settings.toasts.devSignOutDisabled") as string);
       return;
@@ -1041,7 +1043,6 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         );
       });
   };
-
   return (
     <div className="flex flex-col gap-3 px-4 pb-5 pt-3">
       <SettingsPageHeader
@@ -1052,379 +1053,40 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
       <FreeRetentionNotice />
       <PressureUnitSelector
         profileUserId={profileUserId}
-        pressureUnits={pressureUnit}
-        isPressureUnit={isPressureUnit}
+        pressureUnit={pressureUnit}
+        pressureUnits={pressureUnits}
+        pressureUnitSaving={pressureUnitSaving}
+        onPressureUnitChange={handlePressureUnitChange}
       />
 
-      {/* <Card size="sm" className="border-white/[0.08]">
-        <CardHeader>
-          <CardTitle>{t("settings.pressureUnit.title")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <details className="group rounded-2xl border border-white/[0.08] bg-white/[0.03]">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium">
-              <span>{t("settings.pressureUnit.displayUnit")}</span>
-              <span className="flex items-center gap-2 text-muted-foreground">
-                {t(
-                  `settings.pressureUnit.units.${pressureUnit}` as TranslationKey,
-                )}
-                <ChevronDown
-                  className="size-4 transition-transform group-open:rotate-180"
-                  aria-hidden
-                />
-              </span>
-            </summary>
-            <div className="space-y-3 border-t border-white/[0.08] px-4 py-4">
-              <Label htmlFor="pref-pressure-unit">
-                {t("settings.pressureUnit.displayUnit")}
-              </Label>
-              <Select
-                value={pressureUnit}
-                onValueChange={handlePressureUnitChange}
-                items={pressureUnits.map((unit) => ({
-                  value: unit,
-                  label: t(
-                    `settings.pressureUnit.units.${unit}` as TranslationKey,
-                  ),
-                }))}
-              >
-                <SelectTrigger
-                  id="pref-pressure-unit"
-                  className="h-11 w-full rounded-2xl text-sm"
-                  disabled={!profileUserId || pressureUnitSaving}
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {pressureUnits.map((unit) => (
-                    <SelectItem key={unit} value={unit}>
-                      {t(
-                        `settings.pressureUnit.units.${unit}` as TranslationKey,
-                      )}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-sm text-muted-foreground">
-                {t("settings.pressureUnit.help")}
-              </p>
-            </div>
-          </details>
-        </CardContent>
-      </Card>
+      <UserSettings
+        email={email}
+        handleSignOut={handleSignOut}
+        deleteAccountOpen={deleteAccountOpen}
+        deleteAccountText={deleteAccountText}
+        deleteAccount={deleteAccount}
+        deletingAccount={deletingAccount}
+        clearPrivateBrowserData={clearPrivateBrowserData}
+        setDeleteAccountText={setDeleteAccountText}
+        setDeletingAccount={setDeletingAccount}
+        setDeleteAccountOpen={setDeleteAccountOpen}
+        handleAddPassword={handleAddPassword}
+        securityBusy={securityBusy}
+        notifyChannel={notifyChannel}
+        handleNotifyChannelChange={handleNotifyChannelChange}
+        telegramId={telegramId}
+        telegramUsername={telegramUsername}
+        handleConnectTelegram={handleConnectTelegram}
+        telegramBusy={telegramBusy}
+        telegramInstructionsOpen={telegramInstructionsOpen}
+        liveStatusMode={liveStatusMode}
+        handleLiveStatusModeChange={handleLiveStatusModeChange}
+        liveStatusModes={liveStatusModes}
+        notifyChannels={notifyChannels}
+        auxBatteryAlertsEnabled={auxBatteryAlertsEnabled}
+        handleAuxBatteryAlertsChange={handleAuxBatteryAlertsChange}
+      />
 
-      <Card size="sm" className="border-white/[0.08]">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            {t("settings.account")}
-            <PremiumBadge />
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm leading-relaxed">
-          <div>
-            <p className="text-muted-foreground text-xs uppercase tracking-[0.24em]">
-              {t("settings.email")}
-            </p>
-            {email === null ? (
-              <Skeleton className="mt-2 h-5 w-2/5 rounded-xl" />
-            ) : (
-              <p className="mt-2 text-sm">{email ?? t("common.unavailable")}</p>
-            )}
-          </div>
-
-          <Button
-            className="h-11 w-full rounded-full text-sm font-semibold"
-            variant="outline"
-            type="button"
-            onClick={() => void handleSignOut()}
-          >
-            {t("settings.signOut")}
-          </Button>
-
-          <div className="border-t border-white/[0.08] pt-3">
-            <p className="text-muted-foreground mb-2 text-sm">
-              {t("settings.exportRecentBody")}
-            </p>
-            <Button
-              asChild
-              variant="secondary"
-              className="h-10 w-full rounded-full text-sm"
-            >
-              <a href={appPath("/api/vehicle/export?format=json")}>
-                <ExternalLink className="mr-2 size-4" aria-hidden />
-                {t("settings.exportRecent")}
-              </a>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card size="sm" className="border-white/[0.08]">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Trash2 className="size-5 text-destructive" aria-hidden />
-            {t("settings.deleteAccount")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm leading-relaxed">
-          <p className="text-muted-foreground">
-            {t("settings.deleteAccountBody")}
-          </p>
-          {deleteAccountOpen ? (
-            <div className="space-y-3">
-              <Input
-                placeholder={t("settings.deleteAccountConfirm") as string}
-                value={deleteAccountText}
-                onChange={(e) => setDeleteAccountText(e.target.value)}
-                className="h-11 rounded-2xl text-sm"
-              />
-              <Button
-                className="h-11 w-full rounded-full text-sm font-semibold"
-                variant="destructive"
-                disabled={deleteAccountText !== "DELETE" || deletingAccount}
-                onClick={async () => {
-                  setDeletingAccount(true);
-                  const result = await deleteAccount();
-                  setDeletingAccount(false);
-                  if (result.ok) {
-                    await clearPrivateBrowserData();
-                    toast.success(t("settings.deleteAccountDone") as string);
-                    router.replace("/login");
-                    router.refresh();
-                  } else {
-                    toast.error(result.error);
-                  }
-                }}
-              >
-                {deletingAccount
-                  ? t("settings.deleteAccountConfirming")
-                  : t("settings.deleteAccount")}
-              </Button>
-              <button
-                type="button"
-                onClick={() => {
-                  setDeleteAccountOpen(false);
-                  setDeleteAccountText("");
-                }}
-                className="w-full py-1 text-center text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
-              >
-                {t("common.cancel") as string}
-              </button>
-            </div>
-          ) : (
-            <Button
-              className="h-11 w-full rounded-full text-sm font-semibold"
-              variant="outline"
-              type="button"
-              onClick={() => setDeleteAccountOpen(true)}
-            >
-              {t("settings.deleteAccount")}
-            </Button>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card size="sm" className="border-white/[0.08]">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <KeyRound className="size-5" aria-hidden />
-            {t("settings.security.title")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-muted-foreground text-sm leading-relaxed">
-            {t("settings.security.body")}
-          </p>
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            className="h-11 w-full rounded-full text-sm font-semibold"
-            disabled={securityBusy || !email}
-            onClick={() => void handleAddPassword()}
-          >
-            {securityBusy
-              ? t("settings.security.sending")
-              : t("settings.security.addPassword")}
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card size="sm" className="border-white/[0.08]">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MessageCircle className="size-5" aria-hidden />
-            {t("settings.telegramConnect.title")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-3">
-            <p className="text-muted-foreground text-xs uppercase tracking-[0.25em]">
-              {t("settings.telegramConnect.status")}
-            </p>
-            <p className="mt-2 text-sm font-medium">
-              {telegramId
-                ? t("settings.telegramConnect.connected", {
-                    username: telegramUsername
-                      ? `@${telegramUsername}`
-                      : String(telegramId),
-                  })
-                : t("settings.telegramConnect.notConnected")}
-            </p>
-          </div>
-
-          <Button
-            type="button"
-            variant={telegramId ? "outline" : "secondary"}
-            size="lg"
-            className="h-11 w-full rounded-full text-sm font-semibold"
-            disabled={telegramBusy}
-            onClick={() => void handleConnectTelegram()}
-          >
-            {telegramBusy
-              ? t("settings.telegramConnect.connecting")
-              : telegramId
-                ? t("settings.telegramConnect.reconnect")
-                : t("settings.telegramConnect.connect")}
-          </Button>
-
-          {telegramInstructionsOpen ? (
-            <div className="space-y-3 rounded-2xl border border-[var(--voltflow-cyan)]/25 bg-[var(--voltflow-cyan)]/10 p-4">
-              <p className="text-sm font-semibold">
-                {t("settings.telegramConnect.instructionsTitle")}
-              </p>
-              <ol className="text-muted-foreground list-decimal space-y-2 pl-5 text-sm leading-relaxed">
-                {(
-                  t(
-                    "settings.telegramConnect.instructions",
-                  ) as readonly string[]
-                ).map((step) => (
-                  <li key={step}>{step}</li>
-                ))}
-              </ol>
-              <Button
-                asChild
-                variant="outline"
-                size="lg"
-                className="h-11 w-full justify-between rounded-full px-4 text-sm font-semibold"
-              >
-                <a
-                  href="https://t.me/Voltflowscr_bot"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <span>{t("settings.telegramConnect.openBot")}</span>
-                  <ExternalLink className="size-4" aria-hidden />
-                </a>
-              </Button>
-            </div>
-          ) : null}
-
-          <div className="space-y-2">
-            <Label htmlFor="notify-channel">
-              {t("settings.telegramConnect.channelLabel")}
-            </Label>
-            <Select
-              value={notifyChannel}
-              onValueChange={handleNotifyChannelChange}
-              items={notifyChannels.map((channel) => ({
-                value: channel,
-                label: t(
-                  `settings.telegramConnect.channels.${channel}` as TranslationKey,
-                ) as string,
-              }))}
-            >
-              <SelectTrigger
-                id="notify-channel"
-                className="h-11 w-full rounded-2xl text-sm"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {notifyChannels.map((channel) => (
-                  <SelectItem key={channel} value={channel}>
-                    {t(
-                      `settings.telegramConnect.channels.${channel}` as TranslationKey,
-                    )}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-muted-foreground text-sm">
-              {t("settings.telegramConnect.channelHelp")}
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="live-status-mode">
-              {t("settings.liveStatus.label")}
-            </Label>
-            <Select
-              value={liveStatusMode}
-              onValueChange={handleLiveStatusModeChange}
-              items={liveStatusModes.map((mode) => ({
-                value: mode,
-                label: t(
-                  `settings.liveStatus.modes.${mode}` as TranslationKey,
-                ) as string,
-              }))}
-            >
-              <SelectTrigger
-                id="live-status-mode"
-                className="h-11 w-full rounded-2xl text-sm"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {liveStatusModes.map((mode) => (
-                  <SelectItem key={mode} value={mode}>
-                    {t(`settings.liveStatus.modes.${mode}` as TranslationKey)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-muted-foreground text-sm">
-              {t("settings.liveStatus.help")}
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="aux-battery-alerts">
-              {t("settings.telegramConnect.auxBatteryAlertsLabel")}
-            </Label>
-            <Select
-              value={auxBatteryAlertsEnabled ? "enabled" : "disabled"}
-              onValueChange={handleAuxBatteryAlertsChange}
-              items={["enabled", "disabled"].map((value) => ({
-                value,
-                label: t(
-                  `settings.telegramConnect.${value}` as TranslationKey,
-                ) as string,
-              }))}
-            >
-              <SelectTrigger
-                id="aux-battery-alerts"
-                className="h-11 w-full rounded-2xl text-sm"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="enabled">
-                  {t("settings.telegramConnect.enabled")}
-                </SelectItem>
-                <SelectItem value="disabled">
-                  {t("settings.telegramConnect.disabled")}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-muted-foreground text-sm">
-              {t("settings.telegramConnect.auxBatteryAlertsHelp")}
-            </p>
-          </div>
-        </CardContent>
-      </Card> */}
-
-      {/* 
       {isAdmin ? <PushDiagnostics /> : null}
 
       {isAdmin ? (
@@ -1491,13 +1153,14 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
             </Button>
           </CardContent>
         </Card>
-      ) : null} */}
+      ) : null}
 
-      <VoltflowMateConnection profileUserId={profileUserId} />
+      {/* <VoltflowMateConnection profileUserId={profileUserId} /> */}
       <Card>
         <DashboardVersionPanel />
         <ClusterBackgroundsSettings />
       </Card>
+
       <Card size="sm" className="border-white/[0.08]">
         <CardHeader>
           <CardTitle>{t("settings.economics")}</CardTitle>
@@ -1979,6 +1642,11 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
               )}
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
           <Separator className="my-6 bg-white/15" />
 
           <div className="space-y-5">
@@ -2040,6 +1708,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
           </SettingsGroup>
         </CardContent>
       </Card>
+
       <Card size="sm" className="border-white/[0.08]">
         <CardHeader>
           <CardTitle>{t("locale.label")}</CardTitle>
@@ -2049,6 +1718,7 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
           <p className="text-muted-foreground text-sm">{t("locale.helper")}</p>
         </CardContent>
       </Card>
+
       <AboutSection />
     </div>
   );
