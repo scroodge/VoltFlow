@@ -1484,9 +1484,7 @@ export const dictionaries = {
         "VoltFlow never talks to chargers directly — timers are deterministic modeling for trip planning · always confirm hardware states on the pedestal.",
       privacyTitle: "Telemetry privacy",
       privacyItems: [
-        "Rls policies enforced with auth.uid()",
-        "Anon JWT only accesses your rows · service role absent on device",
-        "Realtime publication limited to charging_sessions inserts/updates · no cross-driver leakage",
+        "All data saved in Supabase ·  no cross-driver leakage",
       ],
       retentionNotice: {
         title: "Free plan data retention",
@@ -2966,9 +2964,7 @@ export const dictionaries = {
         "VoltFlow не размаўляе з зарадкамі наўпрост — таймеры толькі мадэлююць план паездкі · заўсёды правярайце стан абсталявання на стойцы.",
       privacyTitle: "Прыватнасць тэлеметрыі",
       privacyItems: [
-        "RLS-палітыкі працуюць праз auth.uid()",
-        "Anon JWT бачыць толькі вашы радкі · service role няма на прыладзе",
-        "Realtime-публікацыя абмежавана inserts/updates у charging_sessions · без уцечак паміж кіроўцамі",
+        "Усе данныя захоўваюцца ў Supabase  · без уцечак паміж кіроўцамі",
       ],
       retentionNotice: {
         title: "Захоўванне даных у free-плане",
@@ -4447,16 +4443,14 @@ export const dictionaries = {
         "VoltFlow не общается с зарядными станциями напрямую — таймеры только моделируют прогресс зарядки.",
       privacyTitle: "Правила хранения телеметрии",
       privacyItems: [
-        "RLS-политики работают через auth.uid()",
-        "Anon JWT видит только ваши строки · service role отсутствует на устройстве",
-        "Realtime-публикация ограничена inserts/updates в charging_sessions · без утечек между пользователями",
+        "Все данные храняться в Supabase без утечек между пользователями",
       ],
       retentionNotice: {
-        title: "Хранение данных в free-плане",
-        body: "В free-плане телеметрия хранится {days} дней. Более старые записи автоматически удаляются.",
+        title: "Хранение данных в без поддержки проекта",
+        body: "В бесплатной версии телеметрия хранится {days} дней. Более старые записи автоматически удаляются.",
         nextDeletion: "Следующее окно очистки: {date}",
-        upgradeCta: "Перейти на Premium",
-        emailHelp: "Чтобы перейти на Premium, напишите на {email}.",
+        upgradeCta: "Поддержать проект",
+        emailHelp: "Чтобы поддержать проект, напишите на {email} или нажмите на кнопку ниже.",
       },
       premiumBadge: "Premium",
       premiumGates: {
