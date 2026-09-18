@@ -45,17 +45,21 @@ export function FreeRetentionNotice() {
   })();
 
   if (loading || status?.isPremium) return null;
-
+  console.log(status);
   return (
     <PremiumFeatureGate title={t("settings.retentionNotice.title")}>
       <p className="text-sm text-muted-foreground">
-        {t("settings.retentionNotice.body", { days: status?.retentionDays ?? 30 })}
+        {t("settings.retentionNotice.body", {
+          days: status?.retentionDays ?? 30,
+        })}
       </p>
       <p className="text-xs text-muted-foreground">
         {t("settings.retentionNotice.nextDeletion", { date: nextDeletionText })}
       </p>
       <p className="text-xs text-muted-foreground">
-        {t("settings.retentionNotice.emailHelp", { email: status?.upgradeEmail ?? "" })}
+        {t("settings.retentionNotice.emailHelp", {
+          email: status?.upgradeEmail ?? "",
+        })}
       </p>
     </PremiumFeatureGate>
   );

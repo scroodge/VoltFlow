@@ -9,15 +9,19 @@ export function SettingsPageHeader({
 }: {
   eyebrow: string;
   title: string;
-  subtitle: string;
+  subtitle?: string;
 }) {
   return (
     <div className="space-y-2 px-1">
       <p className="text-muted-foreground text-[11px] uppercase tracking-[0.26em]">
         {eyebrow}
       </p>
-      <h1 className="text-balance text-2xl font-semibold tracking-tight">{title}</h1>
-      <p className="text-muted-foreground max-w-xl text-sm leading-relaxed">{subtitle}</p>
+      <h1 className="text-balance text-2xl font-semibold tracking-tight">
+        {title}
+      </h1>
+      <p className="text-muted-foreground max-w-xl text-sm leading-relaxed">
+        {subtitle}
+      </p>
     </div>
   );
 }
