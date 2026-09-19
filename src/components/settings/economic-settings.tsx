@@ -9,9 +9,10 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { useTranslation } from "@/hooks/use-translation";
-import { type TranslationKey } from "@/lib/i18n";
+import { type Currency, type TranslationKey } from "@/lib/i18n";
 import { CheckCircle2, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { ChargingTariffType } from "@/types/database";
 
 export function EconomicsSettings({
   handleCurrencyChange,
@@ -71,8 +72,6 @@ export function EconomicsSettings({
   handleAddTariffLocation,
   tariffLocations,
   handleDeleteTariffLocation,
-  ChargingTariffType,
-  Currency,
 }: {
   handleCurrencyChange: any;
   handlePriceSave: any;
@@ -131,8 +130,6 @@ export function EconomicsSettings({
   handleAddTariffLocation: any;
   tariffLocations: any;
   handleDeleteTariffLocation: any;
-  ChargingTariffType: any;
-  Currency: any;
 }) {
   const { t } = useTranslation();
   return (
@@ -157,7 +154,7 @@ export function EconomicsSettings({
                 className="h-11 w-full rounded-2xl text-sm"
               >
                 <SelectValue>
-                  {(value: typeof Currency | null) =>
+                  {(value: Currency | null) =>
                     value
                       ? currencyTextWithIcon(currencyLabels[value], value)
                       : null
@@ -496,7 +493,7 @@ export function EconomicsSettings({
             <Select
               value={newLocationTariffType}
               onValueChange={(value) =>
-                setNewLocationTariffType(value as typeof ChargingTariffType)
+                setNewLocationTariffType(value as ChargingTariffType)
               }
               items={(["home", "commercial_ac", "fast_dc"] as const).map(
                 (value) => ({
