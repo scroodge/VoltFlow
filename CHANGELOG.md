@@ -11,6 +11,22 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-09-19
 
+### Admin users panel refactor (`admin-users-panel.tsx` 1,012 → ~50 lines)
+
+Behavior-preserving split of a 9-component file; no API, data-model or storage change.
+
+- `admin-users-panel.tsx` is a composition; state/fetch live in `use-admin-users.ts`
+  (single `filters` object, `setFilter` resets the page in one place, `refresh()` for
+  mutations). The fetch now uses an `AbortController`, fixing a race where a slow response
+  from a superseded filter could append to a newer list. `refresh()` also returns to page 1.
+- New components in `src/components/admin/users/`: `admin-users-filters` (data-driven
+  `FilterGroup`), `admin-users-metrics`, `attention-queue`, `user-card` (admin/premium editor
+  toggles merged), `premium-editor` (+ `usePremiumPayments`, `useId()` input ids),
+  `admin-revoker`; shared `types.ts` and `post-admin-action.ts` (fetch/ok/error boilerplate).
+- Pure formatters moved to `src/lib/admin-users-format.ts` with
+  `admin-users-format.test.mjs`. Attention label/tone/detail stay in `attention-queue.tsx`.
+- Verified: eslint, `tsc --noEmit`, new tests. Manual `/admin/users` pass still to do.
+
 ### Settings page refactor (`settings-view.tsx` 1,710 → ~55 lines)
 
 `SettingsView` was a client monolith: ~35 `useState`s, 16 handlers, six extra components in one
