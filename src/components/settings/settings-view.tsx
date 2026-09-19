@@ -92,6 +92,7 @@ import { clearPrivateBrowserData } from "@/lib/privacy/client";
 import { VoltflowMateConnection } from "@/components/settings/voltflow-mate-connection";
 import { PressureUnitSelector } from "@/components/settings/pressure-unit-selector";
 import { UserSettings } from "@/components/settings/user-settings";
+import { useEntitlementQuery } from "@/hooks/use-entitlement-query";
 import type {
   Car,
   ChargingProviderType,
@@ -1043,6 +1044,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         );
       });
   };
+
+  const { data } = useEntitlementQuery();
+
   return (
     <div className="flex flex-col gap-3 px-4 pb-5 pt-3">
       <SettingsPageHeader
@@ -1061,9 +1065,9 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
                 <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">
                   {t("settings.housekeeping")}
                 </p>
-                <p className="text-sm leading-relaxed text-muted-foreground">
+                {/* <p className="text-sm leading-relaxed text-muted-foreground">
                   {t("settings.housekeepingBody")}
-                </p>
+                </p> */}
               </div>
               <Button
                 asChild
@@ -1197,11 +1201,13 @@ export function SettingsView({ isAdmin = false }: { isAdmin?: boolean }) {
         </Card>
       ) : null}
 
-      {/* <VoltflowMateConnection profileUserId={profileUserId} /> */}
-      <Card>
-        <DashboardVersionPanel />
-        <ClusterBackgroundsSettings />
-      </Card>
+      <VoltflowMateConnection profileUserId={profileUserId} />
+      {data?.isPremium ? (
+        <Card>
+          <DashboardVersionPanel />
+          <ClusterBackgroundsSettings />
+        </Card>
+      ) : null}
 
       <Card size="sm" className="border-white/[0.08]">
         <CardHeader>

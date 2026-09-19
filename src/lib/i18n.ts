@@ -669,7 +669,7 @@ export const dictionaries = {
       nicknamePlaceholder: "Urban Runner",
       battery: "Useable battery (kWh)",
       wallbox: "Wallbox kW",
-      wallboxHelp: "Matches your AC pedestal limit.",
+      wallboxHelp: "Matches your AC charger limit.",
       homePrice: "Home charging price (optional)",
       homePricePlaceholder: "e.g. 0.15",
       homePriceHelp:
@@ -1621,9 +1621,9 @@ export const dictionaries = {
       removeConfirm: "Remove {name}?",
       deleteError: "Something went sideways",
       removed: "{name} removed",
-      pedestal: "{battery} kWh · {power} kW pedestal",
+      pedestal: "{battery} kWh · AC {power} kW charger",
       privacy:
-        "VoltFlow never talks to chargers directly — timers are deterministic modeling for trip planning · always confirm hardware states on the pedestal.",
+        "VoltFlow never talks to chargers directly — timers are deterministic modeling for trip planning · always confirm hardware states on the charger.",
       privacyTitle: "Telemetry privacy",
       privacyItems: ["All data saved in Supabase ·  no cross-driver leakage"],
       retentionNotice: {
@@ -2299,7 +2299,7 @@ export const dictionaries = {
       nicknamePlaceholder: "Гарадскі бегун",
       battery: "Карысная батарэя (кВт·г)",
       wallbox: "Wallbox кВт",
-      wallboxHelp: "Адпавядае ліміту вашай AC-стойкі.",
+      wallboxHelp: "Адпавядае ліміту вашай AC-зарадцы.",
       homePrice: "Цана хатняй зарадкі (неабавязкова)",
       homePricePlaceholder: "напр. 0.15",
       homePriceHelp:
@@ -3249,7 +3249,7 @@ export const dictionaries = {
       removeConfirm: "Выдаліць {name}?",
       deleteError: "Нешта пайшло не так",
       removed: "{name} выдалена",
-      pedestal: "{battery} кВт·г · стойка {power} кВт",
+      pedestal: "{battery} кВт·г · зарадка  AC {power} кВт",
       privacy:
         "VoltFlow не размаўляе з зарадкамі наўпрост — таймеры толькі мадэлююць план паездкі · заўсёды правярайце стан абсталявання на стойцы.",
       privacyTitle: "Прыватнасць тэлеметрыі",
@@ -3930,7 +3930,7 @@ export const dictionaries = {
       nicknamePlaceholder: "Название вашего авто",
       battery: "Полезная батарея (кВт·ч)",
       wallbox: "Зарядная станция в  кВт",
-      wallboxHelp: "Соответствует лимиту вашей AC-стойки.",
+      wallboxHelp: "Соответствует лимиту вашей AC-зарядке.",
       homePrice: "Цена домашней зарядки (необязательно)",
       homePricePlaceholder: "напр. 0.15",
       homePriceHelp:
@@ -4881,7 +4881,7 @@ export const dictionaries = {
       removeConfirm: "Удалить {name}?",
       deleteError: "Что-то пошло не так",
       removed: "{name} удалена",
-      pedestal: "{battery} кВт·ч · стойка {power} кВт",
+      pedestal: "{battery} кВт·ч · зарядка AC {power} кВт",
       privacy:
         "VoltFlow не общается с зарядными станциями напрямую — таймеры только моделируют прогресс зарядки.",
       privacyTitle: "Правила хранения телеметрии",
