@@ -31,10 +31,13 @@ async function fetchProfile(): Promise<Profile | null> {
   return data ? mapProfile(data as Record<string, unknown>) : null;
 }
 
-export function useProfileQuery() {
+export function useProfileQuery(options?: {
+  refetchOnMount?: boolean | "always";
+}) {
   return useQuery({
     queryKey: queryKeys.profile,
     queryFn: fetchProfile,
     staleTime: 30_000,
+    ...options,
   });
 }

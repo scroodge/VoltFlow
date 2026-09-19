@@ -3307,3 +3307,115 @@ No payment gateway work in this pass; revisit only if asked later.
 5. Phase 5 (real payment gateway) — explicitly not building this pass.
 
 ---
+
+## ~~🟠 Refactor `settings-view.tsx` (1,710-line client monolith)~~ — SHIPPED 2026-09-19
+
+See [CHANGELOG.md](CHANGELOG.md) → "2026-09-19 · Settings page refactor". Steps (a)–(e) of
+option 1 shipped; step (f) (server-rendered static sections) was dropped because
+`useTranslation` takes its locale from the client preference store. The manual browser
+pass in "Verification" below is still outstanding. Kept for its options/trade-off record.
+
+Review of `src/components/settings/settings-view.tsx` against the Next 16 docs in
+`node_modules/next/dist/docs/01-app/01-getting-started/` (05 server/client components,
+06 fetching data, 07 mutating data). Read-only review; nothing changed by this entry.
+
+### Findings
+
+**Bugs / dead code (fix regardless of the refactor)**
+- **B1 — stray `debugger;`** at `handleSignOut` (line ~889). Pauses sign-out whenever devtools
+  is open; shipped code.
+- **B2 — 8 unused imports/symbols** left by the `EconomicsSettings` extraction: `ChevronDown`,
+  `CheckCircle2`, `KeyRound`, `Loader2`, `Trash2`, `PremiumBadge`, `Input`, `mapUserProvider`.
+  Two separate `lucide-react` import statements should be one.
+- **B3 — `EconomicsSettings` props are 57 × `any`** (62 `no-explicit-any` lint errors in
+  `economic-settings.tsx`), and it receives a *component* (`TariffLocationMapPreview`) and
+  pure helpers (`parseLocationProviderValue`, `currencyTextWithIcon`, `currencies`,
+  `currencyLabels`, `currencySymbols`) as props even though it could import them directly.
+
+**Structure**
+- **S1 — one component does everything.** `SettingsView` is ~970 lines: ~35 `useState`s, two
+  effects, 16 handlers, then the JSX. Six more components are appended to the same file
+  (`TariffLocationMapPreview`, `DashboardVersionPanel`, `PushDiagnostics`, `PushStatusRow`,
+  `CarRow`, `AboutSection`).
+- **S2 — prop drilling instead of colocation.** `EconomicsSettings` takes 57 props and
+  `UserSettings` 23; all state and all handlers live in the parent only to be handed down.
+  State that only one section uses (new-location form, new-provider form, delete-account
+  dialog, Telegram busy flags) should live inside that section.
+- **S3 — everything ships as client JS.** Per the Next docs, a `"use client"` file pulls in
+  everything it imports/renders. Static markup (`AboutSection`, legal card, admin link cards,
+  the page header) is bundled and hydrated for no reason.
+
+**Data fetching**
+- **D1 — ~200 lines hand-fetch the profile in `useEffect`, duplicating an existing hook.**
+  `src/hooks/use-profile-query.ts` (`queryKeys.profile`, already handles the `isDevAppRoute`
+  branch) exists, yet `SettingsView` re-implements the dev and prod fetch twice by hand and
+  mirrors the result into ~12 local `useState`s. Handlers then *also* patch
+  `queryKeys.profile` in the cache (`handlePressureUnitChange`) — two sources of truth.
+  Costs: client-side waterfall (`getUser` → profile + locations) and a flash of defaults.
+- **D2 — tariff locations are fetched with raw Supabase, outside TanStack Query**, unlike cars,
+  providers, entitlement and paired devices, which already have hooks.
+- **D3 — `createClient()` + `.from().update()` copy-pasted ~14 times**, each with its own
+  optimistic-update / rollback / toast boilerplate (currency, locale, pressure, notify channel,
+  live status, aux alerts, chemistry, providers, locations).
+
+### Options
+
+1. **Split + colocate + reuse existing hooks (recommended).** No behavior or data-path change.
+   - Delete the hand-rolled fetch; read `useProfileQuery()`; add `useTariffLocationsQuery()`.
+     Sync the Zustand tariff/currency preferences from the profile in one small
+     `useEffect`/hook, not twelve setters.
+   - One `useUpdateProfile()` mutation hook (optimistic patch of `queryKeys.profile`,
+     rollback on error, toast) replaces ~9 copy-pasted handlers.
+   - Move each section into its own file under `src/components/settings/` owning its own
+     state: `economic-settings.tsx` (+ tariff-locations and providers cards),
+     `car-row.tsx`, `push-diagnostics.tsx`, `dashboard-version-panel.tsx`,
+     `about-section.tsx`, notifications and account sections. `settings-view.tsx`
+     becomes a ~80-line composition of sections. Prop drilling drops from 57/23 props to
+     ~0–3 per section; `any` types disappear because sections import the real types.
+   - Make `SettingsPage` (server component) render the static sections
+     (`AboutSection`, legal card, admin link cards, header) and pass them to the client
+     shell as `children`/slots, so they leave the client bundle (docs 05, "Interleaving
+     Server and Client Components").
+   - Risk: low. Pure move + dedupe; covered by `tsc`, `lint`, `build`, and a manual pass over
+     each section.
+2. **Option 1 plus server-side initial data.** In `SettingsPage`, fetch the profile and
+   locations on the server and seed the query cache (`HydrationBoundary`) so first paint has
+   real values (no flash). Extra cost: needs a server Supabase fetch path that also works for
+   the dev-route/Telegram WebView flows the client hook currently handles via `devFetch`;
+   `providers.tsx` owns a root-lifetime `QueryClient` (see AUD-04), so hydration must be
+   account-scoped first. Worth doing *after* AUD-04, not with this refactor.
+3. **Option 1 plus Server Actions for mutations** (docs 07). Not recommended now: the app's
+   writes are direct client→Supabase under RLS with an explicit column-grant allowlist
+   (AUD-02 hardening). Moving them changes the trust boundary and would need per-action
+   validation; the gain is mostly stylistic. Revisit only for writes that need server
+   secrets. (Existing `deleteAccount`, `deleteCar`, `sendTestPush` already are actions.)
+4. **Do only B1–B3.** Smallest, fixes the real defects, leaves the monolith. Reasonable
+   fallback if the refactor is too large right now.
+
+### Recommendation
+
+Option 1, in this order so each step is independently shippable and verifiable:
+(a) B1/B2 cleanup; (b) extract `CarRow`, `PushDiagnostics`, `DashboardVersionPanel`,
+`AboutSection` (no shared state — trivial moves); (c) `useProfileQuery` + tariff-locations
+query, drop the 200-line effect; (d) `useUpdateProfile` mutation hook; (e) colocate
+Economics/Account state into their sections and type the props; (f) hoist static sections to
+the server page. Defer Option 2 until AUD-04 lands; skip Option 3.
+
+### Data ownership and location (no change)
+
+No new data and nothing moves. Profile columns and tariff locations remain **user-owned
+Postgres** rows under existing RLS; default tariff prices and currency stay in the existing
+client-side `useAppPreferences` store, mirrored from the profile exactly as today. The
+refactor changes only *where the code lives and how it is fetched*, not what is stored where.
+
+### Verification
+
+`npx tsc --noEmit`, `npm run lint` (expect the 62 `any` errors gone), `npm run build`, then
+manually exercise each section in the browser: currency/locale/pressure/notification changes
+(optimistic update + rollback on a forced failure), add/delete provider and tariff location,
+sign-out, delete-account dialog, admin cards as admin vs non-admin, dev route
+(`isDevAppRoute`) and the Telegram Mini App path.
+
+### Should I build this?
+
+---

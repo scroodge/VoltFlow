@@ -1,3 +1,9 @@
+"use client";
+
+import { ChevronDown } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
@@ -7,25 +13,44 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { ChevronDown } from "lucide-react";
+import { useProfileQuery } from "@/hooks/use-profile-query";
 import { useTranslation } from "@/hooks/use-translation";
+import { useUpdateProfile } from "@/hooks/use-update-profile";
 import { type TranslationKey } from "@/lib/i18n";
-import type { PressureUnit } from "@/lib/pressure-units";
-
-export function PressureUnitSelector({
-  profileUserId,
-  pressureUnit,
+import {
+  defaultPressureUnit,
+  isPressureUnit,
   pressureUnits,
-  pressureUnitSaving,
-  onPressureUnitChange,
-}: {
-  profileUserId: string | null;
-  pressureUnit: PressureUnit;
-  pressureUnits: readonly PressureUnit[];
-  pressureUnitSaving: boolean;
-  onPressureUnitChange: (value: PressureUnit | null) => void;
-}) {
+  type PressureUnit,
+} from "@/lib/pressure-units";
+
+export function PressureUnitSelector() {
   const { t } = useTranslation();
+  const { data: profile } = useProfileQuery();
+  const updateProfile = useUpdateProfile();
+  const [saving, setSaving] = useState(false);
+
+  const storedUnit = profile?.preferred_pressure_unit;
+  const pressureUnit = isPressureUnit(storedUnit)
+    ? storedUnit
+    : defaultPressureUnit;
+
+  const handleChange = async (value: PressureUnit | null) => {
+    if (!value || !isPressureUnit(value) || !profile) return;
+
+    setSaving(true);
+    try {
+      const result = await updateProfile({ preferred_pressure_unit: value });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(t("settings.pressureUnit.saved") as string);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Card size="sm" className="border-white/[0.08]">
       <CardHeader>
@@ -51,7 +76,7 @@ export function PressureUnitSelector({
             </Label>
             <Select
               value={pressureUnit}
-              onValueChange={onPressureUnitChange}
+              onValueChange={(value) => void handleChange(value)}
               items={pressureUnits.map((unit) => ({
                 value: unit,
                 label: t(
@@ -62,7 +87,7 @@ export function PressureUnitSelector({
               <SelectTrigger
                 id="pref-pressure-unit"
                 className="h-11 w-full rounded-2xl text-sm"
-                disabled={!profileUserId || pressureUnitSaving}
+                disabled={!profile || saving}
               >
                 <SelectValue />
               </SelectTrigger>

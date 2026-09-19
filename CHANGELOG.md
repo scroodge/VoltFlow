@@ -9,6 +9,44 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-09-19
+
+### Settings page refactor (`settings-view.tsx` 1,710 → ~55 lines)
+
+`SettingsView` was a client monolith: ~35 `useState`s, 16 handlers, six extra components in one
+file, a ~200-line hand-rolled profile fetch in `useEffect` that duplicated `useProfileQuery`,
+and 57/23 `any`-typed props drilled into `EconomicsSettings`/`UserSettings`. No data model or
+storage change — profile columns and tariff locations stay user-owned Postgres rows under RLS;
+default tariff prices/currency stay in the client `useAppPreferences` store.
+
+- `settings-view.tsx` is now a composition of self-contained sections under
+  `src/components/settings/`: `cars-card`, `car-row`, `pressure-unit-selector`,
+  `account-settings`, `notification-settings`, `economic-settings` (+ `provider-tariffs-section`,
+  `tariff-locations-section`, `tariff-location-map-preview`), `push-diagnostics`,
+  `admin-links`, `dashboard-version-panel`, `legal-card`, `locale-card`, `about-section`.
+  Each owns its own state; props dropped from 57/23 to none. `user-settings.tsx` removed.
+- New hooks: `useUpdateProfile` (optimistic profile patch + rollback of only the patched keys,
+  replaces ~9 copy-pasted Supabase handlers), `useTariffLocationsQuery` (shares the existing
+  `queryKeys.tariffLocations`), `useAccountEmailQuery` (Auth email, not client-writable
+  `profiles.email`), `useSyncProfilePreferences` (mirrors profile currency/tariffs into the
+  preference store). `useProfileQuery` takes an optional `refetchOnMount`.
+- Bugs fixed on the way: stray `debugger;` in sign-out; `currencySymbols[typeof currency]`
+  (introduced by the earlier extraction) made tariff labels lose their currency symbol; type-only
+  `Currency`/`ChargingTariffType` passed as runtime props; 8 unused imports; 62 `any` lint errors.
+- Deliberately not done: hoisting static sections to the server page. `useTranslation` reads the
+  locale from the client preference store, so server-rendered sections would show the wrong
+  language until hydration. Needs a server-side locale source first. Server-side initial profile
+  data (option 2) still waits on AUD-04 (account-scoped query cache); Server Actions for
+  mutations (option 3) skipped by design.
+- Behavior notes: profile is now the single source of truth (no local mirror state), so the
+  page shows the loading skeleton for email until the query resolves; a signed-in profile is
+  needed for preference changes to apply (previously a signed-out user got a local-only change).
+- Verified: `tsc --noEmit` clean; `npm run test` 491 pass, 3 fail (the three pre-existing
+  failures recorded in BACKLOG.md); eslint clean on all touched files. **Not verified:** a
+  browser pass over each section — needs a signed-in session (see checklist in the BACKLOG entry).
+
+---
+
 ## 2026-09-17 (2)
 
 ### Watermarked demo data for explorer-mode users (0 cars)
