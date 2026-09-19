@@ -53,9 +53,15 @@ export function AdminUsersPanel() {
   const [refreshTick, setRefreshTick] = useState(0);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
-  const [telemetryFilter, setTelemetryFilter] = useState<"none" | "7d" | "30d">("none");
-  const [premiumFilter, setPremiumFilter] = useState<"all" | "yes" | "no" | "term" | "flag">("all");
-  const [lastSeenFilter, setLastSeenFilter] = useState<"any" | "24h" | "7d" | "30d" | "never">("any");
+  const [telemetryFilter, setTelemetryFilter] = useState<"none" | "7d" | "30d">(
+    "none",
+  );
+  const [premiumFilter, setPremiumFilter] = useState<
+    "all" | "yes" | "no" | "term" | "flag"
+  >("all");
+  const [lastSeenFilter, setLastSeenFilter] = useState<
+    "any" | "24h" | "7d" | "30d" | "never"
+  >("any");
   const [registeredSince, setRegisteredSince] = useState("");
   const [registeredBefore, setRegisteredBefore] = useState("");
   const [stats, setStats] = useState<AdminUsersStats>(EMPTY_ADMIN_USERS_STATS);
@@ -81,22 +87,38 @@ export function AdminUsersPanel() {
 
     fetch(`/api/admin/users?${params.toString()}`, { credentials: "include" })
       .then(async (response) => {
-        const payload = (await response.json()) as UsersResponse | { error?: string };
+        const payload = (await response.json()) as
+          UsersResponse | { error?: string };
         if (!response.ok || !("ok" in payload)) {
           throw new Error(
-            "error" in payload && payload.error ? payload.error : "Failed to load users",
+            "error" in payload && payload.error
+              ? payload.error
+              : "Failed to load users",
           );
         }
-        setUsers((prev) => (page === 1 ? payload.users : [...prev, ...payload.users]));
+        setUsers((prev) =>
+          page === 1 ? payload.users : [...prev, ...payload.users],
+        );
         setHasMore(page * payload.pageSize < payload.total);
         setStats(payload.stats ?? EMPTY_ADMIN_USERS_STATS);
         setAttention(payload.attention ?? []);
       })
       .catch((error: unknown) => {
-        toast.error(error instanceof Error ? error.message : "Failed to load users");
+        toast.error(
+          error instanceof Error ? error.message : "Failed to load users",
+        );
       })
       .finally(() => setLoading(false));
-  }, [page, search, telemetryFilter, premiumFilter, lastSeenFilter, registeredSince, registeredBefore, refreshTick]);
+  }, [
+    page,
+    search,
+    telemetryFilter,
+    premiumFilter,
+    lastSeenFilter,
+    registeredSince,
+    registeredBefore,
+    refreshTick,
+  ]);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -190,7 +212,15 @@ export function AdminUsersPanel() {
                 }
               }}
             >
-              {f === "all" ? "All" : f === "yes" ? "Premium" : f === "no" ? "Free" : f === "term" ? "Term" : "Flag"}
+              {f === "all"
+                ? "All"
+                : f === "yes"
+                  ? "Premium"
+                  : f === "no"
+                    ? "Free"
+                    : f === "term"
+                      ? "Term"
+                      : "Flag"}
             </FilterPill>
           ))}
         </FilterRow>
@@ -266,7 +296,13 @@ export function AdminUsersPanel() {
   );
 }
 
-function FilterRow({ label, children }: { label: string; children: React.ReactNode }) {
+function FilterRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex items-start gap-3">
       <span className="mt-1.5 shrink-0 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
@@ -301,7 +337,13 @@ function FilterPill({
   );
 }
 
-function UserCard({ user, onUpdated }: { user: AdminUser; onUpdated: () => void }) {
+function UserCard({
+  user,
+  onUpdated,
+}: {
+  user: AdminUser;
+  onUpdated: () => void;
+}) {
   const [showEditor, setShowEditor] = useState(false);
   const [showAdminEditor, setShowAdminEditor] = useState(false);
 
@@ -309,7 +351,9 @@ function UserCard({ user, onUpdated }: { user: AdminUser; onUpdated: () => void 
     <div className="space-y-3 rounded-xl border border-white/10 bg-card p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{user.email ?? "No email"}</p>
+          <p className="truncate text-sm font-medium">
+            {user.email ?? "No email"}
+          </p>
           <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
             {user.id}
           </p>
@@ -335,12 +379,16 @@ function UserCard({ user, onUpdated }: { user: AdminUser; onUpdated: () => void 
       <div className="flex items-center gap-3 text-xs text-muted-foreground">
         <span>
           Last seen:{" "}
-          <span className="text-foreground">{relativeTime(user.last_seen_at)}</span>
+          <span className="text-foreground">
+            {relativeTime(user.last_seen_at)}
+          </span>
         </span>
         <span className="text-white/10">·</span>
         <span>
           Mate:{" "}
-          <span className="text-foreground">{user.latest_mate_version ?? "–"}</span>
+          <span className="text-foreground">
+            {user.latest_mate_version ?? "–"}
+          </span>
         </span>
       </div>
 
@@ -350,10 +398,13 @@ function UserCard({ user, onUpdated }: { user: AdminUser; onUpdated: () => void 
         <div className="flex items-center justify-between">
           <div className="text-xs text-muted-foreground">
             via{" "}
-            <span className="font-medium text-foreground">{user.premium_source}</span>
+            <span className="font-medium text-foreground">
+              {user.premium_source}
+            </span>
             {user.premium_source === "term" && user.premium_until && (
               <>
-                {" "}· until{" "}
+                {" "}
+                · until{" "}
                 <span className="font-medium text-foreground">
                   {formatDate(user.premium_until)}
                 </span>
@@ -435,9 +486,13 @@ function MetricTile({
 }) {
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2">
-      <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">{label}</p>
+      <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+        {label}
+      </p>
       <p className="mt-1 text-sm font-semibold tabular-nums">{value}</p>
-      <p className="mt-1 text-[10px] leading-4 text-muted-foreground">{helper}</p>
+      <p className="mt-1 text-[10px] leading-4 text-muted-foreground">
+        {helper}
+      </p>
     </div>
   );
 }
@@ -481,10 +536,16 @@ function AttentionQueue({
               className="flex w-full items-center justify-between gap-3 border-b border-white/10 px-3 py-3 text-left last:border-b-0 transition hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--voltflow-cyan)] focus-visible:ring-inset"
             >
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{item.email ?? "No email"}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{attentionDetail(item)}</p>
+                <p className="truncate text-sm font-medium">
+                  {item.email ?? "No email"}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {attentionDetail(item)}
+                </p>
               </div>
-              <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${attentionTone(item.kind)}`}>
+              <span
+                className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${attentionTone(item.kind)}`}
+              >
                 {attentionLabel(item.kind)}
               </span>
             </button>
@@ -559,7 +620,13 @@ type PremiumPayment = {
   created_at: string;
 };
 
-function PremiumEditor({ user, onUpdated }: { user: AdminUser; onUpdated: () => void }) {
+function PremiumEditor({
+  user,
+  onUpdated,
+}: {
+  user: AdminUser;
+  onUpdated: () => void;
+}) {
   const [busy, setBusy] = useState(false);
   const [premiumUntil, setPremiumUntil] = useState<string>(
     toDatetimeLocalValue(user.premium_until),
@@ -576,7 +643,10 @@ function PremiumEditor({ user, onUpdated }: { user: AdminUser; onUpdated: () => 
     let active = true;
     fetch(`/api/admin/users/${user.id}/payments`, { credentials: "include" })
       .then(async (response) => {
-        const body = (await response.json()) as { ok?: boolean; payments?: PremiumPayment[] };
+        const body = (await response.json()) as {
+          ok?: boolean;
+          payments?: PremiumPayment[];
+        };
         if (active && response.ok && body.ok) setPayments(body.payments ?? []);
       })
       .catch(() => {
@@ -595,7 +665,12 @@ function PremiumEditor({ user, onUpdated }: { user: AdminUser; onUpdated: () => 
   type PremiumUpdatePayload = {
     premiumUntil?: string | null;
     isPremium?: boolean;
-    payment?: { amount: number; currency: string; method: string; note?: string };
+    payment?: {
+      amount: number;
+      currency: string;
+      method: string;
+      note?: string;
+    };
   };
 
   const submit = async (payload: PremiumUpdatePayload) => {
@@ -611,7 +686,11 @@ function PremiumEditor({ user, onUpdated }: { user: AdminUser; onUpdated: () => 
       if (!response.ok || !body.ok) {
         throw new Error(body.error ?? "Could not update premium");
       }
-      toast.success(payload.payment ? "Premium updated · payment registered" : "Premium updated");
+      toast.success(
+        payload.payment
+          ? "Premium updated · payment registered"
+          : "Premium updated",
+      );
       if (payload.payment) {
         setPaymentAmount("");
         setPaymentNote("");
@@ -619,7 +698,9 @@ function PremiumEditor({ user, onUpdated }: { user: AdminUser; onUpdated: () => 
       }
       onUpdated();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not update premium");
+      toast.error(
+        error instanceof Error ? error.message : "Could not update premium",
+      );
     } finally {
       setBusy(false);
     }
@@ -628,7 +709,9 @@ function PremiumEditor({ user, onUpdated }: { user: AdminUser; onUpdated: () => 
   const saveWithOptionalPayment = () => {
     const amountNum = Number(paymentAmount);
     const payment =
-      paymentAmount.trim().length > 0 && Number.isFinite(amountNum) && amountNum >= 0
+      paymentAmount.trim().length > 0 &&
+      Number.isFinite(amountNum) &&
+      amountNum >= 0
         ? {
             amount: amountNum,
             currency: paymentCurrency.trim() || "BYN",
@@ -709,7 +792,9 @@ function PremiumEditor({ user, onUpdated }: { user: AdminUser; onUpdated: () => 
         {payments === null ? (
           <p className="text-xs text-muted-foreground">Loading...</p>
         ) : payments.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No payments recorded yet.</p>
+          <p className="text-xs text-muted-foreground">
+            No payments recorded yet.
+          </p>
         ) : (
           <ul className="space-y-1.5">
             {payments.map((payment) => (
@@ -720,8 +805,12 @@ function PremiumEditor({ user, onUpdated }: { user: AdminUser; onUpdated: () => 
                 <span className="font-semibold tabular-nums">
                   {payment.amount} {payment.currency}
                 </span>
-                <span className="text-muted-foreground">{paymentMethodLabel(payment.method)}</span>
-                <span className="text-muted-foreground">{formatDate(payment.created_at)}</span>
+                <span className="text-muted-foreground">
+                  {paymentMethodLabel(payment.method)}
+                </span>
+                <span className="text-muted-foreground">
+                  {formatDate(payment.created_at)}
+                </span>
               </li>
             ))}
           </ul>
@@ -811,7 +900,13 @@ function PremiumEditor({ user, onUpdated }: { user: AdminUser; onUpdated: () => 
   );
 }
 
-function AdminRevoker({ user, onUpdated }: { user: AdminUser; onUpdated: () => void }) {
+function AdminRevoker({
+  user,
+  onUpdated,
+}: {
+  user: AdminUser;
+  onUpdated: () => void;
+}) {
   const [busy, setBusy] = useState(false);
 
   const revoke = async () => {
@@ -828,7 +923,9 @@ function AdminRevoker({ user, onUpdated }: { user: AdminUser; onUpdated: () => v
       toast.success("Admin role revoked");
       onUpdated();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not revoke admin");
+      toast.error(
+        error instanceof Error ? error.message : "Could not revoke admin",
+      );
     } finally {
       setBusy(false);
     }
@@ -837,8 +934,12 @@ function AdminRevoker({ user, onUpdated }: { user: AdminUser; onUpdated: () => v
   return (
     <div className="mt-3 space-y-3 rounded-lg border border-red-500/20 bg-red-500/[0.03] p-3">
       <p className="text-xs leading-5 text-muted-foreground">
-        This will remove <span className="font-medium text-foreground">{user.email ?? "this user"}</span>{" "}
-        from the admin list. Their premium entitlement will switch to their current premium term/flag.
+        This will remove{" "}
+        <span className="font-medium text-foreground">
+          {user.email ?? "this user"}
+        </span>{" "}
+        from the admin list. Their premium entitlement will switch to their
+        current premium term/flag.
       </p>
       <div className="flex gap-2">
         <button
