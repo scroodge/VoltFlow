@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
 import { useState } from "react";
 
 import type { AdminAttentionItem } from "@/lib/admin-users-attention";
@@ -14,36 +15,57 @@ export function AttentionQueue({
   items: AdminAttentionItem[] | null;
   onOpenUser: (userId: string) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const visibleItems =
     items?.slice(0, showAll ? items.length : COLLAPSED_COUNT) ?? [];
+  const expandable = items !== null && items.length > 0;
+  const Chevron = expanded ? ChevronUp : ChevronDown;
+
+  const summary =
+    items === null
+      ? "Checking account health..."
+      : items.length === 0
+        ? "No current follow-up items."
+        : `${items.length} actionable account${items.length === 1 ? "" : "s"}`;
 
   return (
     <section className="rounded-xl border border-white/10 bg-card">
-      <div className="flex items-baseline justify-between gap-3 px-3 py-3">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        disabled={!expandable}
+        aria-expanded={expandable ? expanded : undefined}
+        className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--voltflow-cyan)] focus-visible:ring-inset"
+      >
         <div>
           <h2 className="text-sm font-semibold">Needs attention</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {items === null
-              ? "Checking account health..."
-              : items.length === 0
-                ? "No current follow-up items."
-                : `${items.length} actionable account${items.length === 1 ? "" : "s"}`}
-          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{summary}</p>
         </div>
-      </div>
+        {expandable && (
+          <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-muted-foreground">
+            {expanded ? "Hide" : "Show"}
+            <Chevron className="size-3" />
+          </span>
+        )}
+      </button>
 
       {items === null ? (
         <div className="border-t border-white/10 px-3 py-4">
           <div className="h-4 w-2/5 animate-pulse rounded bg-white/[0.07]" />
         </div>
-      ) : visibleItems.length === 0 ? null : (
+      ) : !expanded || visibleItems.length === 0 ? null : (
         <div className="border-t border-white/10">
+          <p className="px-3 pt-2 text-[11px] text-muted-foreground">
+            Accounts that may need a follow-up. Click one to filter the list
+            below to that user.
+          </p>
           {visibleItems.map((item) => (
             <button
               key={`${item.kind}:${item.userId}`}
               type="button"
               onClick={() => onOpenUser(item.userId)}
+              title="Filter the list to this user"
               className="flex w-full items-center justify-between gap-3 border-b border-white/10 px-3 py-3 text-left last:border-b-0 transition hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--voltflow-cyan)] focus-visible:ring-inset"
             >
               <div className="min-w-0">
@@ -54,10 +76,13 @@ export function AttentionQueue({
                   {attentionDetail(item)}
                 </p>
               </div>
-              <span
-                className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${attentionTone(item.kind)}`}
-              >
-                {attentionLabel(item.kind)}
+              <span className="flex shrink-0 items-center gap-2">
+                <span
+                  className={`rounded-full px-2 py-1 text-[10px] font-semibold ${attentionTone(item.kind)}`}
+                >
+                  {attentionLabel(item.kind)}
+                </span>
+                <ChevronRight className="size-4 text-muted-foreground" />
               </span>
             </button>
           ))}

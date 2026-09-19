@@ -25,6 +25,9 @@ Behavior-preserving split of a 9-component file; no API, data-model or storage c
   `admin-revoker`; shared `types.ts` and `post-admin-action.ts` (fetch/ok/error boilerplate).
 - Pure formatters moved to `src/lib/admin-users-format.ts` with
   `admin-users-format.test.mjs`. Attention label/tone/detail stay in `attention-queue.tsx`.
+- "Needs attention" is now collapsed by default (header toggle with Show/Hide chevron and
+  the account count). Expanded, it explains itself ("click one to filter the list below to
+  that user") and each row has a chevron and tooltip so it reads as clickable.
 - Verified: eslint, `tsc --noEmit`, new tests. Manual `/admin/users` pass still to do.
 
 ### Settings page refactor (`settings-view.tsx` 1,710 → ~55 lines)
