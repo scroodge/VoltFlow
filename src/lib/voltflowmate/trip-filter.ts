@@ -22,9 +22,13 @@ function hasNegativePower(points: TripMotionPowerPoint[]) {
   });
 }
 
-function hasMovingEvidence(trip: VoltflowMateTripRow, points: TripMotionPowerPoint[]) {
+function hasMovingEvidence(
+  trip: VoltflowMateTripRow,
+  points: TripMotionPowerPoint[],
+) {
   const distance = finiteNumber(trip.distance_km);
-  if (distance != null && distance > STATIONARY_DISTANCE_THRESHOLD_KM) return true;
+  if (distance != null && distance > STATIONARY_DISTANCE_THRESHOLD_KM)
+    return true;
 
   const maxSpeed = finiteNumber(trip.max_speed_kmh);
   if (maxSpeed != null && maxSpeed > MOVING_SPEED_THRESHOLD_KMH) return true;
@@ -37,13 +41,20 @@ function hasMovingEvidence(trip: VoltflowMateTripRow, points: TripMotionPowerPoi
     if (speed != null && speed > MOVING_SPEED_THRESHOLD_KMH) return true;
 
     const currentTripDistance = finiteNumber(point.current_trip_distance_km);
-    return currentTripDistance != null && currentTripDistance > STATIONARY_DISTANCE_THRESHOLD_KM;
+    return (
+      currentTripDistance != null &&
+      currentTripDistance > STATIONARY_DISTANCE_THRESHOLD_KM
+    );
   });
 }
 
-function hasStationaryEvidence(trip: VoltflowMateTripRow, points: TripMotionPowerPoint[]) {
+function hasStationaryEvidence(
+  trip: VoltflowMateTripRow,
+  points: TripMotionPowerPoint[],
+) {
   const distance = finiteNumber(trip.distance_km);
-  if (distance != null && distance <= STATIONARY_DISTANCE_THRESHOLD_KM) return true;
+  if (distance != null && distance <= STATIONARY_DISTANCE_THRESHOLD_KM)
+    return true;
 
   const maxSpeed = finiteNumber(trip.max_speed_kmh);
   if (maxSpeed != null && maxSpeed <= MOVING_SPEED_THRESHOLD_KMH) return true;
@@ -56,7 +67,10 @@ function hasStationaryEvidence(trip: VoltflowMateTripRow, points: TripMotionPowe
     if (speed != null && speed <= MOVING_SPEED_THRESHOLD_KMH) return true;
 
     const currentTripDistance = finiteNumber(point.current_trip_distance_km);
-    return currentTripDistance != null && currentTripDistance <= STATIONARY_DISTANCE_THRESHOLD_KM;
+    return (
+      currentTripDistance != null &&
+      currentTripDistance <= STATIONARY_DISTANCE_THRESHOLD_KM
+    );
   });
 }
 
@@ -64,11 +78,23 @@ export function isSingleSampleTrip(trip: VoltflowMateTripRow): boolean {
   return trip.sample_count < 2;
 }
 
-/** Stationary micro-trips (1–2 samples, no real movement) — common while parked. */
-export function isJunkTrip(trip: VoltflowMateTripRow, points: TripMotionPowerPoint[] = []) {
+/**
+ * Stationary micro-trips (0–2 samples, no real movement) — common while parked.
+ *
+ * A trip with fewer than `MIN_TRIP_SAMPLES` in-between telemetry samples is only junk
+ * when it also has no moving evidence. A gap-closed daemon trip can legitimately have
+ * `sample_count = 0` (only the open+close bracket reached ingest) while still carrying a
+ * real `distance_km` derived from the car's trip-meter delta — that must not be hidden
+ * just because no extend samples arrived in between. See docs/TRIPS.md → "Client display
+ * filter" and BACKLOG.md "Trip display filter hides real gap-bridged trips".
+ */
+export function isJunkTrip(
+  trip: VoltflowMateTripRow,
+  points: TripMotionPowerPoint[] = [],
+) {
   if (isStationaryChargingLikeTrip(trip, points)) return true;
-  if (trip.sample_count < 2) return true;
-  if (trip.sample_count < MIN_TRIP_SAMPLES && !hasMovingEvidence(trip, points)) return true;
+  if (trip.sample_count < MIN_TRIP_SAMPLES && !hasMovingEvidence(trip, points))
+    return true;
   return false;
 }
 

@@ -110,3 +110,32 @@ test("isJunkTrip keeps two-sample trips with movement", () => {
     false,
   );
 });
+
+test("isJunkTrip drops zero-sample trips with no distance (true parking blip)", () => {
+  assert.equal(
+    isJunkTrip({
+      ...baseTrip,
+      sample_count: 0,
+      distance_km: 0,
+      max_speed_kmh: 0,
+      avg_speed_kmh: 0,
+    }),
+    true,
+  );
+});
+
+test("isJunkTrip keeps zero-sample gap-closed trips with real trip-meter distance", () => {
+  // Regression for Kevlar_5's report (2026-09-22): a daemon-sourced trip closed by the
+  // 5-minute gap rule with no in-between extend samples, but a genuine distance derived
+  // from the car's trip-meter delta, must not be hidden as junk.
+  assert.equal(
+    isJunkTrip({
+      ...baseTrip,
+      sample_count: 0,
+      distance_km: 5.7,
+      max_speed_kmh: null,
+      avg_speed_kmh: 16.55,
+    }),
+    false,
+  );
+});

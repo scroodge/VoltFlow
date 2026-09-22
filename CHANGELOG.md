@@ -9,6 +9,45 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-09-22
+
+### Trip display filter no longer hides real gap-bridged trips
+
+Reported by a user (Kevlar_5): two real trips (13:49 and 17:11 Kyiv time, 21.09.2026)
+were missing from the app's trip list even though nothing was deleted server-side.
+
+Root cause: `isJunkTrip()` (`src/lib/voltflowmate/trip-filter.ts`) unconditionally hid
+any trip with `sample_count < 2`, before checking whether it had real distance/speed
+evidence. Legacy/daemon-sourced trips (`client_trip = false`) closed by the 5-minute
+gap rule often carry `sample_count = 0` (no in-between "extend" samples reached ingest)
+while still having a genuine `distance_km` derived from the car's trip-meter delta
+(`docs/TRIPS.md` → "distance_km is a per-trip delta", migration `20260615120000`) —
+that combination was always treated as junk regardless of the real distance.
+
+Fix: `isJunkTrip()` now folds the `sample_count < 2` check into the existing
+`sample_count < MIN_TRIP_SAMPLES` branch, so a trip is only hidden when it *also* has
+no moving evidence (`hasMovingEvidence()` — distance, max/avg speed). The server junk
+filter (`bydmate_discard_trip_if_junk`, Rules A/B/C) is unchanged and remains
+authoritative for deletion; this only affects what the already-stored, non-deleted
+trips render as in the trip browser.
+
+**Scope confirmed via read-only prod query:** 11,375 trips across 15 accounts (126,694
+total km) matched the same pattern — `sample_count < 2` with real distance/speed
+evidence — almost entirely on the daemon-only (`client_trip = false`) ingest path (for
+the largest affected account, 1,588 of 1,588 non-client-trip rows, i.e. every single
+legacy/daemon trip in that account's history, had `sample_count < 2`). This was not an
+edge case specific to one report; it was hiding the majority of daemon-path trip
+history for most accounts using that path. No backfill needed — the fix is a pure
+function of already-stored `bydmate_trips` columns, so previously-hidden trips appear
+immediately on next load with no data migration.
+
+**Verification:** added two regression tests (`trip-filter.test.mjs`) — a true
+0-sample parking blip (no distance) stays hidden, a 0-sample gap-closed trip with real
+`distance_km` (mirroring Kevlar_5's reported trip) is now kept. Full unit suite:
+500/503 pass; the 3 failures (`charging-math.test.mjs`, `live-status-notifications.test.mjs`,
+`telemetry-history.test.mjs`) are pre-existing and unrelated, confirmed via `git stash`
+against unmodified `main`. `npm run build` completed successfully.
+
 ## 2026-09-21
 
 ### Next.js App Router audit corrections
