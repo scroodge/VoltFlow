@@ -61,6 +61,21 @@ this on-device import. No backfill needed — the fix is a pure function of
 already-stored `bydmate_trips` columns, so previously-hidden trips appear immediately
 on next load with no data migration.
 
+**Follow-up on the 8 `telemetry`-source rows (still unresolved, low priority):** ruled
+out, with direct evidence, junk-rule discard (trip meter climbed cleanly 0→5.8 km, no
+resets, real speed to 63 km/h — no Rule A/B/C would match), the `live_only` fast path
+(it also skips the `bydmate_telemetry_samples` insert, but the real samples exist), and
+a thrown/rolled-back exception (Vercel runtime logs for the exact window show all ~40
+`POST /api/bydmate/telemetry` calls returning 200, zero errors). Found in the
+`BYDMate-own` Android repo that `TripTracker.kt` is "v2.0: GPS collector only — does
+NOT create TripEntity records," with trip identity now delegated to the on-device
+`byd_energydata` log; no corresponding flag was found telling the *server* to suppress
+its own independent trip-open logic, so this remains an open architectural question
+rather than a confirmed root cause. Not worth further investigation at 8 trips / 3
+accounts / 18 km (0.07% of the finding above) unless it recurs — a live repro with
+temporary logging of `ingestResult` (`sample_count`/`trip_id`) on
+`/api/bydmate/telemetry` would settle it if it becomes worth chasing.
+
 **Verification:** added two regression tests (`trip-filter.test.mjs`) — a true
 0-sample parking blip (no distance) stays hidden, a 0-sample gap-closed trip with real
 `distance_km` (mirroring Kevlar_5's reported trip) is now kept. Full unit suite:
