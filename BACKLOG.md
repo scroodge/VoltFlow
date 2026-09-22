@@ -1,5 +1,56 @@
 # Backlog — proposed plans awaiting go-ahead
 
+## OpenTelemetry server instrumentation — proposed 2026-09-21
+
+### Problem
+
+VoltFlow is deployed on Vercel with Next.js 16.2.10, but has no
+`src/instrumentation.ts` entrypoint and no declared OpenTelemetry packages. The many
+server routes therefore lack the standard Next.js request traces that would make it
+possible to correlate slow or failing telemetry ingest, command polling, cron, and
+vehicle APIs in a connected observability backend. No OTLP collector URL, credentials,
+or provider integration is configured in the repository, so a custom exporter cannot
+be safely configured from the checked-in project state.
+
+### Options considered
+
+1. **Use Next.js' `@vercel/otel` helper in `src/instrumentation.ts` (recommended).**
+   Add the OpenTelemetry packages recommended by the installed Next.js 16 docs, then
+   register the stable service name `voltflow`. This lets Next emit its built-in server
+   spans on Vercel (or through a later configured compatible collector), works for both
+   Node and Edge runtimes, and avoids hand-managing SDK lifecycle. It deliberately adds
+   no `onRequestError` exporter and no custom attributes, so request headers, API keys,
+   telemetry payloads, GPS, and account data cannot be accidentally exported.
+2. **Manual Node SDK plus OTLP HTTP exporter.** Gives fine-grained processors and an
+   explicit collector endpoint, but needs an approved provider/collector destination,
+   server-only credentials, Node-only conditional loading, batching/shutdown handling,
+   and separate Edge behavior. Premature without an identified destination.
+3. **Add only custom spans at individual hot paths.** Useful later for individual
+   database/RPC or ingest phases, but without provider initialization it does not
+   establish working end-to-end tracing and is a larger semantic surface now.
+
+### Recommendation and scope
+
+Implement option 1 only:
+
+- add `@vercel/otel` and the OpenTelemetry support packages specified by the installed
+  Next.js guide to `package.json`/`package-lock.json`;
+- add `src/instrumentation.ts` exporting `register()` and calling `registerOTel` with
+  service name `voltflow`;
+- leave route handlers, database access, telemetry payloads, runtime settings,
+  deployment configuration, and all user-facing behavior unchanged;
+- verify with a focused TypeScript/build check appropriate to the approved scope.
+
+Trace data is **app-owned operational data** handled by the selected observability
+provider; this change creates no user-facing data model and stores nothing in Postgres
+or localStorage. Provider-side retention, access, region, and credentials remain
+unconfigured until an observability provider is explicitly connected in Vercel or an
+approved collector is supplied.
+
+### Should I build this?
+
+---
+
 ## ~~🟠 Watermarked demo data for explorer-mode users (0 cars)~~ — SHIPPED 2026-09-17
 
 See [CHANGELOG.md](CHANGELOG.md) → "2026-09-17 · Watermarked demo data..." for what

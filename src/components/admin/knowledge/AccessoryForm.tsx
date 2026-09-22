@@ -107,7 +107,7 @@ export function AccessoryForm({
             <input
               name="image_file"
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-sm file:font-bold file:text-primary-foreground"
             />
             <span className="text-xs font-normal text-muted-foreground">

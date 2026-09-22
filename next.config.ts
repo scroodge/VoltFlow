@@ -29,6 +29,9 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
+      // Knowledge Base admin forms carry multipart image uploads. This is the
+      // aggregate raw request budget (including multipart overhead), not a
+      // per-file limit; server-side signature validation remains mandatory.
       bodySizeLimit: "20mb",
     },
   },

@@ -9,6 +9,38 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-09-21
+
+### Next.js App Router audit corrections
+
+- `/onboarding` now has a server `layout.tsx` that sets `robots: noindex`, so
+  the authenticated setup flow no longer inherits the root indexable metadata.
+- Added one app-wide route error boundary, root-layout error fallback, and root
+  404 screen. They provide VoltFlow-branded recovery/navigation UI without
+  copying `loading`, `error`, or `not-found` files into every route.
+- Preserved `serverActions.bodySizeLimit: "20mb"`: it remains the aggregate raw
+  multipart allowance for Knowledge Base image forms. The config now documents
+  that purpose and does not reclassify it as a per-image size limit.
+- Knowledge Base uploads now allow JPEG, PNG, and WebP only. A shared server
+  validator reads the file signature, requires it to agree with the declared
+  MIME type, and derives the Storage MIME type/extension from verified bytes,
+  rather than the untrusted filename. Admin inputs advertise the same format
+  set. Existing hosted URLs and all Supabase Storage buckets/data remain
+  unchanged.
+- Article-image preparation still performs its existing client-side compression,
+  but no longer uploads directly from the browser: the compressed multipart
+  file reaches the existing authorized Server Action and passes the same
+  validator as accessory and spare-part images.
+
+**Verification:** `knowledge-image-validation.test.mjs` passed (3/3) and
+`git diff --check` passed. `next build` compiled successfully and finished its
+TypeScript phase, then produced a new `.next/BUILD_ID`; the local command runner
+did not return a final exit status after page-data collection, so full build
+completion remains unconfirmed and should be rerun before release. No migration,
+production action, or browser upload pass was performed.
+
+---
+
 ## 2026-09-19
 
 ### Admin users panel refactor (`admin-users-panel.tsx` 1,012 → ~50 lines)

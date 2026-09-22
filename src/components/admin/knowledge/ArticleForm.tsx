@@ -9,7 +9,6 @@ import { JsonSectionsEditor } from "@/components/admin/knowledge/JsonSectionsEdi
 import { TagsInput } from "@/components/admin/knowledge/TagsInput";
 import { stateKey, stateList, stateString } from "@/components/admin/knowledge/form-state";
 import { carGenerations } from "@/lib/car-generations";
-import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { telegramGenerationLabels } from "@/lib/telegram/generation";
 import type { KnowledgeArticle, KnowledgeCategory } from "@/types/knowledge";
 
@@ -102,7 +101,7 @@ export function ArticleForm({ article, categories, articles, action }: ArticleFo
               <input
                 name="image_files"
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 multiple
                 className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-sm file:font-bold file:text-primary-foreground"
               />
@@ -235,7 +234,6 @@ const imageFieldPattern = /^(image_files|content_image_files_\d+)$/;
 const imageCompressionThreshold = 700 * 1024;
 const maxImageDimension = 1600;
 const compressedImageQuality = 0.82;
-const articleImageBucket = "knowledge-articles";
 
 export const inputClass =
   "min-h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/40";
@@ -279,13 +277,14 @@ function sectionsFromState(state: AdminFormState) {
 
 async function prepareArticleFormData(formData: FormData) {
   const nextFormData = new FormData();
-  const supabase = createSupabaseBrowserClient();
 
   for (const [name, value] of formData.entries()) {
     if (value instanceof File && imageFieldPattern.test(name)) {
       if (value.size > 0) {
-        const image = await uploadArticleImage(supabase, value);
-        appendUploadedImage(nextFormData, name, image);
+        nextFormData.append(
+          name,
+          shouldCompressArticleImage(value) ? await compressImageFile(value) : value,
+        );
       }
       continue;
     }
@@ -294,44 +293,6 @@ async function prepareArticleFormData(formData: FormData) {
   }
 
   return nextFormData;
-}
-
-async function uploadArticleImage(
-  supabase: ReturnType<typeof createSupabaseBrowserClient>,
-  file: File,
-) {
-  const uploadFile = shouldCompressArticleImage(file) ? await compressImageFile(file) : file;
-  const extension = uploadFile.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
-  const path = `${crypto.randomUUID()}.${extension}`;
-  const { error } = await supabase.storage.from(articleImageBucket).upload(path, uploadFile, {
-    contentType: uploadFile.type || "image/jpeg",
-    upsert: false,
-  });
-
-  if (error) throw error;
-
-  const { data } = supabase.storage.from(articleImageBucket).getPublicUrl(path);
-  return {
-    url: data.publicUrl,
-    alt: file.name.replace(/\.[^.]+$/, ""),
-  };
-}
-
-function appendUploadedImage(
-  formData: FormData,
-  fieldName: string,
-  image: { url: string; alt: string },
-) {
-  if (fieldName === "image_files") {
-    formData.append("existing_image_url", image.url);
-    formData.append("existing_image_alt", image.alt);
-    return;
-  }
-
-  const sectionIndex = fieldName.replace("content_image_files_", "");
-  formData.append("content_image_section_index", sectionIndex);
-  formData.append("content_image_url", image.url);
-  formData.append("content_image_alt", image.alt);
 }
 
 function shouldCompressArticleImage(file: File) {

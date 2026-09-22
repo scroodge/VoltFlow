@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { isCarGeneration } from "@/lib/car-generations";
+import {
+  KnowledgeImageValidationError,
+  validateKnowledgeImage,
+} from "@/lib/knowledge-image-validation";
 
 import {
   createAccessory,
@@ -58,7 +62,7 @@ export async function createArticleAction(
   const guard = await requireAdmin();
   if (!guard.ok) return { message: "Нет доступа администратора." };
 
-  const input = await parseArticleForm(formData);
+  const input = await parseKnowledgeImageForm(formData, () => parseArticleForm(formData));
   if (isFormState(input)) return input;
 
   await createArticle(input);
@@ -74,7 +78,7 @@ export async function updateArticleAction(
   const guard = await requireAdmin();
   if (!guard.ok) return { message: "Нет доступа администратора." };
 
-  const input = await parseArticleForm(formData, id);
+  const input = await parseKnowledgeImageForm(formData, () => parseArticleForm(formData, id));
   if (isFormState(input)) return input;
 
   await updateArticle(id, input);
@@ -146,7 +150,7 @@ export async function createAccessoryAction(
   const guard = await requireAdmin();
   if (!guard.ok) return { message: "Нет доступа администратора." };
 
-  const input = await parseAccessoryForm(formData);
+  const input = await parseKnowledgeImageForm(formData, () => parseAccessoryForm(formData));
   if (isFormState(input)) return input;
 
   await createAccessory(input);
@@ -162,7 +166,7 @@ export async function updateAccessoryAction(
   const guard = await requireAdmin();
   if (!guard.ok) return { message: "Нет доступа администратора." };
 
-  const input = await parseAccessoryForm(formData);
+  const input = await parseKnowledgeImageForm(formData, () => parseAccessoryForm(formData));
   if (isFormState(input)) return input;
 
   await updateAccessory(id, input);
@@ -185,7 +189,7 @@ export async function createSparePartAction(
   const guard = await requireAdmin();
   if (!guard.ok) return { message: "Нет доступа администратора." };
 
-  const input = await parseSparePartForm(formData);
+  const input = await parseKnowledgeImageForm(formData, () => parseSparePartForm(formData));
   if (isFormState(input)) return input;
 
   await createSparePart(input);
@@ -201,7 +205,7 @@ export async function updateSparePartAction(
   const guard = await requireAdmin();
   if (!guard.ok) return { message: "Нет доступа администратора." };
 
-  const input = await parseSparePartForm(formData);
+  const input = await parseKnowledgeImageForm(formData, () => parseSparePartForm(formData));
   if (isFormState(input)) return input;
 
   await updateSparePart(id, input);
@@ -441,12 +445,12 @@ function parseServiceProviderForm(formData: FormData): ServiceProviderInput | Ad
 
 async function uploadAccessoryImage(file: File) {
   const supabase = await createClient();
-  const extension = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+  const { contentType, extension } = await validateKnowledgeImage(file);
   const path = `${crypto.randomUUID()}.${extension}`;
   const { error } = await supabase.storage
     .from("knowledge-accessories")
     .upload(path, file, {
-      contentType: file.type || "image/jpeg",
+      contentType,
       upsert: false,
     });
 
@@ -504,12 +508,12 @@ async function uploadImageList(files: FormDataEntryValue[], bucket: string): Pro
 
 async function uploadKnowledgeImage(file: File, bucket: string) {
   const supabase = await createClient();
-  const extension = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+  const { contentType, extension } = await validateKnowledgeImage(file);
   const path = `${crypto.randomUUID()}.${extension}`;
   const { error } = await supabase.storage
     .from(bucket)
     .upload(path, file, {
-      contentType: file.type || "image/jpeg",
+      contentType,
       upsert: false,
     });
 
@@ -720,4 +724,18 @@ function revalidateKnowledge() {
 
 function isFormState<T>(value: T | AdminFormState): value is AdminFormState {
   return typeof value === "object" && value !== null && ("errors" in value || "message" in value || "ok" in value);
+}
+
+async function parseKnowledgeImageForm<T>(
+  formData: FormData,
+  parse: () => Promise<T | AdminFormState>,
+): Promise<T | AdminFormState> {
+  try {
+    return await parse();
+  } catch (error) {
+    if (error instanceof KnowledgeImageValidationError) {
+      return { message: error.message, values: formValues(formData) };
+    }
+    throw error;
+  }
 }
