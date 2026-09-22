@@ -125,9 +125,11 @@ test("isJunkTrip drops zero-sample trips with no distance (true parking blip)", 
 });
 
 test("isJunkTrip keeps zero-sample gap-closed trips with real trip-meter distance", () => {
-  // Regression for Kevlar_5's report (2026-09-22): a daemon-sourced trip closed by the
-  // 5-minute gap rule with no in-between extend samples, but a genuine distance derived
-  // from the car's trip-meter delta, must not be hidden as junk.
+  // Regression for Kevlar_5's report (2026-09-22): confirmed root cause is
+  // bydmate_trips.source = 'byd_energydata' (migration 20260706190000) -- a trip
+  // imported from the car's own on-device trip log, which permanently has
+  // sample_count = 0 (no telemetry samples/track/max speed at all) but a genuine
+  // distance_km. Must not be hidden as junk just for having zero samples.
   assert.equal(
     isJunkTrip({
       ...baseTrip,

@@ -11,35 +11,55 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-09-22
 
-### Trip display filter no longer hides real gap-bridged trips
+### Trip display filter no longer hides real `byd_energydata`-imported trips
 
 Reported by a user (Kevlar_5): two real trips (13:49 and 17:11 Kyiv time, 21.09.2026)
 were missing from the app's trip list even though nothing was deleted server-side.
 
 Root cause: `isJunkTrip()` (`src/lib/voltflowmate/trip-filter.ts`) unconditionally hid
 any trip with `sample_count < 2`, before checking whether it had real distance/speed
-evidence. Legacy/daemon-sourced trips (`client_trip = false`) closed by the 5-minute
-gap rule often carry `sample_count = 0` (no in-between "extend" samples reached ingest)
-while still having a genuine `distance_km` derived from the car's trip-meter delta
-(`docs/TRIPS.md` → "distance_km is a per-trip delta", migration `20260615120000`) —
-that combination was always treated as junk regardless of the real distance.
+evidence. `sample_count = 0` is not a rare telemetry gap — it is the **permanent,
+by-design** shape of `bydmate_trips.source = 'byd_energydata'` rows: some BYD models
+(confirmed: Yuan Up 2025 / DiLink 5) keep their own trip log on the car
+(`/storage/emulated/0/energydata/EC_database.db`), and the Mate app imports it via a
+second ingestion path, `bydmate_ingest_trip_summaries`
+(migration `20260706190000_bydmate_trip_summary_source.sql`). That path inserts
+per-trip aggregates only — `distance_km` and a derived `avg_speed_kmh` — with no
+telemetry samples, no GPS track, no `max_speed_kmh`, no SOC, ever, and it explicitly
+bypasses `bydmate_ingest_telemetry` and the server junk filter entirely (the client
+filter is the *only* safety net for junk trips from this source). `isJunkTrip()`'s
+unconditional `sample_count < 2` check treated every such trip as junk regardless of
+its very real `distance_km`.
+
+(Initial diagnosis wrongly attributed this to "legacy/daemon-sourced" trips closed by
+the 5-minute gap rule with a delayed telemetry batch — that mechanism is real for a
+small number of rows, see below, but is not what caused Kevlar_5's report or the bulk
+of the impact.)
 
 Fix: `isJunkTrip()` now folds the `sample_count < 2` check into the existing
 `sample_count < MIN_TRIP_SAMPLES` branch, so a trip is only hidden when it *also* has
 no moving evidence (`hasMovingEvidence()` — distance, max/avg speed). The server junk
 filter (`bydmate_discard_trip_if_junk`, Rules A/B/C) is unchanged and remains
-authoritative for deletion; this only affects what the already-stored, non-deleted
-trips render as in the trip browser.
+authoritative for deletion on the `telemetry` source; this only affects what the
+already-stored, non-deleted trips render as in the trip browser.
 
 **Scope confirmed via read-only prod query:** 11,375 trips across 15 accounts (126,694
-total km) matched the same pattern — `sample_count < 2` with real distance/speed
-evidence — almost entirely on the daemon-only (`client_trip = false`) ingest path (for
-the largest affected account, 1,588 of 1,588 non-client-trip rows, i.e. every single
-legacy/daemon trip in that account's history, had `sample_count < 2`). This was not an
-edge case specific to one report; it was hiding the majority of daemon-path trip
-history for most accounts using that path. No backfill needed — the fix is a pure
-function of already-stored `bydmate_trips` columns, so previously-hidden trips appear
-immediately on next load with no data migration.
+total km) matched the same `sample_count < 2` + real distance/speed pattern. Broken
+down by `bydmate_trips.source`:
+
+| source | affected trips | accounts | total km |
+|---|---|---|---|
+| `byd_energydata` (the by-design case above) | 11,367 | 14 | 126,676 |
+| `telemetry` (genuine gap — real 1 Hz samples delivered late/in bulk after a
+  connectivity drop, confirmed via `bydmate_telemetry_samples` for Kevlar_5's own
+  trips; the resulting `bydmate_trips` row still ends up with `sample_count = 0`
+  for a reason not yet root-caused) | 8 | 3 | 18 |
+
+99.93% of the impact is the permanent `byd_energydata` category, not an edge case —
+it was hiding an entire legitimate trip-data source for every user whose car supports
+this on-device import. No backfill needed — the fix is a pure function of
+already-stored `bydmate_trips` columns, so previously-hidden trips appear immediately
+on next load with no data migration.
 
 **Verification:** added two regression tests (`trip-filter.test.mjs`) — a true
 0-sample parking blip (no distance) stays hidden, a 0-sample gap-closed trip with real

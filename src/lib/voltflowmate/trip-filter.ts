@@ -82,11 +82,16 @@ export function isSingleSampleTrip(trip: VoltflowMateTripRow): boolean {
  * Stationary micro-trips (0–2 samples, no real movement) — common while parked.
  *
  * A trip with fewer than `MIN_TRIP_SAMPLES` in-between telemetry samples is only junk
- * when it also has no moving evidence. A gap-closed daemon trip can legitimately have
- * `sample_count = 0` (only the open+close bracket reached ingest) while still carrying a
- * real `distance_km` derived from the car's trip-meter delta — that must not be hidden
- * just because no extend samples arrived in between. See docs/TRIPS.md → "Client display
- * filter" and BACKLOG.md "Trip display filter hides real gap-bridged trips".
+ * when it also has no moving evidence. `sample_count = 0` is not always a rare
+ * telemetry gap — it is the *permanent* shape of `bydmate_trips.source =
+ * 'byd_energydata'` rows: some BYD models keep their own on-car trip log, and
+ * `bydmate_ingest_trip_summaries` (migration `20260706190000`) imports it as
+ * aggregate-only trips (real `distance_km`/`avg_speed_kmh`, but no telemetry samples,
+ * GPS track, max speed, or SOC — ever), bypassing `bydmate_ingest_telemetry` and its
+ * server junk filter entirely. This function is the *only* junk check that ever runs
+ * on those rows, so it must judge them by moving evidence, not sample count. See
+ * CHANGELOG.md → "Trip display filter no longer hides real byd_energydata-imported
+ * trips" (2026-09-22).
  */
 export function isJunkTrip(
   trip: VoltflowMateTripRow,
