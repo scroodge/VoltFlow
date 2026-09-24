@@ -1,6 +1,7 @@
 import { resolveVoltflowMateApiKeyProfile } from "@/lib/voltflowmate/api-auth";
 import { liveFastSecondsFor } from "@/lib/voltflowmate/live-fast";
 import { createServiceClient } from "@/lib/supabase/service";
+import { resolveVehicleKey } from "@/lib/voltflowmate/vehicle-identity";
 import {
   ACTIVE_COMMAND_POLL_AFTER_SECONDS,
   REMOTE_COMMANDS_DISABLED,
@@ -66,17 +67,29 @@ async function expireStalePending(
 
 export async function GET(request: Request) {
   const apiKey = request.headers.get("x-api-key") ?? "";
-  const vehicleId = request.headers.get("x-vehicle-id")?.trim();
-  if (!vehicleId) {
-    return Response.json({ ok: false, error: "Missing X-Vehicle-Id" }, { status: 400 });
+  const headerVehicleId = request.headers.get("x-vehicle-id")?.trim();
+  if (!headerVehicleId) {
+    return Response.json(
+      { ok: false, error: "Missing X-Vehicle-Id" },
+      { status: 400 },
+    );
   }
 
   try {
     const supabase = createServiceClient();
     const profile = await resolveVoltflowMateApiKeyProfile(supabase, apiKey);
     if (!profile) {
-      return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+      return Response.json(
+        { ok: false, error: "Unauthorized" },
+        { status: 401 },
+      );
     }
+    const vehicleId = await resolveVehicleKey(
+      supabase,
+      profile.id,
+      headerVehicleId,
+      request.headers.get("x-vehicle-uid"),
+    );
 
     const liveFastSeconds = liveFastSecondsFor(profile, vehicleId);
     if (REMOTE_COMMANDS_DISABLED) {
@@ -89,12 +102,18 @@ export async function GET(request: Request) {
       });
     }
 
-    const { error: scheduleError } = await supabase.rpc("enqueue_due_vehicle_command_schedules", {
-      p_user_id: profile.id,
-      p_vehicle_id: vehicleId,
-    });
+    const { error: scheduleError } = await supabase.rpc(
+      "enqueue_due_vehicle_command_schedules",
+      {
+        p_user_id: profile.id,
+        p_vehicle_id: vehicleId,
+      },
+    );
     if (scheduleError) {
-      return Response.json({ ok: false, error: "Schedule materialization failed" }, { status: 500 });
+      return Response.json(
+        { ok: false, error: "Schedule materialization failed" },
+        { status: 500 },
+      );
     }
 
     const { data: rows, error } = await supabase
@@ -107,7 +126,10 @@ export async function GET(request: Request) {
       .limit(MAX_BATCH);
 
     if (error) {
-      return Response.json({ ok: false, error: "Command lookup failed" }, { status: 500 });
+      return Response.json(
+        { ok: false, error: "Command lookup failed" },
+        { status: 500 },
+      );
     }
 
     // Empty queue (the overwhelming majority of polls) costs one indexed read and zero
@@ -155,6 +177,9 @@ export async function GET(request: Request) {
       poll_after_seconds: ACTIVE_POLL_AFTER_SECONDS,
     });
   } catch {
-    return Response.json({ ok: false, error: "Command poll failed" }, { status: 500 });
+    return Response.json(
+      { ok: false, error: "Command poll failed" },
+      { status: 500 },
+    );
   }
 }

@@ -6,8 +6,12 @@ const readMigration = (name) => readFile(new URL(`../migrations/${name}`, import
 
 // The alarm table, schedule and delivery path; its detector is superseded below.
 const installSql = await readMigration("20260908130000_telemetry_cadence_collapse_alarm.sql");
-// The current detector definition.
+// Superseded by the cooldown/digest migration's detector redefinition, but still the
+// source for the consecutive-pair rule assertions below (unchanged by that migration).
 const detectorSql = await readMigration("20260911100000_telemetry_cadence_consecutive_moving_gap.sql");
+// The current detector definition (adds the 24h per-tuple delivery cooldown) plus the
+// new daily digest function and schedule.
+const digestSql = await readMigration("20260924100000_telemetry_cadence_alarm_digest.sql");
 
 test("judges consecutive samples, both moving, more than 8 s apart", () => {
   // Each moving sample is paired with the sample immediately before it, of any speed ...
@@ -56,5 +60,47 @@ test("keeps one open audit per vehicle and signal", () => {
   assert.equal(
     detectorSql.match(/on conflict \(user_id, vehicle_id, signal\) where resolved_at is null do nothing/gi)?.length,
     2,
+  );
+});
+
+test("suppresses immediate delivery for a tuple already notified in the last 24h", () => {
+  assert.match(
+    digestSql,
+    /not exists \(\s*select 1\s*from public\.bydmate_telemetry_cadence_alarm_audits earlier[\s\S]*earlier\.notified_at >= v_now - interval '24 hours'/,
+  );
+  // The rule still keeps the consecutive-pair moving_gap logic and the 24h floor intact.
+  assert.match(digestSql, /worst_gap_seconds > 8/);
+  assert.match(digestSql, /sample_count_24h < 500/);
+});
+
+test("digests everything still undelivered past a grace period, once a day", () => {
+  assert.match(digestSql, /bydmate_dispatch_telemetry_cadence_digest/);
+  assert.match(digestSql, /notified_at is null\s+and audit\.detected_at <= v_now - interval '15 minutes'/);
+  assert.match(digestSql, /\/api\/cron\/telemetry-cadence-digest/);
+  assert.match(digestSql, /'telemetry-cadence-alarm-digest'/);
+  assert.match(digestSql, /'0 8 \* \* \*'/);
+  assert.doesNotMatch(digestSql, /api\.telegram\.org/);
+});
+
+test("keeps the digest dispatcher off the public API roles", () => {
+  assert.match(
+    digestSql,
+    /revoke all on function public\.bydmate_dispatch_telemetry_cadence_digest\(\) from public;/,
+  );
+  assert.match(
+    digestSql,
+    /grant execute on function public\.bydmate_dispatch_telemetry_cadence_digest\(\) to service_role;/,
+  );
+});
+
+test("also revokes the digest dispatcher from anon/authenticated (Supabase's explicit default grant)", async () => {
+  // `revoke all ... from public` above does not remove Supabase's explicit default
+  // EXECUTE grant to anon/authenticated on every new public function (AGENTS.md,
+  // "Hard-won rules > Migrations"). Verified live right after applying 20260924100000:
+  // bydmate_dispatch_telemetry_cadence_digest was executable by both. Fixed same-day.
+  const revokeSql = await readMigration("20260924100001_revoke_cadence_digest_from_api_roles.sql");
+  assert.match(
+    revokeSql,
+    /revoke execute on function public\.bydmate_dispatch_telemetry_cadence_digest\(\) from anon, authenticated;/,
   );
 });

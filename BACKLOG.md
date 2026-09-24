@@ -1,5 +1,93 @@
 # Backlog — proposed plans awaiting go-ahead
 
+## ~~Cadence-collapse alarm: fold chronic repeats into a daily digest~~ — SHIPPED 2026-09-24
+
+See [CHANGELOG.md](CHANGELOG.md) → "2026-09-24" for what shipped, including a
+same-day privilege-gap fix found while applying it. Kept below for its options/
+trade-off record.
+
+### Problem
+
+The alarm described in "🟡 Cadence-collapse alarm" below already ships as **operator-only**
+(admins with a linked `profiles.telegram_id`), and the 8 s consecutive-moving-pair rule is
+not the noise source it was pre-2026-09-11. A read-only 14-day query against
+`bydmate_telemetry_cadence_alarm_audits` on prod (2026-09-24) shows why admins are still
+getting pinged constantly:
+
+| Email | Vehicle | Signal | Alarms / 14d | Range | Still open |
+|---|---|---|---|---|---|
+| den4art@gmail.com | BYD Yuan Up | moving_gap | 14 | 11.09 → 21.09 | 0 |
+| kevlar_5@meta.ua | BYD Yuan Up 25 | moving_gap | 12 | 12.09 → 24.09 | 1 |
+| den4art@gmail.com | BYD Yuan Up | low_24h_count | 7 | 11.09 → 23.09 | 0 |
+| alexavr69@gmail.com | yuan up | low_24h_count | 4 | 11.09 → 23.09 | 1 |
+| 9 other accounts | various | either | 1–3 each | scattered, one-off | mostly 0 |
+
+Every one-off account behaves as designed: rare, self-resolving, real gaps — exactly the
+2026-09-11 backtest's intent. But two accounts (den4art, kevlar_5) are **chronic**: their
+sender genuinely opens and closes the same (vehicle, signal) gap roughly once a day, so each
+occurrence is a *real* detection, not a bug in the rule, yet it produces a fresh Telegram push
+every time. Nothing here reopens the false-positive question already closed for the rule
+itself; this is purely about delivery volume for a small number of repeatedly-firing tuples.
+
+### Options considered
+
+1. **Daily digest only — drop all real-time pushes.** One new pg_cron job, once a day,
+   collects every alarm row opened since the last digest, groups by
+   `(user_id, vehicle_id, signal)`, and sends one message per admin. Simplest change (the
+   existing detector function's `net.http_post` delivery loop is removed entirely; only the
+   new job posts). Cost: a brand-new sender bug on a previously-quiet vehicle now surfaces up
+   to 24 h late instead of within ~10 minutes, which weakens the alarm's original purpose
+   (catching a *new* regression quickly).
+2. **Per-tuple cooldown + digest for the suppressed repeats (recommended).** Keep today's
+   near-real-time push for the *first* time a given `(user_id, vehicle_id, signal)` alarm has
+   been notified in the last 24 h (checked against existing `notified_at` history — no schema
+   change needed for the check itself, since resolved rows are never deleted). Any alarm for a
+   tuple already notified inside that window is left `notified_at IS NULL` but is skipped by
+   the individual-delivery retry loop; a new once-daily digest job sweeps up everything still
+   `notified_at IS NULL` past a short grace period (so it doesn't race the normal 10-minute
+   retry), groups it the same way, and sends one rollup message per admin ("BYD Yuan Up 25
+   (kevlar_5@meta.ua): 2 more moving_gap alarms today, worst 2m 01s"). A first-ever gap on any
+   vehicle still pages within ~10 minutes as it does now; only repeats of an already-seen
+   tuple within 24 h get batched. Slightly more logic than option 1, but preserves the
+   "catch a new regression promptly" property that motivated operator delivery in the first
+   place.
+3. **Only fold `low_24h_count` into a digest, leave `moving_gap` real-time.** Smaller diff,
+   but `moving_gap` is the larger contributor (14 and 12 alarms respectively vs 7 and 4), so
+   this leaves most of the noise in place. Rejected as insufficient on its own.
+4. **Leave as-is.** Rejected — the two chronic accounts will keep generating a Telegram push
+   roughly daily indefinitely; per-account investigation (contacting den4art/kevlar_5 about
+   their phone's background/battery settings) is a separate, non-code follow-up either way.
+
+### Recommendation and scope (option 2)
+
+- Modify `bydmate_detect_telemetry_cadence_collapses()`'s delivery loop (new migration; never
+  edit `20260908130000` or `20260911100000`, both already applied): before calling
+  `net.http_post` for a newly opened alarm, check whether any row for the same
+  `(user_id, vehicle_id, signal)` has `notified_at >= now() - interval '24 hours'`; if so,
+  leave the new row for the digest instead of dispatching or retrying it individually.
+- New function + pg_cron schedule (once daily, proposed 08:00 UTC) —
+  `bydmate_dispatch_telemetry_cadence_digest()` — selects rows with `notified_at is null` and
+  `detected_at <= now() - interval '15 minutes'` (grace window so it never races the normal
+  immediate path), groups by `(user_id, vehicle_id, signal)` with count + worst value, and
+  posts once to a new route.
+- New route `src/app/api/cron/telemetry-cadence-digest/route.ts`, following the existing
+  `telemetry-cadence-alarm/route.ts` pattern (admin lookup, `sendTelegramMessage`), but
+  building one message covering every group instead of one alarm.
+- New message builder alongside `cadence-alarm-message.ts` (plus a `.test.mjs`), and skip
+  sending entirely when the digest has zero groups.
+- Update `supabase/tests/telemetry-cadence-collapse-alarm.test.mjs` for the cooldown check.
+
+### Data ownership and location
+
+No user-facing data model change. Alarm rows, the cooldown check, and the digest job are all
+**app-owned** operational monitoring in **Postgres**, in the same table
+(`bydmate_telemetry_cadence_alarm_audits`) and the same admin-only Telegram delivery path
+already approved under "Delivery: operator-only" below. No new user data, no localStorage.
+
+### Should I build this?
+
+---
+
 ## OpenTelemetry server instrumentation — proposed 2026-09-21
 
 ### Problem

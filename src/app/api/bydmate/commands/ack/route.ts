@@ -1,6 +1,10 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { resolveVoltflowMateApiKeyProfile } from "@/lib/voltflowmate/api-auth";
-import { readBodyWithLimit, RequestBodyTooLargeError } from "@/lib/api/read-body";
+import { resolveVehicleKey } from "@/lib/voltflowmate/vehicle-identity";
+import {
+  readBodyWithLimit,
+  RequestBodyTooLargeError,
+} from "@/lib/api/read-body";
 
 export const runtime = "nodejs";
 
@@ -16,21 +20,36 @@ type AckItem = {
 
 export async function POST(request: Request) {
   const apiKey = request.headers.get("x-api-key") ?? "";
-  const vehicleId = request.headers.get("x-vehicle-id")?.trim();
-  if (!vehicleId) {
-    return Response.json({ ok: false, error: "Missing X-Vehicle-Id" }, { status: 400 });
+  const headerVehicleId = request.headers.get("x-vehicle-id")?.trim();
+  if (!headerVehicleId) {
+    return Response.json(
+      { ok: false, error: "Missing X-Vehicle-Id" },
+      { status: 400 },
+    );
   }
 
   try {
     const supabase = createServiceClient();
     const profile = await resolveVoltflowMateApiKeyProfile(supabase, apiKey);
     if (!profile) {
-      return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+      return Response.json(
+        { ok: false, error: "Unauthorized" },
+        { status: 401 },
+      );
     }
+    const vehicleId = await resolveVehicleKey(
+      supabase,
+      profile.id,
+      headerVehicleId,
+      request.headers.get("x-vehicle-uid"),
+    );
 
     const contentLength = Number(request.headers.get("content-length") ?? "0");
     if (Number.isFinite(contentLength) && contentLength > MAX_ACK_BODY_BYTES) {
-      return Response.json({ ok: false, error: "Payload too large" }, { status: 413 });
+      return Response.json(
+        { ok: false, error: "Payload too large" },
+        { status: 413 },
+      );
     }
 
     let bodyBytes: Uint8Array;
@@ -38,7 +57,10 @@ export async function POST(request: Request) {
       bodyBytes = await readBodyWithLimit(request, MAX_ACK_BODY_BYTES);
     } catch (error) {
       if (error instanceof RequestBodyTooLargeError) {
-        return Response.json({ ok: false, error: "Payload too large" }, { status: 413 });
+        return Response.json(
+          { ok: false, error: "Payload too large" },
+          { status: 413 },
+        );
       }
       throw error;
     }
@@ -46,7 +68,10 @@ export async function POST(request: Request) {
     try {
       body = JSON.parse(new TextDecoder().decode(bodyBytes));
     } catch {
-      return Response.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
+      return Response.json(
+        { ok: false, error: "Invalid JSON" },
+        { status: 400 },
+      );
     }
 
     const acks = Array.isArray((body as { acks?: unknown }).acks)
@@ -54,10 +79,16 @@ export async function POST(request: Request) {
       : [];
 
     if (acks.length === 0) {
-      return Response.json({ ok: false, error: "acks array required" }, { status: 400 });
+      return Response.json(
+        { ok: false, error: "acks array required" },
+        { status: 400 },
+      );
     }
     if (acks.length > MAX_ACKS) {
-      return Response.json({ ok: false, error: "Too many acknowledgements" }, { status: 413 });
+      return Response.json(
+        { ok: false, error: "Too many acknowledgements" },
+        { status: 413 },
+      );
     }
 
     const executedAt = new Date().toISOString();

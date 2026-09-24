@@ -9,6 +9,63 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-09-24
+
+User reported repeated Telegram cadence-alarm pings and asked why. Read-only 14-day query
+against `bydmate_telemetry_cadence_alarm_audits` on prod: most accounts (9 of ~13) fire
+1-3 alarms in two weeks and self-resolve — the 2026-09-11 backtest's intent working as
+designed. Two accounts are chronic: `den4art@gmail.com` (14 `moving_gap` + 7
+`low_24h_count` alarms over 14 days) and `kevlar_5@meta.ua` (12 `moving_gap`). Each
+occurrence is a real detection, not a rule bug — their sender genuinely opens/closes the
+same gap roughly daily — but it pages admins on Telegram every time.
+
+**Fix: 24h per-tuple delivery cooldown + once-daily digest for held-back repeats.**
+Plan and options recorded in BACKLOG.md (moved here now that it shipped). The first time a
+given `(user_id, vehicle_id, signal)` is notified in a rolling 24h window, it still pages
+within ~10 minutes as before — a brand-new problem is not delayed. A repeat of an
+already-notified tuple within that window is left `notified_at is null` by the immediate
+delivery loop instead of paging again; a new daily `pg_cron` job (08:00 UTC,
+`bydmate_dispatch_telemetry_cadence_digest`) sweeps up everything still undelivered past a
+15-minute grace period, groups it by `(user_id, vehicle_id, signal)`, and sends one rollup
+message per admin via a new route (`/api/cron/telemetry-cadence-digest`) instead.
+
+Shipped: migration `20260924100000_telemetry_cadence_alarm_digest.sql` (detector cooldown
++ digest function/schedule, applied to prod via `psql -f`), new
+`src/lib/telegram/cadence-digest-message.ts` (pure grouping + message builder, tested),
+new `src/app/api/cron/telemetry-cadence-digest/route.ts`, and updated
+`supabase/tests/telemetry-cadence-collapse-alarm.test.mjs`. The detection rule itself
+(8s consecutive-moving-pair threshold, 24h sample floor) is unchanged — this only affects
+delivery volume for tuples that keep re-firing.
+
+**Self-caught privilege gap:** right after applying `20260924100000`, a live check found
+the new `bydmate_dispatch_telemetry_cadence_digest()` (`SECURITY DEFINER`) was executable
+by `anon` and `authenticated` — the same Supabase default-grant trap documented in
+AGENTS.md ("Hard-won rules > Migrations": `revoke all ... from public` does not remove
+Supabase's explicit default `EXECUTE` grant to those two roles on a brand-new function).
+Closed same-day with `20260924100001_revoke_cadence_digest_from_api_roles.sql`. Verified
+live with `has_function_privilege`: `anon`/`authenticated` now have no execute on either
+cadence function; `service_role`/`postgres` (pg_cron) retain it. No anon-key exploitation
+of the ~15-minute window was found or attempted; the fix predates any deployed caller.
+
+Also found and fixed in the same session: the prod read-only helper's pooled connection
+had a leaked `default_transaction_read_only = on` from an earlier session (the exact
+failure mode AGENTS.md warns about — a session-level `SET` through the transaction
+pooler on port 6543 sticks to whichever client Supavisor hands that backend to next).
+Undone through the same pool (`set default_transaction_read_only = off`) and verified with
+`pg_backend_pid()`/`current_setting()` before applying the migration.
+
+Verification: `node --test supabase/tests/telemetry-cadence-collapse-alarm.test.mjs
+src/lib/telegram/cadence-alarm-message.test.mjs src/lib/telegram/cadence-digest-message.test.mjs`
+(21/21 pass), `npx tsc --noEmit` (clean), and full `npm run test` (506/509 pass; the 3
+failures are the pre-existing, already-tracked ones in
+`src/features/charging/_domain/charging-math.test.mjs` and the two runtime-alias test
+files — unrelated to this change, not introduced by it).
+
+Data boundary: no user-facing data model change. Alarm rows, the cooldown check and the
+digest job are all app-owned operational monitoring in Postgres, in the same
+`bydmate_telemetry_cadence_alarm_audits` table and the same admin-only Telegram delivery
+path already in place.
+
 ## 2026-09-22
 
 ### Trip display filter no longer hides real `byd_energydata`-imported trips

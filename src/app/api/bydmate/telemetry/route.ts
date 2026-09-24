@@ -16,6 +16,7 @@ import {
 import { createServiceClient } from "@/lib/supabase/service";
 import { resolveVoltflowMateApiKeyProfile } from "@/lib/voltflowmate/api-auth";
 import { liveFastSecondsFor } from "@/lib/voltflowmate/live-fast";
+import { resolveVehicleKey } from "@/lib/voltflowmate/vehicle-identity";
 import {
   readBodyWithLimit,
   RequestBodyTooLargeError,
@@ -137,8 +138,8 @@ function persistenceError(
 
 export async function POST(request: Request) {
   const apiKey = request.headers.get("x-api-key") ?? "";
-  const headerVehicleId = request.headers.get("x-vehicle-id")?.trim();
-  if (!headerVehicleId) {
+  const requestVehicleId = request.headers.get("x-vehicle-id")?.trim();
+  if (!requestVehicleId) {
     return Response.json({ ok: false, error: "Missing X-Vehicle-Id" }, { status: 400 });
   }
 
@@ -154,6 +155,14 @@ export async function POST(request: Request) {
   if (!profile) {
     return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
+  // B-03: the key this car's data lives under — the header name for older APKs, or the key
+  // its X-Vehicle-Uid was bound to, which survives a rename. Everything below uses it.
+  const headerVehicleId = await resolveVehicleKey(
+    supabase,
+    profile.id,
+    requestVehicleId,
+    request.headers.get("x-vehicle-uid"),
+  );
 
   let json: unknown;
   try {
