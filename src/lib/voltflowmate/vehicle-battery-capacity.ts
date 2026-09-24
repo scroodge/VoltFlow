@@ -19,7 +19,9 @@ export type CarCapacityRow = {
 
 function plausibleCapacity(row: CarCapacityRow): number | null {
   const kwh = Number(row.battery_capacity_kwh);
-  return Number.isFinite(kwh) && kwh >= MIN_PLAUSIBLE_BATTERY_KWH && kwh <= MAX_PLAUSIBLE_BATTERY_KWH
+  return Number.isFinite(kwh) &&
+    kwh >= MIN_PLAUSIBLE_BATTERY_KWH &&
+    kwh <= MAX_PLAUSIBLE_BATTERY_KWH
     ? kwh
     : null;
 }
@@ -35,7 +37,8 @@ export function pickVehicleBatteryCapacityKwh(
 ): number | null {
   const aliased = rows.find((row) => row.vehicle_alias === vehicleId);
   if (aliased) return plausibleCapacity(aliased);
-  if (rows.length === 1 && !rows[0].vehicle_alias) return plausibleCapacity(rows[0]);
+  if (rows.length === 1 && !rows[0].vehicle_alias)
+    return plausibleCapacity(rows[0]);
   return null;
 }
 
