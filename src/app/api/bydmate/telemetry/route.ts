@@ -1,6 +1,16 @@
-import { processVoltflowMateAutoChargingSessions, reconcileChargingSessionsForUser } from "@/features/charging/server";
-import { normalizePayloads, type HourlyBlock, type TripBlock } from "@/lib/voltflowmate/ingest-payload";
-import { batchHasChargingSignal, planTelemetryIngestDelivery } from "@/lib/voltflowmate/ingest-delivery";
+import {
+  processVoltflowMateAutoChargingSessions,
+  reconcileChargingSessionsForUser,
+} from "@/features/charging/server";
+import {
+  normalizePayloads,
+  type HourlyBlock,
+  type TripBlock,
+} from "@/lib/voltflowmate/ingest-payload";
+import {
+  batchHasChargingSignal,
+  planTelemetryIngestDelivery,
+} from "@/lib/voltflowmate/ingest-delivery";
 import { parseIngestStats } from "@/lib/voltflowmate/ingest-stats";
 import { processVoltflowMateChargeNotifications } from "@/lib/push/charge-notifications";
 import { processVoltflowMateLiveStatusNotifications } from "@/lib/push/live-status-notifications";
@@ -99,7 +109,9 @@ function expectedCellVoltage(sample: TelemetryPayload) {
   };
 }
 
-function persistedTelemetry(row: PersistedTelemetryRow): PersistedTelemetryResponse {
+function persistedTelemetry(
+  row: PersistedTelemetryRow,
+): PersistedTelemetryResponse {
   return {
     vehicle_id: row.vehicle_id,
     received_at: row.received_at,
@@ -140,7 +152,10 @@ export async function POST(request: Request) {
   const apiKey = request.headers.get("x-api-key") ?? "";
   const requestVehicleId = request.headers.get("x-vehicle-id")?.trim();
   if (!requestVehicleId) {
-    return Response.json({ ok: false, error: "Missing X-Vehicle-Id" }, { status: 400 });
+    return Response.json(
+      { ok: false, error: "Missing X-Vehicle-Id" },
+      { status: 400 },
+    );
   }
 
   let supabase: ReturnType<typeof createServiceClient>;
@@ -149,7 +164,10 @@ export async function POST(request: Request) {
     supabase = createServiceClient();
     profile = await resolveVoltflowMateApiKeyProfile(supabase, apiKey);
   } catch {
-    return Response.json({ ok: false, error: "Key lookup failed" }, { status: 500 });
+    return Response.json(
+      { ok: false, error: "Key lookup failed" },
+      { status: 500 },
+    );
   }
 
   if (!profile) {
@@ -170,7 +188,10 @@ export async function POST(request: Request) {
     json = JSON.parse(new TextDecoder().decode(body));
   } catch (error) {
     if (error instanceof RequestBodyTooLargeError) {
-      return Response.json({ ok: false, error: "Payload too large" }, { status: 413 });
+      return Response.json(
+        { ok: false, error: "Payload too large" },
+        { status: 413 },
+      );
     }
     return Response.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
   }
@@ -189,7 +210,9 @@ export async function POST(request: Request) {
   // prevents a 400 mismatch that would mark those items non-retryable in
   // the APK and silently drain the queue.
   const payloads = normalized.payloads.map((p) =>
-    p.vehicle_id !== headerVehicleId ? { ...p, vehicle_id: headerVehicleId } : p,
+    p.vehicle_id !== headerVehicleId
+      ? { ...p, vehicle_id: headerVehicleId }
+      : p,
   );
   // Hourly blocks have no vehicle_id of their own (HourlyRollupAccumulator.toJson() omits
   // it) — they belong to whichever single vehicle this batch's samples were just normalized
@@ -204,8 +227,13 @@ export async function POST(request: Request) {
     deviceTime: new Date(payload.device_time),
   }));
 
-  if (parsedSamples.some((sample) => Number.isNaN(sample.deviceTime.getTime()))) {
-    return Response.json({ ok: false, error: "Invalid device_time" }, { status: 400 });
+  if (
+    parsedSamples.some((sample) => Number.isNaN(sample.deviceTime.getTime()))
+  ) {
+    return Response.json(
+      { ok: false, error: "Invalid device_time" },
+      { status: 400 },
+    );
   }
 
   const normalizedSamples = parsedSamples.map(({ payload, deviceTime }) => ({
@@ -214,7 +242,9 @@ export async function POST(request: Request) {
   }));
 
   try {
-    const vehicleIds = Array.from(new Set(normalizedSamples.map((sample) => sample.vehicle_id)));
+    const vehicleIds = Array.from(
+      new Set(normalizedSamples.map((sample) => sample.vehicle_id)),
+    );
     const { data: previousRows, error: previousError } = await supabase
       .from("bydmate_live_snapshots")
       .select("vehicle_id, device_time, telemetry, location")
@@ -222,31 +252,35 @@ export async function POST(request: Request) {
       .in("vehicle_id", vehicleIds);
 
     if (previousError) {
-      return Response.json({ ok: false, error: "Previous telemetry lookup failed" }, { status: 500 });
+      return Response.json(
+        { ok: false, error: "Previous telemetry lookup failed" },
+        { status: 500 },
+      );
     }
 
     const previousLocations = new Map<string, AcceptedLocation>();
     const previousTelemetry = new Map<string, AcceptedTelemetry>();
     for (const row of previousRows ?? []) {
       const accepted = acceptedLocationFromSnapshot(row);
-      if (accepted) previousLocations.set(accepted.vehicleId, accepted.location);
+      if (accepted)
+        previousLocations.set(accepted.vehicleId, accepted.location);
 
       const telemetry = acceptedTelemetryFromSnapshot(row);
-      if (telemetry) previousTelemetry.set(telemetry.vehicleId, telemetry.telemetry);
+      if (telemetry)
+        previousTelemetry.set(telemetry.vehicleId, telemetry.telemetry);
     }
 
     const previousTelemetryBeforeSanitize = new Map(previousTelemetry);
-    const { payloads: locationSanitizedSamples, droppedLocations } = sanitizePayloadLocations(
-      normalizedSamples,
-      previousLocations,
-    );
-    const { payloads: samples, droppedTelemetryFields } = sanitizePayloadTelemetry(
-      locationSanitizedSamples,
-      previousTelemetry,
-    );
+    const { payloads: locationSanitizedSamples, droppedLocations } =
+      sanitizePayloadLocations(normalizedSamples, previousLocations);
+    const { payloads: samples, droppedTelemetryFields } =
+      sanitizePayloadTelemetry(locationSanitizedSamples, previousTelemetry);
     // Only a wholly live-only batch without client rollups can skip durable fan-out.
     // A mixed batch stays on the full path so its normal sample remains authoritative.
-    const chargingSignal = batchHasChargingSignal(samples, previousTelemetryBeforeSanitize);
+    const chargingSignal = batchHasChargingSignal(
+      samples,
+      previousTelemetryBeforeSanitize,
+    );
     const deliveryPlan = planTelemetryIngestDelivery(samples, {
       hourlyBlockCount: hourlyBlocks.length,
       tripBlockCount: tripBlocks.length,
@@ -274,7 +308,10 @@ export async function POST(request: Request) {
           });
 
     if (ingestError) {
-      return Response.json({ ok: false, error: "Telemetry ingest failed" }, { status: 500 });
+      return Response.json(
+        { ok: false, error: "Telemetry ingest failed" },
+        { status: 500 },
+      );
     }
 
     const activityUpdates: PromiseLike<unknown>[] = [];
@@ -295,27 +332,36 @@ export async function POST(request: Request) {
 
     // The inactivity job works on a 30/60-day horizon. Updating this on every
     // three-second fast-status push only contends with the command-poll profile read.
-    activityUpdates.push(stampUserActivity(supabase, profile.id, new Date(activityTime)));
+    activityUpdates.push(
+      stampUserActivity(supabase, profile.id, new Date(activityTime)),
+    );
 
     const lastSample = samples.at(-1);
-    const persistedLookup = deliveryPlan.verifyPersistedSnapshot && lastSample
-      ? supabase
-          .from("bydmate_live_snapshots")
-          .select(
-            "vehicle_id, received_at, device_time, diplus, diplus_min_cell_voltage_v, diplus_max_cell_voltage_v, diplus_cell_delta_v",
-          )
-          .eq("user_id", profile.id)
-          .eq("vehicle_id", lastSample.vehicle_id)
-          .maybeSingle()
-      : null;
+    const persistedLookup =
+      deliveryPlan.verifyPersistedSnapshot && lastSample
+        ? supabase
+            .from("bydmate_live_snapshots")
+            .select(
+              "vehicle_id, received_at, device_time, diplus, diplus_min_cell_voltage_v, diplus_max_cell_voltage_v, diplus_cell_delta_v",
+            )
+            .eq("user_id", profile.id)
+            .eq("vehicle_id", lastSample.vehicle_id)
+            .maybeSingle()
+        : null;
 
     let persisted: PersistedTelemetryResponse | null = null;
     if (persistedLookup) {
-      const [, persistedResult] = await Promise.all([Promise.all(activityUpdates), persistedLookup]);
+      const [, persistedResult] = await Promise.all([
+        Promise.all(activityUpdates),
+        persistedLookup,
+      ]);
       const { data: persistedRow, error: persistedError } = persistedResult;
 
       if (persistedError) {
-        return Response.json({ ok: false, error: "Persisted telemetry lookup failed" }, { status: 500 });
+        return Response.json(
+          { ok: false, error: "Persisted telemetry lookup failed" },
+          { status: 500 },
+        );
       }
 
       persisted = persistedRow ? persistedTelemetry(persistedRow) : null;
@@ -343,13 +389,14 @@ export async function POST(request: Request) {
         }).catch(() => ({ sent: 0, thresholds: [] as number[] }))
       : Promise.resolve({ sent: 0, thresholds: [] as number[] });
 
-    const liveStatusNotificationsPromise = deliveryPlan.runLiveStatusNotifications
-      ? processVoltflowMateLiveStatusNotifications({
-          supabase,
-          userId: profile.id,
-          samples,
-        }).catch(() => ({ sent: 0 }))
-      : Promise.resolve({ sent: 0 });
+    const liveStatusNotificationsPromise =
+      deliveryPlan.runLiveStatusNotifications
+        ? processVoltflowMateLiveStatusNotifications({
+            supabase,
+            userId: profile.id,
+            samples,
+          }).catch(() => ({ sent: 0 }))
+        : Promise.resolve({ sent: 0 });
 
     const telegramWidgetsPromise = updateTelegramLiveWidgets({
       supabase,
@@ -367,9 +414,16 @@ export async function POST(request: Request) {
           samples,
         }).catch((autoSessionError: unknown) => {
           const message =
-            autoSessionError instanceof Error ? autoSessionError.message : "Auto session failed";
+            autoSessionError instanceof Error
+              ? autoSessionError.message
+              : "Auto session failed";
           console.error("bydmate auto charging session:", message);
-          return { started: 0, stopped: 0, sessionIds: [] as string[], error: message };
+          return {
+            started: 0,
+            stopped: 0,
+            sessionIds: [] as string[],
+            error: message,
+          };
         })
       : Promise.resolve({ started: 0, stopped: 0, sessionIds: [] as string[] });
 
@@ -378,47 +432,55 @@ export async function POST(request: Request) {
     // must not fail the request or affect ack accounting (sentCount stays samples-only), since
     // the per-sample path (or the daemon/an old APK) already wrote an equivalent row for any
     // hour this fails to update.
-    const hourlyRollupPromise = deliveryPlan.applyClientRollups && hourlyBlocks.length
-      ? Promise.all(
-          hourlyBlocks.map((block) =>
-            supabase.rpc("bydmate_apply_client_hourly", {
-              p_user_id: profile.id,
-              p_vehicle_id: headerVehicleId,
-              p_hour_start: block.hour_start,
-              p_block: block,
-            }),
-          ),
-        )
-          .then(() => hourlyBlocks.length)
-          .catch((hourlyError: unknown) => {
-            const message = hourlyError instanceof Error ? hourlyError.message : "Hourly rollup failed";
-            console.error("bydmate hourly rollup:", message);
-            return 0;
-          })
-      : Promise.resolve(0);
+    const hourlyRollupPromise =
+      deliveryPlan.applyClientRollups && hourlyBlocks.length
+        ? Promise.all(
+            hourlyBlocks.map((block) =>
+              supabase.rpc("bydmate_apply_client_hourly", {
+                p_user_id: profile.id,
+                p_vehicle_id: headerVehicleId,
+                p_hour_start: block.hour_start,
+                p_block: block,
+              }),
+            ),
+          )
+            .then(() => hourlyBlocks.length)
+            .catch((hourlyError: unknown) => {
+              const message =
+                hourlyError instanceof Error
+                  ? hourlyError.message
+                  : "Hourly rollup failed";
+              console.error("bydmate hourly rollup:", message);
+              return 0;
+            })
+        : Promise.resolve(0);
 
     // Best-effort like the hourly blocks, and for a stronger reason: bydmate_apply_client_trip
     // is UPDATE-only, so a block that fails here changes nothing at all. The row itself was
     // already stubbed by the ingest call above (which is why blocks must stay ordered after
     // the samples), and the client keeps re-sending the full cumulative trip until it acks.
-    const tripRollupPromise = deliveryPlan.applyClientRollups && tripBlocks.length
-      ? Promise.all(
-          tripBlocks.map((block) =>
-            supabase.rpc("bydmate_apply_client_trip", {
-              p_user_id: profile.id,
-              p_vehicle_id: headerVehicleId,
-              p_trip_id: block.trip_id,
-              p_block: block,
-            }),
-          ),
-        )
-          .then(() => tripBlocks.length)
-          .catch((tripError: unknown) => {
-            const message = tripError instanceof Error ? tripError.message : "Trip rollup failed";
-            console.error("bydmate trip rollup:", message);
-            return 0;
-          })
-      : Promise.resolve(0);
+    const tripRollupPromise =
+      deliveryPlan.applyClientRollups && tripBlocks.length
+        ? Promise.all(
+            tripBlocks.map((block) =>
+              supabase.rpc("bydmate_apply_client_trip", {
+                p_user_id: profile.id,
+                p_vehicle_id: headerVehicleId,
+                p_trip_id: block.trip_id,
+                p_block: block,
+              }),
+            ),
+          )
+            .then(() => tripBlocks.length)
+            .catch((tripError: unknown) => {
+              const message =
+                tripError instanceof Error
+                  ? tripError.message
+                  : "Trip rollup failed";
+              console.error("bydmate trip rollup:", message);
+              return 0;
+            })
+        : Promise.resolve(0);
 
     const [
       chargeNotifications,
@@ -439,12 +501,15 @@ export async function POST(request: Request) {
     if ("error" in autoChargingSessions) {
       // Persistence alone is not an ACK: Mate must retain and retry this batch.
       // The queue and versioned commit make retries safe after a partial response.
-      return Response.json({
-        ok: false,
-        error: "Charging processing failed; retry delivery",
-        retryable: true,
-        persisted,
-      }, { status: 503 });
+      return Response.json(
+        {
+          ok: false,
+          error: "Charging processing failed; retry delivery",
+          retryable: true,
+          persisted,
+        },
+        { status: 503 },
+      );
     }
 
     // Only reconcile when auto-session processing actually opened/closed a row.
@@ -452,7 +517,10 @@ export async function POST(request: Request) {
     // every ~1Hz sample was a large, mostly-redundant CPU + egress cost. The
     // session-list load path (/api/vehicle/sessions) still reconciles, so any
     // rows broken while no auto event fired are repaired when the list loads.
-    let chargingSessionReconcile = { reconciled: 0, sessionIds: [] as string[] };
+    let chargingSessionReconcile = {
+      reconciled: 0,
+      sessionIds: [] as string[],
+    };
     if (autoChargingSessions.started || autoChargingSessions.stopped) {
       try {
         chargingSessionReconcile = await reconcileChargingSessionsForUser({
@@ -462,7 +530,9 @@ export async function POST(request: Request) {
         });
       } catch (reconcileError) {
         const message =
-          reconcileError instanceof Error ? reconcileError.message : "Reconcile failed";
+          reconcileError instanceof Error
+            ? reconcileError.message
+            : "Reconcile failed";
         console.error("charging session reconcile:", message);
       }
     }
@@ -491,6 +561,9 @@ export async function POST(request: Request) {
       ingest: ingestResult,
     });
   } catch {
-    return Response.json({ ok: false, error: "Receiver failed" }, { status: 500 });
+    return Response.json(
+      { ok: false, error: "Receiver failed" },
+      { status: 500 },
+    );
   }
 }
