@@ -194,6 +194,11 @@ may suspend its fast command loop and fall back to a slow floor poll. It MUST ke
 floor so it learns when command delivery is enabled again. `poll_after_seconds` is the server's
 requested delay before that next poll; clients may clamp it to their supported range.
 
+`battery_capacity_kwh` is the vehicle's car-profile capacity (`cars.battery_capacity_kwh`, the row
+whose `vehicle_alias` matches, else the account's only unaliased car), sent only when it resolves to
+a plausible 10–200 kWh. The APK uses it for the on-car AI Range so the car and the web agree; it is
+omitted, not null, when unknown, and older clients ignore it.
+
 ```json
 {
   "ok": true,
@@ -202,7 +207,8 @@ requested delay before that next poll; clients may clamp it to their supported r
   ],
   "commands_enabled": true,
   "live_fast_seconds": 20,
-  "poll_after_seconds": 6
+  "poll_after_seconds": 6,
+  "battery_capacity_kwh": 45.1
 }
 ```
 
