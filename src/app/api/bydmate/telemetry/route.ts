@@ -26,6 +26,7 @@ import {
 import { createServiceClient } from "@/lib/supabase/service";
 import { resolveVoltflowMateApiKeyProfile } from "@/lib/voltflowmate/api-auth";
 import { liveFastSecondsFor } from "@/lib/voltflowmate/live-fast";
+import { fetchVehicleBatteryCapacityKwh } from "@/lib/voltflowmate/vehicle-battery-capacity";
 import { resolveVehicleKey } from "@/lib/voltflowmate/vehicle-identity";
 import {
   readBodyWithLimit,
@@ -537,6 +538,15 @@ export async function POST(request: Request) {
       }
     }
 
+    // Car-profile capacity for the APK's on-car AI Range (see vehicle-battery-capacity.ts).
+    // Carried here because while remote commands are suspended the command poll is a static
+    // rewrite (next.config.ts) that never reaches its route. Best-effort, one indexed read.
+    const batteryCapacityKwh = await fetchVehicleBatteryCapacityKwh(
+      supabase,
+      profile.id,
+      headerVehicleId,
+    ).catch(() => null);
+
     return Response.json({
       ok: true,
       persisted,
@@ -547,6 +557,7 @@ export async function POST(request: Request) {
       // and it is what lets the command poll drop from 6s to 60s while remote commands are
       // suspended without stranding the live view at the slower cadence.
       live_fast_seconds: liveFastSecondsFor(profile, headerVehicleId),
+      ...(batteryCapacityKwh != null ? { battery_capacity_kwh: batteryCapacityKwh } : {}),
       ...parseIngestStats(ingestResult, samples.length),
       dropped_location_count: droppedLocations,
       dropped_telemetry_field_count: droppedTelemetryFields,

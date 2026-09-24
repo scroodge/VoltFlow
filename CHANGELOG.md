@@ -11,6 +11,21 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-09-24
 
+**Agent tooling: cut Bash context injection.** Bash output was ~50% of injected agent
+context. In 7 days of transcripts for this project, no single output was large (max ~3K
+tokens), but 503 of 540 calls were compound commands, which the global `sqz` hook skips,
+and ~124 calls built the prod psql connection inline (`PW=$(grep … .env.local) && psql …`),
+the largest bucket and a password leak into transcripts. Shipped:
+`scripts/prod-sql.sh` (read-only, compact `|` output, 60-line cap, wraps
+`prod-psql-readonly.sh`) plus an AGENTS.md rule to use it; and a local, gitignored
+PreToolUse hook `.claude/hooks/cap-bash-output.py` (registered in
+`.claude/settings.local.json`) that wraps compound commands in `{ …; } 2>&1 | sqz compress`
+and caps output at 250 lines / 20K chars, keeps the exit code via `pipefail`, and does not
+auto-approve. `# no-cap` in a command opts out. Known issue: `sqz compress` silently drops
+blocks of generic output (seen live on `seq 1 400`); dropping the sqz stage from this hook
+is proposed. Not done: steering broad searches to the Explore agent and `/clear` between
+tasks are habits, not code.
+
 User reported repeated Telegram cadence-alarm pings and asked why. Read-only 14-day query
 against `bydmate_telemetry_cadence_alarm_audits` on prod: most accounts (9 of ~13) fire
 1-3 alarms in two weeks and self-resolve — the 2026-09-11 backtest's intent working as

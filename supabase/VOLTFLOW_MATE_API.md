@@ -198,6 +198,9 @@ requested delay before that next poll; clients may clamp it to their supported r
 whose `vehicle_alias` matches, else the account's only unaliased car), sent only when it resolves to
 a plausible 10–200 kWh. The APK uses it for the on-car AI Range so the car and the web agree; it is
 omitted, not null, when unknown, and older clients ignore it.
+The same field rides the telemetry ingest response, which is the carrier that actually reaches
+cars while remote commands are suspended: `next.config.ts` then rewrites this poll to a static
+JSON file and the route never runs.
 
 ```json
 {
