@@ -89,6 +89,7 @@ Mirror of `auth.users`. Created automatically on signup via trigger.
 
 Effective premium = `is_admin OR is_premium OR premium_until > now()`, computed by
 `public.is_user_premium(user_id)`. See [PREMIUM_ADMIN.md](PREMIUM_ADMIN.md).
+Donations do not set either profile field.
 
 ---
 
@@ -665,6 +666,15 @@ time.
 The service-role-only `admin_users_attention_queue()` function derives an admin-only
 follow-up queue from profile, snapshot, release, entitlement, and admin-role facts. It
 persists no additional user data.
+
+### `premium_payments` (historical name)
+
+App-owned, admin-only Postgres records. Existing rows may describe earlier payments
+associated with Premium access (`applied_until` set). New rows record voluntarily
+reported, account-linked donations for statistics with `applied_until = null`; the
+donation action cannot update account entitlements. Columns include `user_id`, `amount`,
+`currency`, `method`, optional `note`, `recorded_by_admin_id`, and `created_at`.
+The historical table name and rows remain unchanged for compatibility.
 
 ---
 

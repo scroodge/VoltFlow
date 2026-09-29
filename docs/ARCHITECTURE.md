@@ -175,7 +175,7 @@ restores. Breaking one of them causes the classic bugs (frozen percent, false
 | **Notifications** | Charge-threshold web push, Android live-status web push, and Telegram live-status widget | [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | `src/lib/push/*`, `src/lib/telegram/*` |
 | **Telegram bot** | Mini App login/link (Next.js) + group-message capture, LLM classification, and marketplace draft creation (**separate Python edge server**, not this Next.js app) | DATABASE_SCHEMA.md §Community marketplace | `src/app/api/telegram/{auth,link}/route.ts`; `scripts/telegram-miniapp-server.py` owns the real registered webhook — `src/app/api/telegram/webhook/route.ts` only sends the PWA deep-link reply and is not the live group-event path |
 | **Remote commands** | Abstract commands PWA → Mate poller or car-off shell daemon (lock, set SOC limit, …) | [VoltFlow Mate API](../supabase/VOLTFLOW_MATE_API.md) | `src/app/api/bydmate/commands/*`, `vehicle_commands` |
-| **Premium & retention** | Entitlements, tiered telemetry retention, admin tools | [PREMIUM_ADMIN.md](PREMIUM_ADMIN.md) | `is_user_premium()`, `purge_old_bydmate_telemetry_by_tier()` |
+| **Access, donations & retention** | Independent account entitlements, donation statistics, tiered telemetry retention, admin tools | [PREMIUM_ADMIN.md](PREMIUM_ADMIN.md) | `is_user_premium()`, `purge_old_bydmate_telemetry_by_tier()` |
 | **Knowledge base** | Content CMS, search, and service catalog | README §Features | `src/app/telegram/*` |
 | **Database** | Tables, RLS, RPCs, enums, storage buckets | [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | `supabase/migrations/` |
 | **PWA / shell** | Install, service worker, mobile nav, i18n (en/be/ru) | [INSTALL.md](../INSTALL.md), README §PWA | `src/app/manifest.ts`, `src/components/layout/*` |
@@ -202,7 +202,7 @@ production deployment evidence.
 | [WEB_INTERFACE_FORMULAS.ru.md](WEB_INTERFACE_FORMULAS.ru.md) | Russian translation of the formula reference; English remains canonical |
 | [KNOWLEDGE_SEARCH.md](KNOWLEDGE_SEARCH.md) | Semantic-search indexing, confidence/refusal behavior, evaluation |
 | [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | Telegram live-status widget (single message, edited in place) |
-| [PREMIUM_ADMIN.md](PREMIUM_ADMIN.md) | Entitlements, retention tiers, admin runbook |
+| [PREMIUM_ADMIN.md](PREMIUM_ADMIN.md) | Account entitlements, voluntary donations, and retention tiers |
 | [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Full schema, RLS, RPCs, enums, storage |
 | [../supabase/TELEMETRY.md](../supabase/TELEMETRY.md) | Telemetry storage model, retention, Di+ fields, analytics APIs |
 | [VoltFlow Mate API](../supabase/VOLTFLOW_MATE_API.md) | Mate ingest + command contract |

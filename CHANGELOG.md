@@ -9,6 +9,35 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-09-29 — Voluntary donations separated from Premium access (working tree)
+
+The user chose voluntary donations without any access or retention benefit, while keeping
+existing Premium restrictions and entitlement code as a separate mechanism. This resolves
+the 2026-09-29 BACKLOG plan. The rejected options were a one-off paid access product and a
+copy-only rename that would still tie a transfer to Premium. The distinction follows the
+[Belarus Ministry of Taxes explanation](https://nalog.gov.by/news/17449/) that a donation
+is gratuitous; the 2023 source is used for that principle, not for current tax rates.
+
+The support page and RU/BE/EN copy now describe voluntary donations and request a receipt
+with account details for attribution, with no Premium promise. Transfer details appear only
+after sign-in; the prepared email includes the account email and ID, while Telegram guidance
+asks donors to include both. Premium feature cards direct access questions to email
+and say donations do not grant access. The Belarus and international terms and privacy
+texts disclose the separation and account-linked donation statistics. Public architecture,
+schema, telemetry, and Mate API docs describe the resulting behavior.
+
+The admin UI has independent buttons for access changes and donation records. The existing
+admin route rejects a request combining both, inserts donation-only records in the historical
+`premium_payments` table with `applied_until = null`, and logs `donation_recorded`. Historical
+rows, schema, Premium checks, and feature limits were preserved. The donation record is
+app-owned operational data in Postgres; no new user preference or localStorage data exists.
+
+Verification: source-wide searches found no remaining pay-to-upgrade copy in current UI/legal
+texts; `git diff --check` passed. Build, lint, tests, production database actions, deployment,
+and live donation flow checks were not run. The external Buy Me a Coffee page could not be
+inspected from this environment; its one-time option and any membership settings need an
+owner-side check before publication.
+
 ## 2026-09-24
 
 **Agent tooling: cut Bash context injection.** Bash output was ~50% of injected agent

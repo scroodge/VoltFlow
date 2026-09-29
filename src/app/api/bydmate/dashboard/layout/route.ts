@@ -20,7 +20,7 @@ async function authorize(request: NextRequest): Promise<Authorized | Rejected> {
   }
 
   // Re-checks entitlement on every call. The cluster caches its own entitlement for six
-  // hours, so a lapsed subscription can still present a client that believes it is
+  // hours, so expired access can still present a client that believes it is
   // premium; this is the check that is actually current.
   const auth = await resolveEntitledProfileId(getSupabaseAdmin(), apiKey);
   if ("error" in auth) {

@@ -83,7 +83,7 @@ vehicle metadata, and timestamps for device and receipt time. When no newer samp
 ### `bydmate_telemetry_samples`
 
 Append-only normalized telemetry history. It supports vehicle charts, charging history,
-and trip details. Free accounts retain raw samples and tracks for 30 days; Premium/Admin data,
+and trip details. Standard-access accounts retain raw samples and tracks for 30 days; Premium/Admin data,
 including original route points and hourly aggregates, remains indefinitely while the account is
 active.
 
@@ -113,5 +113,5 @@ session detection and reconciliation are documented in
 - Credentials are used only by trusted server or paired-client paths and must never be
   published in source control.
 - The latest snapshot is intended for realtime display; stale exact GPS is cleared after 24 h.
-- Free historical views are bounded; Premium/Admin historical telemetry and exact tracks are
+- Standard historical views are bounded; Premium/Admin historical telemetry and exact tracks are
   retained indefinitely while the account is active.

@@ -1,16 +1,16 @@
 "use client";
 
 import { Lock } from "lucide-react";
-import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useEntitlementQuery } from "@/hooks/use-entitlement-query";
 import { useTranslation } from "@/hooks/use-translation";
+import { getPremiumUpgradeEmail } from "@/lib/premium-upgrade-mailto";
 
 /**
- * Shared "this is a Premium feature" upsell card. Self-contained: resolves entitlement
+ * Shared "this is a Premium feature" access card. Self-contained: resolves entitlement
  * itself (react-query dedupes concurrent callers on the same page against one request)
  * and renders nothing once the viewer is confirmed Premium, so callers only need to
  * supply the feature-specific copy.
@@ -39,8 +39,11 @@ export function PremiumFeatureGate({
       </CardHeader>
       <CardContent className="space-y-3">
         {children}
+        <p className="text-xs text-muted-foreground">{t("settings.premiumGates.accessNote")}</p>
         <Button asChild size="lg" className="h-11 w-full rounded-full text-sm font-semibold">
-          <Link href="/support">{t("settings.retentionNotice.upgradeCta")}</Link>
+          <a href={`mailto:${getPremiumUpgradeEmail()}`}>
+            {t("settings.retentionNotice.upgradeCta")}
+          </a>
         </Button>
       </CardContent>
     </Card>

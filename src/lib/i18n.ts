@@ -241,21 +241,29 @@ export const dictionaries = {
     },
     support: {
       title: "Support the project",
-      intro: "You can support VoltFlow financially. Contributions go toward:",
+      intro: "You can make a voluntary, one-time donation to VoltFlow. Donations help cover:",
       fund1: "monthly hosting and server costs",
       fund2: "domains and their SSL certificates",
       fund3: "further development and new features",
-      premiumPerkTitle: "A thank-you for supporters",
+      premiumPerkTitle: "Thank you for your support",
       premiumPerkBody:
-        "Supporters get Premium: unlimited charging history instead of 30 days, and more.",
+        "Donations do not change access to VoltFlow features or data retention and are not required to use the app.",
       cardTitle: "Bank card transfer",
       copy: "Copy",
       copied: "Copied",
       intlTitle: "For users in other countries",
       buyMeCoffee: "Buy Me a Coffee",
-      receiptTitle: "Send your receipt",
+      intlHelp: "Please choose the one-time contribution option.",
+      checkingAccount: "Checking your account…",
+      signInTitle: "Sign in before donating",
+      signInBody: "Sign in so we can identify and record your donation. The payment details will appear after you sign in.",
+      signIn: "Sign in",
+      receiptTitle: "Send your receipt and account details",
       receiptBody:
-        "After paying, send a screenshot or PDF of the receipt — include your account email and ID below so we can match it.",
+        "After donating, send the receipt by Telegram or email with the account email and ID below. This lets us identify the donor and record the donation. Donations do not change Premium access.",
+      receiptEmailSubject: "VoltFlow voluntary donation",
+      receiptEmailBody:
+        "I made a voluntary donation to VoltFlow. I will attach the receipt.\n",
       sendViaBot: "Send in Telegram",
       sendViaEmail: "Send by email",
       yourAccountEmail: "Your email",
@@ -655,7 +663,7 @@ export const dictionaries = {
       editDescription:
         "Update generation, battery size, and AC limits for this EV.",
       freeCarLimitError:
-        "Free plan supports 1 car. Upgrade to Premium to add more cars to your garage.",
+        "Standard access supports 1 car. Contact us if you need access for more cars; donations do not change access.",
       generationLabel: "Model generation",
       generation: {
         gen1_2024: "2024 · 1st generation",
@@ -1125,7 +1133,7 @@ export const dictionaries = {
         aux12vLowDays:
           "Resting voltage fell below 11.8 V on {count} day(s) in this period.",
         aux12vPremiumHistory:
-          "Longer 12V history needs Premium; free-plan raw samples are retained for 30 days.",
+          "Longer 12V history requires separate Premium access; standard raw samples are retained for 30 days.",
         monthlyTitle: "Monthly summary",
         monthlySubtitle:
           "Distance, charging, regen, and consumption for the selected month.",
@@ -1372,7 +1380,7 @@ export const dictionaries = {
         supported: "Supported",
         permission: "Permission",
         serviceWorker: "Service worker",
-        subscription: "Subscription",
+        subscription: "Push registration",
         endpoint: "Endpoint",
         yes: "yes",
         no: "no",
@@ -1627,26 +1635,27 @@ export const dictionaries = {
       privacyTitle: "Telemetry privacy",
       privacyItems: ["All data saved in Supabase ·  no cross-driver leakage"],
       retentionNotice: {
-        title: "Free plan data retention",
-        body: "Free plan keeps telemetry for {days} days. Older records are automatically deleted.",
+        title: "Standard data retention",
+        body: "Standard access keeps telemetry for {days} days. Older records are automatically deleted.",
         nextDeletion: "Next cleanup window: {date}",
-        upgradeCta: "Upgrade to Premium",
-        emailHelp: "To upgrade, email us at {email}.",
+        upgradeCta: "Ask about access",
+        emailHelp: "Premium access is managed separately from donations. Questions: {email}.",
       },
       premiumBadge: "Premium",
       premiumGates: {
+        accessNote: "Donations do not grant Premium access.",
         diagnosticsTitle: "Deep battery diagnostics is a Premium feature",
         diagnosticsBody:
-          "Free plan shows your current battery health percentage. Premium unlocks the full Battery Consistency view: per-cell trends, degradation history, and early warnings.",
+          "Standard access shows your current battery health percentage. Premium access includes the full Battery Consistency view: per-cell trends, degradation history, and early warnings.",
         fastModeTitle: "Fast live updates is a Premium feature",
         fastModeBody:
-          "Free plan refreshes live vehicle status at the normal pace. Premium watchers get 3-9 second updates while viewing the car.",
+          "Standard access refreshes live vehicle status at the normal pace. Premium access provides 3-9 second updates while viewing the car.",
         exportTitle: "Full-history export is a Premium feature",
         exportBody:
-          "Free plan exports match the {days}-day free retention window. Premium exports your complete charging and trip history.",
+          "Standard exports match the {days}-day retention window. Premium access includes complete charging and trip history exports.",
         multiCarTitle: "Multiple cars is a Premium feature",
         multiCarBody:
-          "Free plan supports 1 car per account. Premium removes the limit for households and multi-car owners.",
+          "Standard access supports 1 car per account. Premium access allows more cars for households and multi-car owners.",
         clusterBgTitle: "Dashboard cluster backgrounds is a Premium feature",
         clusterBgBody:
           "Custom images for the VoltFlow Dashboard projection on your car's cluster screen are available to Premium and admin accounts.",
@@ -1872,21 +1881,29 @@ export const dictionaries = {
     support: {
       title: "Падтрымаць праект",
       intro:
-        "Вы можаце падтрымаць VoltFlow фінансава. Сабраныя сродкі пойдуць на:",
+        "Вы можаце добраахвотна і аднаразова ахвяраваць сродкі на VoltFlow. Ахвяраванні дапамагаюць аплачваць:",
       fund1: "штомесячную аплату хостынгу і сервераў",
       fund2: "аплату даменаў і SSL-сертыфікатаў да іх",
       fund3: "далейшае развіццё праекта і яго магчымасцяў",
-      premiumPerkTitle: "Падзяка падтрымальнікам",
+      premiumPerkTitle: "Дзякуй за падтрымку",
       premiumPerkBody:
-        "Падтрымальнікам даступны Premium: неабмежаваная гісторыя зарадак замест 30 дзён і не толькі.",
+        "Ахвяраванне не змяняе доступ да функцый VoltFlow або тэрмін захоўвання даных і не патрабуецца для карыстання праграмай.",
       cardTitle: "Пераказ на банкаўскую карту",
       copy: "Скапіраваць",
       copied: "Скапіравана",
       intlTitle: "Для карыстальнікаў з іншых краін",
       buyMeCoffee: "Buy Me a Coffee",
-      receiptTitle: "Адпраўце чэк",
+      intlHelp: "Калі ласка, выбірайце варыянт аднаразовага ахвяравання.",
+      checkingAccount: "Правяраем ваш акаўнт…",
+      signInTitle: "Увайдзіце перад ахвяраваннем",
+      signInBody: "Увайдзіце, каб мы маглі вызначыць, ад каго паступіла ахвяраванне, і ўлічыць яго. Рэквізіты з’явяцца пасля ўваходу.",
+      signIn: "Увайсці",
+      receiptTitle: "Дашліце чэк і даныя акаўнта",
       receiptBody:
-        "Пасля аплаты адпраўце скрыншот або PDF чэка — пазначце вашу пошту і ID акаўнта ніжэй, каб мы маглі яго супаставіць.",
+        "Пасля ахвяравання дашліце чэк у Telegram або на пошту разам з поштай і ID акаўнта ніжэй. Так мы зможам вызначыць донара і ўлічыць ахвяраванне. Яно не змяняе Premium-доступ.",
+      receiptEmailSubject: "Добраахвотнае ахвяраванне для VoltFlow",
+      receiptEmailBody:
+        "Я зрабіў(ла) добраахвотнае ахвяраванне для VoltFlow. Далучу чэк.\n",
       sendViaBot: "Адправіць у Telegram",
       sendViaEmail: "Адправіць на пошту",
       yourAccountEmail: "Ваша пошта",
@@ -2285,7 +2302,7 @@ export const dictionaries = {
       editTitle: "Рэдагаванне аўто",
       editDescription: "Абнавіце пакаленне, ёмістасць батарэі і ліміты AC.",
       freeCarLimitError:
-        "У free-плане даступная 1 машына. Перайдзіце на Premium, каб дадаць яшчэ машыны ў гараж.",
+        "Са стандартным доступам даступная 1 машына. Калі патрэбны доступ для некалькіх машын, напішыце нам; ахвяраванні не змяняюць доступ.",
       generationLabel: "Пакаленне мадэлі",
       generation: {
         gen1_2024: "2024 · 1-е пакаленне",
@@ -2753,7 +2770,7 @@ export const dictionaries = {
         aux12vLowDays:
           "Напружанне ў спакоі было ніжэй за 11,8 В у {count} дзень(дні) гэтага перыяду.",
         aux12vPremiumHistory:
-          "Больш доўгая гісторыя 12 В патрабуе Premium; на бясплатным плане сырыя даныя захоўваюцца 30 дзён.",
+          "Больш доўгая гісторыя 12 В патрабуе асобнага Premium-доступу; стандартныя сырыя даныя захоўваюцца 30 дзён.",
         monthlyTitle: "Месячная зводка",
         monthlySubtitle: "Пrabег, зарадка, рэген і расход за выбраны месяц.",
         chargingTrendsTitle: "Трэнды зарадкі",
@@ -2999,7 +3016,7 @@ export const dictionaries = {
         supported: "Падтрымліваецца",
         permission: "Дазвол",
         serviceWorker: "Service worker",
-        subscription: "Падпіска",
+        subscription: "Рэгістрацыя push",
         endpoint: "Endpoint",
         yes: "так",
         no: "не",
@@ -3257,26 +3274,27 @@ export const dictionaries = {
         "Усе данныя захоўваюцца ў Supabase  · без уцечак паміж кіроўцамі",
       ],
       retentionNotice: {
-        title: "Захоўванне даных у free-плане",
-        body: "У free-плане тэлеметрыя захоўваецца {days} дзён. Старэйшыя запісы аўтаматычна выдаляюцца.",
+        title: "Стандартнае захоўванне даных",
+        body: "Са стандартным доступам тэлеметрыя захоўваецца {days} дзён. Старэйшыя запісы аўтаматычна выдаляюцца.",
         nextDeletion: "Наступнае акно ачысткі: {date}",
-        upgradeCta: "Перайсці на Premium",
-        emailHelp: "Каб абнавіцца, напішыце на {email}.",
+        upgradeCta: "Спытаць пра доступ",
+        emailHelp: "Premium-доступ кіруецца асобна ад ахвяраванняў. Пытанні: {email}.",
       },
       premiumBadge: "Premium",
       premiumGates: {
+        accessNote: "Ахвяраванні не даюць Premium-доступ.",
         diagnosticsTitle: "Паглыбленая дыягностыка батарэі — функцыя Premium",
         diagnosticsBody:
-          "У free-плане паказваецца бягучы працэнт здароўя батарэі. Premium адкрывае поўны экран Battery Consistency: трэнды па ячэйках, гісторыю дэградацыі і раннія папярэджанні.",
+          "Са стандартным доступам паказваецца бягучы працэнт здароўя батарэі. Premium-доступ уключае поўны экран Battery Consistency: трэнды па ячэйках, гісторыю дэградацыі і раннія папярэджанні.",
         fastModeTitle: "Хуткае абнаўленне статусу — функцыя Premium",
         fastModeBody:
-          "У free-плане жывы статус машыны абнаўляецца ў звычайным тэмпе. Гледачы з Premium атрымліваюць абнаўленні кожныя 3-9 секунд.",
+          "Са стандартным доступам жывы статус машыны абнаўляецца ў звычайным тэмпе. Premium-доступ дае абнаўленні кожныя 3-9 секунд.",
         exportTitle: "Поўны экспарт гісторыі — функцыя Premium",
         exportBody:
-          "У free-плане экспарт абмежаваны акном захоўвання ў {days} дзён. Premium экспартуе поўную гісторыю зарадак і паездак.",
+          "Стандартны экспарт абмежаваны акном захоўвання ў {days} дзён. Premium-доступ уключае экспарт поўнай гісторыі зарадак і паездак.",
         multiCarTitle: "Некалькі машын — функцыя Premium",
         multiCarBody:
-          "У free-плане даступная 1 машына на акаунт. Premium здымае гэта абмежаванне для сем'яў і ўладальнікаў некалькіх машын.",
+          "Са стандартным доступам даступная 1 машына на акаўнт. Premium-доступ дазваляе дадаць некалькі машын.",
         clusterBgTitle: "Фоны прыборнай панэлі — функцыя Premium",
         clusterBgBody:
           "Уласныя выявы для праекцыі VoltFlow Dashboard на экране прыборнай панэлі даступныя для Premium і адмін-акаунтаў.",
@@ -3502,21 +3520,29 @@ export const dictionaries = {
     support: {
       title: "Поддержать проект",
       intro:
-        "Вы можете поддержать проект финансово. Собранные средства пойдут на:",
+        "Вы можете добровольно и разово пожертвовать средства на VoltFlow. Донаты помогают оплачивать:",
       fund1: "ежемесячную оплату хостинга и серверов",
       fund2: "оплату доменов и SSL-сертификатов к ним",
       fund3: "дальнейшее развитие проекта и его функциональных возможностей",
-      premiumPerkTitle: "Благодарность поддержавшим",
+      premiumPerkTitle: "Спасибо за поддержку",
       premiumPerkBody:
-        "Поддержавшим проект доступны дополнительные возможности — Premium: неограниченная история зарядок вместо 30 дней и не только.",
+        "Донат не меняет доступ к функциям VoltFlow или срок хранения данных и не требуется для использования приложения.",
       cardTitle: "Перевод на банковскую карту",
       copy: "Скопировать",
       copied: "Скопировано",
       intlTitle: "Для пользователей из других стран",
       buyMeCoffee: "Buy Me a Coffee",
-      receiptTitle: "Отправьте чек",
+      intlHelp: "Пожалуйста, выбирайте вариант разового доната.",
+      checkingAccount: "Проверяем аккаунт…",
+      signInTitle: "Войдите перед донатом",
+      signInBody: "Войдите, чтобы мы могли определить, от кого поступил донат, и учесть его. Реквизиты появятся после входа.",
+      signIn: "Войти",
+      receiptTitle: "Отправьте чек и данные аккаунта",
       receiptBody:
-        "После оплаты отправьте скриншот или PDF чека — укажите вашу почту и ID аккаунта ниже, чтобы мы могли его сопоставить.",
+        "После доната отправьте чек в Telegram или на почту вместе с указанными ниже почтой и ID аккаунта. Так мы узнаем, кто сделал донат, и учтём его. Донат не меняет Premium-доступ.",
+      receiptEmailSubject: "Добровольный донат для VoltFlow",
+      receiptEmailBody:
+        "Я сделал(а) добровольный донат для VoltFlow. Прикреплю чек.\n",
       sendViaBot: "Отправить в Telegram",
       sendViaEmail: "Отправить на почту",
       yourAccountEmail: "Ваша почта",
@@ -3916,7 +3942,7 @@ export const dictionaries = {
       editTitle: "Редактирование авто",
       editDescription: "Обновите поколение, емкость батареи и лимиты AC.",
       freeCarLimitError:
-        "В free-плане доступна 1 машина. Перейдите на Premium, чтобы добавить ещё машины в гараж.",
+        "Со стандартным доступом доступна 1 машина. Если нужен доступ для нескольких машин, напишите нам; донаты не меняют доступ.",
       generationLabel: "Поколение модели",
       generation: {
         gen1_2024: "2024 · 1-е поколение",
@@ -4385,7 +4411,7 @@ export const dictionaries = {
         aux12vLowDays:
           "Напряжение покоя было ниже 11,8 В в {count} день(дни) этого периода.",
         aux12vPremiumHistory:
-          "Более длинная история 12 В требует Premium; на бесплатном плане сырые данные хранятся 30 дней.",
+          "Более длинная история 12 В требует отдельного Premium-доступа; стандартные сырые данные хранятся 30 дней.",
         monthlyTitle: "Месячная сводка",
         monthlySubtitle: "Пробег, зарядка, реген и расход за выбранный месяц.",
         chargingTrendsTitle: "Тренды зарядки",
@@ -4630,7 +4656,7 @@ export const dictionaries = {
         supported: "Поддерживается",
         permission: "Разрешение",
         serviceWorker: "Service worker",
-        subscription: "Подписка",
+        subscription: "Регистрация push",
         endpoint: "Endpoint",
         yes: "да",
         no: "нет",
@@ -4889,27 +4915,28 @@ export const dictionaries = {
         "Все данные храняться в Supabase без утечек между пользователями",
       ],
       retentionNotice: {
-        title: "Хранение данных в без поддержки проекта",
-        body: "В бесплатной версии телеметрия хранится {days} дней. Более старые записи автоматически удаляются.",
+        title: "Стандартное хранение данных",
+        body: "Со стандартным доступом телеметрия хранится {days} дней. Более старые записи автоматически удаляются.",
         nextDeletion: "Следующее окно очистки: {date}",
-        upgradeCta: "Поддержать проект",
+        upgradeCta: "Спросить о доступе",
         emailHelp:
-          "Чтобы поддержать проект, напишите на {email} или нажмите на кнопку ниже.",
+          "Premium-доступ регулируется отдельно от донатов. Вопросы: {email}.",
       },
       premiumBadge: "Premium",
       premiumGates: {
+        accessNote: "Донаты не предоставляют Premium-доступ.",
         diagnosticsTitle: "Углублённая диагностика батареи — функция Premium",
         diagnosticsBody:
-          "В free-плане отображается текущий процент здоровья батареи. Premium открывает полный экран Battery Consistency: тренды по ячейкам, историю деградации и ранние предупреждения.",
+          "Со стандартным доступом отображается текущий процент здоровья батареи. Premium-доступ включает полный экран Battery Consistency: тренды по ячейкам, историю деградации и ранние предупреждения.",
         fastModeTitle: "Быстрое обновление статуса — функция Premium",
         fastModeBody:
-          "В free-плане живой статус машины обновляется в обычном темпе. Зрители с Premium получают обновления каждые 3-9 секунд.",
+          "Со стандартным доступом живой статус машины обновляется в обычном темпе. Premium-доступ даёт обновления каждые 3-9 секунд.",
         exportTitle: "Полный экспорт истории — функция Premium",
         exportBody:
-          "В free-плане экспорт ограничен окном хранения в {days} дней. Premium экспортирует полную историю зарядок и поездок.",
+          "Стандартный экспорт ограничен окном хранения в {days} дней. Premium-доступ включает экспорт полной истории зарядок и поездок.",
         multiCarTitle: "Несколько машин — функция Premium",
         multiCarBody:
-          "В free-плане доступна 1 машина на аккаунт. Premium снимает это ограничение для семей и владельцев нескольких машин.",
+          "Со стандартным доступом доступна 1 машина на аккаунт. Premium-доступ позволяет добавить несколько машин.",
         clusterBgTitle: "Фоны приборной панели — функция Premium",
         clusterBgBody:
           "Свои изображения для проекции VoltFlow Dashboard на экране приборной панели доступны для Premium и админ-аккаунтов.",

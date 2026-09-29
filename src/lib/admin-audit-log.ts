@@ -1,7 +1,7 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 /**
- * Records a privileged admin action (premium/role changes, payment registration).
+ * Records a privileged admin action (access/role changes, donation statistics).
  * Best-effort: a logging failure must never block or roll back the action itself, so
  * this only logs to the server console on error rather than throwing.
  */
