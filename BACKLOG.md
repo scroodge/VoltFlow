@@ -1,5 +1,203 @@
 # Backlog — proposed plans awaiting go-ahead
 
+## Telegram community launch pack with isolated local VoltFlow demo — proposed 2026-09-29
+
+### Research findings and boundary
+
+The authenticated application is a mobile-first PWA with a real charging cockpit,
+charging-session history/costs, vehicle telemetry/trips/analytics, service logbook,
+and a separate knowledge base (`docs/ARCHITECTURE.md`). The first-use path is real:
+an account can select **Explore first**, add a supported car, and pair VoltFlow Mate;
+telemetry-derived live status, trips, route/analytics and automatic charging detection
+require that external companion to deliver data. Manual charging entry does not prove
+or require a working car integration.
+
+The existing `src/lib/demo-data.ts` is deliberately a small explorer-mode empty-state
+preview (one car, two charging sessions and two trips), not a full demo environment.
+The existing `/dev/*` routes are also unsuitable for publication screenshots: their
+development proxy can bypass app authentication and the index explicitly advertises
+real-account/real-car data. They must not be started or used for this task.
+
+### Options considered
+
+1. **Use the explorer-mode preview as-is.** No code change, but it cannot demonstrate
+   the requested 2–4 week history, completed-charge analytics or populated vehicle
+   charts. It would yield only empty-state material, so it is insufficient.
+2. **Create accounts/rows in the existing Supabase target and screenshot normal routes.**
+   Gives the broadest UI coverage but violates the requested isolation, changes a
+   working database, and makes cleanup/error recovery a risk. Rejected.
+3. **Build a local-only, static-fixture demo route and Playwright screenshot harness
+   (recommended).** A new route is available only when `NODE_ENV !== "production"`
+   **and** an explicit local server flag (for example `VOLT_FLOW_TELEGRAM_DEMO=true`)
+   is set. It reads no Supabase credentials, makes no client/server calls to external
+   services, has no command controls, and renders the same presentational application
+   modules and Russian translations with a named, persistent “Демонстрационные данные”
+   label. The flag is off by default; a URL query parameter may only select a screen
+   after that server-side gate and must never grant authentication or access to actual
+   application routes/data. A Playwright script supplies only local fixture responses,
+   asserts that no request leaves localhost, waits for charts/fonts, captures mobile
+   390×844 DPR 2 PNGs, and can optionally capture one desktop screen.
+
+### Proposed scope
+
+- Add a coherent, deterministic static fixture set under an appropriate `src/lib/demo/`
+  location: one fictional supported BYD, 21–28 days of telemetry/trips, at least three
+  completed charging sessions with distinct duration/power/tariff types, BYN prices,
+  costs, and chart-ready summaries. Use fictional identifiers and deliberately omit
+  exact GPS coordinates. Derive grid energy and costs from the app’s current
+  battery-side SOC/efficiency rules so the displayed figures reconcile.
+- Add a local-only demo entrypoint and adapters/providers needed to feed the existing
+  dashboard, charging/history and vehicle presentational screens. Do not change normal
+  paths, RLS, production API authorization, Supabase schema, cloud configuration, or
+  telemetry/command integration behavior. The demo must be visibly labeled, disabled
+  by default, and incapable of calling a real vehicle or real backend.
+- Add focused fixture-consistency and demo-gate tests, plus a reproducible Playwright
+  screenshot script. It will run the local server on a free port with the explicit flag,
+  intercept/assert network traffic, visit only the demo route, and save screenshots
+  under `docs/marketing/telegram-launch/screenshots/`.
+- Exercise the precise screenshots in the browser, check page errors/network failures,
+  chart population, viewport layout and Russian text, then inspect every final PNG.
+  The planned set is: dashboard summary, charging session/cost, charging-history
+  statistics, trips/analytics, and vehicle state; desktop only if it materially improves
+  a chart. Screenshot captions will state that values are demonstrational.
+- Create `docs/marketing/telegram-launch/README.md`, `01-overview.md`,
+  `02-quick-start.md`, and `03-example.md`: three copy-ready Russian Telegram posts,
+  separate image-order guidance, exact fixture values for the practical example,
+  reproducibility steps, verification evidence, and explicit external-integration
+  limits. Do not publish to Telegram, deploy, push, or claim a Mate/vehicle connection
+  was verified from the fixtures.
+
+### Data ownership and location
+
+No user-facing data model changes. The demonstration values are **app-owned static
+development fixtures** in the repository and browser test process only: never written
+to Postgres, localStorage, Supabase Storage, a real account, or a cloud service. They
+are not user-owned data. The explicit local enable flag is a server environment setting,
+not stored in a profile or exposed as a public authorization mechanism.
+
+### Verification plan
+
+Run focused unit tests for fixture math/gating, the project’s required focused checks
+for touched code, and the reproducible screenshot harness. Report browser console/page
+errors and all non-local network attempts separately; run no real integration or vehicle
+commands. Inspect the generated PNGs at their final dimensions before declaring them
+ready.
+
+### Should I build this?
+
+
+## Receive AndyShaman/BYDMate's "Webhook — telemetry" JSON, to A/B against Di+/Mate on `way` — proposed 2026-09-29
+
+### Context
+
+User pointed at `https://github.com/AndyShaman/BYDMate` (a separate, independently-maintained
+app — **not** the same code as this project's companion "VoltFlow Mate", `scroodge/BYDMate-own`,
+though this repo has borrowed from it before: `20260708130000_add_autoservice_fid_fields.sql`
+credits its `FidRegistry.kt`, and the 2026-07-02 no-ADB `energydata` investigation below already
+tested it on this same `way` car and hit a dead end for that data source). Its Settings screen
+has a real, shipped (v3.13, 2026-08-24) "Webhook — telemetry" feature, confirmed by reading its
+source (not guessed): `WebhookTelemetryClient.kt`, `IternioTelemetryClient.kt` (shared payload
+builder), `IternioIntervalPolicy.kt`, `DiParsData.kt`, `SettingsRepository.kt`,
+`TrackingService.maybeSendIternioTelemetry()`, `SettingsScreen.kt`, and its CHANGELOG.
+
+**License flag:** that repo is PolyForm Noncommercial 1.0.0, not a permissive OSS license.
+Writing our own independent receiver for an arbitrary JSON shape doesn't require copying their
+code, but do not port any of their source (field lists above were read only to describe the
+wire shape, same as reading a public API's docs) into this repo.
+
+### What their webhook actually sends (this is the compatibility gap, in full)
+
+One flat JSON object per tick, **no envelope, no batching, no vehicle id at all** — POSTed to a
+user-configured URL with an optional `Authorization: Bearer <secret>` header (blank = no auth).
+Cadence is adaptive off gear/speed, not a fixed interval: 1 s driving, 8 s charging, 30 s parked;
+on any send failure it drops the sample and waits a flat 60 s — no queue, no retry.
+
+```json
+{"utc":1758937200,"soc":62,"speed":87,"power":18.4,"voltage":512,"current":35.9,
+ "hvac_setpoint":22,"batt_temp":31,"ext_temp":24,"capacity":72.9,"odometer":15234.6,
+ "cabin_temp":23,"tire_pressure_fl":250,"is_charging":0,"is_parked":0,
+ "car_model":"byd:leopard3:23:72.9"}
+```
+```json
+{"utc":1758950000,"soc":44,"power":-58.2,"voltage":505,"current":-115.2,"batt_temp":28,
+ "ext_temp":19,"capacity":72.9,"odometer":15240.1,"is_charging":1,"is_dcfc":1,
+ "kwh_charged":12.4,"soh":97.5}
+```
+
+Differences vs. this project's existing normalized `telemetry` fields (`speed_kmh`,
+`charge_power_kw`, `is_charging`, `soc`, `gun`, `current_trip_distance_km`):
+
+- **`utc` is epoch seconds**, not the ISO-8601 `device_time` the existing ingest expects.
+- **No vehicle/device identifier anywhere in the payload.** Unlike `X-Vehicle-Id`/`X-API-Key`,
+  identity can only come from the webhook URL path or the bearer secret we mint per car.
+- **`power` is signed net battery power** (positive = discharge, negative = charge/regen), a
+  single field always present (defaults to `0` when the underlying reading is missing). Our
+  `charge_power_kw` is a charging-only magnitude, and our hard-won rule is explicit that **"a
+  null power reading is never treated as zero"** for the 5-minute-zero-power auto-stop check —
+  this source cannot distinguish "0 kW, confirmed" from "no reading," so it cannot safely feed
+  that specific invariant without a defined fallback (recommend: never let this source's `power`
+  drive auto-stop; only display/compare it).
+- **`is_charging` means gun-connected**, derived purely from the connector-state enum — the exact
+  same staleness trap this project's own CLAUDE.md already documents for Di+'s `is_charging`
+  (stays true for hours after the charger actually stops). Compatible in spirit, same caveat.
+- **No raw gun/plug state code** — only the two booleans `is_charging` and `is_dcfc` (AC vs DC),
+  and `is_dcfc` only appears when an optional Leopard-3 autoservice read succeeds mid-charge.
+- **No trip/session concept** — `odometer` is lifetime mileage, not the per-trip delta
+  `current_trip_distance_km` is. Trip inference would have to be rebuilt server-side from
+  consecutive `odometer` diffs, same as this project already does for its other sources.
+- GPS (`lat`/`lon`/`heading`) is opt-in and **off by default** on their side.
+
+### Options considered
+
+1. **Build a dedicated receiving endpoint that maps into the existing pipeline (recommended).**
+   New route (e.g. `POST /api/bydmate/webhook-telemetry/[token]`) that:
+   - resolves vehicle/user identity from a new per-car webhook token (own row, analogous to the
+     existing paired-client key in `bydmate_devices`, not `X-Vehicle-Id`);
+   - converts `utc` (s) → ISO `device_time`, maps `speed`→`speed_kmh`, `soc`→`soc`,
+     `power`→`charge_power_kw` only as `abs(power)` when `power < 0 && is_charging`, else `0` and
+     tagged not-usable-for-stall-detection, `lat/lon/heading`→`location`, temps→existing hourly
+     aggregate fields;
+   - reuses `bydmate_ingest_telemetry` / the existing normalize→sanitize→ingest→auto-session
+     pipeline rather than a second parallel processor, tagged with a distinct `source` (e.g.
+     `"AndyShaman-BYDMate-webhook"`) so every downstream table keeps provenance;
+   - skips trip inference for this source initially (documented limitation, not silently wrong
+     data) since there's no per-trip delta to seed it from.
+   This is real, scoped work: a new auth/token scheme, a new field mapper + its own tests
+   (`.test.mjs`, matching this repo's test conventions), and explicit handling of the
+   ambiguous-zero-power and gun-connected-not-energy-flowing traps above so they don't silently
+   violate the existing charging invariants.
+2. **Skip the production endpoint; capture payloads out-of-band for a one-off manual diff.**
+   Point their webhook at a disposable capture target (e.g. a temporary request-bin) for one
+   drive + one charge on `way`, save the raw JSON, and diff it by hand/script against the
+   `bydmate_telemetry_samples` rows recorded for the same window from the existing Di+/Mate
+   source. Answers "how do the two sources differ" fully — everything in the table above already
+   does most of this from source alone — without touching any production route, auth, or schema.
+   Much faster, zero prod risk, but produces no lasting ingest capability if the answer turns out
+   to be "yes, wire it up for real."
+3. **Both: ship option 1, then use the new endpoint itself (tagged `source`) to run the
+   comparison**, by querying `bydmate_telemetry_samples` for `way` filtered by `source` across
+   the same time window once both senders are live side by side. Gives a repeatable, queryable
+   comparison instead of a one-off capture, at the cost of doing option 1's full scope first.
+
+### Data ownership and location
+
+- The per-car webhook secret/token is a **credential**, app-owned in Postgres, alongside the
+  existing paired-client keys in `bydmate_devices` — never client-side/localStorage.
+- The telemetry values themselves are **user-owned data in Postgres**, the same
+  `bydmate_telemetry_samples` / `bydmate_live_snapshots` tables the existing sources already
+  write to, distinguished only by a new `source` tag — no new user-facing data model.
+
+### Recommendation
+
+Option 2 first to actually answer "how does `way`'s telemetry differ between di+ and this app,"
+since it needs no code and gives a real side-by-side sample within one drive/charge cycle. Build
+option 1 afterward only if the comparison shows the extra source is worth ingesting permanently —
+otherwise it's schema/auth work in service of a question a raw capture already answers, and it
+carries real design decisions (the token scheme, the ambiguous-zero-power fallback, dropping trip
+inference) that deserve to be locked with real sample data in hand, not guessed up front.
+
+### Should I build this?
+
 ## ~~Cadence-collapse alarm: fold chronic repeats into a daily digest~~ — SHIPPED 2026-09-24
 
 See [CHANGELOG.md](CHANGELOG.md) → "2026-09-24" for what shipped, including a

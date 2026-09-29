@@ -13,6 +13,23 @@ the vehicle, firmware, permissions, and configured integration.
 Completed-trip summaries are a fallback for trip history. They do not provide live state,
 charging state, remote commands, or route tracks.
 
+### Third-party webhook telemetry senders (experimental)
+
+`POST /api/bydmate/webhook-telemetry/[token]` accepts a single flat JSON object from an
+external app's own "send telemetry to my server" feature — currently AndyShaman/BYDMate's
+Settings → "Webhook — telemetry" (a separate app from VoltFlow Mate). Unlike the Mate
+contract above, these senders carry no vehicle id, no `X-API-Key`/`X-Vehicle-Id` headers,
+and no batching; identity comes entirely from an opaque per-(user, vehicle) token embedded
+in the URL, minted with `scripts/mint-bydmate-webhook-token.mjs` and stored hashed in
+`bydmate_webhook_tokens` (never plaintext). The route maps the third-party fields into the
+normalized `telemetry`/`location` shape (`src/lib/voltflowmate/bydmate-webhook-mapper.ts`)
+and writes through the same `bydmate_ingest_telemetry` RPC as the Mate path, tagged
+`source: "bydmate-app-webhook"` — but deliberately skips auto-charging-session detection,
+notifications, Telegram widgets, rollups, and trip inference for this source; it is a live
+snapshot + history writer only. `charge_power_kw` is recomputed as `abs(voltage × current)`
+rather than trusting the sender's own signed `power` field, which mixes motor and battery
+power outside charging. See BACKLOG.md for the full field-mapping rationale.
+
 ## Ingest
 
 The authenticated telemetry endpoint accepts one sample or a batch. Each sample contains:
