@@ -175,7 +175,7 @@ Telegram Mini App (`/telegram`) сейчас является публичной
 | **Уведомления** | Web push (пороги заряда) + Telegram-виджет живого статуса (одно сообщение, редактируется на месте) | [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | `src/lib/push/*`, `src/lib/telegram/*` |
 | **Telegram-бот** | Вход/линковка Mini App (Next.js) + захват групповых сообщений, LLM-классификация и создание черновиков маркетплейса (**отдельный Python edge-сервер**, не этот Next.js-app) | DATABASE_SCHEMA.md §Community marketplace | `src/app/api/telegram/{auth,link}/route.ts`; реальный зарегистрированный webhook держит `scripts/telegram-miniapp-server.py` — `src/app/api/telegram/webhook/route.ts` только отправляет deep-link на PWA и не является живым путём групповых событий |
 | **Удалённые команды** | Абстрактные команды PWA → Mate poller или shell daemon при выключенном авто (lock, SOC limit, …) | [VoltFlow Mate API](../supabase/VOLTFLOW_MATE_API.md) | `src/app/api/bydmate/commands/*`, `vehicle_commands` |
-| **Premium и retention** | Entitlements, retention телеметрии по тарифу, admin-инструменты | [PREMIUM_ADMIN.md](PREMIUM_ADMIN.md) | `is_user_premium()`, `purge_old_bydmate_telemetry_by_tier()` |
+| **Доступ, донаты и хранение** | Независимый Premium-доступ, статистика донатов, сроки хранения телеметрии и админ-инструменты | [PREMIUM_ADMIN.md](PREMIUM_ADMIN.md) | `is_user_premium()`, `purge_old_bydmate_telemetry_by_tier()` |
 | **База знаний** | CMS контента, поиск и каталог сервисов | README §Features | `src/app/telegram/*` |
 | **База данных** | Таблицы, RLS, RPC, enum, storage buckets | [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | `supabase/migrations/` |
 | **PWA / shell** | Установка, service worker, мобильная навигация, i18n (en/be/ru) | [INSTALL.md](../INSTALL.md), README §PWA | `src/app/manifest.ts`, `src/components/layout/*` |
@@ -202,7 +202,7 @@ Telegram Mini App (`/telegram`) сейчас является публичной
 | [WEB_INTERFACE_FORMULAS.ru.md](WEB_INTERFACE_FORMULAS.ru.md) | Русский перевод справочника формул |
 | [KNOWLEDGE_SEARCH.md](KNOWLEDGE_SEARCH.md) | Индексация семантического поиска, confidence/refusal и evaluation |
 | [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | Telegram-виджет живого статуса (одно сообщение, редактируется на месте) |
-| [PREMIUM_ADMIN.md](PREMIUM_ADMIN.md) | Entitlements, тарифы retention, admin runbook |
+| [PREMIUM_ADMIN.md](PREMIUM_ADMIN.md) | Доступ к функциям, добровольные донаты и сроки хранения |
 | [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Полная схема, RLS, RPC, enum, storage |
 | [../supabase/TELEMETRY.md](../supabase/TELEMETRY.md) | Модель хранения телеметрии, retention, поля Di+, API аналитики |
 | [VoltFlow Mate API](../supabase/VOLTFLOW_MATE_API.md) | Контракт ingest и команд VoltFlow Mate |

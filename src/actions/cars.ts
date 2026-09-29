@@ -72,7 +72,7 @@ export async function createCar(formData: FormData) {
     return { ok: false as const, error: parsed.error.flatten().fieldErrors };
   }
 
-  // Free plan is capped at 1 car (BACKLOG.md, Premium monetization plan). Existing
+  // Standard access is capped at 1 car. Existing
   // free accounts that already have more than this from before the cap keep every car
   // they have -- this only blocks *adding* another one, never removes what's there.
   const isPremium = await resolveUserEffectivePremium(supabase, user.id);

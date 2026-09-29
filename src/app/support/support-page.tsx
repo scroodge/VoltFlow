@@ -67,6 +67,7 @@ export function SupportPage() {
   const { t } = useTranslation();
   const [email, setEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [accountLoading, setAccountLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -75,6 +76,10 @@ export function SupportPage() {
       if (!active) return;
       setEmail(data.user?.email ?? null);
       setUserId(data.user?.id ?? null);
+    }).catch(() => {
+      // Treat an unavailable auth service as signed out; do not reveal payment details.
+    }).finally(() => {
+      if (active) setAccountLoading(false);
     });
     return () => {
       active = false;
@@ -83,15 +88,13 @@ export function SupportPage() {
 
   const funds = [t("support.fund1"), t("support.fund2"), t("support.fund3")];
 
-  const receiptBody = [
-    `Account email: ${email ?? "—"}`,
-    `Account ID: ${userId ?? "—"}`,
-    "",
-    "(attach the receipt screenshot or PDF)",
-  ].join("\n");
   const receiptMailto = `mailto:${SUPPORT_EMAIL}?${new URLSearchParams({
-    subject: "VoltFlow support receipt",
-    body: receiptBody,
+    subject: String(t("support.receiptEmailSubject")),
+    body: [
+      String(t("support.receiptEmailBody")),
+      `${t("support.yourAccountEmail")}: ${email ?? "—"}`,
+      `${t("support.yourAccountId")}: ${userId ?? "—"}`,
+    ].join("\n"),
   }).toString()}`;
 
   return (
@@ -136,77 +139,92 @@ export function SupportPage() {
             </ul>
           </div>
 
-          {/* Premium perk */}
+          {/* Donation terms */}
           <div className="voltflow-card p-4">
             <p className="font-heading text-base font-bold">
-              🎁 {t("support.premiumPerkTitle")}
+              ♡ {t("support.premiumPerkTitle")}
             </p>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
               {t("support.premiumPerkBody")}
             </p>
           </div>
 
-          {/* Bank cards */}
-          <div className="space-y-2">
-            <p className="font-heading text-base font-bold">{t("support.cardTitle")}</p>
-            {SUPPORT_CARDS.map((card, index) => (
-              <CopyRow key={index} value={card.number} label={card.bank} />
-            ))}
-          </div>
-
-          {/* International */}
-          <div className="space-y-2">
-            <p className="font-heading text-base font-bold">{t("support.intlTitle")}</p>
-            <Button
-              size="lg"
-              className="h-12 w-full rounded-full bg-[#FFDD00] font-heading text-sm font-bold text-[#06110B]"
-              asChild
-            >
-              <a href={SUPPORT_BUYMEACOFFEE_URL} target="_blank" rel="noreferrer">
-                <Coffee className="size-4" aria-hidden />
-                {t("support.buyMeCoffee")}
-              </a>
-            </Button>
-          </div>
-
-          {/* Receipt */}
-          <div className="voltflow-card space-y-3 p-4">
-            <p className="font-heading text-base font-bold">
-              {t("support.receiptTitle")}
-            </p>
-            <p className="text-sm leading-6 text-muted-foreground">
-              {t("support.receiptBody")}
-            </p>
-            {email ? <CopyRow value={email} label={t("support.yourAccountEmail") as string} /> : null}
-            {userId ? <CopyRow value={userId} label={t("support.yourAccountId") as string} /> : null}
-            <div className="flex flex-col gap-2 pt-1">
-              <Button
-                size="lg"
-                className="h-12 w-full rounded-full bg-[linear-gradient(90deg,#00E676_0%,#00D1FF_100%)] font-heading text-sm font-bold text-[#06110B] voltflow-glow"
-                asChild
-              >
-                <a href={SUPPORT_TELEGRAM_BOT_URL} target="_blank" rel="noreferrer">
-                  <Send className="size-4" aria-hidden />
-                  {t("support.sendViaBot")}
-                </a>
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="h-12 w-full rounded-full border-border bg-white/[0.03] font-heading text-sm font-bold"
-                asChild
-              >
-                <a href={receiptMailto}>
-                  <Mail className="size-4" aria-hidden />
-                  {t("support.sendViaEmail")}
-                </a>
+          {accountLoading ? (
+            <p className="text-sm text-muted-foreground">{t("support.checkingAccount")}</p>
+          ) : !userId ? (
+            <div className="voltflow-card space-y-3 p-4">
+              <p className="font-heading text-base font-bold">{t("support.signInTitle")}</p>
+              <p className="text-sm leading-6 text-muted-foreground">{t("support.signInBody")}</p>
+              <Button asChild className="rounded-full">
+                <Link href="/login?next=/support">{t("support.signIn")}</Link>
               </Button>
             </div>
-          </div>
+          ) : (
+            <>
+              {/* Bank cards */}
+              <div className="space-y-2">
+                <p className="font-heading text-base font-bold">{t("support.cardTitle")}</p>
+                {SUPPORT_CARDS.map((card, index) => (
+                  <CopyRow key={index} value={card.number} label={card.bank} />
+                ))}
+              </div>
 
-          <p className="pt-2 text-center font-heading text-lg font-bold">
-            🙏 {t("support.thanks")}
-          </p>
+              {/* International */}
+              <div className="space-y-2">
+                <p className="font-heading text-base font-bold">{t("support.intlTitle")}</p>
+                <Button
+                  size="lg"
+                  className="h-12 w-full rounded-full bg-[#FFDD00] font-heading text-sm font-bold text-[#06110B]"
+                  asChild
+                >
+                  <a href={SUPPORT_BUYMEACOFFEE_URL} target="_blank" rel="noreferrer">
+                    <Coffee className="size-4" aria-hidden />
+                    {t("support.buyMeCoffee")}
+                  </a>
+                </Button>
+                <p className="text-xs leading-5 text-muted-foreground">{t("support.intlHelp")}</p>
+              </div>
+
+              {/* Receipt */}
+              <div className="voltflow-card space-y-3 p-4">
+                <p className="font-heading text-base font-bold">
+                  {t("support.receiptTitle")}
+                </p>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  {t("support.receiptBody")}
+                </p>
+                {email ? <CopyRow value={email} label={t("support.yourAccountEmail") as string} /> : null}
+                <CopyRow value={userId} label={t("support.yourAccountId") as string} />
+                <div className="flex flex-col gap-2 pt-1">
+                  <Button
+                    size="lg"
+                    className="h-12 w-full rounded-full bg-[linear-gradient(90deg,#00E676_0%,#00D1FF_100%)] font-heading text-sm font-bold text-[#06110B] voltflow-glow"
+                    asChild
+                  >
+                    <a href={SUPPORT_TELEGRAM_BOT_URL} target="_blank" rel="noreferrer">
+                      <Send className="size-4" aria-hidden />
+                      {t("support.sendViaBot")}
+                    </a>
+                  </Button>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="h-12 w-full rounded-full border-border bg-white/[0.03] font-heading text-sm font-bold"
+                    asChild
+                  >
+                    <a href={receiptMailto}>
+                      <Mail className="size-4" aria-hidden />
+                      {t("support.sendViaEmail")}
+                    </a>
+                  </Button>
+                </div>
+              </div>
+
+              <p className="pt-2 text-center font-heading text-lg font-bold">
+                🙏 {t("support.thanks")}
+              </p>
+            </>
+          )}
         </section>
       </div>
     </main>

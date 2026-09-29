@@ -11,13 +11,13 @@ export function buildPremiumUpgradeMailto(params: {
   desiredTerm?: string;
   note?: string;
 }) {
-  const subject = "VoltFlow Premium upgrade request";
+  const subject = "VoltFlow account access question";
   const bodyLines = [
-    "Hello, I want to upgrade to VoltFlow Premium.",
+    "Hello, I have a question about my VoltFlow account access.",
     "",
     `Account email: ${params.accountEmail ?? "not provided"}`,
     `User ID: ${params.userId ?? "not provided"}`,
-    `Preferred term: ${params.desiredTerm ?? "1 year"}`,
+    `Requested period, if applicable: ${params.desiredTerm ?? "not specified"}`,
     `App language: ${params.locale ?? "unknown"}`,
     "",
     `Note: ${params.note ?? ""}`,

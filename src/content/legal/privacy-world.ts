@@ -1,7 +1,7 @@
 import type { Locale } from "@/lib/i18n";
 import type { LegalDocument, LegalOperatorDetails } from "@/content/legal/types";
 
-const UPDATED = "2026-07-20";
+const UPDATED = "2026-09-29";
 
 const en = (op: LegalOperatorDetails): LegalDocument => ({
   title: "Privacy Policy (International)",
@@ -22,7 +22,8 @@ const en = (op: LegalOperatorDetails): LegalDocument => ({
         "Charging sessions: start/stop times, SOC, energy, tariff, and cost estimates.",
         "VoltFlow Mate telemetry when enabled: battery state, speeds, temperatures, odometer, trip tracks, and GPS when your car tablet grants location permission.",
         "Device preferences: language, currency, and default tariff stored locally and in your profile.",
-        "Push notification subscription endpoints if you enable web push.",
+        "Push notification endpoints if you enable web push.",
+        "For an account-linked donation you report: your account email and ID, plus the amount, currency, transfer method, and optional note recorded by an administrator.",
       ],
     },
     {
@@ -33,6 +34,7 @@ const en = (op: LegalOperatorDetails): LegalDocument => ({
         "Secure your account and enforce per-user data isolation.",
         "Send optional charging notifications.",
         "Improve reliability and diagnose technical issues.",
+        "Keep statistics of voluntarily reported donations without changing account access.",
       ],
     },
     {
@@ -52,8 +54,8 @@ const en = (op: LegalOperatorDetails): LegalDocument => ({
     {
       title: "Retention",
       paragraphs: [
-        "We keep account and session data while your account is active. Raw telemetry retention policy is tiered: Free plan keeps 30 days of raw telemetry/tracks; Premium retains them indefinitely while the account remains active. Hourly aggregated telemetry can be kept longer for analytics.",
-        "For the Free plan, when raw telemetry retention is exceeded, records are deleted during scheduled cleanup and cannot be restored.",
+        "We keep account and session data while your account is active. Raw telemetry retention policy is tiered: standard access keeps 30 days of raw telemetry/tracks; Premium access retains them while the account remains active. Donations do not affect retention. Hourly aggregated telemetry can be kept longer for analytics.",
+        "With standard access, when raw telemetry retention is exceeded, records are deleted during scheduled cleanup and cannot be restored.",
         "Inactive accounts: if you do not log in or send telemetry for 30 days, we will send a warning email. If no activity occurs within 60 days, your account and all associated data will be permanently deleted. Premium users are exempt while their Premium status is active.",
         "You may request deletion of your account and associated data by contacting us.",
       ],
@@ -107,7 +109,8 @@ const be = (op: LegalOperatorDetails): LegalDocument => ({
         "Зарадныя сесіі: час, SOC, энергія, тарыф і кошт.",
         "Тэлеметрыя VoltFlow Mate: стан батарэі, хуткасць, тэмпературы, адометр, паездкі і GPS пры дазволе на планшэце.",
         "Налады: мова, валюта, тарыф.",
-        "Push-падпіскі, калі ўключаны вэб-push.",
+        "Адрасы для push-апавяшчэнняў, калі ўключаны вэб-push.",
+        "Для паведамленага вамі ахвяравання: пошта і ID акаўнта, а таксама сума, валюта, спосаб пераказу і неабавязковая нататка, занесеныя адміністратарам.",
       ],
     },
     {
@@ -118,6 +121,7 @@ const be = (op: LegalOperatorDetails): LegalDocument => ({
         "Бяспека акаўнта і ізаляцыя даных карыстальніка.",
         "Апавяшчэнні пра зарадку (па жаданні).",
         "Паляпшэнне надзейнасці сэрвісу.",
+        "Статыстыка добраахвотна паведамленых ахвяраванняў без змены доступу да акаўнта.",
       ],
     },
     {
@@ -137,8 +141,8 @@ const be = (op: LegalOperatorDetails): LegalDocument => ({
     {
       title: "Захоўванне",
       paragraphs: [
-        "Даныя акаўнта захоўваюцца, пакуль акаўнт актыўны. Палітыка сырых даных ступенчатая: free-план — 30 дзён сырай тэлеметрыі/трэкаў; Premium захоўвае іх бестэрмінова, пакуль акаўнт актыўны. Пагадзінныя агрэгацыі могуць захоўвацца даўжэй для аналітыкі.",
-        "Для free-плана пасля дасягнення тэрміну захоўвання сырыя запісы выдаляюцца падчас планавых ачыстак і не могуць быць адноўлены.",
+        "Даныя акаўнта захоўваюцца, пакуль акаўнт актыўны. Са стандартным доступам сырая тэлеметрыя і трэкі захоўваюцца 30 дзён; з Premium-доступам — пакуль акаўнт актыўны. Ахвяраванні не ўплываюць на тэрмін захоўвання. Пагадзінныя агрэгацыі могуць захоўвацца даўжэй для аналітыкі.",
+        "Са стандартным доступам пасля заканчэння тэрміну захоўвання сырыя запісы выдаляюцца падчас планавых ачыстак і не могуць быць адноўлены.",
         "Неактыўныя акаўнты: калі вы не ўваходзіце ў сістэму або не дасылаеце тэлеметрыю на працягу 30 дзён, мы дашлем папярэджанне на email. Калі актыўнасць не аднавіцца на працягу 60 дзён, ваш акаўнт і ўсе звязаныя даныя будуць выдалены назаўжды. Прэміум-карыстальнікі вызваляюцца, пакуль іх прэміум-статус актыўны.",
         "Вы можаце запытаць выдаленне акаўнта, звязаўшыся з намі.",
       ],
@@ -190,7 +194,8 @@ const ru = (op: LegalOperatorDetails): LegalDocument => ({
         "Зарядные сессии: время, SOC, энергия, тариф и стоимость.",
         "Телеметрия VoltFlow Mate: состояние батареи, скорость, температуры, одометр, поездки и GPS при разрешении на планшете.",
         "Настройки: язык, валюта, тариф.",
-        "Push-подписки при включённом web push.",
+        "Адреса для push-уведомлений при включённом web push.",
+        "Для доната, о котором вы сообщили: почта и ID аккаунта, а также сумма, валюта, способ перевода и необязательное примечание, внесённые администратором.",
       ],
     },
     {
@@ -201,6 +206,7 @@ const ru = (op: LegalOperatorDetails): LegalDocument => ({
         "Безопасность аккаунта и изоляция данных пользователя.",
         "Уведомления о зарядке (по желанию).",
         "Улучшение надёжности сервиса.",
+        "Статистика добровольно сообщённых донатов без изменения доступа к аккаунту.",
       ],
     },
     {
@@ -220,8 +226,8 @@ const ru = (op: LegalOperatorDetails): LegalDocument => ({
     {
       title: "Хранение",
       paragraphs: [
-        "Данные аккаунта хранятся, пока аккаунт активен. Политика по сырым данным ступенчатая: free-план — 30 дней сырой телеметрии/треков; Premium хранит их бессрочно, пока аккаунт активен. Почасовые агрегаты могут храниться дольше для аналитики.",
-        "Для free-плана после истечения срока хранения сырые записи удаляются в плановых очистках и восстановлению не подлежат.",
+        "Данные аккаунта хранятся, пока аккаунт активен. Со стандартным доступом сырая телеметрия и треки хранятся 30 дней; с Premium-доступом — пока аккаунт активен. Донаты не влияют на срок хранения. Почасовые агрегаты могут храниться дольше для аналитики.",
+        "Со стандартным доступом после истечения срока хранения сырые записи удаляются в плановых очистках и восстановлению не подлежат.",
         "Неактивные аккаунты: если вы не входите в систему или не отправляете телеметрию в течение 30 дней, мы отправим предупреждение по email. Если активность не возобновится в течение 60 дней, ваш аккаунт и все связанные данные будут безвозвратно удалены. Премиум-пользователи освобождаются, пока их премиум-статус активен.",
         "Вы можете запросить удаление аккаунта, связавшись с нами.",
       ],
