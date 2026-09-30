@@ -138,7 +138,7 @@ One row per charge event, live-updated during charging.
 | `energy_corrected_at` | timestamptz | When a provider-billed energy/cost correction was applied |
 | `manual_entry` | boolean | True only for a receipt-based, user-entered missed charge |
 | `session_origin` | text | `legacy / manual_receipt / telemetry_recovered`; provenance for history display |
-| `recovery_key` | text | Nullable idempotency key for owner-confirmed telemetry recovery; unique per user/car when present |
+| `recovery_key` | text | Nullable idempotency key (`startedAt:stoppedAt` of the recovered window) for telemetry recovery, owner-confirmed or automatic after a late delivery; unique per user/car when present |
 | `end_max_cell_delta_v` | numeric | Maximum cell-voltage delta measured near the session's peak charging SOC (single sample, noise-sensitive) |
 | `end_delta_soc` | numeric | SOC at which `end_max_cell_delta_v` was measured |
 | `end_median_cell_delta_v` | numeric | Median cell-voltage delta over the same top-of-charge window (`20260914120000`) — noise-robust companion to `end_max_cell_delta_v`, the value Battery Consistency trends against. Null until a session closes under this definition; no backfill for older sessions |

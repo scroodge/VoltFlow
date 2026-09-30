@@ -1,5 +1,99 @@
 # Backlog — proposed plans awaiting go-ahead
 
+## Charges delivered late (car offline/asleep) must always become history — proposed 2026-09-30
+
+### Research findings
+
+Requirement (owner): if the car has no internet during a charge, the charge must still be saved
+and shown once data arrives — always, without a manual step.
+
+Measured on prod (read-only, 10–30 days): the telemetry itself **is** preserved. The device keeps
+sampling while offline (~11 s cadence, correct `device_time`) and flushes the backlog in one burst
+when it reconnects — e.g. 2026-09-25: nothing received 11:21→12:43, then 472 samples at 12:43,
+coinciding with the car starting to drive. The loss is one layer up: `charging_sessions` is derived
+only by the live planner (`planChargingBatch`), and auto-start requires `recent` (sample ≤ 3 min
+old at *processing* time, `AUTO_START_WINDOW_MS`). A late burst is never recent, so no session is
+created. All 3 September charges of one account failed this way (delivery lag 17–80 min; two were
+also before the car row existed, 2026-09-16). Not one user: 4 of 13 accounts have ≥99% of charging
+samples delivered >3 min late (median lags: 23 min, 27 min, 48 min, 7.4 h).
+
+Why the device stays silent while the car sleeps is **not established** from the database (no
+app version stored for Mate devices). The sender code is not in this repo. Unverified: whether the
+on-device buffer is durable (survives app kill / head-unit reboot) and how large it can grow.
+
+The existing owner-confirmed recovery (shipped in `bb24b7b`, plan below) already contains a tested
+closed-window detector (`findTelemetryRecoveryCandidates`). It rejected automatic insertion
+(its option 2) because of phantom/bad-tariff risk; this plan revisits that on the owner's new
+requirement and keeps every safeguard that made the detector conservative.
+
+### Options considered
+
+1. **Status quo: owner must press import.** Safe, but the charge is invisible until someone
+   notices the card. Does not meet "always". Rejected.
+2. **Relax the live planner: measure `recent` against the batch's newest sample, not wall clock.**
+   One code path, but it touches the strict auto-start rule whose whole purpose is to stop stale
+   power readings creating phantom sessions (see AGENTS.md: starting vs staying open). A late
+   batch that ends mid-charge would leave an open session with no further data. Highest risk. Rejected.
+3. **Auto-apply the existing closed-window detector to each late batch (recommended).** After
+   ingest, only when the batch contains charging samples delivered >3 min late, scan *that
+   batch's time range* for the car and insert each closed, non-overlapping candidate as a
+   `completed` session with `session_origin = 'telemetry_recovered'`. Reuses the tested detector,
+   the unique `recovery_key` index and the overlap check. Live path is untouched.
+4. **Fix at the source (APK): durable on-device queue + upload on reconnect/while asleep.**
+   Needed for *freshness* and to guarantee nothing is lost if the buffer is volatile, but it is
+   not in this repo and cannot fix charges already delivered late. Complementary, tracked
+   separately; option 3 makes the server correct regardless.
+
+### Proposed scope (option 3)
+
+1. In the Mate ingest route, after `bydmate_ingest_telemetry`, compute per vehicle whether any
+   non-`live_only` charging sample in this batch has `received − device_time > 3 min`. If none,
+   do nothing (zero cost on the normal fast path).
+2. If so, load that vehicle's samples for `[batch min device_time − 15 min, batch max]`, run
+   `findTelemetryRecoveryCandidates`, drop candidates overlapping existing sessions or already
+   holding that `recovery_key`, and insert the rest with the same fields as
+   `importTelemetryRecoveryCandidate` (extract its insert into a shared server function instead
+   of duplicating it). One transaction per batch; `ON CONFLICT DO NOTHING` on the unique index.
+3. A run still open at the end of the batch is **not** imported (no explicit end): the live
+   path owns it, and the next late/fresh batch closes it.
+4. Fix the detector's end time: when the next non-charging sample is far after the last charging
+   sample (observed: 14 h of telemetry silence, 2026-09-12), use the last charging sample as
+   `stopped_at`, never the distant next sample. Add a test for it.
+5. Keep the History recovery card for anything the automatic path declined (older data, no car
+   at the time); it stays owner-confirmed.
+6. One-off backfill for already-affected accounts (3 others) only with a separate explicit
+   go-ahead; it writes user-owned rows.
+
+### Data ownership and location
+
+Recovered sessions are **user-owned** rows in **Postgres** (`charging_sessions`, existing
+`auth.uid()`/RLS scope), exactly like today's imports. No new table, no new preference, nothing
+in `localStorage`. Undo = delete the session in History; because the scan only covers the
+batch's own range and ingest de-duplicates samples, a deleted session is not re-created unless
+the same samples are re-delivered. Please confirm this ownership/storage choice.
+
+### Risks and safeguards
+
+- Estimated cost uses today's profile prices and SOC-derived energy (battery-side ÷ per-tariff
+  efficiency), labelled by `session_origin`; owner can correct it afterward.
+- Phantom risk stays bounded by the detector: ≥4 samples, real `charge_power_kw > 0.1`, parked,
+  ≤3 min gaps, SOC rising, explicit non-charging boundary, ≤24 h.
+- Race with the live planner: overlap check plus the unique index; live sessions win.
+- Extra query per late batch only; bounded range, same pagination/limit guards as the action.
+- Out of scope and unverified here: APK buffer durability (option 4).
+
+### Verification plan
+
+- Detector tests: distant next sample uses last charging sample as stop; existing cases unchanged.
+- Route/unit tests: fresh batch → no scan; late batch with closed charge → one session; replay of
+  the same batch → no duplicate; late batch ending mid-charge → nothing imported; overlap with a
+  live session → skipped.
+- Existing strict auto-session tests still prove old measurements cannot open a live session.
+- Read-only prod check after ship: for the 4 affected accounts, charging episodes in telemetry
+  vs `charging_sessions` rows.
+
+### Should I build this?
+
 ## Recover missed telemetry charges after delayed car setup or delivery — proposed 2026-09-30
 
 ### Research findings
@@ -155,11 +249,14 @@ before writing APK code. Keep the existing integer `charge_power_kw` as the fall
 0a. **Discovery, code side — DONE 2026-09-30.** Decompiled `diplus.2.0.0-beta8-3.apk`
    and diffed its strings against 2.0.0-beta1; result recorded in
    `BYDMate-own/docs/DIPLUS_DATA.md`.
-0b. **Discovery, car side — NOT DONE, needs the car.** On `way` (di+ 2.0, plugged in),
-   poll `/api/historyStatus` from the same context the APK uses and record: whether the
-   call needs the `auth` header, how often `batteryPackCurrent` changes, the round-trip
-   time and CPU cost at 1 Hz and 0.1 Hz, the sign of the current on AC and DC, and
-   `|V × I|` against the integer kW reading and the `batteryEnergyKwh` slope.
+0b. **Discovery, car side — PARTLY DONE 2026-09-30 (car idle at 100 %).** Measured on
+   `way` (di+ `2.0.0b8-2`): no `auth` header needed, round trip ≤ 170 ms including
+   `adb`/`curl` start-up, values fractional. Also found that on **AC** the di+
+   charging-module power (`rawChargingPower`, `maxChargingPower`) is `0.0`, while
+   di+'s own V × I integral gave session `9640` 14.87 kWh (≈ 4.59 kW mean, 4.77 kW peak).
+   **Still open, needs a real charge:** the sign of `batteryPackCurrent` under load,
+   how often it changes, di+ CPU cost of a 1 Hz poll, and `|V × I|` against the
+   integer kW reading — on AC and on DC. Details in `BYDMate-own/docs/DIPLUS_DATA.md`.
 1. **APK:** add a client for `/api/historyStatus` next to `DiParsClient` (same
    `127.0.0.1:8988` host); read `batteryPackVoltage`/`batteryPackCurrent` only when
    charging and only when the validity bits are set; add `chargeBatteryCurrentA` to

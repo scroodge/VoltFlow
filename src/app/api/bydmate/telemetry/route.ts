@@ -1,5 +1,6 @@
 import {
   processVoltflowMateAutoChargingSessions,
+  recoverLateChargesForBatch,
   reconcileChargingSessionsForUser,
 } from "@/features/charging/server";
 import {
@@ -513,6 +514,37 @@ export async function POST(request: Request) {
       );
     }
 
+    // A batch flushed after the car was offline/asleep holds charges the live planner
+    // rejects on purpose (older than its start window). Recover the closed ones from the
+    // persisted samples so they still reach History. Best-effort: the samples are already
+    // saved, and the History recovery card remains the fallback, so a failure here must
+    // not fail the request and make the device re-send an already-stored batch.
+    let lateChargeRecovery = {
+      recovered: 0,
+      sessionIds: [] as string[],
+      errors: [] as string[],
+    };
+    try {
+      lateChargeRecovery = await recoverLateChargesForBatch({
+        supabase,
+        userId: profile.id,
+        samples,
+        receivedAt,
+      });
+      if (lateChargeRecovery.errors.length) {
+        console.error(
+          "late charge recovery:",
+          lateChargeRecovery.errors.join("; "),
+        );
+      }
+    } catch (recoveryError) {
+      const message =
+        recoveryError instanceof Error
+          ? recoveryError.message
+          : "Late charge recovery failed";
+      console.error("late charge recovery:", message);
+    }
+
     // Only reconcile when auto-session processing actually opened/closed a row.
     // Reconcile reads sessions + samples back from Supabase, so running it on
     // every ~1Hz sample was a large, mostly-redundant CPU + egress cost. The
@@ -557,7 +589,9 @@ export async function POST(request: Request) {
       // and it is what lets the command poll drop from 6s to 60s while remote commands are
       // suspended without stranding the live view at the slower cadence.
       live_fast_seconds: liveFastSecondsFor(profile, headerVehicleId),
-      ...(batteryCapacityKwh != null ? { battery_capacity_kwh: batteryCapacityKwh } : {}),
+      ...(batteryCapacityKwh != null
+        ? { battery_capacity_kwh: batteryCapacityKwh }
+        : {}),
       ...parseIngestStats(ingestResult, samples.length),
       dropped_location_count: droppedLocations,
       dropped_telemetry_field_count: droppedTelemetryFields,
@@ -568,6 +602,10 @@ export async function POST(request: Request) {
       telegram_live_widgets: telegramWidgets,
       auto_charging_sessions: autoChargingSessions,
       charging_session_reconcile: chargingSessionReconcile,
+      late_charge_recovery: {
+        recovered: lateChargeRecovery.recovered,
+        session_ids: lateChargeRecovery.sessionIds,
+      },
       received_at: receivedAt,
       ingest: ingestResult,
     });

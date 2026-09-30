@@ -45,3 +45,17 @@ test("does not join charging samples across a stale telemetry gap", () => {
   ]);
   assert.deepEqual(candidates, []);
 });
+
+test("ends at the last charging sample when telemetry stays silent afterwards", () => {
+  const candidates = findTelemetryRecoveryCandidates(car, [
+    sample(0, { soc: 40, charge_power_kw: 7, speed_kmh: 0 }),
+    sample(1, { soc: 41, charge_power_kw: 7, speed_kmh: 0 }),
+    sample(2, { soc: 42, charge_power_kw: 7, speed_kmh: 0 }),
+    sample(3, { soc: 43, charge_power_kw: 7, speed_kmh: 0 }),
+    // The car went silent for 14 h; the next reading is not evidence of when charging ended.
+    sample(14 * 60 + 3, { soc: 43, charge_power_kw: 0, speed_kmh: 0 }),
+  ]);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].startedAt, at(0));
+  assert.equal(candidates[0].stoppedAt, at(3));
+});

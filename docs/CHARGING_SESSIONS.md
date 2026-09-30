@@ -212,8 +212,24 @@ When telemetry arrived before the owner created a cloud car profile, or after th
 three-minute live-start window, it is retained but cannot create a live session. The History
 page may offer a **recovery candidate** for a matching car only when retained telemetry has a
 closed, parked run of at least four real `charge_power_kw > 0.1` measurements with plausible,
-rising SOC. Candidates are derived on demand and are never stored until the owner confirms an
-import.
+rising SOC, followed by an explicit non-charging sample. If the next sample arrives after more
+than the three-minute gap (car asleep/offline), the session ends at the **last charging
+sample**, never at that distant reading. Candidates found on demand are not stored until the
+owner confirms an import.
+
+**Automatic recovery of late deliveries.** A car that is offline or asleep keeps sampling and
+flushes the backlog when it reconnects, so the charge is persisted in telemetry but every
+sample is older than the live start window. After each ingest batch
+(`recoverLateChargesForBatch`, called from `POST /api/bydmate/telemetry` after the live
+planner), if any non-`live_only` sample was received more than three minutes after its
+`device_time`, the closed-window detector re-scans that vehicle's persisted samples from 12 h
+before the earliest late sample to the newest sample in the batch, and inserts every closed,
+non-overlapping candidate through the same guarded insert as the History import
+(`insertRecoveredSession`). A charge still open at the end of the range is never imported; the
+live path owns it. The step is best-effort — a failure is logged and never fails the request or
+makes the device re-send a stored batch — and the History card stays as the manual fallback for
+older data or accounts that had no car at the time. Deleting a recovered session does not
+re-create it: only a batch's own range is scanned, and ingest de-duplicates samples.
 
 An imported row has `session_origin = 'telemetry_recovered'`, measured SOC and derived
 SOC-based grid energy. Its tariff cost is an estimate using the current tariff and may be

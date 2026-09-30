@@ -1,12 +1,16 @@
-import { efficiencyPercentForTariff } from "@/lib/charging-efficiency";
-import { resolveTariffTypeByPower } from "@/lib/charging-tariffs";
-import type { Car, ChargingTariffType, VoltflowMateTelemetry } from "@/types/database";
+import { efficiencyPercentForTariff } from "../../../lib/charging-efficiency.ts";
+import { resolveTariffTypeByPower } from "../../../lib/charging-tariffs.ts";
+import type {
+  Car,
+  ChargingTariffType,
+  VoltflowMateTelemetry,
+} from "../../../types/database.ts";
 import {
   finiteTelemetryNumber,
   isMateAutoSessionCharging,
   sanitizeChargerPowerKw,
   telemetrySpeedKmh,
-} from "./telemetry-charging";
+} from "./telemetry-charging.ts";
 
 export type RecoveryTelemetrySample = {
   device_time: string;
@@ -48,20 +52,33 @@ function candidateFromRun(
   const startedAt = run[0]!.device_time;
   const startMs = Date.parse(startedAt);
   const stoppedMs = Date.parse(stoppedAt);
-  if (!Number.isFinite(startMs) || !Number.isFinite(stoppedMs) || stoppedMs <= startMs || stoppedMs - startMs > MAX_DURATION_MS) {
+  if (
+    !Number.isFinite(startMs) ||
+    !Number.isFinite(stoppedMs) ||
+    stoppedMs <= startMs ||
+    stoppedMs - startMs > MAX_DURATION_MS
+  ) {
     return null;
   }
 
   const startPercent = finiteTelemetryNumber(run[0]!.telemetry.soc);
   const endPercent = finiteTelemetryNumber(run.at(-1)!.telemetry.soc);
-  if (startPercent == null || endPercent == null || endPercent <= startPercent || endPercent > 100) return null;
+  if (
+    startPercent == null ||
+    endPercent == null ||
+    endPercent <= startPercent ||
+    endPercent > 100
+  )
+    return null;
 
   const rawPowers = run
     .map((sample) => finiteTelemetryNumber(sample.telemetry.charge_power_kw))
     .filter((power): power is number => power != null && power > 0.1);
   if (!rawPowers.length) return null;
   const medianPower = median(rawPowers);
-  const chargeType = run.find((sample) => typeof sample.telemetry.charge_type === "string")?.telemetry.charge_type;
+  const chargeType = run.find(
+    (sample) => typeof sample.telemetry.charge_type === "string",
+  )?.telemetry.charge_type;
   const chargerPowerKw = sanitizeChargerPowerKw(
     medianPower,
     typeof chargeType === "string" ? chargeType.toUpperCase() : null,
@@ -70,7 +87,7 @@ function candidateFromRun(
   const tariffType = resolveTariffTypeByPower(chargerPowerKw);
   const efficiencyPercent = efficiencyPercentForTariff(car, tariffType);
   const chargedEnergyKwh =
-    ((endPercent - startPercent) / 100 * car.battery_capacity_kwh) /
+    (((endPercent - startPercent) / 100) * car.battery_capacity_kwh) /
     (efficiencyPercent / 100);
   if (!Number.isFinite(chargedEnergyKwh) || chargedEnergyKwh <= 0) return null;
 
@@ -124,7 +141,16 @@ export function findTelemetryRecoveryCandidates(
       continue;
     }
 
-    const candidate = candidateFromRun(car, run, sample.device_time);
+    const lastCharging = run.at(-1);
+    // A long silence before the first non-charging reading (car asleep/offline) is not
+    // evidence of when charging ended: stop at the last charging sample instead.
+    const stoppedAt =
+      lastCharging &&
+      Date.parse(sample.device_time) - Date.parse(lastCharging.device_time) >
+        MAX_INTER_SAMPLE_GAP_MS
+        ? lastCharging.device_time
+        : sample.device_time;
+    const candidate = candidateFromRun(car, run, stoppedAt);
     if (candidate) candidates.push(candidate);
     run = [];
     previousChargingMs = null;
