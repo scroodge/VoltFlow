@@ -10,6 +10,8 @@ export type ChargingProviderType =
   | "user_provider"
   | "custom";
 
+export type ChargingSessionOrigin = "legacy" | "manual_receipt" | "telemetry_recovered";
+
 import type { PressureUnit } from "@/lib/pressure-units";
 
 export type Profile = {
@@ -78,6 +80,10 @@ export type ChargingSessionRow = {
    *  (see createManualChargingSession). Energy/cost are receipt figures; SOC and charger
    *  power are derived from them, so the row is excluded from efficiency learning. */
   manual_entry: boolean;
+  /** How this completed-history row was created. */
+  session_origin: ChargingSessionOrigin;
+  /** Idempotency key for owner-confirmed telemetry recovery; null for ordinary sessions. */
+  recovery_key: string | null;
   charged_energy_kwh: number;
   estimated_cost: number;
   status: SessionStatus;

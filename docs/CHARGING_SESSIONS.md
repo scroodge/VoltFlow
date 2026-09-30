@@ -206,6 +206,22 @@ car, since a duplicate would double-count in the day summary and every monthly t
 Manual rows carry `manual_entry = true`, which drives the "Manual" badge and scopes
 `deleteManualChargingSession` — auto-detected sessions can never be deleted through it.
 
+## Recovery from retained telemetry
+
+When telemetry arrived before the owner created a cloud car profile, or after the normal
+three-minute live-start window, it is retained but cannot create a live session. The History
+page may offer a **recovery candidate** for a matching car only when retained telemetry has a
+closed, parked run of at least four real `charge_power_kw > 0.1` measurements with plausible,
+rising SOC. Candidates are derived on demand and are never stored until the owner confirms an
+import.
+
+An imported row has `session_origin = 'telemetry_recovered'`, measured SOC and derived
+SOC-based grid energy. Its tariff cost is an estimate using the current tariff and may be
+corrected later. It is not a receipt/manual entry (`manual_entry = false`) and remains eligible
+for normal reconciliation. `recovery_key` makes the import idempotent, while the usual overlap
+guard prevents a duplicate with an existing session. The feature does not relax the live
+three-minute auto-start rule.
+
 ## Battery Consistency diagnostics
 
 `bydmate_capture_session_end_delta()` runs at every session-close path (manual stop, atomic

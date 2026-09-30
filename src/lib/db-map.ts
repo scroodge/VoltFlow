@@ -119,6 +119,12 @@ export function mapChargingSession(
     energy_overridden: raw.energy_overridden === true,
     energy_corrected_at: raw.energy_corrected_at ? String(raw.energy_corrected_at) : null,
     manual_entry: raw.manual_entry === true,
+    session_origin: enumValue(
+      raw.session_origin,
+      ["legacy", "manual_receipt", "telemetry_recovered"] as const,
+      raw.manual_entry === true ? "manual_receipt" : "legacy",
+    ) as ChargingSessionRow["session_origin"],
+    recovery_key: raw.recovery_key ? String(raw.recovery_key) : null,
     charged_energy_kwh: num(raw.charged_energy_kwh),
     estimated_cost: num(raw.estimated_cost),
     status: raw.status as ChargingSessionRow["status"],

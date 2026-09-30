@@ -1330,6 +1330,11 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                   {t("dashboard.addEvBody")}
                 </p>
               )}
+              {vehicleConnection?.connected && cars.length === 0 ? (
+                <p className="mt-2 text-sm leading-6 text-amber-700 dark:text-amber-300">
+                  {t("charging.recovery.setupWarning")}
+                </p>
+              ) : null}
             </div>
           </div>
 

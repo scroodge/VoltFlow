@@ -31,6 +31,8 @@ export function buildMockChargingSession(nowMs = Date.now()): ChargingSessionRow
     energy_overridden: false,
     energy_corrected_at: null,
     manual_entry: false,
+    session_origin: "legacy",
+    recovery_key: null,
     charged_energy_kwh: 0,
     estimated_cost: 0,
     status: "charging",

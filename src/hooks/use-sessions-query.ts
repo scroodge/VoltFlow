@@ -15,7 +15,7 @@ import type { ChargingSessionRow } from "@/types/database";
  * three home/commercial/fast_dc price columns this mapper never touches.
  */
 const SESSION_COLUMNS =
-  "id,user_id,car_id,start_percent,current_percent,target_percent,battery_capacity_kwh,charger_power_kw,efficiency_percent,tariff_type,provider_type,tariff_manual,price_per_kwh,charged_energy_kwh,estimated_cost,status,started_at,stopped_at,created_at,updated_at" as const;
+  "id,user_id,car_id,start_percent,current_percent,target_percent,battery_capacity_kwh,charger_power_kw,efficiency_percent,tariff_type,provider_type,user_provider_id,tariff_manual,tariff_selected_at,price_per_kwh,energy_overridden,energy_corrected_at,manual_entry,session_origin,recovery_key,charged_energy_kwh,estimated_cost,status,started_at,stopped_at,end_max_cell_delta_v,end_delta_soc,end_median_cell_delta_v,created_at,updated_at" as const;
 
 export async function fetchSessions(): Promise<ChargingSessionRow[]> {
   if (isDevAppRoute()) {

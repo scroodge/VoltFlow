@@ -1,5 +1,207 @@
 # Backlog — proposed plans awaiting go-ahead
 
+## Recover missed telemetry charges after delayed car setup or delivery — proposed 2026-09-30
+
+### Research findings
+
+An authenticated Mate sender can persist telemetry before its owner creates a `cars` row.
+The atomic charging planner then has no car/capacity/tariff context and skips those samples
+(`charging-auto-session-processor.ts`). It still consumes the pending inputs, and creating a
+car later does not replay them. Retaining that pending queue alone would not solve the
+problem: automatic starts deliberately reject measurements older than three minutes, so an
+offline or delayed batch cannot open a historical live session.
+
+The raw telemetry remains available for its normal retention window and contains enough
+evidence to identify some missed charges: a matching vehicle alias, parked samples, four or
+more consecutive real `charge_power_kw > 0.1` readings, plausible SOC, and a later
+non-charging boundary. The existing receipt-based manual entry cannot recover such a charge
+without the owner knowing billed kWh and cost. It also must not be relabelled as a manual
+receipt: it is vehicle-telemetry-derived data.
+
+### Options considered
+
+1. **Keep manual entry only.** No implementation risk, but an owner without receipts or
+   access to the car cannot restore an otherwise well-evidenced session. Rejected.
+2. **Automatically insert every historical match.** Fixes the empty history without a user
+   step, but can turn a stale or delayed power reading into a billed-looking session and uses
+   today's tariff configuration for a past event. Rejected.
+3. **On-demand, owner-confirmed recovery candidates (recommended).** On the charging-history
+   page, derive bounded candidates from the owner's retained telemetry for the selected car.
+   Show start/end, SOC gain, derived energy, and an explicitly estimated tariff/cost; the owner
+   chooses which one to import. The same scan covers both telemetry received before car setup
+   and later offline batches. It creates no durable candidate rows, so no background job or
+   queue replay is needed. A connected-but-carless account also gets an onboarding warning to
+   add its car before the retention window expires.
+
+### Proposed scope
+
+1. Extract a pure historical-candidate detector. It reuses the strict real-power/parked
+   predicate, requires a closed, non-overlapping window and a matching `cars.vehicle_alias`,
+   rejects samples outside the retention window or ambiguous boundaries, and never changes the
+   live three-minute auto-start rule.
+2. Add an authenticated, RLS-scoped reader/action for the selected car that scans a bounded
+   telemetry window and returns candidates only to that car's owner. Do not persist candidates
+   or expose another user's telemetry.
+3. Add a History-page recovery card and confirmation dialog. The owner sees what will be
+   imported, can decline it, and can adjust/correct the estimated tariff afterward. A card must
+   state that recovery is based on vehicle telemetry, not a provider receipt.
+4. Add `charging_sessions.session_origin` plus an idempotent `recovery_key` through one new migration, defaulting
+   existing rows to their known legacy source and recording `telemetry_recovered` separately
+   from `manual_receipt` and normal auto/manual starts. The imported row is `completed`, uses
+   measured SOC/derived energy, remains eligible for reconciliation, and never produces an
+   efficiency-learning observation until a provider correction is entered.
+5. When the first live snapshot arrives for an account with no cloud car, show a clear,
+   non-blocking setup warning: telemetry is connected, but charging history needs a car profile
+   before its retained data expires. Do not auto-create a car: capacity, model and tariff are
+   owner choices.
+
+### Data ownership and location
+
+Raw telemetry and recovered charging sessions are **user-owned** and live in **Postgres** under
+the existing `auth.uid()` scope. `session_origin` is provenance on that existing user-owned
+session row. Recovery candidates are derived on demand from the owner's retained telemetry and
+are **not stored** in Postgres or `localStorage`; there is no new preference. Please confirm
+these ownership and storage choices before implementation.
+
+### Risks and safeguards
+
+- Recovery is available only while raw telemetry is retained; the UI must say so.
+- Candidate detection must stay stricter than a visual SOC rise and require a clear end to
+  avoid phantom history. It must never use traction `power_kw` or a lone `is_charging` flag.
+- Import is idempotent: a unique source window/origin guard plus the existing overlap check
+  prevents duplicate sessions on retry or reload.
+- A late live batch must continue to be preserved as telemetry; this feature adds an opt-in
+  historical import path, not a relaxation of the live auto-start safety rule.
+
+### Verification plan
+
+- Pure detector tests: car created after telemetry, delayed batch, valid recovery, no-car/no
+  alias, stale power, missing end, overlap, duplicate import, and a different user's denial.
+- Existing strict auto-session tests prove old measurements still cannot create a live session.
+- Migration review verifies default/backfill, `CHECK`/index/privileges, and RLS; apply once to
+  self-hosted production with the documented pooler procedure.
+- Browser QA: a carless-but-connected account sees the setup warning; the affected account sees
+  candidates, declines one, imports one, reloads History, edits the tariff, and cannot import it
+  twice. Confirm the row's origin and values with a read-only production query.
+
+### Should I build this?
+
+## Measured charging power from pack voltage × current — proposed 2026-09-30
+
+### Research findings
+
+Charging power (`charge_power_kw`) is the predicate behind auto-start (`> 0.1 kW`, 4
+consecutive samples) and the 5-minute zero-power stall stop, and it feeds the power
+display. Today it is coarse:
+
+- **APK** (`BYDMate-own`, `TelemetrySnapshot.kt:126`): `charge_power_kw` is taken from
+  `powerKw`, i.e. the di+ engine-power field (`发动机功率`), an **integer kW** that reads
+  e.g. `-65` while the real value is 65.4. Not re-verified in this pass: the body of the
+  `if (isCharging == true)` branch at line 126 was not read; the source is inferred from
+  `docs/DIPLUS_DATA.md`.
+- **Voltage:** `battery_voltage_v` is already in the contract and DB. It comes from
+  autoservice `FID_CHARGE_BATTERY_VOLT` (`AutoserviceClient.kt:104`), as an **integer V**.
+- **Current:** **not read anywhere in the APK** — `ChargingReading` and `FidRegistry`
+  have no current field. The server contract (`ingest-payload.ts`,
+  `telemetry-sanitizer.ts`, `database.ts`) has no current column either.
+- **di+ internals:** `/api/vehicleSegments` and `/api/chargingSessions` expose pack
+  `batteryVoltageMin/Max` and `batteryCurrentMin/Max` per segment; `332.0 V × 198.5 A =
+  65.902 kW` equals `batteryPowerMax` exactly (`DIPLUS_DATA.md` ~L551), so P = V × I is the
+  right formula. These are **aggregates, not instantaneous** values; the open segment
+  refreshes roughly every 3 s. Fractional energy there is **not persisted** when a
+  segment closes (B-14 closed as a negative result) — do not revive that path.
+- **Precedent:** the third-party webhook mapper already computes
+  `abs(voltage × current)` (`bydmate-webhook-mapper.ts:91`), but only for that sender.
+- **New di+ build downloaded:** `BYDMate-own/research/diplus.2.0.0-beta8-3.apk`
+  (versionCode 168, sha256 `f9fe9b35…56ed`, from the beta manifest
+  `jt.x2x.fun:852/Update/dibeta.txt`). Its changelog (`v200b8.txt`, item 5) announces new
+  automation parameters for **instrument-cluster SOC and fractional SOC**.
+- **Discovery result (2026-09-30, decompiled beta8-3, written up in
+  `BYDMate-own/docs/DIPLUS_DATA.md` → "Live pack voltage and current exist in
+  `/api/historyStatus`"):** di+ **does** expose a live `batteryPackVoltage`,
+  `batteryPackCurrent` (negative while charging) and `batteryPower =
+  max(0, −V × I / 1000)` as doubles in `/api/historyStatus`. The same keys exist in
+  2.0.0b1, so no di+ upgrade is required on a 2.0 car. It is 2.0-only; 1.x cars have no
+  such endpoint. Still **unmeasured on the car:** the snapshot refresh rate, whether the
+  `"auth"` filter affects the APK's localhost call, and the cost of polling it (the reply
+  also runs several Room `COUNT(*)` queries).
+
+### Options considered
+
+1. **Do nothing.** Zero risk, keeps integer-kW power. Rejected: it stays blind to
+   sub-kW changes and to a charger tapering at low power.
+2. **Read live pack current/voltage from di+ `/api/historyStatus` in the APK, send
+   `charge_current_a` (and pack voltage), derive `charge_power_kw = |V × I|`
+   (recommended).** The fields exist (discovery 2026-09-30), are doubles, and di+ uses
+   the same formula internally. Works on di+ 2.0 cars only; 1.x cars keep the integer
+   reading. Cost: APK release + contract + migration, plus a measurement of refresh
+   rate and poll cost.
+3. **Read the charging current from autoservice (a new FID) instead.** Would also cover
+   di+ 1.x cars, but no current FID is known: `FidRegistry` has none, and finding one
+   means reverse-engineering more of the BYD service. Keep as a fallback only if step 0b
+   shows `/api/historyStatus` is too heavy to poll.
+4. **Consume di+ 2.0 segment aggregates (B-14 style).** ~3 s/20 s resolution, lost
+   when the segment closes. Rejected; option 2 is strictly better.
+
+### Recommendation
+
+Option 2. Discovery found a live source, so the open question is operational (refresh
+rate, poll cost, `auth`), not whether the data exists. Measure those on `way` (step 0b)
+before writing APK code. Keep the existing integer `charge_power_kw` as the fallback so
+1.x cars and invalid samples behave exactly as today.
+
+### Proposed scope
+
+0a. **Discovery, code side — DONE 2026-09-30.** Decompiled `diplus.2.0.0-beta8-3.apk`
+   and diffed its strings against 2.0.0-beta1; result recorded in
+   `BYDMate-own/docs/DIPLUS_DATA.md`.
+0b. **Discovery, car side — NOT DONE, needs the car.** On `way` (di+ 2.0, plugged in),
+   poll `/api/historyStatus` from the same context the APK uses and record: whether the
+   call needs the `auth` header, how often `batteryPackCurrent` changes, the round-trip
+   time and CPU cost at 1 Hz and 0.1 Hz, the sign of the current on AC and DC, and
+   `|V × I|` against the integer kW reading and the `batteryEnergyKwh` slope.
+1. **APK:** add a client for `/api/historyStatus` next to `DiParsClient` (same
+   `127.0.0.1:8988` host); read `batteryPackVoltage`/`batteryPackCurrent` only when
+   charging and only when the validity bits are set; add `chargeBatteryCurrentA` to
+   `VehicleTelemetrySnapshot`; send `charge_current_a`; compute `charge_power_kw` from
+   V × I when both are fresh and sane, else keep the existing value. Both senders
+   (`CloudTelemetrySender` **and** `CommandDaemon`, which builds its own payload) must
+   be changed.
+2. **Server:** add `charge_current_a` to `ingest-payload.ts`,
+   `telemetry-sanitizer.ts` (range check) and `database.ts`; one new **idempotent**
+   migration (`add column if not exists`), applied to production with `psql`; if the
+   ingest RPC changes, re-`revoke execute … from public, anon, authenticated` and grant
+   explicitly. Never edit an applied migration.
+3. **Consumers:** keep the strict start predicate and the tolerant sustained predicate
+   as they are. A `null` power is still never treated as zero. A measured current only
+   makes `charge_power_kw` more precise; it does not change the session rules. Energy and
+   cost stay SOC-derived (`kwh_charged` remains diagnostics only). Optionally show the
+   amperage in the session view.
+4. **Tests:** unit tests for V × I derivation (null, negative sign, out-of-range,
+   stale current) and sanitizer range; existing `auto-session.test.mjs` must keep passing.
+
+### Data ownership and location
+
+Vehicle telemetry is **owned by the user's vehicle/account** and stored in **Postgres**
+(`bydmate_telemetry_samples` / `bydmate_live_snapshots`), scoped by `auth.uid()` exactly
+as today. `charge_current_a` is one more column on those existing tables, not a new
+preference or tariff, so the client-side-storage default does not apply. **Please
+confirm both choices.**
+
+### Risks
+
+- The current FID may not exist or may need a different unit/sign; discovery decides.
+- Two senders and an APK release: behaviour only changes once the car updates.
+- Ingest is the hot path; one extra nullable numeric column adds no extra query.
+
+### Verification plan
+
+Discovery report first. Then focused unit tests, `npm run lint`, `npm run build`,
+a production read-only check of the new column with `scripts/prod-sql.sh`, and a real
+AC plus DC charge on `way` comparing measured kW with the old integer value.
+
+### Should I build this?
+
 ## Telegram community launch pack with isolated local VoltFlow demo — proposed 2026-09-29
 
 ### Research findings and boundary
