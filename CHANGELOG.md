@@ -11,6 +11,33 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-10-01
 
+### Charge power now comes from measured pack voltage × current (di+ 2.0)
+
+- Problem: `charge_power_kw` was di+'s **integer** engine-power parameter. On car `way` it read
+  `-5` for a real ≈ 5.65 kW AC charge (≈ 11 % low), and no current was sent at all.
+- Finding (decompile of di+ `2.0.0b8-2/b8-3`, then measured on `way`): `/api/historyStatus`
+  serves a live `batteryPackVoltage` and `batteryPackCurrent` (negative while charging, 0.1 A
+  steps), with no auth header. The keys also exist in 2.0.0b1; di+ 1.x has no such endpoint.
+  Write-up in `BYDMate-own/docs/DIPLUS_DATA.md`.
+- Built, server: `charge_current_a` accepted in telemetry (±1000 A, rounded to 0.1 A). **No
+  migration** — telemetry is a `jsonb` column; the schema's `.strip()` was the only thing that
+  would have dropped the key. APK (`BYDMate-own`): `HistoryStatusClient` (at most one read per
+  5 s, only while a gun is connected, cache dropped after 15 s), wired into both
+  `TrackingService` and `CommandDaemon`, which builds its own payload.
+- Rule worth keeping: power is `max(0, −V × I / 1000)`, **not** `|V × I|`. At idle di+ reads
+  `+0.3 A`, which `abs()` turns into 0.095 kW, right next to the auto-start threshold
+  (`charge_power_kw > 0.1`). With no pack reading (di+ 1.x, stale, invalid) the previous
+  integer value is used unchanged, and a missing value is still never treated as zero.
+- Verified: 22 server tests + `tsc`; 104 APK unit tests in the 4 affected classes (the full
+  APK suite and `assembleDebug` were not run in the session). On `way`, AC, production rows went
+  from `5` to `5.629…5.692` with `charge_current_a −17.7…−17.9`, from both the app and the
+  daemon path; the open charging session was unaffected.
+- Not verified, tracked in BACKLOG: DC charging (sign and size of the current), how often di+
+  refreshes the current, and CPU cost at the real read rate.
+- Operational note: reinstalling the APK leaves a ~2 min gap (the daemon sends 60 s rows until
+  it relaunches the app), and payloads queued by the old build still carry the integer value.
+- Data: the user's vehicle telemetry, in Postgres inside the existing `telemetry` jsonb.
+
 ### History → Trips no longer shows every drive twice
 
 - 765oliva567@gmail.com reported each trip duplicated with slightly different times, km and

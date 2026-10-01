@@ -47,7 +47,11 @@ export function isFrozenLiveChargeReading(
   let anchorMs = latest.deviceTimeMs;
   for (let i = samples.length - 1; i >= 0; i -= 1) {
     const sample = samples[i];
-    if (sample.soc !== latest.soc || sample.chargePowerKw !== latest.chargePowerKw) break;
+    if (
+      sample.soc !== latest.soc ||
+      sample.chargePowerKw !== latest.chargePowerKw
+    )
+      break;
     anchorMs = sample.deviceTimeMs;
   }
 
@@ -71,10 +75,13 @@ export function isFrozenLiveChargeReading(
  * no visible change. The 50ms slack mirrors the old `>= 950` persist guard so a
  * 1000ms tick still passes its own tier threshold.
  */
-export function chargingPersistIntervalMs(currentPercent: number | null | undefined) {
-  const pct = typeof currentPercent === "number" && Number.isFinite(currentPercent)
-    ? currentPercent
-    : 0;
+export function chargingPersistIntervalMs(
+  currentPercent: number | null | undefined,
+) {
+  const pct =
+    typeof currentPercent === "number" && Number.isFinite(currentPercent)
+      ? currentPercent
+      : 0;
   if (pct >= 98) return 1_000;
   if (pct >= 95) return 5_000;
   return 30_000;
@@ -89,19 +96,69 @@ function finiteNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-export function snapshotSoc(snapshot: VoltflowMateLiveSnapshotRow | null | undefined) {
-  const soc = finiteNumber(snapshot?.telemetry?.soc) ?? finiteNumber(snapshot?.diplus?.soc);
+export function snapshotSoc(
+  snapshot: VoltflowMateLiveSnapshotRow | null | undefined,
+) {
+  const soc =
+    finiteNumber(snapshot?.telemetry?.soc) ??
+    finiteNumber(snapshot?.diplus?.soc);
   return soc != null && soc >= 0 && soc <= 100 ? soc : null;
 }
 
-export function snapshotSpeedKmh(snapshot: VoltflowMateLiveSnapshotRow | null | undefined) {
+export function snapshotSpeedKmh(
+  snapshot: VoltflowMateLiveSnapshotRow | null | undefined,
+) {
   const speed = finiteNumber(snapshot?.telemetry?.speed_kmh);
   return speed != null && speed >= 0 ? speed : null;
 }
 
-export function snapshotChargePowerKw(snapshot: VoltflowMateLiveSnapshotRow | null | undefined) {
+export function snapshotChargePowerKw(
+  snapshot: VoltflowMateLiveSnapshotRow | null | undefined,
+) {
   const power = finiteNumber(snapshot?.telemetry?.charge_power_kw);
   return power != null && power > 0 ? power : null;
+}
+
+/**
+ * Charge power the sender **measured** as pack voltage × current, in kW (battery-side).
+ *
+ * The sender attaches `charge_current_a` — negative while charging — only when it derived
+ * `charge_power_kw` from a fresh di+ 2.0 pack reading. So a negative current next to a positive
+ * power means the value is a measurement (±0.03 kW: 0.1 A and 1 V steps), not di+'s integer kW,
+ * a session average or a configured fallback. Null in those cases; callers keep showing them
+ * as approximate.
+ */
+export function measuredChargePowerKw(
+  telemetry:
+    | { charge_power_kw?: number | null; charge_current_a?: number | null }
+    | null
+    | undefined,
+): number | null {
+  const current = finiteNumber(telemetry?.charge_current_a);
+  if (current == null || current >= 0) return null;
+  const power = finiteNumber(telemetry?.charge_power_kw);
+  return power != null && power > 0 ? power : null;
+}
+
+/** Measured pack current in amps (positive magnitude) while [measuredChargePowerKw] applies. */
+export function measuredChargeCurrentA(
+  telemetry:
+    | { charge_power_kw?: number | null; charge_current_a?: number | null }
+    | null
+    | undefined,
+): number | null {
+  if (measuredChargePowerKw(telemetry) == null) return null;
+  const current = finiteNumber(telemetry?.charge_current_a);
+  return current == null ? null : Math.abs(current);
+}
+
+/** [measuredChargePowerKw] for a live snapshot, only while the snapshot itself is fresh. */
+export function snapshotMeasuredChargePowerKw(
+  snapshot: VoltflowMateLiveSnapshotRow | null | undefined,
+  nowMs: number,
+): number | null {
+  if (!snapshot || !isFreshLiveSnapshot(snapshot, nowMs)) return null;
+  return measuredChargePowerKw(snapshot.telemetry);
 }
 
 /**
@@ -112,7 +169,9 @@ export function snapshotChargePowerKw(snapshot: VoltflowMateLiveSnapshotRow | nu
  * sending with autoservice on (≈10% of samples), so callers must fall back. Returns
  * null when absent or ≤ 0 (≤ 0 means "nothing measured yet" → prefer the estimate).
  */
-export function snapshotKwhCharged(snapshot: VoltflowMateLiveSnapshotRow | null | undefined) {
+export function snapshotKwhCharged(
+  snapshot: VoltflowMateLiveSnapshotRow | null | undefined,
+) {
   const kwh = finiteNumber(snapshot?.telemetry?.kwh_charged);
   return kwh != null && kwh > 0 ? kwh : null;
 }
@@ -189,16 +248,22 @@ export function findFreshChargingSnapshot(
   snapshots: VoltflowMateLiveSnapshotRow[],
   nowMs: number,
 ) {
-  return snapshots.find((snapshot) => isFreshChargingSnapshot(snapshot, nowMs)) ?? null;
+  return (
+    snapshots.find((snapshot) => isFreshChargingSnapshot(snapshot, nowMs)) ??
+    null
+  );
 }
 
 export function findFreshSocSnapshot(
   snapshots: VoltflowMateLiveSnapshotRow[],
   nowMs: number,
 ) {
-  return snapshots.find(
-    (snapshot) => isFreshLiveSnapshot(snapshot, nowMs) && snapshotSoc(snapshot) != null,
-  ) ?? null;
+  return (
+    snapshots.find(
+      (snapshot) =>
+        isFreshLiveSnapshot(snapshot, nowMs) && snapshotSoc(snapshot) != null,
+    ) ?? null
+  );
 }
 
 /**
@@ -237,12 +302,16 @@ export function deriveLiveChargingState({
     requireCharging
       ? !isFreshChargingSnapshot(snapshot, nowMs)
       : !isFreshLiveSnapshot(snapshot, nowMs)
-  ) return null;
+  )
+    return null;
 
   const soc = snapshotSoc(snapshot);
   if (soc == null) return null;
 
-  const currentPercent = Math.min(params.targetPercent, Math.max(params.startPercent, soc));
+  const currentPercent = Math.min(
+    params.targetPercent,
+    Math.max(params.startPercent, soc),
+  );
   // Energy/cost always from SOC×capacity — the BMS kwh_charged counter is cell-only,
   // missing thermal management load (≈1.7 kW during DC). SOC is calibrated against
   // charger input and matches grid truth within 2%.
@@ -252,13 +321,23 @@ export function deriveLiveChargingState({
     currentPercent,
   );
   const chargedEnergySource = "estimate" as const;
-  const chargedEnergyKwh = energyFromGridKwh(batteryEnergyKwh, params.efficiencyPercent);
-  const estimatedCost = costFromGridEnergy(chargedEnergyKwh, params.pricePerKwh);
+  const chargedEnergyKwh = energyFromGridKwh(
+    batteryEnergyKwh,
+    params.efficiencyPercent,
+  );
+  const estimatedCost = costFromGridEnergy(
+    chargedEnergyKwh,
+    params.pricePerKwh,
+  );
   const elapsedSeconds = Math.max(0, (nowMs - startedAtMs) / 1000);
   const isComplete = soc >= params.targetPercent;
   const chargePowerKw = snapshotChargePowerKw(snapshot);
   const remainingGridEnergyKwh = energyFromGridKwh(
-    energyNeededKwh(params.batteryCapacityKwh, currentPercent, params.targetPercent),
+    energyNeededKwh(
+      params.batteryCapacityKwh,
+      currentPercent,
+      params.targetPercent,
+    ),
     params.efficiencyPercent,
   );
 

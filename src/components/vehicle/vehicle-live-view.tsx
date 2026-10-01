@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type { ReactNode } from "react";
 import { track } from "@vercel/analytics";
 import dynamic from "next/dynamic";
@@ -57,10 +65,7 @@ import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
 import { useLongPress } from "@/hooks/use-long-press";
 import { useAppPath } from "@/lib/dev/dev-path";
-import {
-  formatPressureFromKpa,
-  isTyrePressureKpa,
-} from "@/lib/pressure-units";
+import { formatPressureFromKpa, isTyrePressureKpa } from "@/lib/pressure-units";
 import { gearIsPark, readGear } from "@/lib/voltflowmate/gear";
 import { isTelemetryCharging } from "@/features/charging/domain";
 import {
@@ -91,8 +96,17 @@ import {
   weightedAvgConsumptionKwh100,
 } from "@/lib/voltflowmate/trip-metrics";
 import { isRouteTrackDisplayable } from "@/lib/voltflowmate/route-insights";
-import { resolvePreferredTripDistanceKm, trackPathDistanceKm } from "@/lib/voltflowmate/trip-distance";
-import { currencySymbols, formatCurrencyAmount, type Currency, type Locale, type TranslationKey } from "@/lib/i18n";
+import {
+  resolvePreferredTripDistanceKm,
+  trackPathDistanceKm,
+} from "@/lib/voltflowmate/trip-distance";
+import {
+  currencySymbols,
+  formatCurrencyAmount,
+  type Currency,
+  type Locale,
+  type TranslationKey,
+} from "@/lib/i18n";
 import { formatSocPercent } from "@/lib/format-soc-percent";
 import { formatTimeAgo } from "@/lib/time-ago";
 import { vehicleReadyDurationBucket } from "@/lib/vehicle-ready-metrics";
@@ -121,25 +135,37 @@ import {
   chargingParamsFromSession,
   deriveSessionProgressFromSoc,
   energyNeededKwh,
+  measuredChargeCurrentA,
   resolveChargingEtaPowerKw,
   resolveDisplayChargePowerKw,
   secondsUntilTargetSoc,
   snapshotChargePowerKw,
+  snapshotMeasuredChargePowerKw,
 } from "@/features/charging/domain";
 
 const TripDetailPanel = dynamic(
-  () => import("@/components/vehicle/TripDetailPanel").then((module) => module.TripDetailPanel),
+  () =>
+    import("@/components/vehicle/TripDetailPanel").then(
+      (module) => module.TripDetailPanel,
+    ),
   {
     loading: () => <Skeleton className="mt-3 h-64 rounded-2xl" />,
   },
 );
 
 function fmt(value: number | null | undefined, digits = 0) {
-  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
+  return typeof value === "number" && Number.isFinite(value)
+    ? value.toFixed(digits)
+    : "—";
 }
 
 function fmtTemp(value: number | null | undefined, digits = 1) {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < -50 || value > 90) {
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    value < -50 ||
+    value > 90
+  ) {
     return "—";
   }
   return `${value.toFixed(digits)} °C`;
@@ -164,12 +190,19 @@ function finiteKm(value: unknown) {
 }
 
 function readAuxVoltageV(
-  snapshot: Pick<VoltflowMateLiveSnapshotRow, "telemetry" | "diplus" | "diplus_voltage_12v">,
+  snapshot: Pick<
+    VoltflowMateLiveSnapshotRow,
+    "telemetry" | "diplus" | "diplus_voltage_12v"
+  >,
 ) {
   return readAuxVoltage(snapshot as VoltflowMateLiveSnapshotRow);
 }
 
-function heroCoreMetrics(snapshot: VoltflowMateLiveSnapshotRow, t: Translator, locale: Locale) {
+function heroCoreMetrics(
+  snapshot: VoltflowMateLiveSnapshotRow,
+  t: Translator,
+  locale: Locale,
+) {
   return [
     {
       key: "auxBattery",
@@ -187,7 +220,10 @@ function heroCoreMetrics(snapshot: VoltflowMateLiveSnapshotRow, t: Translator, l
 }
 
 function readOdometerKm(
-  snapshot: Pick<VoltflowMateLiveSnapshotRow, "telemetry" | "diplus" | "diplus_mileage_km">,
+  snapshot: Pick<
+    VoltflowMateLiveSnapshotRow,
+    "telemetry" | "diplus" | "diplus_mileage_km"
+  >,
 ) {
   const fromTelemetry = finiteKm(snapshot.telemetry.odometer_km);
   if (fromTelemetry != null) return fromTelemetry;
@@ -214,7 +250,10 @@ function telemetryGridClass(count: number) {
   return "grid grid-cols-2 gap-2 min-[380px]:grid-cols-3";
 }
 
-type Translator = (key: TranslationKey, values?: Record<string, string | number>) => string;
+type Translator = (
+  key: TranslationKey,
+  values?: Record<string, string | number>,
+) => string;
 
 function localeCode(locale: Locale) {
   return locale === "be" ? "be-BY" : locale === "ru" ? "ru-RU" : "en-US";
@@ -262,11 +301,14 @@ export function VehicleLiveView({
     if (vehicleReadyReported.current || isLoading || !snapshot) return;
 
     const navigation = performance.getEntriesByType("navigation")[0] as
-      | PerformanceNavigationTiming
-      | undefined;
+      PerformanceNavigationTiming | undefined;
     // Navigation Timing describes the document, not an App Router transition. Keep this
     // event cold-document-only until a route-transition mark has its own measured seam.
-    if (!navigation || new URL(navigation.name).pathname !== window.location.pathname) return;
+    if (
+      !navigation ||
+      new URL(navigation.name).pathname !== window.location.pathname
+    )
+      return;
 
     vehicleReadyReported.current = true;
     const durationMs = Math.round(performance.now());
@@ -274,7 +316,8 @@ export function VehicleLiveView({
     track("vehicle_live_ready", {
       duration_bucket: vehicleReadyDurationBucket(durationMs),
       navigation_type: navigation.type,
-      release: process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
+      release:
+        process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
     });
   }, [isLoading, snapshot]);
 
@@ -370,9 +413,12 @@ function VehicleLiveContent({
   const matchedCar = useMemo(() => {
     const cars = carsData?.cars;
     if (!cars?.length) return null;
-    const selected = cars.find((car) => car.id === selectedCarId) ?? cars[0] ?? null;
+    const selected =
+      cars.find((car) => car.id === selectedCarId) ?? cars[0] ?? null;
     if (selected?.vehicle_alias === snapshot.vehicle_id) return selected;
-    return cars.find((car) => car.vehicle_alias === snapshot.vehicle_id) ?? selected;
+    return (
+      cars.find((car) => car.vehicle_alias === snapshot.vehicle_id) ?? selected
+    );
   }, [carsData?.cars, selectedCarId, snapshot.vehicle_id]);
   const vehicleLabel = matchedCar?.name ?? snapshot.vehicle_id;
   const batteryCapacityKwh = matchedCar?.battery_capacity_kwh ?? null;
@@ -393,15 +439,20 @@ function VehicleLiveContent({
   // is labelled to the user — see LIVE_SNAPSHOT_ASLEEP_MS.
   const isStale = vehicleMode === "stale" || vehicleMode === "asleep";
   const [fallbackDate] = useState(() => localDateKey(Date.now()));
-  const [selectedDateOverride, setSelectedDateOverride] = useState<string | null>(null);
+  const [selectedDateOverride, setSelectedDateOverride] = useState<
+    string | null
+  >(null);
   const fixtureDateKeys = useMemo(() => {
     if (!fixturePoints?.length) return [];
-    return Array.from(new Set(fixturePoints.map((point) => localDateKey(pointTimeMs(point)))))
+    return Array.from(
+      new Set(fixturePoints.map((point) => localDateKey(pointTimeMs(point)))),
+    )
       .filter((key) => key !== "1970-01-01")
       .sort()
       .reverse();
   }, [fixturePoints]);
-  const selectedDate = selectedDateOverride ?? fixtureDateKeys[0] ?? fallbackDate;
+  const selectedDate =
+    selectedDateOverride ?? fixtureDateKeys[0] ?? fallbackDate;
   const fixtureTripSegments = useMemo(() => {
     if (!fixturePoints) return null;
     const dayPoints = fixturePoints.filter(
@@ -410,14 +461,21 @@ function VehicleLiveContent({
     return buildTrips(dayPoints);
   }, [fixturePoints, selectedDate]);
   const fixtureTrips = useMemo(
-    () => fixtureTripSegments?.map((trip) => tripRowFromFixture(trip, snapshot.vehicle_id)) ?? null,
+    () =>
+      fixtureTripSegments?.map((trip) =>
+        tripRowFromFixture(trip, snapshot.vehicle_id),
+      ) ?? null,
     [fixtureTripSegments, snapshot.vehicle_id],
   );
   const {
     data: apiTrips = [],
     isLoading: isTripsLoading,
     error: tripsError,
-  } = useVoltflowMateTripsQuery(selectedDate, snapshot.vehicle_id, !fixturePoints && !isCharging && !isStale);
+  } = useVoltflowMateTripsQuery(
+    selectedDate,
+    snapshot.vehicle_id,
+    !fixturePoints && !isCharging && !isStale,
+  );
   const { data: sessions = [] } = useSessionsQuery();
   // Not gated by isCharging: Math Range (kmPerPercentSoc × SOC) needs the last drive's
   // efficiency, which the live snapshot can't supply while charging (the daemon doesn't
@@ -439,14 +497,23 @@ function VehicleLiveContent({
         snapshot,
         batteryCapacityKwh,
       }),
-    [sessions, matchedCar?.id, fixtureTrips, recentTrips, snapshot, batteryCapacityKwh],
+    [
+      sessions,
+      matchedCar?.id,
+      fixtureTrips,
+      recentTrips,
+      snapshot,
+      batteryCapacityKwh,
+    ],
   );
   // Active charging session for this car. The ~1 Hz persist/auto-complete is owned globally
   // by ChargingSessionBackgroundSync (MobileShell), so here we only read it for display.
   const activeChargingSession = useMemo<ChargingSessionRow | null>(
     () =>
       sessions.find(
-        (s) => s.status === "charging" && (!matchedCar || s.car_id === matchedCar.id),
+        (s) =>
+          s.status === "charging" &&
+          (!matchedCar || s.car_id === matchedCar.id),
       ) ?? null,
     [sessions, matchedCar],
   );
@@ -470,18 +537,20 @@ function VehicleLiveContent({
     typeof soc === "number" && heroDriveMetrics.kmPerPercentSoc != null
       ? heroDriveMetrics.kmPerPercentSoc * soc
       : null;
-  const mathRangeLabel = mathRangeKm != null ? `≈ ${fmt(mathRangeKm, 0)} km` : "—";
+  const mathRangeLabel =
+    mathRangeKm != null ? `≈ ${fmt(mathRangeKm, 0)} km` : "—";
   const parkedAvgConsumptionKwh100 = useMemo(
     () => weightedAvgConsumptionKwh100(heroDriveMetrics.rangeEstimateTrips),
     [heroDriveMetrics.rangeEstimateTrips],
   );
   const parkedRecentEnergyKwh =
     parkedAvgConsumptionKwh100 != null ? parkedAvgConsumptionKwh100 / 2 : null;
-  const [selectedTripId, setSelectedTripId] = useState<string | null | undefined>(
-    initialTripId ?? undefined,
-  );
+  const [selectedTripId, setSelectedTripId] = useState<
+    string | null | undefined
+  >(initialTripId ?? undefined);
   const defaultTripId = trips[0]?.id ?? null;
-  const expandedTripId = selectedTripId === undefined ? defaultTripId : selectedTripId;
+  const expandedTripId =
+    selectedTripId === undefined ? defaultTripId : selectedTripId;
   const expandedFixtureTrip =
     fixtureTripSegments?.find((trip) => trip.id === expandedTripId) ?? null;
 
@@ -506,7 +575,10 @@ function VehicleLiveContent({
         batteryCapacityKwh={batteryCapacityKwh}
         tripWindow={fixtureTrips ?? heroDriveMetrics.rangeEstimateTrips}
         allTrips={fixtureTrips ?? recentTrips}
-        lastSession={findLastFinishedChargeSession(sessions, matchedCar?.id ?? null)}
+        lastSession={findLastFinishedChargeSession(
+          sessions,
+          matchedCar?.id ?? null,
+        )}
       />
       {isCharging ? (
         <>
@@ -549,13 +621,23 @@ function VehicleLiveContent({
           {isStale ? (
             <>
               <StaleTelemetryNotice />
-              <LastTripCard vehicleId={snapshot.vehicle_id} hasMounted={hasMounted} />
+              <LastTripCard
+                vehicleId={snapshot.vehicle_id}
+                hasMounted={hasMounted}
+              />
               {!fixturePoints ? <VehicleAnalyticsTeaser /> : null}
-              <DeferredLocationCard snapshot={snapshot} hasMounted={hasMounted} />
+              <DeferredLocationCard
+                snapshot={snapshot}
+                hasMounted={hasMounted}
+              />
             </>
           ) : (
             <>
-              <TelemetryGrid snapshot={snapshot} vehicleMode={vehicleMode} cabinTempC={cabinTempC} />
+              <TelemetryGrid
+                snapshot={snapshot}
+                vehicleMode={vehicleMode}
+                cabinTempC={cabinTempC}
+              />
               <TirePressureCard snapshot={snapshot} />
               <TripBrowser
                 showDateFilter={Boolean(fixturePoints)}
@@ -569,7 +651,10 @@ function VehicleLiveContent({
                 selectedTripId={expandedTripId}
                 onSelectTrip={(tripId) => {
                   setSelectedTripId((currentTripId) => {
-                    const currentExpandedTripId = currentTripId === undefined ? defaultTripId : currentTripId;
+                    const currentExpandedTripId =
+                      currentTripId === undefined
+                        ? defaultTripId
+                        : currentTripId;
                     return currentExpandedTripId === tripId ? null : tripId;
                   });
                 }}
@@ -578,7 +663,10 @@ function VehicleLiveContent({
                 expandedFixtureTrip={expandedFixtureTrip}
               />
               {!fixturePoints ? <VehicleAnalyticsTeaser /> : null}
-              <DeferredLocationCard snapshot={snapshot} hasMounted={hasMounted} />
+              <DeferredLocationCard
+                snapshot={snapshot}
+                hasMounted={hasMounted}
+              />
             </>
           )}
         </>
@@ -653,7 +741,10 @@ function Hero({
   kmPerPercentSoc: number | null;
   parkedRecentEnergyKwh: number | null;
   heroDriveMetrics: ReturnType<typeof computeHeroDriveMetrics>;
-  rangeEstimate: { estimatedRangeKm: number | null; consumptionKwh100Km: number | null };
+  rangeEstimate: {
+    estimatedRangeKm: number | null;
+    consumptionKwh100Km: number | null;
+  };
   batteryCapacityKwh: number | null;
   tripWindow: VoltflowMateTripRow[];
   allTrips: VoltflowMateTripRow[];
@@ -666,18 +757,67 @@ function Hero({
   const dedupedTrips = useMemo(() => dedupeTripsBySource(allTrips), [allTrips]);
   const explanations = useMemo(() => {
     const liveDistanceKm = snapshot.telemetry.current_trip_distance_km;
-    const anchorStoppedAt = lastSession?.stopped_at ?? lastSession?.started_at ?? null;
+    const anchorStoppedAt =
+      lastSession?.stopped_at ?? lastSession?.started_at ?? null;
     return {
-      aiRange: explainAiRange({ snapshot, recentTrips: tripWindow, batteryCapacityKwh, estimate: rangeEstimate }),
-      mathRange: explainMathRange({ soc: snapshot.telemetry.soc, kmPerPercentSoc: heroDriveMetrics.kmPerPercentSoc, trips: tripWindow, batteryCapacityKwh, sourceAt: snapshot.received_at }),
-      kmPerPercent: explainKmPerPercent({ trips: dedupedTrips, liveSoc: snapshot.telemetry.soc, liveDistanceKm, batteryCapacityKwh, consumptionKwh100: snapshot.telemetry.current_trip_consumption_kwh_100km, sourceAt: snapshot.received_at }),
-      sinceCharge: explainDistanceSinceCharge({ trips: dedupedTrips, anchorStoppedAt, liveDistanceKm, lastSession, sourceAt: snapshot.received_at }),
-      recentEnergy: explainRecentEnergy({ trips: tripWindow, avgConsumptionKwh100: parkedRecentEnergyKwh != null ? parkedRecentEnergyKwh * 2 : null, sourceAt: snapshot.received_at }),
+      aiRange: explainAiRange({
+        snapshot,
+        recentTrips: tripWindow,
+        batteryCapacityKwh,
+        estimate: rangeEstimate,
+      }),
+      mathRange: explainMathRange({
+        soc: snapshot.telemetry.soc,
+        kmPerPercentSoc: heroDriveMetrics.kmPerPercentSoc,
+        trips: tripWindow,
+        batteryCapacityKwh,
+        sourceAt: snapshot.received_at,
+      }),
+      kmPerPercent: explainKmPerPercent({
+        trips: dedupedTrips,
+        liveSoc: snapshot.telemetry.soc,
+        liveDistanceKm,
+        batteryCapacityKwh,
+        consumptionKwh100:
+          snapshot.telemetry.current_trip_consumption_kwh_100km,
+        sourceAt: snapshot.received_at,
+      }),
+      sinceCharge: explainDistanceSinceCharge({
+        trips: dedupedTrips,
+        anchorStoppedAt,
+        liveDistanceKm,
+        lastSession,
+        sourceAt: snapshot.received_at,
+      }),
+      recentEnergy: explainRecentEnergy({
+        trips: tripWindow,
+        avgConsumptionKwh100:
+          parkedRecentEnergyKwh != null ? parkedRecentEnergyKwh * 2 : null,
+        sourceAt: snapshot.received_at,
+      }),
     } satisfies Record<string, MetricExplanation>;
-  }, [snapshot, tripWindow, batteryCapacityKwh, rangeEstimate, heroDriveMetrics.kmPerPercentSoc, dedupedTrips, lastSession, parkedRecentEnergyKwh]);
+  }, [
+    snapshot,
+    tripWindow,
+    batteryCapacityKwh,
+    rangeEstimate,
+    heroDriveMetrics.kmPerPercentSoc,
+    dedupedTrips,
+    lastSession,
+    parkedRecentEnergyKwh,
+  ]);
   const [openMetric, setOpenMetric] = useState<string | null>(null);
-  const activeExplanation = openMetric ? explanations[openMetric as keyof typeof explanations] ?? null : null;
-  const primaryMetrics: { key: string; icon: typeof Gauge; label: string; value: ReactNode; hint?: string; explanation?: MetricExplanation }[] = [
+  const activeExplanation = openMetric
+    ? (explanations[openMetric as keyof typeof explanations] ?? null)
+    : null;
+  const primaryMetrics: {
+    key: string;
+    icon: typeof Gauge;
+    label: string;
+    value: ReactNode;
+    hint?: string;
+    explanation?: MetricExplanation;
+  }[] = [
     {
       key: "aiRange",
       icon: Route,
@@ -727,10 +867,14 @@ function Hero({
             {formatSocPercent(telemetry.soc)}
             <span className="text-xl text-muted-foreground">%</span>
           </h1>
-          <p className="mt-1 text-xs text-muted-foreground" suppressHydrationWarning>
+          <p
+            className="mt-1 text-xs text-muted-foreground"
+            suppressHydrationWarning
+          >
             {hasMounted
               ? t("vehicle.lastUpdate", {
-                  value: formatTimeAgo(snapshot.received_at, nowMs, t) ?? "\u2014",
+                  value:
+                    formatTimeAgo(snapshot.received_at, nowMs, t) ?? "\u2014",
                 })
               : "\u00a0"}
           </p>
@@ -777,35 +921,34 @@ function Hero({
             if (isStale) {
               modeMetrics.push(...driveMetrics);
             } else if (vehicleMode === "parked") {
-              modeMetrics.push(
-                ...driveMetrics,
-                {
-                  key: "recentEnergy",
-                  icon: Gauge,
-                  label: t("vehicle.metrics.recentEnergy"),
-                  value: `~${fmt(parkedRecentEnergyKwh, 1)} kWh`,
-                  supportingText: t("vehicle.metrics.recentEnergyContext"),
-                  valueCentered: true,
-                  explanation: explanations.recentEnergy,
-                },
-              );
+              modeMetrics.push(...driveMetrics, {
+                key: "recentEnergy",
+                icon: Gauge,
+                label: t("vehicle.metrics.recentEnergy"),
+                value: `~${fmt(parkedRecentEnergyKwh, 1)} kWh`,
+                supportingText: t("vehicle.metrics.recentEnergyContext"),
+                valueCentered: true,
+                explanation: explanations.recentEnergy,
+              });
             } else {
-              modeMetrics.push(
-                ...driveMetrics,
-                {
-                  key: "speed",
-                  icon: Gauge,
-                  label: t("vehicle.metrics.speed"),
-                  value: `${fmt(telemetry.speed_kmh, 0)} km/h`,
-                },
-              );
+              modeMetrics.push(...driveMetrics, {
+                key: "speed",
+                icon: Gauge,
+                label: t("vehicle.metrics.speed"),
+                value: `${fmt(telemetry.speed_kmh, 0)} km/h`,
+              });
             }
 
-            const visibleModeMetrics = modeMetrics.filter((metric) => metric.explanation || !isMissingMetricValue(metric.value));
+            const visibleModeMetrics = modeMetrics.filter(
+              (metric) =>
+                metric.explanation || !isMissingMetricValue(metric.value),
+            );
             if (visibleModeMetrics.length === 0) return null;
 
             return (
-              <div className={`mt-2 ${telemetryGridClass(visibleModeMetrics.length)}`}>
+              <div
+                className={`mt-2 ${telemetryGridClass(visibleModeMetrics.length)}`}
+              >
                 {visibleModeMetrics.map((metric) => (
                   <HeroMetric
                     key={metric.key}
@@ -825,7 +968,9 @@ function Hero({
       ) : null}
       <MetricExplainerSheet
         open={openMetric != null}
-        onOpenChange={(open) => { if (!open) setOpenMetric(null); }}
+        onOpenChange={(open) => {
+          if (!open) setOpenMetric(null);
+        }}
         explanation={activeExplanation ?? explanations.aiRange}
         nowMs={nowMs}
       />
@@ -853,17 +998,51 @@ function HeroMetric({
   onExplain?: () => void;
 }) {
   const longPressProps = useLongPress(onExplain ?? (() => {}));
-  const content = <>
+  const content = (
+    <>
       <Icon className="mb-1 size-3.5 text-primary" aria-hidden />
-      {explanation ? <Info className="absolute right-2.5 top-2.5 size-3.5 opacity-60" aria-hidden /> : null}
-      <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
-      <p className={valueCentered ? "absolute inset-x-2.5 top-1/2 -translate-y-[5px] font-heading text-base font-semibold tabular-nums" : "mt-0.5 font-heading text-base font-semibold tabular-nums"}>{value}</p>
-      {valueCentered && supportingText ? <p className="absolute inset-x-2.5 bottom-2.5 text-[10px] font-medium text-muted-foreground">{supportingText}</p> : null}
-    </>;
+      {explanation ? (
+        <Info
+          className="absolute right-2.5 top-2.5 size-3.5 opacity-60"
+          aria-hidden
+        />
+      ) : null}
+      <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+        {label}
+      </p>
+      <p
+        className={
+          valueCentered
+            ? "absolute inset-x-2.5 top-1/2 -translate-y-[5px] font-heading text-base font-semibold tabular-nums"
+            : "mt-0.5 font-heading text-base font-semibold tabular-nums"
+        }
+      >
+        {value}
+      </p>
+      {valueCentered && supportingText ? (
+        <p className="absolute inset-x-2.5 bottom-2.5 text-[10px] font-medium text-muted-foreground">
+          {supportingText}
+        </p>
+      ) : null}
+    </>
+  );
   const className = `w-full rounded-xl border border-border bg-white/[0.03] p-2.5 text-left ${explanation ? "relative cursor-pointer" : ""} ${
-        valueCentered ? "relative min-h-[5.25rem]" : ""
-      }`;
-  return explanation ? <button type="button" className={className} title={hint} {...longPressProps}>{content}</button> : <div className={className} title={hint}>{content}</div>;
+    valueCentered ? "relative min-h-[5.25rem]" : ""
+  }`;
+  return explanation ? (
+    <button
+      type="button"
+      className={className}
+      title={hint}
+      {...longPressProps}
+    >
+      {content}
+    </button>
+  ) : (
+    <div className={className} title={hint}>
+      {content}
+    </div>
+  );
 }
 
 function ChargingModeCard({
@@ -893,7 +1072,10 @@ function ChargingModeCard({
       sessionChargerPowerKw: params.chargerPowerKw,
     });
     const clampedSoc = Math.min(liveSoc, params.targetPercent);
-    const deliveredKwh = deriveSessionProgressFromSoc(params, clampedSoc).chargedEnergyKwh;
+    const deliveredKwh = deriveSessionProgressFromSoc(
+      params,
+      clampedSoc,
+    ).chargedEnergyKwh;
     const batteryGainKwh = energyNeededKwh(
       params.batteryCapacityKwh,
       params.startPercent,
@@ -914,7 +1096,10 @@ function ChargingModeCard({
         session.tariff_type === "fast_dc" ||
         snapshot.telemetry.charge_type?.toUpperCase() === "DC",
     });
-    const fullCost = deriveSessionProgressFromSoc(params, params.targetPercent).estimatedCost;
+    const fullCost = deriveSessionProgressFromSoc(
+      params,
+      params.targetPercent,
+    ).estimatedCost;
     const secsLeft = secondsUntilTargetSoc(
       chargePowerKw != null
         ? {
@@ -925,29 +1110,95 @@ function ChargingModeCard({
       clampedSoc,
     );
     return {
-      timeLeftLabel: secsLeft != null && secsLeft > 0 ? formatDuration(secsLeft * 1000) : null,
+      timeLeftLabel:
+        secsLeft != null && secsLeft > 0
+          ? formatDuration(secsLeft * 1000)
+          : null,
       gridEnergyLabel: `${deliveredKwh.toFixed(2)} kWh`,
       batteryGainLabel: `${batteryGainKwh.toFixed(2)} kWh`,
-      fullCostLabel: <CurrencyAmount currency={currency} value={fullCost} locale={locale} />,
+      fullCostLabel: (
+        <CurrencyAmount currency={currency} value={fullCost} locale={locale} />
+      ),
       chargePowerKw,
     };
-  }, [session, snapshot, telemetry.soc, telemetry.charge_power_kw, currency, locale, nowMs]);
+  }, [
+    session,
+    snapshot,
+    telemetry.soc,
+    telemetry.charge_power_kw,
+    currency,
+    locale,
+    nowMs,
+  ]);
+  // A fresh pack V × I reading is a measurement (±0.03 kW), so it gets two decimals, no "~"
+  // and the amperage; an integer di+ value, session average or configured fallback stays
+  // approximate ("~", one decimal). Measured power is battery-side, hence the label.
+  const measuredPowerKw = snapshotMeasuredChargePowerKw(snapshot, nowMs);
+  const measuredCurrentA =
+    measuredPowerKw != null ? measuredChargeCurrentA(snapshot.telemetry) : null;
   const items = [
-    { key: "chargeTimeLeft", icon: Clock3, label: tx("charging.remaining"), value: chargeSummary?.timeLeftLabel ?? "—" },
-    { key: "chargeFromGrid", icon: BatteryCharging, label: tx("charging.energyFromChargerEstimate"), value: chargeSummary?.gridEnergyLabel ?? "—" },
-    { key: "chargeToBattery", icon: BatteryCharging, label: tx("charging.energyToBatteryEstimate"), value: chargeSummary?.batteryGainLabel ?? "—" },
-    { key: "chargeFullCost", icon: Activity, label: tx("charging.fullCost"), value: chargeSummary?.fullCostLabel ?? "—" },
+    {
+      key: "chargeTimeLeft",
+      icon: Clock3,
+      label: tx("charging.remaining"),
+      value: chargeSummary?.timeLeftLabel ?? "—",
+    },
+    {
+      key: "chargeFromGrid",
+      icon: BatteryCharging,
+      label: tx("charging.energyFromChargerEstimate"),
+      value: chargeSummary?.gridEnergyLabel ?? "—",
+    },
+    {
+      key: "chargeToBattery",
+      icon: BatteryCharging,
+      label: tx("charging.energyToBatteryEstimate"),
+      value: chargeSummary?.batteryGainLabel ?? "—",
+    },
+    {
+      key: "chargeFullCost",
+      icon: Activity,
+      label: tx("charging.fullCost"),
+      value: chargeSummary?.fullCostLabel ?? "—",
+    },
     {
       key: "chargePower",
       icon: Zap,
-      label: tx("vehicle.telemetry.chargePower"),
-      value: `${telemetry.charge_type ? `${telemetry.charge_type} · ` : ""}~ ${fmt(chargeSummary?.chargePowerKw ?? telemetry.charge_power_kw, 1)} kW`,
+      label: tx(
+        measuredPowerKw != null
+          ? "vehicle.telemetry.chargePowerToBattery"
+          : "vehicle.telemetry.chargePower",
+      ),
+      value: `${telemetry.charge_type ? `${telemetry.charge_type} · ` : ""}${
+        measuredPowerKw != null
+          ? `${fmt(measuredPowerKw, 2)} kW${
+              measuredCurrentA != null ? ` · ${fmt(measuredCurrentA, 1)} A` : ""
+            }`
+          : `~ ${fmt(chargeSummary?.chargePowerKw ?? telemetry.charge_power_kw, 1)} kW`
+      }`,
     },
-    { key: "batteryTemp", icon: Thermometer, label: tx("vehicle.telemetry.batteryTemp"), value: fmtTemp(telemetry.battery_temp_c) },
-    { key: "cabinTemp", icon: Thermometer, label: tx("vehicle.telemetry.cabinTemp"), value: fmtTemp(cabinTempC) },
-    { key: "outsideTemp", icon: Thermometer, label: tx("vehicle.telemetry.outsideTemp"), value: fmtTemp(telemetry.outside_temp_c) },
+    {
+      key: "batteryTemp",
+      icon: Thermometer,
+      label: tx("vehicle.telemetry.batteryTemp"),
+      value: fmtTemp(telemetry.battery_temp_c),
+    },
+    {
+      key: "cabinTemp",
+      icon: Thermometer,
+      label: tx("vehicle.telemetry.cabinTemp"),
+      value: fmtTemp(cabinTempC),
+    },
+    {
+      key: "outsideTemp",
+      icon: Thermometer,
+      label: tx("vehicle.telemetry.outsideTemp"),
+      value: fmtTemp(telemetry.outside_temp_c),
+    },
   ];
-  const visibleItems = items.filter((item) => !isMissingMetricValue(item.value));
+  const visibleItems = items.filter(
+    (item) => !isMissingMetricValue(item.value),
+  );
 
   return (
     <Card className="border-cyan-300/20 bg-cyan-300/[0.06]">
@@ -959,7 +1210,12 @@ function ChargingModeCard({
       </CardHeader>
       <CardContent className="grid grid-cols-2 gap-2 p-3 pt-0">
         {visibleItems.map((item) => (
-          <HeroMetric key={item.key} icon={item.icon} label={item.label} value={item.value} />
+          <HeroMetric
+            key={item.key}
+            icon={item.icon}
+            label={item.label}
+            value={item.value}
+          />
         ))}
       </CardContent>
     </Card>
@@ -979,19 +1235,45 @@ function RestMetricsCard({
 }) {
   const { locale, t: translate } = useTranslation();
   const t = translate as Translator;
-  const items: { key: string; icon: typeof Gauge; label: string; value: ReactNode; hint?: string }[] = [
-    { key: "aiRange", icon: Route, label: t("vehicle.metrics.aiRange"), value: rangeLabel, hint: t("vehicle.metrics.aiRangeHint") },
-    { key: "mathRange", icon: Activity, label: t("vehicle.metrics.mathRange"), value: mathRangeLabel, hint: t("vehicle.metrics.mathRangeHint") },
+  const items: {
+    key: string;
+    icon: typeof Gauge;
+    label: string;
+    value: ReactNode;
+    hint?: string;
+  }[] = [
+    {
+      key: "aiRange",
+      icon: Route,
+      label: t("vehicle.metrics.aiRange"),
+      value: rangeLabel,
+      hint: t("vehicle.metrics.aiRangeHint"),
+    },
+    {
+      key: "mathRange",
+      icon: Activity,
+      label: t("vehicle.metrics.mathRange"),
+      value: mathRangeLabel,
+      hint: t("vehicle.metrics.mathRangeHint"),
+    },
     ...heroCoreMetrics(snapshot, t, locale),
   ];
-  const visibleItems = items.filter((item) => !isMissingMetricValue(item.value));
+  const visibleItems = items.filter(
+    (item) => !isMissingMetricValue(item.value),
+  );
   if (visibleItems.length === 0) return null;
 
   return (
     <section className="voltflow-card p-4">
       <div className={telemetryGridClass(visibleItems.length)}>
         {visibleItems.map((item) => (
-          <HeroMetric key={item.key} icon={item.icon} label={item.label} value={item.value} hint={item.hint} />
+          <HeroMetric
+            key={item.key}
+            icon={item.icon}
+            label={item.label}
+            value={item.value}
+            hint={item.hint}
+          />
         ))}
       </div>
     </section>
@@ -1088,7 +1370,10 @@ function TelemetryGrid({
 
     if (vehicleMode === "parked") {
       return all.filter(
-        (item) => item.key === "batteryTemp" || item.key === "cabinTemp" || item.key === "outsideTemp",
+        (item) =>
+          item.key === "batteryTemp" ||
+          item.key === "cabinTemp" ||
+          item.key === "outsideTemp",
       );
     }
 
@@ -1105,9 +1390,20 @@ function TelemetryGrid({
   if (items.length === 0) return null;
 
   return (
-    <div className={items.length === 2 ? "grid grid-cols-2 gap-2" : telemetryGridClass(items.length)}>
+    <div
+      className={
+        items.length === 2
+          ? "grid grid-cols-2 gap-2"
+          : telemetryGridClass(items.length)
+      }
+    >
       {items.map((item) => (
-        <HeroMetric key={item.key} icon={item.icon} label={item.label} value={item.value} />
+        <HeroMetric
+          key={item.key}
+          icon={item.icon}
+          label={item.label}
+          value={item.value}
+        />
       ))}
     </div>
   );
@@ -1117,20 +1413,27 @@ type CellDeltaStatus = "good" | "warning" | "critical" | "unknown";
 
 function diplusNumber(
   snapshot: VoltflowMateLiveSnapshotRow,
-  columnKey: "diplus_min_cell_voltage_v" | "diplus_max_cell_voltage_v" | "diplus_cell_delta_v",
+  columnKey:
+    | "diplus_min_cell_voltage_v"
+    | "diplus_max_cell_voltage_v"
+    | "diplus_cell_delta_v",
   rawKey: "min_cell_voltage_v" | "max_cell_voltage_v" | "cell_delta_v",
   telemetryKeys: Array<keyof VoltflowMateTelemetry> = [],
 ) {
   const columnValue = snapshot[columnKey];
-  if (typeof columnValue === "number" && Number.isFinite(columnValue)) return columnValue;
+  if (typeof columnValue === "number" && Number.isFinite(columnValue))
+    return columnValue;
 
   for (const key of telemetryKeys) {
     const telemetryValue = snapshot.telemetry[key];
-    if (typeof telemetryValue === "number" && Number.isFinite(telemetryValue)) return telemetryValue;
+    if (typeof telemetryValue === "number" && Number.isFinite(telemetryValue))
+      return telemetryValue;
   }
 
   const rawValue = snapshot.diplus?.[rawKey];
-  return typeof rawValue === "number" && Number.isFinite(rawValue) ? rawValue : null;
+  return typeof rawValue === "number" && Number.isFinite(rawValue)
+    ? rawValue
+    : null;
 }
 
 function cellDeltaStatus(delta: number | null): CellDeltaStatus {
@@ -1141,34 +1444,55 @@ function cellDeltaStatus(delta: number | null): CellDeltaStatus {
 }
 
 function cellStatusClasses(status: CellDeltaStatus) {
-  if (status === "good") return "border-emerald-300/25 bg-emerald-300/10 text-emerald-100";
-  if (status === "warning") return "border-yellow-300/25 bg-yellow-300/10 text-yellow-100";
-  if (status === "critical") return "border-red-300/25 bg-red-300/10 text-red-100";
+  if (status === "good")
+    return "border-emerald-300/25 bg-emerald-300/10 text-emerald-100";
+  if (status === "warning")
+    return "border-yellow-300/25 bg-yellow-300/10 text-yellow-100";
+  if (status === "critical")
+    return "border-red-300/25 bg-red-300/10 text-red-100";
   return "border-border bg-white/[0.03] text-muted-foreground";
 }
 
-function CellHealthCard({ snapshot }: { snapshot: VoltflowMateLiveSnapshotRow }) {
+function CellHealthCard({
+  snapshot,
+}: {
+  snapshot: VoltflowMateLiveSnapshotRow;
+}) {
   const { t } = useTranslation();
   const tx = t as Translator;
-  const minCellVoltage = diplusNumber(snapshot, "diplus_min_cell_voltage_v", "min_cell_voltage_v", [
+  const minCellVoltage = diplusNumber(
+    snapshot,
     "diplus_min_cell_voltage_v",
-    "cell_voltage_min_v",
-  ]);
-  const maxCellVoltage = diplusNumber(snapshot, "diplus_max_cell_voltage_v", "max_cell_voltage_v", [
+    "min_cell_voltage_v",
+    ["diplus_min_cell_voltage_v", "cell_voltage_min_v"],
+  );
+  const maxCellVoltage = diplusNumber(
+    snapshot,
     "diplus_max_cell_voltage_v",
-    "cell_voltage_max_v",
-  ]);
-  const storedCellDelta = diplusNumber(snapshot, "diplus_cell_delta_v", "cell_delta_v", [
+    "max_cell_voltage_v",
+    ["diplus_max_cell_voltage_v", "cell_voltage_max_v"],
+  );
+  const storedCellDelta = diplusNumber(
+    snapshot,
     "diplus_cell_delta_v",
     "cell_delta_v",
-  ]);
-  const cellDelta = storedCellDelta ?? (
-    minCellVoltage != null && maxCellVoltage != null ? maxCellVoltage - minCellVoltage : null
+    ["diplus_cell_delta_v", "cell_delta_v"],
   );
+  const cellDelta =
+    storedCellDelta ??
+    (minCellVoltage != null && maxCellVoltage != null
+      ? maxCellVoltage - minCellVoltage
+      : null);
   const status = cellDeltaStatus(cellDelta);
   const items = [
-    { label: tx("vehicle.cellHealth.min"), value: `${fmt(minCellVoltage, 3)} V` },
-    { label: tx("vehicle.cellHealth.max"), value: `${fmt(maxCellVoltage, 3)} V` },
+    {
+      label: tx("vehicle.cellHealth.min"),
+      value: `${fmt(minCellVoltage, 3)} V`,
+    },
+    {
+      label: tx("vehicle.cellHealth.max"),
+      value: `${fmt(maxCellVoltage, 3)} V`,
+    },
     { label: tx("vehicle.cellHealth.delta"), value: `${fmt(cellDelta, 3)} V` },
   ];
 
@@ -1178,16 +1502,23 @@ function CellHealthCard({ snapshot }: { snapshot: VoltflowMateLiveSnapshotRow })
         <CardTitle className="flex items-center gap-1.5 font-heading text-sm">
           <HeartPulse className="size-4" aria-hidden />
           {tx("vehicle.cellHealth.title")}
-        <span className="rounded-full border border-current/20 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em]">
-          {tx(`vehicle.cellHealth.status.${status}`)}
-        </span>
+          <span className="rounded-full border border-current/20 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em]">
+            {tx(`vehicle.cellHealth.status.${status}`)}
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="grid grid-cols-3 gap-2 px-3 pb-3 pt-0">
         {items.map((item) => (
-          <div key={item.label} className="rounded-xl border border-current/10 bg-black/10 p-2">
-            <p className="text-[10px] uppercase tracking-[0.14em] opacity-75">{item.label}</p>
-            <p className="mt-0.5 font-heading text-sm font-semibold tabular-nums">{item.value}</p>
+          <div
+            key={item.label}
+            className="rounded-xl border border-current/10 bg-black/10 p-2"
+          >
+            <p className="text-[10px] uppercase tracking-[0.14em] opacity-75">
+              {item.label}
+            </p>
+            <p className="mt-0.5 font-heading text-sm font-semibold tabular-nums">
+              {item.value}
+            </p>
           </div>
         ))}
       </CardContent>
@@ -1199,7 +1530,11 @@ function tirePressureKpa(value: unknown) {
   return isTyrePressureKpa(value) ? value : null;
 }
 
-function TirePressureCard({ snapshot }: { snapshot: VoltflowMateLiveSnapshotRow }) {
+function TirePressureCard({
+  snapshot,
+}: {
+  snapshot: VoltflowMateLiveSnapshotRow;
+}) {
   const { t } = useTranslation();
   const { data: profile } = useProfileQuery();
   const tx = t as Translator;
@@ -1238,7 +1573,10 @@ function TirePressureCard({ snapshot }: { snapshot: VoltflowMateLiveSnapshotRow 
         </CardTitle>
       </CardHeader>
       <CardContent className="px-3 pb-3 pt-0">
-        <div className="grid grid-cols-2" aria-label={tx("vehicle.tirePressure.title")}>
+        <div
+          className="grid grid-cols-2"
+          aria-label={tx("vehicle.tirePressure.title")}
+        >
           {tires.map((tire, index) => (
             <div
               key={tire.key}
@@ -1338,7 +1676,9 @@ function validNumber(value: number | null | undefined) {
 function pointTimeMs(point: { device_time: string; received_at?: string }) {
   const deviceMs = Date.parse(point.device_time);
   if (Number.isFinite(deviceMs)) return deviceMs;
-  const receivedMs = point.received_at ? Date.parse(point.received_at) : Number.NaN;
+  const receivedMs = point.received_at
+    ? Date.parse(point.received_at)
+    : Number.NaN;
   return Number.isFinite(receivedMs) ? receivedMs : 0;
 }
 
@@ -1352,7 +1692,10 @@ function localDateKey(ms: number) {
 }
 
 function formatClock(ms: number) {
-  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return new Date(ms).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function formatDuration(ms: number) {
@@ -1377,7 +1720,11 @@ function buildTrips(points: VoltflowMateTelemetryPointRow[]): TripSegment[] {
   for (const point of sorted) {
     const lastGroup = groups.at(-1);
     const previous = lastGroup?.at(-1);
-    if (!lastGroup || !previous || pointTimeMs(point) - pointTimeMs(previous) > TRIP_GAP_MS) {
+    if (
+      !lastGroup ||
+      !previous ||
+      pointTimeMs(point) - pointTimeMs(previous) > TRIP_GAP_MS
+    ) {
       groups.push([point]);
     } else {
       lastGroup.push(point);
@@ -1388,7 +1735,8 @@ function buildTrips(points: VoltflowMateTelemetryPointRow[]): TripSegment[] {
     // Exclude trips with only a single point
     if (tripPoints.length < 2) return false;
     // Exclude trips where the car was not moving for 5+ minutes
-    const durationMs = pointTimeMs(tripPoints.at(-1)!) - pointTimeMs(tripPoints[0]);
+    const durationMs =
+      pointTimeMs(tripPoints.at(-1)!) - pointTimeMs(tripPoints[0]);
     if (durationMs >= TRIP_GAP_MS) {
       const speeds = tripPoints
         .map((point) => validNumber(point.telemetry.speed_kmh))
@@ -1399,57 +1747,73 @@ function buildTrips(points: VoltflowMateTelemetryPointRow[]): TripSegment[] {
     return true;
   });
 
-  return validGroups.map((tripPoints, index) => {
-    const startMs = pointTimeMs(tripPoints[0]);
-    const endMs = pointTimeMs(tripPoints.at(-1) ?? tripPoints[0]);
-    const speeds = tripPoints
-      .map((point) => validNumber(point.telemetry.speed_kmh))
-      .filter((value): value is number => value != null);
-    const consumptionValues = tripPoints
-      .map((point) => validNumber(point.telemetry.current_trip_consumption_kwh_100km))
-      .filter((value): value is number => value != null && value >= 0);
-    const odometerValues = tripPoints
-      .map((point) => validNumber(point.telemetry.odometer_km))
-      .filter((value): value is number => value != null);
-    const tripDistanceValues = tripPoints
-      .map((point) => validNumber(point.telemetry.current_trip_distance_km))
-      .filter((value): value is number => value != null);
-    const odometerDistance =
-      odometerValues.length > 1 ? odometerValues.at(-1)! - odometerValues[0] : null;
-    const tripDistance =
-      tripDistanceValues.length > 0 ? Math.max(...tripDistanceValues) - Math.min(...tripDistanceValues) : null;
-    const gpsCoords = tripPoints
-      .map((point) => {
-        const lat = validNumber(point.location?.lat);
-        const lon = validNumber(point.location?.lon);
-        return lat != null && lon != null ? { lat, lon } : null;
-      })
-      .filter((point): point is { lat: number; lon: number } => point != null);
-    const distanceKm = resolvePreferredTripDistanceKm({
-      gpsDistanceKm: trackPathDistanceKm(gpsCoords),
-      odometerDistanceKm: odometerDistance,
-      tripCounterDistanceKm: tripDistance,
-    });
+  return validGroups
+    .map((tripPoints, index) => {
+      const startMs = pointTimeMs(tripPoints[0]);
+      const endMs = pointTimeMs(tripPoints.at(-1) ?? tripPoints[0]);
+      const speeds = tripPoints
+        .map((point) => validNumber(point.telemetry.speed_kmh))
+        .filter((value): value is number => value != null);
+      const consumptionValues = tripPoints
+        .map((point) =>
+          validNumber(point.telemetry.current_trip_consumption_kwh_100km),
+        )
+        .filter((value): value is number => value != null && value >= 0);
+      const odometerValues = tripPoints
+        .map((point) => validNumber(point.telemetry.odometer_km))
+        .filter((value): value is number => value != null);
+      const tripDistanceValues = tripPoints
+        .map((point) => validNumber(point.telemetry.current_trip_distance_km))
+        .filter((value): value is number => value != null);
+      const odometerDistance =
+        odometerValues.length > 1
+          ? odometerValues.at(-1)! - odometerValues[0]
+          : null;
+      const tripDistance =
+        tripDistanceValues.length > 0
+          ? Math.max(...tripDistanceValues) - Math.min(...tripDistanceValues)
+          : null;
+      const gpsCoords = tripPoints
+        .map((point) => {
+          const lat = validNumber(point.location?.lat);
+          const lon = validNumber(point.location?.lon);
+          return lat != null && lon != null ? { lat, lon } : null;
+        })
+        .filter(
+          (point): point is { lat: number; lon: number } => point != null,
+        );
+      const distanceKm = resolvePreferredTripDistanceKm({
+        gpsDistanceKm: trackPathDistanceKm(gpsCoords),
+        odometerDistanceKm: odometerDistance,
+        tripCounterDistanceKm: tripDistance,
+      });
 
-    return {
-      id: `${startMs}-${index}`,
-      points: tripPoints,
-      startMs,
-      endMs,
-      durationMs: Math.max(0, endMs - startMs),
-      distanceKm,
-      socStart: validNumber(tripPoints[0]?.telemetry.soc),
-      socEnd: validNumber(tripPoints.at(-1)?.telemetry.soc),
-      maxSpeed: speeds.length ? Math.max(...speeds) : null,
-      avgSpeed: speeds.length ? speeds.reduce((sum, value) => sum + value, 0) / speeds.length : null,
-      avgConsumptionKwh100Km: consumptionValues.length
-        ? consumptionValues.reduce((sum, value) => sum + value, 0) / consumptionValues.length
-        : null,
-    };
-  }).reverse();
+      return {
+        id: `${startMs}-${index}`,
+        points: tripPoints,
+        startMs,
+        endMs,
+        durationMs: Math.max(0, endMs - startMs),
+        distanceKm,
+        socStart: validNumber(tripPoints[0]?.telemetry.soc),
+        socEnd: validNumber(tripPoints.at(-1)?.telemetry.soc),
+        maxSpeed: speeds.length ? Math.max(...speeds) : null,
+        avgSpeed: speeds.length
+          ? speeds.reduce((sum, value) => sum + value, 0) / speeds.length
+          : null,
+        avgConsumptionKwh100Km: consumptionValues.length
+          ? consumptionValues.reduce((sum, value) => sum + value, 0) /
+            consumptionValues.length
+          : null,
+      };
+    })
+    .reverse();
 }
 
-function tripRowFromFixture(trip: TripSegment, vehicleId: string): VoltflowMateTripRow {
+function tripRowFromFixture(
+  trip: TripSegment,
+  vehicleId: string,
+): VoltflowMateTripRow {
   return {
     id: trip.id,
     user_id: "fixture",
@@ -1459,7 +1823,9 @@ function tripRowFromFixture(trip: TripSegment, vehicleId: string): VoltflowMateT
     last_device_time: new Date(trip.endMs).toISOString(),
     sample_count: trip.points.length,
     track_point_count: trip.points.filter(
-      (point) => typeof point.location.lat === "number" && typeof point.location.lon === "number",
+      (point) =>
+        typeof point.location.lat === "number" &&
+        typeof point.location.lon === "number",
     ).length,
     distance_km: trip.distanceKm,
     soc_start: trip.socStart,
@@ -1501,17 +1867,29 @@ function formatTripTractionEnergyKwh(trip: VoltflowMateTripRow) {
 
 function formatTripNetConsumptionKwh100(trip: VoltflowMateTripRow) {
   const consumptionKwh100 = tripNetConsumptionKwh100(trip);
-  return consumptionKwh100 != null ? `${fmt(consumptionKwh100, 1)} kWh/100 km` : "—";
+  return consumptionKwh100 != null
+    ? `${fmt(consumptionKwh100, 1)} kWh/100 km`
+    : "—";
 }
 
-function withResultDisplay(explanation: MetricExplanation, displayValue: string): MetricExplanation {
+function withResultDisplay(
+  explanation: MetricExplanation,
+  displayValue: string,
+): MetricExplanation {
   return {
     ...explanation,
-    rows: explanation.rows.map((item) => item.kind === "result" ? { ...item, displayValue } : item),
+    rows: explanation.rows.map((item) =>
+      item.kind === "result" ? { ...item, displayValue } : item,
+    ),
   };
 }
 
-function ExplainableTripMetric({ label, value, explanation, className = "" }: {
+function ExplainableTripMetric({
+  label,
+  value,
+  explanation,
+  className = "",
+}: {
   label: string;
   value: ReactNode;
   explanation: MetricExplanation;
@@ -1528,22 +1906,43 @@ function ExplainableTripMetric({ label, value, explanation, className = "" }: {
         aria-label={`${label}: ${typeof value === "string" ? value : ""}`}
         {...press}
       >
-        <Info className="absolute right-0 top-0 size-3.5 text-muted-foreground opacity-60" aria-hidden />
-        <p className="pr-5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
-        <p className="mt-1 font-heading text-base font-semibold tabular-nums">{value}</p>
+        <Info
+          className="absolute right-0 top-0 size-3.5 text-muted-foreground opacity-60"
+          aria-hidden
+        />
+        <p className="pr-5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+          {label}
+        </p>
+        <p className="mt-1 font-heading text-base font-semibold tabular-nums">
+          {value}
+        </p>
       </button>
-      <MetricExplainerSheet open={open} onOpenChange={setOpen} explanation={explanation} nowMs={nowMs} />
+      <MetricExplainerSheet
+        open={open}
+        onOpenChange={setOpen}
+        explanation={explanation}
+        nowMs={nowMs}
+      />
     </>
   );
 }
 
-function TripNetConsumptionMetric({ trip, label }: { trip: VoltflowMateTripRow; label: string }) {
+function TripNetConsumptionMetric({
+  trip,
+  label,
+}: {
+  trip: VoltflowMateTripRow;
+  label: string;
+}) {
   const displayValue = formatTripNetConsumptionKwh100(trip);
   return (
     <ExplainableTripMetric
       label={label}
       value={displayValue}
-      explanation={withResultDisplay(explainTripNetConsumption(trip), displayValue)}
+      explanation={withResultDisplay(
+        explainTripNetConsumption(trip),
+        displayValue,
+      )}
       className="mt-3 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.06] px-3 py-2.5 text-emerald-100"
     />
   );
@@ -1574,12 +1973,17 @@ function TripBrowser({
 }) {
   const { locale, t } = useTranslation();
   const tx = t as Translator;
-  const totalDistance = trips.reduce((sum, trip) => sum + (trip.distance_km ?? 0), 0);
+  const totalDistance = trips.reduce(
+    (sum, trip) => sum + (trip.distance_km ?? 0),
+    0,
+  );
   const fixtureTripEnergy = expandedFixtureTrip
-    ? calculateTripEnergy(expandedFixtureTrip.points.map((point) => ({
-        device_time: point.device_time,
-        power_kw: point.telemetry?.power_kw,
-      })))
+    ? calculateTripEnergy(
+        expandedFixtureTrip.points.map((point) => ({
+          device_time: point.device_time,
+          power_kw: point.telemetry?.power_kw,
+        })),
+      )
     : null;
   const totalRegenEnergy = trips.reduce((sum, trip) => {
     const fallbackRegen =
@@ -1592,7 +1996,13 @@ function TripBrowser({
 
   return (
     <section className="voltflow-card p-5">
-      <div className={showDateFilter ? "flex flex-wrap items-end justify-between gap-4" : undefined}>
+      <div
+        className={
+          showDateFilter
+            ? "flex flex-wrap items-end justify-between gap-4"
+            : undefined
+        }
+      >
         <div>
           <h2 className="font-heading text-2xl font-semibold tracking-tight">
             {tx("vehicle.trips.title")}
@@ -1633,7 +2043,10 @@ function TripBrowser({
                 title={tx("vehicle.trips.dateHasTelemetry", { date: dateKey })}
               >
                 <span className="font-heading font-semibold">
-                  {date.toLocaleDateString(localeCode(locale), { month: "short", day: "numeric" })}
+                  {date.toLocaleDateString(localeCode(locale), {
+                    month: "short",
+                    day: "numeric",
+                  })}
                 </span>
               </button>
             );
@@ -1642,13 +2055,27 @@ function TripBrowser({
       ) : null}
 
       <div className="mt-5 grid grid-cols-2 gap-3 min-[100px]:grid-cols-3">
-        <SummaryPill label={tx("vehicle.trips.count")} value={isLoading ? "…" : String(trips.length)} />
-        <SummaryPill label={tx("vehicle.trips.distance")} value={`${fmt(totalDistance, 1)} km`} />
-        <SummaryPill label={tx("vehicle.trips.regen")} value={`${fmt(totalRegenEnergy, 2)} kWh`} />
-        <SummaryPill label={tx("vehicle.trips.consumption")} value={`${fmt(avgConsumption, 1)} kWh/100`} />
+        <SummaryPill
+          label={tx("vehicle.trips.count")}
+          value={isLoading ? "…" : String(trips.length)}
+        />
+        <SummaryPill
+          label={tx("vehicle.trips.distance")}
+          value={`${fmt(totalDistance, 1)} km`}
+        />
+        <SummaryPill
+          label={tx("vehicle.trips.regen")}
+          value={`${fmt(totalRegenEnergy, 2)} kWh`}
+        />
+        <SummaryPill
+          label={tx("vehicle.trips.consumption")}
+          value={`${fmt(avgConsumption, 1)} kWh/100`}
+        />
         <SummaryPill
           label={tx("vehicle.trips.points")}
-          value={String(trips.reduce((sum, trip) => sum + trip.sample_count, 0))}
+          value={String(
+            trips.reduce((sum, trip) => sum + trip.sample_count, 0),
+          )}
         />
       </div>
 
@@ -1663,7 +2090,9 @@ function TripBrowser({
       ) : (
         <div className="mt-5 grid gap-3">
           {trips.map((trip, index) => {
-            const tripLabel = tx("vehicle.trips.tripLabel", { value: trips.length - index });
+            const tripLabel = tx("vehicle.trips.tripLabel", {
+              value: trips.length - index,
+            });
             const expanded = trip.id === selectedTripId;
             const displayTrip =
               fixtureTripEnergy && expandedFixtureTrip?.id === trip.id
@@ -1724,11 +2153,19 @@ function TripListItem({
   const tx = t as Translator;
   const currency = useAppPreferences((s) => s.currency) as Currency;
   const pricePerKwh = useAppPreferences((s) => s.defaultPricePerKwh);
-  const costStr = formatTripCostStr(trip, currency, pricePerKwh, locale as Locale);
+  const costStr = formatTripCostStr(
+    trip,
+    currency,
+    pricePerKwh,
+    locale as Locale,
+  );
   const tractionDisplay = formatTripTractionEnergyKwh(trip);
   const energyPerKmDisplay = formatTripEnergyPerKm(trip);
   const costValue = tripCost(trip, pricePerKwh);
-  const costDisplay = costValue == null ? null : formatCurrencyAmount(currency, costValue, locale as Locale);
+  const costDisplay =
+    costValue == null
+      ? null
+      : formatCurrencyAmount(currency, costValue, locale as Locale);
 
   if (!expanded) {
     return (
@@ -1744,11 +2181,14 @@ function TripListItem({
             {tripLabel}
           </p>
           <p className="truncate text-sm text-muted-foreground">
-            {formatClock(startMs)} - {formatClock(endMs)} · {formatDuration(durationMs)}
+            {formatClock(startMs)} - {formatClock(endMs)} ·{" "}
+            {formatDuration(durationMs)}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-3 text-sm tabular-nums text-muted-foreground">
-          <span className="text-emerald-300">{fmt(trip.regen_energy_kwh, 2)} kWh</span>
+          <span className="text-emerald-300">
+            {fmt(trip.regen_energy_kwh, 2)} kWh
+          </span>
           <span>{fmt(trip.distance_km, 1)} km</span>
           <span className="hidden min-[430px]:inline">
             {tx("vehicle.trips.pointShort", { value: trip.sample_count })}
@@ -1760,15 +2200,24 @@ function TripListItem({
 
   return (
     <div className="rounded-2xl border border-primary bg-primary/10 p-4 text-left transition">
-      <button type="button" onClick={onSelect} aria-expanded className="flex w-full flex-wrap items-start justify-between gap-3 text-left">
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-expanded
+        className="flex w-full flex-wrap items-start justify-between gap-3 text-left"
+      >
         <div className="flex min-w-0 gap-3">
-          <ChevronDown className="mt-1 size-4 shrink-0 text-primary" aria-hidden />
+          <ChevronDown
+            className="mt-1 size-4 shrink-0 text-primary"
+            aria-hidden
+          />
           <div>
             <p className="font-heading text-lg font-semibold tracking-tight">
               {tripLabel}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {formatClock(startMs)} - {formatClock(endMs)} · {formatDuration(durationMs)}
+              {formatClock(startMs)} - {formatClock(endMs)} ·{" "}
+              {formatDuration(durationMs)}
             </p>
           </div>
         </div>
@@ -1777,30 +2226,61 @@ function TripListItem({
         </span>
       </button>
       <div className="mt-4 grid grid-cols-2 gap-3 min-[430px]:grid-cols-[repeat(auto-fit,minmax(6.5rem,1fr))]">
-        <MiniStat label={tx("vehicle.trips.distance")} value={`${fmt(trip.distance_km, 1)} km`} />
-        <MiniStat label={tx("vehicle.trips.regen")} value={`${fmt(trip.regen_energy_kwh, 2)} kWh`} />
+        <MiniStat
+          label={tx("vehicle.trips.distance")}
+          value={`${fmt(trip.distance_km, 1)} km`}
+        />
+        <MiniStat
+          label={tx("vehicle.trips.regen")}
+          value={`${fmt(trip.regen_energy_kwh, 2)} kWh`}
+        />
         <ExplainableTripMetric
           label={tx("vehicle.trips.traction")}
           value={tractionDisplay}
-          explanation={withResultDisplay(explainTripTractionEnergy(trip), tractionDisplay)}
+          explanation={withResultDisplay(
+            explainTripTractionEnergy(trip),
+            tractionDisplay,
+          )}
         />
         <ExplainableTripMetric
           label={tx("vehicle.trips.energyPerKm")}
           value={energyPerKmDisplay}
-          explanation={withResultDisplay(explainTripEnergyPerKm(trip), energyPerKmDisplay)}
+          explanation={withResultDisplay(
+            explainTripEnergyPerKm(trip),
+            energyPerKmDisplay,
+          )}
         />
-        <MiniStat label="SOC" value={`${formatSocPercent(trip.soc_start)}% -> ${formatSocPercent(trip.soc_end)}%`} />
-        <MiniStat label={tx("vehicle.trips.maxSpeed")} value={`${fmt(trip.max_speed_kmh)} km/h`} />
-        <MiniStat label={tx("vehicle.trips.avgSpeed")} value={`${fmt(trip.avg_speed_kmh)} km/h`} />
+        <MiniStat
+          label="SOC"
+          value={`${formatSocPercent(trip.soc_start)}% -> ${formatSocPercent(trip.soc_end)}%`}
+        />
+        <MiniStat
+          label={tx("vehicle.trips.maxSpeed")}
+          value={`${fmt(trip.max_speed_kmh)} km/h`}
+        />
+        <MiniStat
+          label={tx("vehicle.trips.avgSpeed")}
+          value={`${fmt(trip.avg_speed_kmh)} km/h`}
+        />
         {costStr != null && costDisplay != null ? (
           <ExplainableTripMetric
             label={tx("vehicle.trips.cost")}
             value={costStr}
-            explanation={withResultDisplay(explainTripCost({ trip, pricePerKwh, currencyUnit: currencySymbols[currency] }), costDisplay)}
+            explanation={withResultDisplay(
+              explainTripCost({
+                trip,
+                pricePerKwh,
+                currencyUnit: currencySymbols[currency],
+              }),
+              costDisplay,
+            )}
           />
         ) : null}
       </div>
-      <TripNetConsumptionMetric trip={trip} label={tx("vehicle.trips.netConsumption")} />
+      <TripNetConsumptionMetric
+        trip={trip}
+        label={tx("vehicle.trips.netConsumption")}
+      />
     </div>
   );
 }
@@ -1808,8 +2288,12 @@ function TripListItem({
 function SummaryPill({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-border bg-white/[0.02] p-3 mx-auto w-fit">
-      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
-      <p className="mt-1 text-center font-heading text-lg font-semibold tabular-nums">{value}</p>
+      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1 text-center font-heading text-lg font-semibold tabular-nums">
+        {value}
+      </p>
     </div>
   );
 }
@@ -1817,8 +2301,12 @@ function SummaryPill({ label, value }: { label: string; value: string }) {
 function MiniStat({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div>
-      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
-      <p className="mt-1 font-heading text-base font-semibold tabular-nums">{value}</p>
+      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1 font-heading text-base font-semibold tabular-nums">
+        {value}
+      </p>
     </div>
   );
 }
@@ -1851,12 +2339,18 @@ function downsamplePoints<T>(points: T[], maxPoints: number) {
 }
 
 const RouteMap = dynamic(
-  () => import("@/components/vehicle/vehicle-route-map").then((module) => module.RouteMap),
+  () =>
+    import("@/components/vehicle/vehicle-route-map").then(
+      (module) => module.RouteMap,
+    ),
   { loading: () => <Skeleton className="mt-3 h-64 rounded-2xl" /> },
 );
 
 const LiveLocationMap = dynamic(
-  () => import("@/components/vehicle/vehicle-route-map").then((module) => module.LiveLocationMap),
+  () =>
+    import("@/components/vehicle/vehicle-route-map").then(
+      (module) => module.LiveLocationMap,
+    ),
   { loading: () => <Skeleton className="h-40 rounded-xl" /> },
 );
 
@@ -1907,14 +2401,19 @@ function LocationCard({
     snapshot,
   );
 
-  const deviceTimeMs = resolved ? Date.parse(resolved.deviceTimeIso) : Number.NaN;
+  const deviceTimeMs = resolved
+    ? Date.parse(resolved.deviceTimeIso)
+    : Number.NaN;
   const deviceTimeLabel =
     hasMounted && Number.isFinite(deviceTimeMs)
       ? new Date(deviceTimeMs).toLocaleString(localeCode(locale))
       : "—";
 
   return (
-    <Card size="sm" className="voltflow-card gap-2 border-border bg-transparent">
+    <Card
+      size="sm"
+      className="voltflow-card gap-2 border-border bg-transparent"
+    >
       <CardHeader className="px-3 pt-3 pb-0">
         <CardTitle className="flex items-center gap-2 text-base tracking-tight">
           <MapPin className="size-4 text-primary" aria-hidden />
@@ -1946,20 +2445,30 @@ function LocationCard({
             telemetry={resolved.telemetry}
           />
         ) : (
-          <p className="text-muted-foreground">{tx("vehicle.location.empty")}</p>
+          <p className="text-muted-foreground">
+            {tx("vehicle.location.empty")}
+          </p>
         )}
         {resolved ? (
           <p className="text-center font-mono text-[11px] tabular-nums text-muted-foreground">
             {resolved.lat.toFixed(5)}, {resolved.lon.toFixed(5)}
             {resolved.source === "lastTrip" ? (
-              <span className="ml-1.5 text-muted-foreground/60">({tx("vehicle.location.lastTrip")})</span>
+              <span className="ml-1.5 text-muted-foreground/60">
+                ({tx("vehicle.location.lastTrip")})
+              </span>
             ) : null}
           </p>
         ) : null}
         <div className="space-y-0">
-          <Row label={tx("vehicle.location.deviceTime")} value={deviceTimeLabel} />
+          <Row
+            label={tx("vehicle.location.deviceTime")}
+            value={deviceTimeLabel}
+          />
           {resolved?.source === "live" ? (
-            <Row label={tx("vehicle.location.accuracy")} value={`${fmt(resolved.accuracyM, 1)} m`} />
+            <Row
+              label={tx("vehicle.location.accuracy")}
+              value={`${fmt(resolved.accuracyM, 1)} m`}
+            />
           ) : null}
         </div>
       </CardContent>
@@ -1971,7 +2480,9 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3 border-t border-border py-2 first:border-t-0 first:pt-0">
       <span className="text-muted-foreground">{label}</span>
-      <span className="text-right font-heading text-sm font-semibold tabular-nums">{value}</span>
+      <span className="text-right font-heading text-sm font-semibold tabular-nums">
+        {value}
+      </span>
     </div>
   );
 }
@@ -1986,7 +2497,10 @@ function LastTripCard({
   const { t } = useTranslation();
   const appPath = useAppPath();
   const tx = t as Translator;
-  const { data: trips = [], isLoading } = useLatestVoltflowMateTripsQuery(vehicleId, 1);
+  const { data: trips = [], isLoading } = useLatestVoltflowMateTripsQuery(
+    vehicleId,
+    1,
+  );
   const trip = trips[0] ?? null;
 
   return (
@@ -2038,19 +2552,23 @@ function LastTripDetail({
   const timeRangeLabel = hasMounted
     ? `${formatClock(startMs)} — ${formatClock(endMs)}`
     : "—";
-  const dateLabel = hasMounted
-    ? new Date(startMs).toLocaleDateString()
-    : "—";
+  const dateLabel = hasMounted ? new Date(startMs).toLocaleDateString() : "—";
 
   return (
     <div className="mt-3 grid gap-2">
       <div className="rounded-xl border border-primary bg-primary/10 p-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="font-heading text-base font-semibold tracking-tight" suppressHydrationWarning>
+            <p
+              className="font-heading text-base font-semibold tracking-tight"
+              suppressHydrationWarning
+            >
               {timeRangeLabel}
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground" suppressHydrationWarning>
+            <p
+              className="mt-0.5 text-xs text-muted-foreground"
+              suppressHydrationWarning
+            >
               {formatDuration(durationMs)} · {dateLabel}
             </p>
           </div>
@@ -2059,18 +2577,39 @@ function LastTripDetail({
           </span>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2 min-[380px]:grid-cols-[repeat(auto-fit,minmax(5.5rem,1fr))]">
-          <MiniStat label={tx("vehicle.trips.distance")} value={`${fmt(trip.distance_km, 1)} km`} />
-          <MiniStat label={tx("vehicle.trips.regen")} value={`${fmt(trip.regen_energy_kwh, 2)} kWh`} />
+          <MiniStat
+            label={tx("vehicle.trips.distance")}
+            value={`${fmt(trip.distance_km, 1)} km`}
+          />
+          <MiniStat
+            label={tx("vehicle.trips.regen")}
+            value={`${fmt(trip.regen_energy_kwh, 2)} kWh`}
+          />
           <MiniStat
             label={tx("vehicle.trips.traction")}
             value={formatTripTractionEnergyKwh(trip)}
           />
-          <MiniStat label={tx("vehicle.trips.energyPerKm")} value={formatTripEnergyPerKm(trip)} />
-          <MiniStat label="SOC" value={`${formatSocPercent(trip.soc_start)}% → ${formatSocPercent(trip.soc_end)}%`} />
-          <MiniStat label={tx("vehicle.trips.maxSpeed")} value={`${fmt(trip.max_speed_kmh)} km/h`} />
-          <MiniStat label={tx("vehicle.trips.avgSpeed")} value={`${fmt(trip.avg_speed_kmh)} km/h`} />
+          <MiniStat
+            label={tx("vehicle.trips.energyPerKm")}
+            value={formatTripEnergyPerKm(trip)}
+          />
+          <MiniStat
+            label="SOC"
+            value={`${formatSocPercent(trip.soc_start)}% → ${formatSocPercent(trip.soc_end)}%`}
+          />
+          <MiniStat
+            label={tx("vehicle.trips.maxSpeed")}
+            value={`${fmt(trip.max_speed_kmh)} km/h`}
+          />
+          <MiniStat
+            label={tx("vehicle.trips.avgSpeed")}
+            value={`${fmt(trip.avg_speed_kmh)} km/h`}
+          />
         </div>
-        <TripNetConsumptionMetric trip={trip} label={tx("vehicle.trips.netConsumption")} />
+        <TripNetConsumptionMetric
+          trip={trip}
+          label={tx("vehicle.trips.netConsumption")}
+        />
       </div>
       <TripDetailPanel tripId={trip.id} trip={trip} />
     </div>
@@ -2093,10 +2632,14 @@ function EmptyVehicleState() {
       <section className="voltflow-card p-4">
         <CarFront className="size-10 text-primary" aria-hidden />
         <h1 className="mt-5 font-heading text-3xl font-bold tracking-normal">
-          {needsPairing ? tx("onboarding.reconnectBanner") : tx("dashboard.addEvTitle")}
+          {needsPairing
+            ? tx("onboarding.reconnectBanner")
+            : tx("dashboard.addEvTitle")}
         </h1>
         {needsPairing ? null : (
-          <p className="mt-3 text-muted-foreground leading-7">{tx("dashboard.addEvBody")}</p>
+          <p className="mt-3 text-muted-foreground leading-7">
+            {tx("dashboard.addEvBody")}
+          </p>
         )}
 
         <DemoWatermark className="mt-5">
@@ -2105,13 +2648,17 @@ function EmptyVehicleState() {
               <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                 {tx("dashboard.demoSoc")}
               </p>
-              <p className="mt-0.5 font-heading text-lg font-bold tabular-nums">82%</p>
+              <p className="mt-0.5 font-heading text-lg font-bold tabular-nums">
+                82%
+              </p>
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                 {tx("dashboard.demoRange")}
               </p>
-              <p className="mt-0.5 font-heading text-lg font-bold tabular-nums">270 km</p>
+              <p className="mt-0.5 font-heading text-lg font-bold tabular-nums">
+                270 km
+              </p>
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
@@ -2133,7 +2680,9 @@ function EmptyVehicleState() {
           className="mt-4 h-14 w-full rounded-full bg-[linear-gradient(90deg,#00E676_0%,#00D1FF_100%)] font-heading text-base font-bold text-[#06110B]"
         >
           <Link href={appPath(needsPairing ? "/onboarding" : "/cars/new")}>
-            {needsPairing ? tx("onboarding.connectCta") : tx("dashboard.addVehicle")}
+            {needsPairing
+              ? tx("onboarding.connectCta")
+              : tx("dashboard.addVehicle")}
           </Link>
         </Button>
       </section>

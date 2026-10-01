@@ -7,15 +7,27 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent, ReactNode, RefObject } from "react";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { toast } from "sonner";
 import { Info } from "lucide-react";
 
-import { startChargingSession, stopChargingSession } from "@/features/charging/actions";
+import {
+  startChargingSession,
+  stopChargingSession,
+} from "@/features/charging/actions";
 import { BrandBadge } from "@/components/brand/BrandBadge";
 import { ChargingBolt } from "@/components/brand/ChargingBolt";
 import { LogoFull } from "@/components/brand/LogoFull";
-import { CurrencyAmount, currencyTextWithIcon } from "@/components/currency-amount";
+import {
+  CurrencyAmount,
+  currencyTextWithIcon,
+} from "@/components/currency-amount";
 import { PremiumBadge } from "@/components/premium/premium-badge";
 import { DemoWatermark } from "@/components/demo/demo-watermark";
 import {
@@ -51,9 +63,15 @@ import {
 } from "@/hooks/use-voltflowmate-trips-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useVehicleConnection } from "@/hooks/use-vehicle-connection";
-import { useUserProvidersQuery, useUserProviderMap } from "@/hooks/use-user-providers-query";
+import {
+  useUserProvidersQuery,
+  useUserProviderMap,
+} from "@/hooks/use-user-providers-query";
 import { usePageVisible } from "@/hooks/use-page-visible";
-import { chargingSessionsRefetchInterval, fetchSessions } from "@/hooks/use-sessions-query";
+import {
+  chargingSessionsRefetchInterval,
+  fetchSessions,
+} from "@/hooks/use-sessions-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
 import { useLongPress } from "@/hooks/use-long-press";
@@ -67,6 +85,7 @@ import {
   formatDuration,
   resolveChargingEtaPowerKw,
   snapshotChargePowerKw,
+  snapshotMeasuredChargePowerKw,
   type QuickSessionField,
   type QuickSessionFieldErrors,
   validateQuickSessionInput,
@@ -79,15 +98,28 @@ import {
   deriveChargingSessionLiveBundle,
   filterLiveSnapshotsForVehicle,
 } from "@/features/charging/domain";
-import { resolveDisplayChargePowerKw, snapshotSoc, isFrozenLiveChargeReading } from "@/features/charging/domain";
+import {
+  resolveDisplayChargePowerKw,
+  snapshotSoc,
+  isFrozenLiveChargeReading,
+} from "@/features/charging/domain";
 import { mapChargingTariffLocation } from "@/lib/db-map";
 import { isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { useAppPath } from "@/lib/dev/dev-path";
 import { useVoltflowMateRecentChargeSamplesQuery } from "@/hooks/use-voltflowmate-recent-charge-samples-query";
-import { currencySymbols, formatCurrencyAmount, type Currency, type Locale, type TranslationKey } from "@/lib/i18n";
+import {
+  currencySymbols,
+  formatCurrencyAmount,
+  type Currency,
+  type Locale,
+  type TranslationKey,
+} from "@/lib/i18n";
 import { parseDecimalInput } from "@/lib/number-input";
 import { PROVIDER_LABELS, resolveTariffPrice } from "@/lib/charging-tariffs";
-import { ensureNotificationsPermission, ensurePushSubscription } from "@/lib/push/client";
+import {
+  ensureNotificationsPermission,
+  ensurePushSubscription,
+} from "@/lib/push/client";
 import { queryKeys } from "@/lib/query-keys";
 import { createClient } from "@/lib/supabase/client";
 import { formatTimeAgo } from "@/lib/time-ago";
@@ -125,7 +157,10 @@ import type {
   ChargingTariffType,
 } from "@/types/database";
 
-const CHARGE_TYPE_OPTIONS: { value: ChargingTariffType; labelKey: TranslationKey }[] = [
+const CHARGE_TYPE_OPTIONS: {
+  value: ChargingTariffType;
+  labelKey: TranslationKey;
+}[] = [
   { value: "home", labelKey: "dashboard.estimateTypeHome" },
   { value: "commercial_ac", labelKey: "dashboard.estimateTypeAc" },
   { value: "fast_dc", labelKey: "dashboard.estimateTypeDc" },
@@ -159,28 +194,39 @@ const CAR_IMAGE_BY_GENERATION = {
 } as const;
 
 const DashboardDeferredSummaries = dynamic(() =>
-  import("./dashboard-deferred-summaries").then((module) => module.DashboardDeferredSummaries),
+  import("./dashboard-deferred-summaries").then(
+    (module) => module.DashboardDeferredSummaries,
+  ),
 );
 
-function defaultEstimatePowerKw(type: ChargingTariffType, homePowerKw?: number | null) {
+function defaultEstimatePowerKw(
+  type: ChargingTariffType,
+  homePowerKw?: number | null,
+) {
   if (type === "fast_dc") return 65;
   if (type === "commercial_ac") return 7;
   // Home charging defaults to the user's per-car configured charger power.
   return typeof homePowerKw === "number" && homePowerKw > 0 ? homePowerKw : 4.4;
 }
 
-
-function liveStartPercent(snapshot: VoltflowMateLiveSnapshotRow | null | undefined) {
+function liveStartPercent(
+  snapshot: VoltflowMateLiveSnapshotRow | null | undefined,
+) {
   const soc = snapshotSoc(snapshot);
   if (soc == null || soc >= 100) return null;
   return formatSocPercent(soc);
 }
 
 function fmt(value: number | null | undefined, digits = 0) {
-  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
+  return typeof value === "number" && Number.isFinite(value)
+    ? value.toFixed(digits)
+    : "—";
 }
 
-function withResultDisplay(explanation: MetricExplanation, displayValue: string): MetricExplanation {
+function withResultDisplay(
+  explanation: MetricExplanation,
+  displayValue: string,
+): MetricExplanation {
   return {
     ...explanation,
     rows: explanation.rows.map((item) =>
@@ -208,17 +254,45 @@ function drivingStatsFromLive(
   };
 }
 
-function DashboardStatTile({ label, value, explanation, onExplain }: { label: string; value: ReactNode; explanation?: MetricExplanation; onExplain?: (explanation: MetricExplanation) => void }) {
-  const longPressProps = useLongPress(() => { if (explanation) onExplain?.(explanation); });
-  const content = <>
-      {explanation ? <Info className="absolute right-2.5 top-2.5 size-3.5 opacity-60" aria-hidden /> : null}
+function DashboardStatTile({
+  label,
+  value,
+  explanation,
+  onExplain,
+}: {
+  label: string;
+  value: ReactNode;
+  explanation?: MetricExplanation;
+  onExplain?: (explanation: MetricExplanation) => void;
+}) {
+  const longPressProps = useLongPress(() => {
+    if (explanation) onExplain?.(explanation);
+  });
+  const content = (
+    <>
+      {explanation ? (
+        <Info
+          className="absolute right-2.5 top-2.5 size-3.5 opacity-60"
+          aria-hidden
+        />
+      ) : null}
       <p className="pr-5 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         {label}
       </p>
-      <p className="flex items-center font-heading text-base font-bold tabular-nums">{value}</p>
-    </>;
-  const className = "relative grid min-h-[84px] w-full grid-rows-[auto_1fr] rounded-xl border border-border bg-white/[0.03] p-2.5 text-left";
-  return explanation ? <button type="button" className={className} {...longPressProps}>{content}</button> : <div className={className}>{content}</div>;
+      <p className="flex items-center font-heading text-base font-bold tabular-nums">
+        {value}
+      </p>
+    </>
+  );
+  const className =
+    "relative grid min-h-[84px] w-full grid-rows-[auto_1fr] rounded-xl border border-border bg-white/[0.03] p-2.5 text-left";
+  return explanation ? (
+    <button type="button" className={className} {...longPressProps}>
+      {content}
+    </button>
+  ) : (
+    <div className={className}>{content}</div>
+  );
 }
 
 function DashboardChargingProgressTile({
@@ -238,19 +312,49 @@ function DashboardChargingProgressTile({
   energyExplanation?: MetricExplanation;
   onExplain?: (explanation: MetricExplanation) => void;
 }) {
-  const timePress = useLongPress(() => { if (timeExplanation) onExplain?.(timeExplanation); });
-  const energyPress = useLongPress(() => { if (energyExplanation) onExplain?.(energyExplanation); });
+  const timePress = useLongPress(() => {
+    if (timeExplanation) onExplain?.(timeExplanation);
+  });
+  const energyPress = useLongPress(() => {
+    if (energyExplanation) onExplain?.(energyExplanation);
+  });
   return (
     <div className="rounded-xl border border-border bg-white/[0.03] p-2.5">
-      <button type="button" className="relative block min-h-11 w-full text-left" {...timePress}>
-        {timeExplanation ? <Info className="absolute right-0 top-0 size-3.5 opacity-60" aria-hidden /> : null}
-        <span className="block pr-5 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{timeLeftLabel}</span>
-        <span className="mt-1 block font-heading text-base font-bold tabular-nums">{timeLeft}</span>
+      <button
+        type="button"
+        className="relative block min-h-11 w-full text-left"
+        {...timePress}
+      >
+        {timeExplanation ? (
+          <Info
+            className="absolute right-0 top-0 size-3.5 opacity-60"
+            aria-hidden
+          />
+        ) : null}
+        <span className="block pr-5 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          {timeLeftLabel}
+        </span>
+        <span className="mt-1 block font-heading text-base font-bold tabular-nums">
+          {timeLeft}
+        </span>
       </button>
-      <button type="button" className="relative mt-1 block min-h-11 w-full text-left" {...energyPress}>
-        {energyExplanation ? <Info className="absolute right-0 top-0 size-3.5 opacity-60" aria-hidden /> : null}
-        <span className="block pr-5 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{chargedLabel}</span>
-        <span className="mt-1 block text-sm font-semibold tabular-nums text-muted-foreground">{charged}</span>
+      <button
+        type="button"
+        className="relative mt-1 block min-h-11 w-full text-left"
+        {...energyPress}
+      >
+        {energyExplanation ? (
+          <Info
+            className="absolute right-0 top-0 size-3.5 opacity-60"
+            aria-hidden
+          />
+        ) : null}
+        <span className="block pr-5 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          {chargedLabel}
+        </span>
+        <span className="mt-1 block text-sm font-semibold tabular-nums text-muted-foreground">
+          {charged}
+        </span>
       </button>
     </div>
   );
@@ -288,7 +392,9 @@ function DrivingStatsGrid({
           >
             <span className="text-xl tracking-normal">{item.value}</span>
             {item.unit ? (
-              <span className="text-xs font-semibold text-muted-foreground">{item.unit}</span>
+              <span className="text-xs font-semibold text-muted-foreground">
+                {item.unit}
+              </span>
             ) : null}
           </p>
         </div>
@@ -306,7 +412,11 @@ function drivingStatParts(
   return { value: fmt(value, digits), unit };
 }
 
-function RangeBadge({ value, explanation, onExplain }: {
+function RangeBadge({
+  value,
+  explanation,
+  onExplain,
+}: {
   value: string | null;
   explanation?: MetricExplanation;
   onExplain?: () => void;
@@ -314,9 +424,14 @@ function RangeBadge({ value, explanation, onExplain }: {
   const longPressProps = useLongPress(onExplain ?? (() => {}));
   if (!value && !explanation) return null;
 
-  const className = "absolute inset-x-0 bottom-0 z-10 mx-auto flex min-h-11 w-fit items-center rounded-full border border-[var(--voltflow-cyan)]/35 bg-[#10151D]/95 px-3 py-1 font-heading text-sm font-bold tracking-normal text-[var(--voltflow-cyan)] shadow-[0_0_18px_rgba(0,209,255,0.18)] tabular-nums";
+  const className =
+    "absolute inset-x-0 bottom-0 z-10 mx-auto flex min-h-11 w-fit items-center rounded-full border border-[var(--voltflow-cyan)]/35 bg-[#10151D]/95 px-3 py-1 font-heading text-sm font-bold tracking-normal text-[var(--voltflow-cyan)] shadow-[0_0_18px_rgba(0,209,255,0.18)] tabular-nums";
   return explanation ? (
-    <button type="button" className={`${className} gap-1.5`} {...longPressProps}>
+    <button
+      type="button"
+      className={`${className} gap-1.5`}
+      {...longPressProps}
+    >
       {value ?? "—"}
       <Info className="size-3.5 shrink-0 opacity-60" aria-hidden />
     </button>
@@ -363,18 +478,35 @@ function ParkChargeEstimatePanel({
   setEstimateTariffType: (value: ChargingTariffType) => void;
   t: (key: TranslationKey, values?: Record<string, string | number>) => string;
   allProviderOptions: { value: string; label: string }[];
-  parseProviderSelectValue: (value: string | null | undefined) => { providerType: ChargingProviderType; userProviderId: string | null };
-  explanations?: { time: MetricExplanation; energy: MetricExplanation; cost: MetricExplanation };
+  parseProviderSelectValue: (value: string | null | undefined) => {
+    providerType: ChargingProviderType;
+    userProviderId: string | null;
+  };
+  explanations?: {
+    time: MetricExplanation;
+    energy: MetricExplanation;
+    cost: MetricExplanation;
+  };
   onExplain?: (explanation: MetricExplanation) => void;
 }) {
-  const timePress = useLongPress(() => { if (explanations) onExplain?.(explanations.time); });
-  const energyPress = useLongPress(() => { if (explanations) onExplain?.(explanations.energy); });
-  const costPress = useLongPress(() => { if (explanations) onExplain?.(explanations.cost); });
+  const timePress = useLongPress(() => {
+    if (explanations) onExplain?.(explanations.time);
+  });
+  const energyPress = useLongPress(() => {
+    if (explanations) onExplain?.(explanations.energy);
+  });
+  const costPress = useLongPress(() => {
+    if (explanations) onExplain?.(explanations.cost);
+  });
   const durationText = parkEstimate
     ? formatDuration(Math.round(parkEstimate.durationSeconds))
     : "—";
   const costText: ReactNode = parkEstimate ? (
-    <CurrencyAmount currency={currency} value={parkEstimate.cost} locale={locale} />
+    <CurrencyAmount
+      currency={currency}
+      value={parkEstimate.cost}
+      locale={locale}
+    />
   ) : (
     "—"
   );
@@ -414,7 +546,9 @@ function ParkChargeEstimatePanel({
               onClick={() => {
                 const next = item.value;
                 setEstimateTariffType(next);
-                setEstimatePowerKw(String(defaultEstimatePowerKw(next, homeChargerPowerKw)));
+                setEstimatePowerKw(
+                  String(defaultEstimatePowerKw(next, homeChargerPowerKw)),
+                );
               }}
               className={cn(
                 "min-h-6 rounded-full px-2 py-1 font-heading text-xs font-bold uppercase tracking-[0.08em] transition",
@@ -432,11 +566,18 @@ function ParkChargeEstimatePanel({
 
       <div className="grid grid-cols-[1fr_4.35rem] gap-2">
         <div className="space-y-1">
-          <Label htmlFor="park-estimate-provider" className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
+          <Label
+            htmlFor="park-estimate-provider"
+            className="text-xs uppercase tracking-[0.12em] text-muted-foreground"
+          >
             {t("dashboard.estimateProvider")}
           </Label>
           <Select
-            value={estimateUserProviderId ? `up_${estimateUserProviderId}` : estimateProviderType}
+            value={
+              estimateUserProviderId
+                ? `up_${estimateUserProviderId}`
+                : estimateProviderType
+            }
             onValueChange={(value) => {
               const parsed = parseProviderSelectValue(value);
               setEstimateProviderType(parsed.providerType);
@@ -447,7 +588,10 @@ function ParkChargeEstimatePanel({
               label: item.label,
             }))}
           >
-            <SelectTrigger id="park-estimate-provider" className="h-8 rounded-xl px-2 text-xs">
+            <SelectTrigger
+              id="park-estimate-provider"
+              className="h-8 rounded-xl px-2 text-xs"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -460,7 +604,10 @@ function ParkChargeEstimatePanel({
           </Select>
         </div>
         <div className="space-y-1">
-          <Label htmlFor="park-estimate-power" className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
+          <Label
+            htmlFor="park-estimate-power"
+            className="text-xs uppercase tracking-[0.12em] text-muted-foreground"
+          >
             kW
           </Label>
           <Input
@@ -476,24 +623,46 @@ function ParkChargeEstimatePanel({
       </div>
 
       <div className="rounded-2xl border border-border/70 bg-[#12151C]/55 px-3 py-2">
-        <button type="button" className="flex min-h-11 w-full items-baseline justify-between gap-2 text-left" {...timePress}>
+        <button
+          type="button"
+          className="flex min-h-11 w-full items-baseline justify-between gap-2 text-left"
+          {...timePress}
+        >
           <span className="flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             {t("dashboard.estimateTimeToFull")}
-            {explanations ? <Info className="size-3.5 shrink-0 opacity-60" aria-hidden /> : null}
+            {explanations ? (
+              <Info className="size-3.5 shrink-0 opacity-60" aria-hidden />
+            ) : null}
           </span>
-          <span className="font-heading text-base font-bold tabular-nums">{durationText}</span>
+          <span className="font-heading text-base font-bold tabular-nums">
+            {durationText}
+          </span>
         </button>
-        <button type="button" className="mt-1 flex min-h-11 w-full items-baseline justify-between gap-2 text-left" {...costPress}>
+        <button
+          type="button"
+          className="mt-1 flex min-h-11 w-full items-baseline justify-between gap-2 text-left"
+          {...costPress}
+        >
           <span className="flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             {t("dashboard.estimateCostToFull")}
-            {explanations ? <Info className="size-3.5 shrink-0 opacity-60" aria-hidden /> : null}
+            {explanations ? (
+              <Info className="size-3.5 shrink-0 opacity-60" aria-hidden />
+            ) : null}
           </span>
-          <span className="font-heading text-base font-bold tabular-nums">{costText}</span>
+          <span className="font-heading text-base font-bold tabular-nums">
+            {costText}
+          </span>
         </button>
       </div>
-      <button type="button" className="flex min-h-11 max-w-full items-center gap-1.5 truncate text-left text-[10px] leading-4 text-muted-foreground" {...energyPress}>
+      <button
+        type="button"
+        className="flex min-h-11 max-w-full items-center gap-1.5 truncate text-left text-[10px] leading-4 text-muted-foreground"
+        {...energyPress}
+      >
         <span className="truncate">{detailText}</span>
-        {explanations ? <Info className="size-3.5 shrink-0 opacity-60" aria-hidden /> : null}
+        {explanations ? (
+          <Info className="size-3.5 shrink-0 opacity-60" aria-hidden />
+        ) : null}
       </button>
     </div>
   );
@@ -531,7 +700,11 @@ function DashboardLoadingSkeleton() {
   );
 }
 
-export function DashboardView({ initialData }: { initialData?: DashboardBootstrapData }) {
+export function DashboardView({
+  initialData,
+}: {
+  initialData?: DashboardBootstrapData;
+}) {
   const router = useRouter();
   const appPath = useAppPath();
   const qc = useQueryClient();
@@ -539,7 +712,9 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   const heroReadyReported = useRef(false);
   useVoltflowMateTripRealtimeInvalidation();
   const [showDeferredDetails, setShowDeferredDetails] = useState(false);
-  const [openMetric, setOpenMetric] = useState<MetricExplanation["metricKey"] | null>(null);
+  const [openMetric, setOpenMetric] = useState<
+    MetricExplanation["metricKey"] | null
+  >(null);
   const {
     data: carsResult,
     isLoading: loadingCars,
@@ -553,10 +728,12 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   // A car row with no telemetry ever received is treated the same as having no car:
   // there is nothing real to show, so the demo preview applies here too.
   const { data: vehicleConnection } = useVehicleConnection();
-  const treatAsNoCar = cars?.length === 0 || vehicleConnection?.connected === false;
+  const treatAsNoCar =
+    cars?.length === 0 || vehicleConnection?.connected === false;
   // Distinguishes "no car row yet" (send to /cars/new) from "car added, APK never
   // paired" (send to /onboarding to pair Mate) -- same demo treatment, different CTA.
-  const needsPairing = (cars?.length ?? 0) > 0 && vehicleConnection?.connected === false;
+  const needsPairing =
+    (cars?.length ?? 0) > 0 && vehicleConnection?.connected === false;
   const { data: userProviderRows = [] } = useUserProvidersQuery();
   const userProviderMap = useUserProviderMap();
   const allProviderOptions = useMemo(() => {
@@ -569,22 +746,27 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   }, [userProviderRows]);
 
   /** Convert a select value to (providerType, userProviderId) pair. */
-  function parseProviderSelectValue(
-    value: string | null | undefined,
-  ): { providerType: ChargingProviderType; userProviderId: string | null } {
+  function parseProviderSelectValue(value: string | null | undefined): {
+    providerType: ChargingProviderType;
+    userProviderId: string | null;
+  } {
     if (typeof value === "string" && value.startsWith("up_")) {
       return { providerType: "user_provider", userProviderId: value.slice(3) };
     }
-    return { providerType: (value as ChargingProviderType) ?? "custom", userProviderId: null };
+    return {
+      providerType: (value as ChargingProviderType) ?? "custom",
+      userProviderId: null,
+    };
   }
-  const { data: voltflowMateLive = [], isLoading: loadingLive } = useVoltflowMateLiveQuery(
-    initialData?.liveSnapshots,
-  );
+  const { data: voltflowMateLive = [], isLoading: loadingLive } =
+    useVoltflowMateLiveQuery(initialData?.liveSnapshots);
   const persistedSelectedCarId = useAppPreferences((s) => s.selectedCarId);
   const setSelectedCarId = useAppPreferences((s) => s.setSelectedCarId);
   const defaultPrice = useAppPreferences((s) => s.defaultPricePerKwh);
   const homePricePerKwh = useAppPreferences((s) => s.homePricePerKwh);
-  const commercialAcPricePerKwh = useAppPreferences((s) => s.commercialAcPricePerKwh);
+  const commercialAcPricePerKwh = useAppPreferences(
+    (s) => s.commercialAcPricePerKwh,
+  );
   const fastDcPricePerKwh = useAppPreferences((s) => s.fastDcPricePerKwh);
   const currency = useAppPreferences((s) => s.currency);
   const { locale, t } = useTranslation(initialData?.locale);
@@ -633,23 +815,27 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   const scopedVehicleId = selectedCar?.vehicle_alias ?? null;
 
   const baseVoltflowMateSnapshot = useMemo(
-    () => (scopedVehicleId ? resolveLiveSnapshotForVehicle(voltflowMateLive, scopedVehicleId) : null),
+    () =>
+      scopedVehicleId
+        ? resolveLiveSnapshotForVehicle(voltflowMateLive, scopedVehicleId)
+        : null,
     [voltflowMateLive, scopedVehicleId],
   );
   const dashboardDevSnapshot = useDashboardDevSnapshot();
-  const latestVoltflowMateSnapshot = useDashboardDevSnapshotOverride(baseVoltflowMateSnapshot);
+  const latestVoltflowMateSnapshot = useDashboardDevSnapshotOverride(
+    baseVoltflowMateSnapshot,
+  );
   const forceDevMockMode = Boolean(dashboardDevSnapshot);
   const forceDevParkMode = dashboardDevSnapshot?.mode === "park";
 
-  const activeSession = useMemo(
-    () => {
-      if (forceDevMockMode || !selectedCar) return null;
-      return sessions?.find(
+  const activeSession = useMemo(() => {
+    if (forceDevMockMode || !selectedCar) return null;
+    return (
+      sessions?.find(
         (s) => s.status === "charging" && s.car_id === selectedCar.id,
-      ) ?? null;
-    },
-    [forceDevMockMode, sessions, selectedCar],
-  );
+      ) ?? null
+    );
+  }, [forceDevMockMode, sessions, selectedCar]);
 
   const nowMs = useTickingClock(Boolean(activeSession) || pageVisible);
 
@@ -661,19 +847,23 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
 
   // Raw telemetry says charging; may still be a frozen Di+ reading (see
   // isChargingMode/chargingTileKw below, which fold in isFrozenLiveChargeReading).
-  const rawIsChargingMode = vehicleMode === "app_charging" || vehicleMode === "live_charging";
-  const { data: recentChargeSamples = [] } = useVoltflowMateRecentChargeSamplesQuery(
-    scopedVehicleId,
-    rawIsChargingMode && !forceDevMockMode,
-  );
+  const rawIsChargingMode =
+    vehicleMode === "app_charging" || vehicleMode === "live_charging";
+  const { data: recentChargeSamples = [] } =
+    useVoltflowMateRecentChargeSamplesQuery(
+      scopedVehicleId,
+      rawIsChargingMode && !forceDevMockMode,
+    );
 
-  const tripVehicleId = latestVoltflowMateSnapshot?.vehicle_id ?? scopedVehicleId;
-  const { data: latestTrips = [], isLoading: loadingTrips } = useLatestVoltflowMateTripsQuery(
-    tripVehicleId,
-    50,
-    Boolean(tripVehicleId) && !forceDevMockMode,
-    vehicleMode !== "driving",
-  );
+  const tripVehicleId =
+    latestVoltflowMateSnapshot?.vehicle_id ?? scopedVehicleId;
+  const { data: latestTrips = [], isLoading: loadingTrips } =
+    useLatestVoltflowMateTripsQuery(
+      tripVehicleId,
+      50,
+      Boolean(tripVehicleId) && !forceDevMockMode,
+      vehicleMode !== "driving",
+    );
 
   // "Walk to my car": last known GPS (live snapshot, else last trip's final GPS
   // point — see useVehicleLastKnownLocation) handed off to the phone's native
@@ -682,9 +872,17 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
     scopedVehicleId,
     latestVoltflowMateSnapshot,
   );
-  const walkToCarIsIos = useSyncExternalStore(noopSubscribe, isIos, () => false);
+  const walkToCarIsIos = useSyncExternalStore(
+    noopSubscribe,
+    isIos,
+    () => false,
+  );
   const walkToCarHref = walkToCarLocation
-    ? buildWalkingDirectionsUrl(walkToCarLocation.lat, walkToCarLocation.lon, walkToCarIsIos)
+    ? buildWalkingDirectionsUrl(
+        walkToCarLocation.lat,
+        walkToCarLocation.lon,
+        walkToCarIsIos,
+      )
     : null;
   const walkToCarTimeAgo = walkToCarLocation
     ? formatTimeAgo(walkToCarLocation.deviceTimeIso, nowMs, (key, values) =>
@@ -742,23 +940,32 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
     }).display;
   }, [activeSession, scopedLiveSnapshots, nowMs]);
 
-  const [ringDisplay, setRingDisplay] = useState<"percent" | "energy">("percent");
+  const [ringDisplay, setRingDisplay] = useState<"percent" | "energy">(
+    "percent",
+  );
   const [dialogOpen, setDialogOpen] = useState(false);
   const [startPct, setStartPct] = useState("42");
   const [targetPct, setTargetPct] = useState("100");
   const [chargerKw, setChargerKw] = useState("");
   const [price, setPrice] = useState(String(defaultPrice));
-  const [manualProviderType, setManualProviderType] = useState<ChargingProviderType>("custom");
-  const [manualUserProviderId, setManualUserProviderId] = useState<string | null>(null);
-  const [manualTariffType, setManualTariffType] = useState<"auto" | ChargingTariffType>(
-    "auto",
-  );
+  const [manualProviderType, setManualProviderType] =
+    useState<ChargingProviderType>("custom");
+  const [manualUserProviderId, setManualUserProviderId] = useState<
+    string | null
+  >(null);
+  const [manualTariffType, setManualTariffType] = useState<
+    "auto" | ChargingTariffType
+  >("auto");
   // The park calculator's last choices survive a reload (localStorage, via the
   // app-preferences store). The `*Touched` flags persist alongside the values and
   // decide precedence: a field the user set by hand stays put, while an untouched
   // field keeps auto-filling from the GPS-matched tariff location below.
-  const savedEstimateTariffType = useAppPreferences((s) => s.parkEstimateTariffType);
-  const savedEstimateProviderType = useAppPreferences((s) => s.parkEstimateProviderType);
+  const savedEstimateTariffType = useAppPreferences(
+    (s) => s.parkEstimateTariffType,
+  );
+  const savedEstimateProviderType = useAppPreferences(
+    (s) => s.parkEstimateProviderType,
+  );
   const savedEstimateUserProviderId = useAppPreferences(
     (s) => s.parkEstimateUserProviderId,
   );
@@ -769,20 +976,23 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   const savedEstimateProviderTouched = useAppPreferences(
     (s) => s.parkEstimateProviderTouched,
   );
-  const savedEstimatePowerTouched = useAppPreferences((s) => s.parkEstimatePowerTouched);
+  const savedEstimatePowerTouched = useAppPreferences(
+    (s) => s.parkEstimatePowerTouched,
+  );
   const setParkEstimatePrefs = useAppPreferences((s) => s.setParkEstimate);
 
-  const [estimateTariffType, setEstimateTariffType] = useState<ChargingTariffType>(
-    savedEstimateTariffType ?? "home",
-  );
+  const [estimateTariffType, setEstimateTariffType] =
+    useState<ChargingTariffType>(savedEstimateTariffType ?? "home");
   const [estimateProviderType, setEstimateProviderType] =
     useState<ChargingProviderType>(savedEstimateProviderType ?? "home");
-  const [estimateUserProviderId, setEstimateUserProviderId] = useState<string | null>(
-    savedEstimateUserProviderId,
-  );
+  const [estimateUserProviderId, setEstimateUserProviderId] = useState<
+    string | null
+  >(savedEstimateUserProviderId);
   const [estimatePowerKw, setEstimatePowerKw] = useState(
     savedEstimatePowerKw ??
-      String(defaultEstimatePowerKw("home", selectedCar?.default_charger_power_kw)),
+      String(
+        defaultEstimatePowerKw("home", selectedCar?.default_charger_power_kw),
+      ),
   );
   const [estimateTariffTouched, setEstimateTariffTouched] = useState(
     savedEstimateTariffTouched,
@@ -795,7 +1005,9 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   );
   const [submitting, setSubmitting] = useState(false);
   const [stopping, setStopping] = useState(false);
-  const [checkoutErrors, setCheckoutErrors] = useState<QuickSessionFieldErrors>({});
+  const [checkoutErrors, setCheckoutErrors] = useState<QuickSessionFieldErrors>(
+    {},
+  );
   const startPctInputRef = useRef<HTMLInputElement>(null);
   const targetPctInputRef = useRef<HTMLInputElement>(null);
   const chargerKwInputRef = useRef<HTMLInputElement>(null);
@@ -817,8 +1029,10 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   const lastSeenLabel =
     (vehicleMode === "parked" || vehicleMode === "stale") &&
     latestVoltflowMateSnapshot?.received_at
-      ? formatTimeAgo(latestVoltflowMateSnapshot.received_at, nowMs, (key, values) =>
-          String(t(key, values)),
+      ? formatTimeAgo(
+          latestVoltflowMateSnapshot.received_at,
+          nowMs,
+          (key, values) => String(t(key, values)),
         )
       : null;
 
@@ -844,11 +1058,11 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   // confident-looking number the car never sent.
   const currentPercent: number | null = forceDevParkMode
     ? (latestVoltflowMateSoc ?? 64)
-    : liveActive?.currentPercent ??
+    : (liveActive?.currentPercent ??
       activeSession?.current_percent ??
       latestVoltflowMateSoc ??
       latestSession?.current_percent ??
-      null;
+      null);
 
   const packCapacityKwh = selectedCar?.battery_capacity_kwh;
   const availableKwh =
@@ -872,19 +1086,25 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
     sessionChargerPowerKw: activeSession?.charger_power_kw,
     defaultChargerPowerKw: selectedCar?.default_charger_power_kw,
   });
-  const freshLiveChargePowerKw = isFreshLiveSnapshot(latestVoltflowMateSnapshot, nowMs)
+  const freshLiveChargePowerKw = isFreshLiveSnapshot(
+    latestVoltflowMateSnapshot,
+    nowMs,
+  )
     ? snapshotChargePowerKw(latestVoltflowMateSnapshot)
     : null;
-  const liveChargeType = latestVoltflowMateSnapshot?.telemetry?.charge_type?.toUpperCase();
+  const liveChargeType =
+    latestVoltflowMateSnapshot?.telemetry?.charge_type?.toUpperCase();
   const dashboardChargePowerKw =
     activeSession && liveActive
       ? resolveChargingEtaPowerKw({
           freshLivePowerKw: freshLiveChargePowerKw,
           chargedGridEnergyKwh: liveActive.chargedEnergyKwh,
           elapsedSeconds: liveActive.elapsedSeconds,
-          socGainPercent: liveActive.currentPercent - activeSession.start_percent,
+          socGainPercent:
+            liveActive.currentPercent - activeSession.start_percent,
           fallbackPowerKw: displayChargePowerKw,
-          isDc: activeSession.tariff_type === "fast_dc" || liveChargeType === "DC",
+          isDc:
+            activeSession.tariff_type === "fast_dc" || liveChargeType === "DC",
         })
       : displayChargePowerKw;
 
@@ -909,7 +1129,9 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   );
 
   const rangeEstimate = useVehicleRangeEstimate({
-    baseSnapshot: forceDevMockMode ? latestVoltflowMateSnapshot : baseVoltflowMateSnapshot,
+    baseSnapshot: forceDevMockMode
+      ? latestVoltflowMateSnapshot
+      : baseVoltflowMateSnapshot,
     scopedVehicleId,
     batteryCapacityKwh: selectedCar?.battery_capacity_kwh,
     fallbackSoc: currentPercent,
@@ -922,7 +1144,9 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
       ? `≈ ${fmt(rangeEstimate.estimatedRangeKm)} km`
       : null;
   const rangeExplanation = useMemo(() => {
-    const snapshot = forceDevMockMode ? latestVoltflowMateSnapshot : baseVoltflowMateSnapshot;
+    const snapshot = forceDevMockMode
+      ? latestVoltflowMateSnapshot
+      : baseVoltflowMateSnapshot;
     if (!snapshot) return null;
     return explainAiRange({
       snapshot,
@@ -944,8 +1168,13 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   const estimateLocation = useMemo(() => {
     const lat = latestVoltflowMateSnapshot?.location?.lat;
     const lon = latestVoltflowMateSnapshot?.location?.lon;
-    return typeof lat === "number" && typeof lon === "number" ? { lat, lon } : null;
-  }, [latestVoltflowMateSnapshot?.location?.lat, latestVoltflowMateSnapshot?.location?.lon]);
+    return typeof lat === "number" && typeof lon === "number"
+      ? { lat, lon }
+      : null;
+  }, [
+    latestVoltflowMateSnapshot?.location?.lat,
+    latestVoltflowMateSnapshot?.location?.lon,
+  ]);
 
   const estimateTariffLocationMatch = useMemo(
     () => resolveTariffLocationMatch(estimateLocation, tariffLocations),
@@ -965,7 +1194,12 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
     }
     if (!estimatePowerTouched) {
       setEstimatePowerKw(
-        String(defaultEstimatePowerKw(nextTariffType, selectedCar?.default_charger_power_kw)),
+        String(
+          defaultEstimatePowerKw(
+            nextTariffType,
+            selectedCar?.default_charger_power_kw,
+          ),
+        ),
       );
     }
   }, [
@@ -981,7 +1215,9 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
     if (!activeSession || !liveActive) return null;
 
     const effectivePricePerKwh =
-      activeSession.price_per_kwh > 0 ? activeSession.price_per_kwh : defaultPrice;
+      activeSession.price_per_kwh > 0
+        ? activeSession.price_per_kwh
+        : defaultPrice;
     const capacityKwh = activeSession.battery_capacity_kwh;
     const currentSoc = Math.min(100, Math.max(0, liveActive.currentPercent));
     const remainingGridEnergyKwh =
@@ -1025,7 +1261,8 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
       chargedEnergyKwh: liveActive.chargedEnergyKwh,
       timeLeft: formatDuration(Math.round(timeLeftSeconds)),
       timeLeftSeconds,
-      timePowerKw: remainingGridEnergyKwh != null ? dashboardChargePowerKw : null,
+      timePowerKw:
+        remainingGridEnergyKwh != null ? dashboardChargePowerKw : null,
       costToFull,
       packValue,
       currentSoc,
@@ -1042,7 +1279,9 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
 
   const parkEstimate = useMemo(() => {
     const capacityKwh =
-      typeof packCapacityKwh === "number" && Number.isFinite(packCapacityKwh) && packCapacityKwh > 0
+      typeof packCapacityKwh === "number" &&
+      Number.isFinite(packCapacityKwh) &&
+      packCapacityKwh > 0
         ? packCapacityKwh
         : null;
     const soc =
@@ -1101,7 +1340,8 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
     selectedCar?.default_efficiency_percent,
   ]);
 
-  const showParkEstimate = (vehicleMode === "parked" || vehicleMode === "stale") && !activeSession;
+  const showParkEstimate =
+    (vehicleMode === "parked" || vehicleMode === "stale") && !activeSession;
 
   const parkExplanations = useMemo(() => {
     const efficiencyPercent = selectedCar?.default_efficiency_percent ?? 90;
@@ -1112,15 +1352,46 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
       efficiencyPercent,
       sourceAt: latestVoltflowMateSnapshot?.received_at ?? null,
     };
-    const time = explainParkChargeTime({ ...common, powerKw, tariffType: estimateTariffType });
+    const time = explainParkChargeTime({
+      ...common,
+      powerKw,
+      tariffType: estimateTariffType,
+    });
     const energy = explainParkChargeEnergy(common);
-    const cost = explainParkChargeCost({ ...common, pricePerKwh: parkEstimate?.pricePerKwh ?? null, currencyUnit: currencySymbols[currency] });
+    const cost = explainParkChargeCost({
+      ...common,
+      pricePerKwh: parkEstimate?.pricePerKwh ?? null,
+      currencyUnit: currencySymbols[currency],
+    });
     return {
-      time: withResultDisplay(time, parkEstimate ? formatDuration(Math.round(parkEstimate.durationSeconds)) : "—"),
-      energy: withResultDisplay(energy, parkEstimate ? `${fmt(parkEstimate.gridEnergyKwh, 1)} kWh` : "—"),
-      cost: withResultDisplay(cost, parkEstimate ? formatCurrencyAmount(currency, parkEstimate.cost, locale) : "—"),
+      time: withResultDisplay(
+        time,
+        parkEstimate
+          ? formatDuration(Math.round(parkEstimate.durationSeconds))
+          : "—",
+      ),
+      energy: withResultDisplay(
+        energy,
+        parkEstimate ? `${fmt(parkEstimate.gridEnergyKwh, 1)} kWh` : "—",
+      ),
+      cost: withResultDisplay(
+        cost,
+        parkEstimate
+          ? formatCurrencyAmount(currency, parkEstimate.cost, locale)
+          : "—",
+      ),
     };
-  }, [selectedCar?.default_efficiency_percent, estimatePowerKw, packCapacityKwh, currentPercent, latestVoltflowMateSnapshot?.received_at, estimateTariffType, parkEstimate, currency, locale]);
+  }, [
+    selectedCar?.default_efficiency_percent,
+    estimatePowerKw,
+    packCapacityKwh,
+    currentPercent,
+    latestVoltflowMateSnapshot?.received_at,
+    estimateTariffType,
+    parkEstimate,
+    currency,
+    locale,
+  ]);
 
   const activeExplanations = useMemo(() => {
     if (!activeSession || !liveActive || !activeChargingStats) return null;
@@ -1130,15 +1401,54 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
       sourceAt: latestVoltflowMateSnapshot?.received_at ?? null,
     };
     return {
-      time: withResultDisplay(explainActiveChargeTime({ ...common, fromPercent: activeChargingStats.currentSoc, powerKw: activeChargingStats.timePowerKw, fallbackSeconds: liveActive.remainingSeconds }), activeChargingStats.timeLeft),
-      energy: withResultDisplay(explainActiveChargeEnergy({ ...common, fromPercent: activeSession.start_percent, currentPercent: activeChargingStats.currentSoc }), activeChargingStats.charged),
-      cost: withResultDisplay(explainActiveChargeCost({ ...common, fromPercent: activeSession.start_percent, pricePerKwh: activeChargingStats.effectivePricePerKwh, currencyUnit: currencySymbols[currency] }), activeChargingStats.costToFull != null ? formatCurrencyAmount(currency, activeChargingStats.costToFull, locale) : "—"),
+      time: withResultDisplay(
+        explainActiveChargeTime({
+          ...common,
+          fromPercent: activeChargingStats.currentSoc,
+          powerKw: activeChargingStats.timePowerKw,
+          fallbackSeconds: liveActive.remainingSeconds,
+        }),
+        activeChargingStats.timeLeft,
+      ),
+      energy: withResultDisplay(
+        explainActiveChargeEnergy({
+          ...common,
+          fromPercent: activeSession.start_percent,
+          currentPercent: activeChargingStats.currentSoc,
+        }),
+        activeChargingStats.charged,
+      ),
+      cost: withResultDisplay(
+        explainActiveChargeCost({
+          ...common,
+          fromPercent: activeSession.start_percent,
+          pricePerKwh: activeChargingStats.effectivePricePerKwh,
+          currencyUnit: currencySymbols[currency],
+        }),
+        activeChargingStats.costToFull != null
+          ? formatCurrencyAmount(
+              currency,
+              activeChargingStats.costToFull,
+              locale,
+            )
+          : "—",
+      ),
     };
-  }, [activeSession, liveActive, activeChargingStats, latestVoltflowMateSnapshot?.received_at, currency, locale]);
-  const selectedExplanation = openMetric === "aiRange"
-    ? rangeExplanation
-    : [...Object.values(parkExplanations), ...Object.values(activeExplanations ?? {})]
-        .find((explanation) => explanation.metricKey === openMetric) ?? null;
+  }, [
+    activeSession,
+    liveActive,
+    activeChargingStats,
+    latestVoltflowMateSnapshot?.received_at,
+    currency,
+    locale,
+  ]);
+  const selectedExplanation =
+    openMetric === "aiRange"
+      ? rangeExplanation
+      : ([
+          ...Object.values(parkExplanations),
+          ...Object.values(activeExplanations ?? {}),
+        ].find((explanation) => explanation.metricKey === openMetric) ?? null);
 
   const drivingStats =
     vehicleMode === "driving"
@@ -1148,21 +1458,39 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   // A fresh network heartbeat can still carry a Di+ reading that never changed — don't
   // show a charge power the car stopped actually measuring (see BACKLOG.md "Dashboard
   // live-charging tile can still show a stale kW...").
-  const isChargeReadingFrozen = rawIsChargingMode && isFrozenLiveChargeReading(recentChargeSamples);
+  const isChargeReadingFrozen =
+    rawIsChargingMode && isFrozenLiveChargeReading(recentChargeSamples);
   const isChargingMode = rawIsChargingMode && !isChargeReadingFrozen;
   const chargingTileKw = isChargeReadingFrozen ? null : dashboardChargePowerKw;
+  // Two decimals and no "~" only when the tile shows the measured pack V × I reading itself
+  // (±0.03 kW). A session average, a fallback, or the resolver's integer-bucket swap is not
+  // that value, so it stays approximate: "~", one decimal.
+  const measuredTileKw = snapshotMeasuredChargePowerKw(
+    latestVoltflowMateSnapshot,
+    nowMs,
+  );
+  const chargingTileLabel =
+    chargingTileKw != null &&
+    measuredTileKw != null &&
+    chargingTileKw === measuredTileKw
+      ? `${fmt(chargingTileKw, 2)} kW`
+      : `~ ${fmt(chargingTileKw, 1)} kW`;
 
-  const isPageLoading = loadingCars || (loadingLive && !latestVoltflowMateSnapshot);
+  const isPageLoading =
+    loadingCars || (loadingLive && !latestVoltflowMateSnapshot);
 
   useEffect(() => {
     if (heroReadyReported.current || isPageLoading || !selectedCar) return;
 
     const navigation = performance.getEntriesByType("navigation")[0] as
-      | PerformanceNavigationTiming
-      | undefined;
+      PerformanceNavigationTiming | undefined;
     // A client-side route change shares the document's old performance clock. Counting it
     // would turn an otherwise quick dashboard transition into a false multi-minute cold load.
-    if (!navigation || new URL(navigation.name).pathname !== window.location.pathname) return;
+    if (
+      !navigation ||
+      new URL(navigation.name).pathname !== window.location.pathname
+    )
+      return;
 
     heroReadyReported.current = true;
 
@@ -1171,7 +1499,8 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
     track("dashboard_hero_ready", {
       duration_bucket: vehicleReadyDurationBucket(durationMs),
       navigation_type: navigation.type,
-      release: process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
+      release:
+        process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
     });
   }, [isPageLoading, selectedCar]);
 
@@ -1188,7 +1517,10 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   };
 
   const focusFirstCheckoutError = (errors: QuickSessionFieldErrors) => {
-    const inputs: Record<QuickSessionField, RefObject<HTMLInputElement | null>> = {
+    const inputs: Record<
+      QuickSessionField,
+      RefObject<HTMLInputElement | null>
+    > = {
       startPct: startPctInputRef,
       targetPct: targetPctInputRef,
       chargerKw: chargerKwInputRef,
@@ -1204,7 +1536,12 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
   const handleStart = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selectedCar) return;
-    const validation = validateQuickSessionInput({ startPct, targetPct, chargerKw, price });
+    const validation = validateQuickSessionInput({
+      startPct,
+      targetPct,
+      chargerKw,
+      price,
+    });
     if (!validation.ok) {
       setCheckoutErrors(validation.errors);
       focusFirstCheckoutError(validation.errors);
@@ -1306,11 +1643,17 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
               {t("dashboard.loadError")}
             </p>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" className="rounded-full" onClick={() => void refetchCars()}>
+              <Button
+                variant="outline"
+                className="rounded-full"
+                onClick={() => void refetchCars()}
+              >
                 {t("charging.checkAgain")}
               </Button>
               <Button asChild className="rounded-full">
-                <Link href={appPath("/login?next=/dashboard")}>{t("dashboard.signIn")}</Link>
+                <Link href={appPath("/login?next=/dashboard")}>
+                  {t("dashboard.signIn")}
+                </Link>
               </Button>
             </div>
           </CardContent>
@@ -1323,7 +1666,9 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
             <ChargingBolt className="size-10 shrink-0" aria-hidden />
             <div>
               <h1 className="font-heading text-2xl font-bold tracking-normal">
-                {needsPairing ? t("onboarding.reconnectBanner") : t("dashboard.addEvTitle")}
+                {needsPairing
+                  ? t("onboarding.reconnectBanner")
+                  : t("dashboard.addEvTitle")}
               </h1>
               {needsPairing ? null : (
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
@@ -1344,19 +1689,25 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                 <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                   {t("dashboard.demoSoc")}
                 </p>
-                <p className="mt-0.5 font-heading text-lg font-bold tabular-nums">82%</p>
+                <p className="mt-0.5 font-heading text-lg font-bold tabular-nums">
+                  82%
+                </p>
               </div>
               <div>
                 <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                   {t("dashboard.demoRange")}
                 </p>
-                <p className="mt-0.5 font-heading text-lg font-bold tabular-nums">270 km</p>
+                <p className="mt-0.5 font-heading text-lg font-bold tabular-nums">
+                  270 km
+                </p>
               </div>
               <div>
                 <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                   {t("dashboard.demoLastCharge")}
                 </p>
-                <p className="mt-0.5 font-heading text-lg font-bold tabular-nums">12.4 kWh</p>
+                <p className="mt-0.5 font-heading text-lg font-bold tabular-nums">
+                  12.4 kWh
+                </p>
               </div>
             </div>
           </DemoWatermark>
@@ -1370,13 +1721,19 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
             className="mt-3 h-14 w-full rounded-full bg-[linear-gradient(90deg,#00E676_0%,#00D1FF_100%)] font-heading text-base font-bold text-[#06110B]"
           >
             <Link href={appPath(needsPairing ? "/onboarding" : "/cars/new")}>
-              {needsPairing ? t("onboarding.connectCta") : t("dashboard.addVehicle")}
+              {needsPairing
+                ? t("onboarding.connectCta")
+                : t("dashboard.addVehicle")}
             </Link>
           </Button>
         </section>
       ) : null}
 
-      {!isPageLoading && !carsError && cars && cars.length > 0 && !treatAsNoCar ? (
+      {!isPageLoading &&
+      !carsError &&
+      cars &&
+      cars.length > 0 &&
+      !treatAsNoCar ? (
         <>
           <section className="dashboard-primary-card voltflow-card overflow-hidden p-4">
             <div className="flex items-start justify-between gap-3">
@@ -1393,7 +1750,9 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                 <div
                   className={`rounded-full border border-border bg-white/[0.04] px-3 py-1.5 text-xs font-bold uppercase tracking-[0.14em] ${statusBadgeClass(vehicleMode)}`}
                 >
-                  {loadingSessions ? (t("dashboard.syncing") as string) : statusLabel}
+                  {loadingSessions
+                    ? (t("dashboard.syncing") as string)
+                    : statusLabel}
                 </div>
                 {lastSeenLabel && !loadingSessions ? (
                   <p
@@ -1406,7 +1765,7 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
               </div>
             </div>
 
-        <div className="mt-3 grid grid-cols-[116px_minmax(0,1fr)] items-stretch gap-3">
+            <div className="mt-3 grid grid-cols-[116px_minmax(0,1fr)] items-stretch gap-3">
               <div>
                 {selectedCarImage ? (
                   <div className="mb-1 flex h-12 w-[116px] items-center justify-center overflow-hidden">
@@ -1429,7 +1788,8 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                   <BatteryRing
                     percent={currentPercent}
                     charging={
-                      vehicleMode === "app_charging" || vehicleMode === "live_charging"
+                      vehicleMode === "app_charging" ||
+                      vehicleMode === "live_charging"
                     }
                     size="compact"
                     displayMode={ringDisplay}
@@ -1444,7 +1804,10 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                   <RangeBadge
                     value={rangeDetail}
                     explanation={rangeExplanation ?? undefined}
-                    onExplain={() => { if (rangeExplanation) setOpenMetric(rangeExplanation.metricKey); }}
+                    onExplain={() => {
+                      if (rangeExplanation)
+                        setOpenMetric(rangeExplanation.metricKey);
+                    }}
                   />
                 </div>
               </div>
@@ -1462,7 +1825,9 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                     onValueChange={(value) => setSelectedCarId(value)}
                   >
                     <SelectTrigger className="h-10 rounded-xl border-border bg-[#12151C]/70 text-sm">
-                      <SelectValue placeholder={t("dashboard.chooseCar") as string} />
+                      <SelectValue
+                        placeholder={t("dashboard.chooseCar") as string}
+                      />
                     </SelectTrigger>
                     <SelectContent>
                       {cars.map((car) => (
@@ -1488,12 +1853,20 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                       items={[
                         {
                           label: t("dashboard.driveAvgSpeed") as string,
-                          ...drivingStatParts(drivingStats.avgSpeedKmh, 0, "km/h"),
+                          ...drivingStatParts(
+                            drivingStats.avgSpeedKmh,
+                            0,
+                            "km/h",
+                          ),
                           accent: "cyan",
                         },
                         {
                           label: t("dashboard.driveConsumption") as string,
-                          ...drivingStatParts(drivingStats.consumptionKwh100, 1, "kWh/100"),
+                          ...drivingStatParts(
+                            drivingStats.consumptionKwh100,
+                            1,
+                            "kWh/100",
+                          ),
                         },
                         {
                           label: t("dashboard.driveDistance") as string,
@@ -1534,7 +1907,9 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                       }}
                       setEstimateUserProviderId={(value) => {
                         setEstimateUserProviderId(value);
-                        setParkEstimatePrefs({ parkEstimateUserProviderId: value });
+                        setParkEstimatePrefs({
+                          parkEstimateUserProviderId: value,
+                        });
                       }}
                       setEstimateTariffType={(value) => {
                         setEstimateTariffTouched(true);
@@ -1548,18 +1923,24 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                       allProviderOptions={allProviderOptions}
                       parseProviderSelectValue={parseProviderSelectValue}
                       explanations={parkExplanations}
-                      onExplain={(explanation) => setOpenMetric(explanation.metricKey)}
+                      onExplain={(explanation) =>
+                        setOpenMetric(explanation.metricKey)
+                      }
                     />
                   ) : activeChargingStats ? (
                     <div className="grid grid-cols-2 gap-2">
                       <DashboardChargingProgressTile
-                        timeLeftLabel={t("dashboard.chargingTimeLeft") as string}
+                        timeLeftLabel={
+                          t("dashboard.chargingTimeLeft") as string
+                        }
                         timeLeft={activeChargingStats.timeLeft}
                         chargedLabel={t("dashboard.chargingCharged") as string}
                         charged={activeChargingStats.charged}
                         timeExplanation={activeExplanations?.time}
                         energyExplanation={activeExplanations?.energy}
-                        onExplain={(explanation) => setOpenMetric(explanation.metricKey)}
+                        onExplain={(explanation) =>
+                          setOpenMetric(explanation.metricKey)
+                        }
                       />
                       <DashboardStatTile
                         label={t("dashboard.chargingCostToFull") as string}
@@ -1575,22 +1956,33 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                           )
                         }
                         explanation={activeExplanations?.cost}
-                        onExplain={(explanation) => setOpenMetric(explanation.metricKey)}
+                        onExplain={(explanation) =>
+                          setOpenMetric(explanation.metricKey)
+                        }
                       />
                       <DashboardStatTile
                         label={t("dashboard.packShort") as string}
                         value={
                           <span className="flex flex-col leading-tight">
                             <span className="whitespace-nowrap">
-                              {activeChargingStats.packValue.replace(/\s+kWh$/, "")}
+                              {activeChargingStats.packValue.replace(
+                                /\s+kWh$/,
+                                "",
+                              )}
                             </span>
-                            <span className="text-sm text-muted-foreground">kWh</span>
+                            <span className="text-sm text-muted-foreground">
+                              kWh
+                            </span>
                           </span>
                         }
                       />
                       <DashboardStatTile
                         label={t("dashboard.chargerShort") as string}
-                        value={<span className="whitespace-nowrap">~ {fmt(chargingTileKw, 1)} kW</span>}
+                        value={
+                          <span className="whitespace-nowrap">
+                            {chargingTileLabel}
+                          </span>
+                        }
                       />
                     </div>
                   ) : (
@@ -1607,7 +1999,11 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                       {isChargingMode ? (
                         <DashboardStatTile
                           label={t("dashboard.chargerShort") as string}
-                          value={<span className="whitespace-nowrap">~ {fmt(chargingTileKw, 1)} kW</span>}
+                          value={
+                            <span className="whitespace-nowrap">
+                              {chargingTileLabel}
+                            </span>
+                          }
                         />
                       ) : null}
                     </div>
@@ -1623,7 +2019,9 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                   disabled={!selectedCar || stopping}
                   loading={stopping}
                   labels={{
-                    start: mainButtonLabel ?? (t("dashboard.startCharging") as string),
+                    start:
+                      mainButtonLabel ??
+                      (t("dashboard.startCharging") as string),
                     stop: t("charging.stop") as string,
                     syncing: t("dashboard.syncing") as string,
                     driving: t("dashboard.statusDriving") as string,
@@ -1644,7 +2042,10 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
               t={(key, values) => String(t(key, values))}
             />
           ) : (
-            <section className="dashboard-summary-grid grid grid-cols-2 gap-2" aria-hidden>
+            <section
+              className="dashboard-summary-grid grid grid-cols-2 gap-2"
+              aria-hidden
+            >
               <Skeleton className="h-[92px] rounded-2xl" />
               <Skeleton className="h-[92px] rounded-2xl" />
             </section>
@@ -1653,7 +2054,11 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
           {showWalkToCar ? (
             <section className="flex flex-col items-center gap-1.5">
               <Button asChild variant="outline" className="w-full rounded-full">
-                <a href={walkToCarHref as string} target="_blank" rel="noreferrer">
+                <a
+                  href={walkToCarHref as string}
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   {t("dashboard.walkToCar")}
                 </a>
               </Button>
@@ -1698,7 +2103,9 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                   clearCheckoutError("startPct");
                 }}
                 aria-invalid={checkoutErrors.startPct || undefined}
-                aria-describedby={checkoutErrors.startPct ? "start-pct-error" : undefined}
+                aria-describedby={
+                  checkoutErrors.startPct ? "start-pct-error" : undefined
+                }
                 className="h-[52px] rounded-xl text-lg"
               />
               {checkoutErrors.startPct ? (
@@ -1724,7 +2131,9 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                   clearCheckoutError("targetPct");
                 }}
                 aria-invalid={checkoutErrors.targetPct || undefined}
-                aria-describedby={checkoutErrors.targetPct ? "target-pct-error" : undefined}
+                aria-describedby={
+                  checkoutErrors.targetPct ? "target-pct-error" : undefined
+                }
                 className="h-[52px] rounded-xl text-lg"
               />
               {checkoutErrors.targetPct ? (
@@ -1738,9 +2147,11 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
               <Input
                 id="charger-kw"
                 ref={chargerKwInputRef}
-                placeholder={t("dashboard.defaultPower", {
-                  power: selectedCar?.default_charger_power_kw ?? "--",
-                }) as string}
+                placeholder={
+                  t("dashboard.defaultPower", {
+                    power: selectedCar?.default_charger_power_kw ?? "--",
+                  }) as string
+                }
                 type="text"
                 inputMode="decimal"
                 pattern="[0-9]*[,.]?[0-9]*"
@@ -1751,7 +2162,9 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                   clearCheckoutError("chargerKw");
                 }}
                 aria-invalid={checkoutErrors.chargerKw || undefined}
-                aria-describedby={checkoutErrors.chargerKw ? "charger-kw-error" : undefined}
+                aria-describedby={
+                  checkoutErrors.chargerKw ? "charger-kw-error" : undefined
+                }
                 className="h-[52px] rounded-xl text-lg"
               />
               {checkoutErrors.chargerKw ? (
@@ -1761,9 +2174,15 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
               ) : null}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="session-provider-type">{t("dashboard.manualProvider")}</Label>
+              <Label htmlFor="session-provider-type">
+                {t("dashboard.manualProvider")}
+              </Label>
               <Select
-                value={manualUserProviderId ? `up_${manualUserProviderId}` : manualProviderType}
+                value={
+                  manualUserProviderId
+                    ? `up_${manualUserProviderId}`
+                    : manualProviderType
+                }
                 onValueChange={(value) => {
                   const parsed = parseProviderSelectValue(value);
                   setManualProviderType(parsed.providerType);
@@ -1774,7 +2193,10 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                   label: item.label,
                 }))}
               >
-                <SelectTrigger id="session-provider-type" className="h-[52px] rounded-xl text-lg">
+                <SelectTrigger
+                  id="session-provider-type"
+                  className="h-[52px] rounded-xl text-lg"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1787,7 +2209,9 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="session-tariff-type">{t("dashboard.manualTariffType")}</Label>
+              <Label htmlFor="session-tariff-type">
+                {t("dashboard.manualTariffType")}
+              </Label>
               <Select
                 value={manualTariffType}
                 onValueChange={(value) =>
@@ -1796,18 +2220,35 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                 items={[
                   { value: "auto", label: t("dashboard.manualTariffAuto") },
                   { value: "home", label: t("dashboard.manualTariffHome") },
-                  { value: "commercial_ac", label: t("dashboard.manualTariffCommercialAc") },
-                  { value: "fast_dc", label: t("dashboard.manualTariffFastDc") },
+                  {
+                    value: "commercial_ac",
+                    label: t("dashboard.manualTariffCommercialAc"),
+                  },
+                  {
+                    value: "fast_dc",
+                    label: t("dashboard.manualTariffFastDc"),
+                  },
                 ]}
               >
-                <SelectTrigger id="session-tariff-type" className="h-[52px] rounded-xl text-lg">
+                <SelectTrigger
+                  id="session-tariff-type"
+                  className="h-[52px] rounded-xl text-lg"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="auto">{t("dashboard.manualTariffAuto")}</SelectItem>
-                  <SelectItem value="home">{t("dashboard.manualTariffHome")}</SelectItem>
-                  <SelectItem value="commercial_ac">{t("dashboard.manualTariffCommercialAc")}</SelectItem>
-                  <SelectItem value="fast_dc">{t("dashboard.manualTariffFastDc")}</SelectItem>
+                  <SelectItem value="auto">
+                    {t("dashboard.manualTariffAuto")}
+                  </SelectItem>
+                  <SelectItem value="home">
+                    {t("dashboard.manualTariffHome")}
+                  </SelectItem>
+                  <SelectItem value="commercial_ac">
+                    {t("dashboard.manualTariffCommercialAc")}
+                  </SelectItem>
+                  <SelectItem value="fast_dc">
+                    {t("dashboard.manualTariffFastDc")}
+                  </SelectItem>
                 </SelectContent>
               </Select>
               {manualTariffType === "auto" ? (
@@ -1819,7 +2260,9 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
             <div className="space-y-2">
               <Label htmlFor="energy-price">
                 {currencyTextWithIcon(
-                  t("dashboard.price", { currency: currencySymbols[currency] }) as string,
+                  t("dashboard.price", {
+                    currency: currencySymbols[currency],
+                  }) as string,
                   currency,
                 )}
               </Label>
@@ -1836,7 +2279,9 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                   clearCheckoutError("price");
                 }}
                 aria-invalid={checkoutErrors.price || undefined}
-                aria-describedby={checkoutErrors.price ? "energy-price-error" : undefined}
+                aria-describedby={
+                  checkoutErrors.price ? "energy-price-error" : undefined
+                }
                 className="h-[52px] rounded-xl text-lg"
               />
               <p className="text-muted-foreground text-xs">
@@ -1848,29 +2293,33 @@ export function DashboardView({ initialData }: { initialData?: DashboardBootstra
                 </p>
               ) : null}
             </div>
-          <DialogFooter className="flex gap-3 sm:flex-col">
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-[48px] rounded-full border-white/25"
-              onClick={() => setDialogOpen(false)}
-            >
-              {t("common.later")}
-            </Button>
-            <Button
-              type="submit"
-              className="min-h-[52px] flex-1 rounded-full bg-[linear-gradient(90deg,#00E676_0%,#00D1FF_100%)] text-base font-semibold text-[#06110B] hover:brightness-110"
-              disabled={submitting || !selectedCar}
-            >
-              {submitting ? t("dashboard.starting") : t("dashboard.startSession")}
-            </Button>
-          </DialogFooter>
+            <DialogFooter className="flex gap-3 sm:flex-col">
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-[48px] rounded-full border-white/25"
+                onClick={() => setDialogOpen(false)}
+              >
+                {t("common.later")}
+              </Button>
+              <Button
+                type="submit"
+                className="min-h-[52px] flex-1 rounded-full bg-[linear-gradient(90deg,#00E676_0%,#00D1FF_100%)] text-base font-semibold text-[#06110B] hover:brightness-110"
+                disabled={submitting || !selectedCar}
+              >
+                {submitting
+                  ? t("dashboard.starting")
+                  : t("dashboard.startSession")}
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
       <MetricExplainerSheet
         open={openMetric != null}
-        onOpenChange={(open) => { if (!open) setOpenMetric(null); }}
+        onOpenChange={(open) => {
+          if (!open) setOpenMetric(null);
+        }}
         explanation={selectedExplanation ?? rangeExplanation}
         nowMs={nowMs}
       />

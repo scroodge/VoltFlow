@@ -1,11 +1,20 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { TelemetryPayload } from "@/lib/voltflowmate/ingest-payload";
-import { isDriveTelemetry, isParkStateTelemetry } from "@/lib/voltflowmate/gear";
+import {
+  isDriveTelemetry,
+  isParkStateTelemetry,
+} from "@/lib/voltflowmate/gear";
 import { latestSampleByVehicle } from "@/lib/voltflowmate/latest-sample";
-import { finiteTelemetryNumber } from "@/features/charging/domain";
+import {
+  finiteTelemetryNumber,
+  measuredChargePowerKw,
+} from "@/features/charging/domain";
 import { siteUrl as canonicalSiteUrl } from "@/lib/site-url";
-import { editTelegramMessageText, sendTelegramMessage } from "@/lib/telegram/bot-send";
+import {
+  editTelegramMessageText,
+  sendTelegramMessage,
+} from "@/lib/telegram/bot-send";
 import {
   newestActiveSessionByCar,
   resolveTelegramChargingMetrics,
@@ -46,12 +55,19 @@ function formatHoursMinutes(totalHours: number, locale: Locale): string {
   const h = Math.floor(totalHours);
   const m = Math.round((totalHours - h) * 60);
   if (h > 0 && m > 0) {
-    return translate(locale, "telegramLiveWidget.timeHoursMinutes", { hours: h, minutes: m }) as string;
+    return translate(locale, "telegramLiveWidget.timeHoursMinutes", {
+      hours: h,
+      minutes: m,
+    }) as string;
   }
   if (h > 0) {
-    return translate(locale, "telegramLiveWidget.timeHours", { hours: h }) as string;
+    return translate(locale, "telegramLiveWidget.timeHours", {
+      hours: h,
+    }) as string;
   }
-  return translate(locale, "telegramLiveWidget.timeMinutes", { minutes: m }) as string;
+  return translate(locale, "telegramLiveWidget.timeMinutes", {
+    minutes: m,
+  }) as string;
 }
 
 type LiveWidgetRow = {
@@ -130,7 +146,9 @@ async function loadCars(
 ): Promise<Map<string, CarInfo>> {
   const { data } = await supabase
     .from("cars")
-    .select("id, name, vehicle_alias, battery_capacity_kwh, default_charger_power_kw")
+    .select(
+      "id, name, vehicle_alias, battery_capacity_kwh, default_charger_power_kw",
+    )
     .eq("user_id", userId)
     .in("vehicle_alias", vehicleIds);
 
@@ -208,7 +226,11 @@ async function loadActiveChargingSessions(
 
 type VehicleState = TelegramLiveVehicleState;
 
-function determineState(lastSample: TelemetryPayload, nowMs: number, receivedAt: string): VehicleState {
+function determineState(
+  lastSample: TelemetryPayload,
+  nowMs: number,
+  receivedAt: string,
+): VehicleState {
   const receivedMs = Date.parse(receivedAt);
   if (Number.isFinite(receivedMs) && nowMs - receivedMs > 10 * 60 * 1000) {
     return "offline";
@@ -230,10 +252,14 @@ function determineState(lastSample: TelemetryPayload, nowMs: number, receivedAt:
 
 function stateEmoji(state: VehicleState): string {
   switch (state) {
-    case "charging": return "🔌";
-    case "parked": return "🚗";
-    case "driving": return "🚗";
-    case "offline": return "💤";
+    case "charging":
+      return "🔌";
+    case "parked":
+      return "🚗";
+    case "driving":
+      return "🚗";
+    case "offline":
+      return "💤";
   }
 }
 
@@ -248,16 +274,26 @@ async function sendOrEditWidget(
   locale: Locale,
 ): Promise<boolean> {
   const replyMarkup = {
-    inline_keyboard: [[
-      { text: translate(locale, "telegramLiveWidget.openVoltFlow") as string, web_app: { url: webAppUrl } },
-    ]],
+    inline_keyboard: [
+      [
+        {
+          text: translate(locale, "telegramLiveWidget.openVoltFlow") as string,
+          web_app: { url: webAppUrl },
+        },
+      ],
+    ],
   };
 
   if (existingMessageId != null && chatId != null) {
-    const result = await editTelegramMessageText(chatId, existingMessageId, html, {
-      parseMode: "HTML",
-      replyMarkup,
-    });
+    const result = await editTelegramMessageText(
+      chatId,
+      existingMessageId,
+      html,
+      {
+        parseMode: "HTML",
+        replyMarkup,
+      },
+    );
     if (result.ok) {
       await touchUpdatedAt(supabase, userId, vehicleId);
       return true;
@@ -271,7 +307,13 @@ async function sendOrEditWidget(
   });
   if (!result.ok || result.messageId == null) return false;
 
-  await upsertWidgetRow(supabase, userId, vehicleId, chatId ?? 0, result.messageId);
+  await upsertWidgetRow(
+    supabase,
+    userId,
+    vehicleId,
+    chatId ?? 0,
+    result.messageId,
+  );
   return true;
 }
 
@@ -308,10 +350,13 @@ export async function updateTelegramLiveWidgets({
   const nowMs = new Date(receivedAt).getTime();
   const existingByVehicle = new Map(
     await Promise.all(
-      vehicleIds.map(async (vehicleId) => [
-        vehicleId,
-        await loadWidgetRow(supabase, userId, vehicleId),
-      ] as const),
+      vehicleIds.map(
+        async (vehicleId) =>
+          [
+            vehicleId,
+            await loadWidgetRow(supabase, userId, vehicleId),
+          ] as const,
+      ),
     ),
   );
   const eligibleVehicleIds = vehicleIds.filter((vehicleId) =>
@@ -327,10 +372,13 @@ export async function updateTelegramLiveWidgets({
   );
   const recentTripsByVehicle = new Map(
     await Promise.all(
-      eligibleVehicleIds.map(async (vehicleId) => [
-        vehicleId,
-        await loadRecentTrips(supabase, userId, vehicleId),
-      ] as const),
+      eligibleVehicleIds.map(
+        async (vehicleId) =>
+          [
+            vehicleId,
+            await loadRecentTrips(supabase, userId, vehicleId),
+          ] as const,
+      ),
     ),
   );
   let updated = 0;
@@ -342,25 +390,38 @@ export async function updateTelegramLiveWidgets({
     const carInfo = cars.get(vehicleId);
 
     const state = determineState(lastSample, nowMs, receivedAt);
-    const soc = clampSoc(lastSample.telemetry.soc) ?? clampSoc(lastSample.diplus?.soc);
-    const odometer = clampOdometer(lastSample.telemetry.odometer_km) ?? clampOdometer(lastSample.diplus?.mileage_km);
+    const soc =
+      clampSoc(lastSample.telemetry.soc) ?? clampSoc(lastSample.diplus?.soc);
+    const odometer =
+      clampOdometer(lastSample.telemetry.odometer_km) ??
+      clampOdometer(lastSample.diplus?.mileage_km);
     const speedKmh = clampSpeed(lastSample.telemetry.speed_kmh);
     const lat = finiteTelemetryNumber(lastSample.location?.lat);
     const lon = finiteTelemetryNumber(lastSample.location?.lon);
 
-    const rawChargePowerKw = finiteTelemetryNumber(lastSample.telemetry.charge_power_kw);
+    const rawChargePowerKw = finiteTelemetryNumber(
+      lastSample.telemetry.charge_power_kw,
+    );
     const chargingMetrics = resolveTelegramChargingMetrics({
       soc,
       rawChargePowerKw,
       defaultChargePowerKw:
-        state === "charging" ? (carInfo?.default_charger_power_kw ?? null) : null,
+        state === "charging"
+          ? (carInfo?.default_charger_power_kw ?? null)
+          : null,
       batteryCapacityKwh: carInfo?.battery_capacity_kwh ?? null,
       chargeType: lastSample.telemetry.charge_type,
       session:
-        state === "charging" && carInfo ? (activeSessions.get(carInfo.id) ?? null) : null,
+        state === "charging" && carInfo
+          ? (activeSessions.get(carInfo.id) ?? null)
+          : null,
       nowMs,
     });
-    const chargePowerKw = chargingMetrics.chargePowerKw;
+    // A measured pack V × I reading (negative charge_current_a) is shown as is, with two
+    // decimals; the ETA below still uses the resolver's value.
+    const measuredPowerKw =
+      state === "charging" ? measuredChargePowerKw(lastSample.telemetry) : null;
+    const chargePowerKw = measuredPowerKw ?? chargingMetrics.chargePowerKw;
     const timeToFull =
       chargingMetrics.timeToFullHours != null
         ? formatHoursMinutes(chargingMetrics.timeToFullHours, profileLocale)
@@ -379,7 +440,9 @@ export async function updateTelegramLiveWidgets({
         : null;
 
     const html = composeTelegramLiveWidget({
-      carName: carInfo?.name ?? (translate(profileLocale, "telegramLiveWidget.vehicle") as string),
+      carName:
+        carInfo?.name ??
+        (translate(profileLocale, "telegramLiveWidget.vehicle") as string),
       emoji: stateEmoji(state),
       state,
       locale: profileLocale,
@@ -388,6 +451,7 @@ export async function updateTelegramLiveWidgets({
       rangeSampleTime: lastSample.device_time,
       nowMs,
       chargePowerKw,
+      chargePowerMeasured: measuredPowerKw != null,
       timeToFull,
       odometer,
       speedKmh,
@@ -398,7 +462,8 @@ export async function updateTelegramLiveWidgets({
     const existing = existingByVehicle.get(vehicleId) ?? null;
 
     // Car was offline (>10 min) and is now back — send a new message
-    const useExistingMessageId = existing?.status === "active" ? existing.message_id : null;
+    const useExistingMessageId =
+      existing?.status === "active" ? existing.message_id : null;
 
     const ok = await sendOrEditWidget(
       supabase,

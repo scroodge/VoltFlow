@@ -9,11 +9,11 @@ import { toast } from "sonner";
 import { BatteryRing } from "./BatteryRing";
 import { ChargingDeltaCard } from "./charging-delta-card";
 import { EnergyCorrectionCard } from "./energy-correction-card";
+import { ChargingStatsGrid, type ChargingStat } from "./ChargingStatsGrid";
 import {
-  ChargingStatsGrid,
-  type ChargingStat,
-} from "./ChargingStatsGrid";
-import { CurrencyAmount, currencyTextWithIcon } from "@/components/currency-amount";
+  CurrencyAmount,
+  currencyTextWithIcon,
+} from "@/components/currency-amount";
 import {
   useChargingDevLiveOverride,
   useChargingDevSource,
@@ -39,8 +39,15 @@ import {
   type ChargingParams,
   type DerivedChargingState,
 } from "../domain";
-import { currencySymbols, formatCurrencyAmount, type TranslationKey } from "@/lib/i18n";
-import { resolveProviderTariff, resolveTariffTypeByPower } from "@/lib/charging-tariffs";
+import {
+  currencySymbols,
+  formatCurrencyAmount,
+  type TranslationKey,
+} from "@/lib/i18n";
+import {
+  resolveProviderTariff,
+  resolveTariffTypeByPower,
+} from "@/lib/charging-tariffs";
 import { resolveTariffLocationMatch } from "@/lib/charging-gps-location";
 import { isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { isDevMockChargingSessionId } from "@/lib/dev/build-mock-charging-session";
@@ -49,7 +56,10 @@ import { mapChargingSession, mapChargingTariffLocation } from "@/lib/db-map";
 import { queryKeys } from "@/lib/query-keys";
 import { useChargingSessionLiveSync } from "../_client/use-charging-session-live-sync";
 import { useChargingSessionAutoTariff } from "../_client/use-charging-session-auto-tariff";
-import { useUserProvidersQuery, useUserProviderMap } from "@/hooks/use-user-providers-query";
+import {
+  useUserProvidersQuery,
+  useUserProviderMap,
+} from "@/hooks/use-user-providers-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useSessionQuery } from "@/hooks/use-session-query";
 import { useVoltflowMateLiveQuery } from "@/hooks/use-voltflowmate-live-query";
@@ -61,7 +71,12 @@ import {
   resolveChargingEtaPowerKw,
   staticDerivedFromSession,
 } from "../domain";
-import { deriveLiveChargingState, findFreshChargingSnapshot, snapshotChargePowerKw } from "../domain";
+import {
+  deriveLiveChargingState,
+  findFreshChargingSnapshot,
+  snapshotChargePowerKw,
+  snapshotMeasuredChargePowerKw,
+} from "../domain";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import { useAppPath } from "@/lib/dev/dev-path";
 import { formatSocPercent } from "@/lib/format-soc-percent";
@@ -97,10 +112,14 @@ export function ChargingSessionScreen({
   const defaultPricePerKwh = useAppPreferences((s) => s.defaultPricePerKwh);
   const appPath = useAppPath();
   const { locale, t } = useTranslation();
-  const [tariffTypeDraft, setTariffTypeDraft] = useState<ChargingTariffType | null>(null);
+  const [tariffTypeDraft, setTariffTypeDraft] =
+    useState<ChargingTariffType | null>(null);
   const [priceDraft, setPriceDraft] = useState("");
-  const [providerTypeDraft, setProviderTypeDraft] = useState<ChargingProviderType | null>(null);
-  const [userProviderIdDraft, setUserProviderIdDraft] = useState<string | null>(null);
+  const [providerTypeDraft, setProviderTypeDraft] =
+    useState<ChargingProviderType | null>(null);
+  const [userProviderIdDraft, setUserProviderIdDraft] = useState<string | null>(
+    null,
+  );
   const [savingTariff, setSavingTariff] = useState(false);
 
   const { data: session, error, isLoading } = useSessionQuery(sessionId);
@@ -113,7 +132,8 @@ export function ChargingSessionScreen({
   const sessionVehicleId = useMemo(
     () =>
       session
-        ? (carsResult?.cars?.find((car) => car.id === session.car_id)?.vehicle_alias ?? null)
+        ? (carsResult?.cars?.find((car) => car.id === session.car_id)
+            ?.vehicle_alias ?? null)
         : null,
     [carsResult?.cars, session],
   );
@@ -126,7 +146,10 @@ export function ChargingSessionScreen({
       value: `up_${p.id}` as const,
       label: p.label,
     }));
-    return [{ value: "custom" as const, label: t(tariffProviderKey("custom")) }, ...userOpts];
+    return [
+      { value: "custom" as const, label: t(tariffProviderKey("custom")) },
+      ...userOpts,
+    ];
   }, [userProviderRows, t]);
 
   function parseProviderSelectValue(value: string | null | undefined): {
@@ -136,12 +159,19 @@ export function ChargingSessionScreen({
     if (typeof value === "string" && value.startsWith("up_")) {
       return { providerType: "user_provider", userProviderId: value.slice(3) };
     }
-    return { providerType: (value as ChargingProviderType) ?? "custom", userProviderId: null };
+    return {
+      providerType: (value as ChargingProviderType) ?? "custom",
+      userProviderId: null,
+    };
   }
 
   const clockActive = session?.status === "charging";
   const nowMs = useTickingClock(clockActive);
-  const effectiveVoltflowMateLive = useChargingDevLiveOverride(voltflowMateLive, session, nowMs);
+  const effectiveVoltflowMateLive = useChargingDevLiveOverride(
+    voltflowMateLive,
+    session,
+    nowMs,
+  );
   const onLiveDerived = useCallback(
     (derived: ReturnType<typeof staticDerivedFromSession> | null) => {
       setLiveDerived(derived);
@@ -238,7 +268,8 @@ export function ChargingSessionScreen({
   }, [session, liveDerived, nowMs, effectiveVoltflowMateLive]);
 
   const displayUsesLiveSoc = useMemo(() => {
-    if (!session || session.status !== "charging" || !session.started_at) return false;
+    if (!session || session.status !== "charging" || !session.started_at)
+      return false;
     const params = toParams(session);
     const startedAtMs = Date.parse(session.started_at);
     return (
@@ -259,7 +290,8 @@ export function ChargingSessionScreen({
     () => snapshotChargePowerKw(freshChargingSnapshot),
     [freshChargingSnapshot],
   );
-  const liveChargeType = freshChargingSnapshot?.telemetry?.charge_type?.toUpperCase();
+  const liveChargeType =
+    freshChargingSnapshot?.telemetry?.charge_type?.toUpperCase();
   const displayAcPowerKw =
     session?.status === "charging" && derived
       ? (resolveChargingEtaPowerKw({
@@ -271,10 +303,22 @@ export function ChargingSessionScreen({
           isDc: session.tariff_type === "fast_dc" || liveChargeType === "DC",
         }) ?? 0)
       : (session?.charger_power_kw ?? 0);
-  const displayAcPowerDecimals = 1;
+  // Two decimals only when the shown value *is* the measured pack V × I reading (±0.03 kW).
+  // A session average or fallback — and the resolver's integer-bucket swap — keep one decimal.
+  const measuredLiveChargePowerKw = snapshotMeasuredChargePowerKw(
+    freshChargingSnapshot,
+    nowMs,
+  );
+  const displayAcPowerDecimals =
+    measuredLiveChargePowerKw != null &&
+    displayAcPowerKw === measuredLiveChargePowerKw
+      ? 2
+      : 1;
 
   const pctForBar =
-    session && derived ? derived.currentPercent : session?.current_percent ?? 0;
+    session && derived
+      ? derived.currentPercent
+      : (session?.current_percent ?? 0);
   const remainingToTargetPercent =
     session && derived
       ? Math.max(0, session.target_percent - derived.currentPercent)
@@ -332,16 +376,23 @@ export function ChargingSessionScreen({
     if (!session) return;
     const effectivePriceDraft =
       priceDraft.trim() === ""
-        ? String(session.price_per_kwh > 0 ? session.price_per_kwh : defaultPricePerKwh)
+        ? String(
+            session.price_per_kwh > 0
+              ? session.price_per_kwh
+              : defaultPricePerKwh,
+          )
         : priceDraft;
-    const pricePerKwh = Number.parseFloat(effectivePriceDraft.replace(",", "."));
+    const pricePerKwh = Number.parseFloat(
+      effectivePriceDraft.replace(",", "."),
+    );
     if (!Number.isFinite(pricePerKwh) || pricePerKwh < 0) {
       toast.error(t("charging.tariff.invalidPrice") as string);
       return;
     }
     setSavingTariff(true);
     const effectiveProvider = providerTypeDraft ?? session.provider_type;
-    const effectiveUserProviderId = userProviderIdDraft ?? session.user_provider_id;
+    const effectiveUserProviderId =
+      userProviderIdDraft ?? session.user_provider_id;
     const res = await updateChargingSessionTariff({
       sessionId,
       tariffType: tariffTypeDraft ?? session.tariff_type,
@@ -357,20 +408,35 @@ export function ChargingSessionScreen({
     await qc.invalidateQueries({ queryKey: queryKeys.session(sessionId) });
     await qc.invalidateQueries({ queryKey: queryKeys.sessions });
     toast.success(t("charging.tariff.updated") as string);
-  }, [defaultPricePerKwh, priceDraft, providerTypeDraft, qc, session, sessionId, t, tariffTypeDraft]);
+  }, [
+    defaultPricePerKwh,
+    priceDraft,
+    providerTypeDraft,
+    qc,
+    session,
+    sessionId,
+    t,
+    tariffTypeDraft,
+  ]);
 
   const applyProviderPresetPrice = useCallback(
     (provider: ChargingProviderType, tariffType: ChargingTariffType) => {
       if (provider === "custom") return;
-      const userProviderId = provider === "user_provider" ? userProviderIdDraft : undefined;
-      const preset = resolveProviderTariff(provider, userProviderId, userProviderMap);
+      const userProviderId =
+        provider === "user_provider" ? userProviderIdDraft : undefined;
+      const preset = resolveProviderTariff(
+        provider,
+        userProviderId,
+        userProviderMap,
+      );
       setPriceDraft(String(preset[tariffType]));
     },
     [userProviderMap, userProviderIdDraft],
   );
 
   const tariffLocationMatch = useMemo(
-    () => resolveTariffLocationMatch(autoTariffGps.activeLocation, tariffLocations),
+    () =>
+      resolveTariffLocationMatch(autoTariffGps.activeLocation, tariffLocations),
     [autoTariffGps.activeLocation, tariffLocations],
   );
   const powerTariffFallback = resolveTariffTypeByPower(displayAcPowerKw);
@@ -404,23 +470,32 @@ export function ChargingSessionScreen({
 
   const charging = session.status === "charging";
   const historyMode = mode === "history";
-  const avgPowerKw = !charging && derived && derived.elapsedSeconds > 0
-    ? (session?.charged_energy_kwh ?? 0) / (derived.elapsedSeconds / 3600)
-    : 0;
+  const avgPowerKw =
+    !charging && derived && derived.elapsedSeconds > 0
+      ? (session?.charged_energy_kwh ?? 0) / (derived.elapsedSeconds / 3600)
+      : 0;
   const effectivePricePerKwh =
     session.price_per_kwh > 0 ? session.price_per_kwh : defaultPricePerKwh;
   const effectiveTariffTypeDraft = tariffTypeDraft ?? session.tariff_type;
   const effectiveProviderTypeDraft = providerTypeDraft ?? session.provider_type;
-  const effectiveUserProviderIdDraft = userProviderIdDraft ?? session.user_provider_id;
+  const effectiveUserProviderIdDraft =
+    userProviderIdDraft ?? session.user_provider_id;
   const effectivePriceDraft =
     priceDraft.trim() === ""
-      ? String(session.price_per_kwh > 0 ? session.price_per_kwh : defaultPricePerKwh)
+      ? String(
+          session.price_per_kwh > 0
+            ? session.price_per_kwh
+            : defaultPricePerKwh,
+        )
       : priceDraft;
   const displayCurrentCost =
     effectivePricePerKwh > 0 ? (
       <CurrencyAmount
         currency={currency}
-        value={costFromGridEnergy(derived.chargedEnergyKwh, effectivePricePerKwh)}
+        value={costFromGridEnergy(
+          derived.chargedEnergyKwh,
+          effectivePricePerKwh,
+        )}
         locale={locale}
       />
     ) : (
@@ -432,7 +507,11 @@ export function ChargingSessionScreen({
         currency={currency}
         value={costFromGridEnergy(
           energyFromGridKwh(
-            energyNeededKwh(session.battery_capacity_kwh, session.start_percent, 100),
+            energyNeededKwh(
+              session.battery_capacity_kwh,
+              session.start_percent,
+              100,
+            ),
             session.efficiency_percent,
           ),
           effectivePricePerKwh,
@@ -444,7 +523,11 @@ export function ChargingSessionScreen({
     );
   const displayFinalCost =
     session.estimated_cost > 0 ? (
-      <CurrencyAmount currency={currency} value={session.estimated_cost} locale={locale} />
+      <CurrencyAmount
+        currency={currency}
+        value={session.estimated_cost}
+        locale={locale}
+      />
     ) : (
       "—"
     );
@@ -457,7 +540,9 @@ export function ChargingSessionScreen({
         ? displayAcPowerKw * (chargeParams.efficiencyPercent / 100)
         : chargeParams.chargerPowerKw,
   };
-  const startedAtMs = session.started_at ? Date.parse(session.started_at) : null;
+  const startedAtMs = session.started_at
+    ? Date.parse(session.started_at)
+    : null;
   const morningTargetMs = (() => {
     const anchor = new Date(nowMs);
     anchor.setHours(7, 0, 0, 0);
@@ -473,7 +558,9 @@ export function ChargingSessionScreen({
       ? secondsUntilTargetSoc(projectionParams, derived.currentPercent)
       : null;
   const estimatedFinishMs =
-    secondsToTarget != null && secondsToTarget > 0 ? nowMs + secondsToTarget * 1000 : null;
+    secondsToTarget != null && secondsToTarget > 0
+      ? nowMs + secondsToTarget * 1000
+      : null;
 
   const localeCode =
     locale === "be" ? "be-BY" : locale === "ru" ? "ru-RU" : "en-US";
@@ -488,14 +575,19 @@ export function ChargingSessionScreen({
       : (t("charging.energyFromChargerEstimate") as string);
   const chargingStats: ChargingStat[] = [
     {
-      label: historyMode ? (t("history.duration") as string) : (t("charging.elapsed") as string),
+      label: historyMode
+        ? (t("history.duration") as string)
+        : (t("charging.elapsed") as string),
       value: formatDuration(derived.elapsedSeconds),
     },
     ...(!historyMode
       ? [
           {
             label: t("charging.remaining") as string,
-            value: charging && secondsToTarget != null ? formatDuration(secondsToTarget) : "—",
+            value:
+              charging && secondsToTarget != null
+                ? formatDuration(secondsToTarget)
+                : "—",
             accent: "cyan" as const,
           },
         ]
@@ -528,7 +620,9 @@ export function ChargingSessionScreen({
           },
         ]),
     {
-      label: historyMode ? (t("charging.avgPower") as string) : (t("charging.acPower") as string),
+      label: historyMode
+        ? (t("charging.avgPower") as string)
+        : (t("charging.acPower") as string),
       value: historyMode
         ? `${avgPowerKw.toFixed(2)} kW`
         : `${displayAcPowerKw.toFixed(displayAcPowerDecimals)} kW`,
@@ -552,7 +646,12 @@ export function ChargingSessionScreen({
       value: `${projectedSocAtMorning.toFixed(1)}%`,
     });
   }
-  if (!historyMode && charging && secondsToTarget != null && secondsToTarget > 0) {
+  if (
+    !historyMode &&
+    charging &&
+    secondsToTarget != null &&
+    secondsToTarget > 0
+  ) {
     chargingStats.push({
       label: t("charging.secondsToTarget") as string,
       value: formatDuration(secondsToTarget),
@@ -583,8 +682,14 @@ export function ChargingSessionScreen({
           size="lg"
           className="min-h-[44px] rounded-full border-border bg-white/[0.03] font-heading text-sm font-bold"
         >
-          <Link href={appPath(historyMode ? "/history?tab=charging" : "/dashboard")}>
-            {historyMode ? (locale === "ru" ? "Назад" : "Back") : t("charging.dashboard")}
+          <Link
+            href={appPath(historyMode ? "/history?tab=charging" : "/dashboard")}
+          >
+            {historyMode
+              ? locale === "ru"
+                ? "Назад"
+                : "Back"
+              : t("charging.dashboard")}
           </Link>
         </Button>
       </div>
@@ -643,15 +748,22 @@ export function ChargingSessionScreen({
             {t("charging.tariff.matchedLocation", {
               name: tariffLocationMatch.preset.name,
               distance: Math.round(tariffLocationMatch.distanceM),
-              provider: t(tariffProviderKey(tariffLocationMatch.preset.provider_type)) as string,
-              tariffType: t(tariffTypeKey(tariffLocationMatch.preset.tariff_type)) as string,
+              provider: t(
+                tariffProviderKey(tariffLocationMatch.preset.provider_type),
+              ) as string,
+              tariffType: t(
+                tariffTypeKey(tariffLocationMatch.preset.tariff_type),
+              ) as string,
             })}
             {autoTariffGps.gpsSource === "browser"
               ? (t("charging.tariff.phoneGpsFallback") as string)
               : ""}
           </p>
         ) : null}
-        {!historyMode && charging && !tariffLocationMatch && autoTariffGps.activeLocation ? (
+        {!historyMode &&
+        charging &&
+        !tariffLocationMatch &&
+        autoTariffGps.activeLocation ? (
           <p className="text-xs text-muted-foreground">
             {t("charging.tariff.noMatchInRadius", {
               tariffType: t(tariffTypeKey(powerTariffFallback)) as string,
@@ -666,14 +778,23 @@ export function ChargingSessionScreen({
         ) : null}
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="session-provider-type">{t("charging.tariff.provider") as string}</Label>
+            <Label htmlFor="session-provider-type">
+              {t("charging.tariff.provider") as string}
+            </Label>
             <Select
-              value={effectiveUserProviderIdDraft ? `up_${effectiveUserProviderIdDraft}` : effectiveProviderTypeDraft}
+              value={
+                effectiveUserProviderIdDraft
+                  ? `up_${effectiveUserProviderIdDraft}`
+                  : effectiveProviderTypeDraft
+              }
               onValueChange={(value) => {
                 const parsed = parseProviderSelectValue(value);
                 setProviderTypeDraft(parsed.providerType);
                 setUserProviderIdDraft(parsed.userProviderId);
-                applyProviderPresetPrice(parsed.providerType, effectiveTariffTypeDraft);
+                applyProviderPresetPrice(
+                  parsed.providerType,
+                  effectiveTariffTypeDraft,
+                );
               }}
               modal={false}
               items={allProviderOptions.map((item) => ({
@@ -681,7 +802,10 @@ export function ChargingSessionScreen({
                 label: item.label,
               }))}
             >
-              <SelectTrigger id="session-provider-type" className="h-11 w-full rounded-2xl text-sm">
+              <SelectTrigger
+                id="session-provider-type"
+                className="h-11 w-full rounded-2xl text-sm"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="z-[200]">
@@ -694,36 +818,50 @@ export function ChargingSessionScreen({
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="session-tariff-type">{t("charging.tariff.type") as string}</Label>
+            <Label htmlFor="session-tariff-type">
+              {t("charging.tariff.type") as string}
+            </Label>
             <Select
               value={effectiveTariffTypeDraft}
               onValueChange={(value) => {
                 const tariffType = value as ChargingTariffType;
                 setTariffTypeDraft(tariffType);
-                applyProviderPresetPrice(effectiveProviderTypeDraft, tariffType);
+                applyProviderPresetPrice(
+                  effectiveProviderTypeDraft,
+                  tariffType,
+                );
               }}
               modal={false}
-              items={(["home", "commercial_ac", "fast_dc"] as const).map((value) => ({
-                value,
-                label: t(tariffTypeKey(value)),
-              }))}
+              items={(["home", "commercial_ac", "fast_dc"] as const).map(
+                (value) => ({
+                  value,
+                  label: t(tariffTypeKey(value)),
+                }),
+              )}
             >
-              <SelectTrigger id="session-tariff-type" className="h-11 w-full rounded-2xl text-sm">
+              <SelectTrigger
+                id="session-tariff-type"
+                className="h-11 w-full rounded-2xl text-sm"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="z-[200]">
-                {(["home", "commercial_ac", "fast_dc"] as const).map((value) => (
-                  <SelectItem key={value} value={value}>
-                    {t(tariffTypeKey(value))}
-                  </SelectItem>
-                ))}
+                {(["home", "commercial_ac", "fast_dc"] as const).map(
+                  (value) => (
+                    <SelectItem key={value} value={value}>
+                      {t(tariffTypeKey(value))}
+                    </SelectItem>
+                  ),
+                )}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="session-tariff-price">
               {currencyTextWithIcon(
-                t("charging.tariff.pricePerKwh", { currency: currencySymbols[currency] }) as string,
+                t("charging.tariff.pricePerKwh", {
+                  currency: currencySymbols[currency],
+                }) as string,
                 currency,
               )}
             </Label>
@@ -743,13 +881,20 @@ export function ChargingSessionScreen({
           disabled={savingTariff}
           onClick={() => void saveTariff()}
         >
-          {savingTariff ? (t("common.saving") as string) : (t("charging.tariff.save") as string)}
+          {savingTariff
+            ? (t("common.saving") as string)
+            : (t("charging.tariff.save") as string)}
         </Button>
       </section>
 
-      {historyMode ? <EnergyCorrectionCard session={session} sessionId={sessionId} /> : null}
+      {historyMode ? (
+        <EnergyCorrectionCard session={session} sessionId={sessionId} />
+      ) : null}
 
-      <ChargingDeltaCard session={session} vehicleId={sessionVehicleId ?? undefined} />
+      <ChargingDeltaCard
+        session={session}
+        vehicleId={sessionVehicleId ?? undefined}
+      />
 
       {!historyMode && (
         <div className="mt-auto space-y-3">

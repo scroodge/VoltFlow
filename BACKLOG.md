@@ -1,5 +1,152 @@
 # Backlog — proposed plans awaiting go-ahead
 
+## Show measured charging power precisely — 2 decimals, no "≈", battery-side — BUILT 2026-10-01 (partly), not deployed
+
+### Research findings
+
+- **Where it is shown:** `vehicle-live-view.tsx:944` renders `AC · ~ 5.6 kW` with `fmt(…, 1)` and
+  an unconditional `~`; the Telegram widget (`live-widget-message.ts:91`) uses `toFixed(1)`.
+  Dashboard, session screen and widget take the number from `resolveChargingEtaPowerKw`
+  (`charging-math.ts`): fresh live power, else a session average (the integer-kW workaround),
+  else the configured fallback.
+- **How precise the measured value is:** current moves in 0.1 A steps and voltage in 1 V
+  steps, so at ≈ 316 V / 18 A the error is about ±0.02–0.03 kW. Two decimals (`5.65`) carry real
+  information; a third would be noise. Live values on `way`: 5.565, 5.629, 5.66, 5.692.
+- **Is "~" still right?** Not for a fresh measured V × I. It stays right for a session
+  average, the configured fallback, and the integer reading from di+ 1.x cars. The UI can tell
+  the cases apart: live snapshot fresh **and** `telemetry.charge_current_a` present (field added
+  2026-10-01).
+- **Basis mismatch (suspected double-counted efficiency in the ETA):** the measured power is
+  **battery-side**. `percentPerHour = chargerPowerKw / batteryCapacityKwh × 100` expects
+  battery-side power, yet `vehicle-live-view.tsx:922` multiplies the live value by
+  `efficiencyPercent / 100` as if it were grid-side. With a battery-side value the ETA is
+  ≈ 2 % (AC) / ≈ 10 % (DC) too long. `dashboard-view.tsx` and `charging-session-screen.tsx:457`
+  also touch efficiency and have **not been read yet**. The resolver mixes bases (live =
+  battery-side; session average and fallback = grid-side). This predates the change (di+'s
+  integer engine power was battery-side too), so it is not a regression.
+- `charge_current_a` is stored but shown nowhere.
+
+### Options considered
+
+1. **Format only:** two decimals, drop `~` when measured. Smallest change; leaves the
+   efficiency question open.
+2. **Format + provenance (recommended).** Same, and `resolveChargingEtaPowerKw` also reports
+   whether the value is measured and which side it is on, so each caller multiplies by
+   efficiency only for grid-side values. The row says the power goes into the battery when
+   measured, and shows the amperage (`−17.9 A`).
+3. **Also show a grid-side estimate** (`÷ efficiency`) next to it. More clutter; defer.
+
+### Proposed scope (option 2)
+
+- `charging-math.ts`: return `{ powerKw, basis, measured }` from a new function; keep the old
+  one as a thin wrapper so existing callers do not change until migrated. Unit tests: fractional
+  live wins, the integer-bucket workaround is unchanged, stale live falls back, measured flag.
+- `vehicle-live-view.tsx`: measured → `AC · 5.65 kW` (2 decimals, no `~`); otherwise keep
+  `AC · ~ 5.6 kW` (1 decimal — two decimals on an estimate would imply false precision;
+  confirm). Apply efficiency to the ETA only for grid-side values. Optional amperage line.
+- Telegram widget and the other callers: same formatting rule and the same efficiency rule,
+  after reading `dashboard-view.tsx` and `charging-session-screen.tsx`.
+- New label text goes through the existing translations (check every locale file).
+
+### Data ownership and location
+
+No new data. It only reads telemetry already stored in Postgres (`telemetry` jsonb, the user's
+vehicle data). Nothing is added to localStorage or the database.
+
+### Verification plan
+
+Resolver unit tests; `npm run lint`, `npm run build`; render the measured and non-measured cases
+from the dev telemetry fixtures; confirm on `way` during a real charge that the row shows
+two decimals without `~` and that the ETA agrees with SOC progress.
+
+### Status (2026-10-01)
+
+Approved by the user, who also chose: **keep one decimal and the `~` for inexact values**.
+
+- **Built:** `measuredChargePowerKw` / `measuredChargeCurrentA` / `snapshotMeasuredChargePowerKw`
+  in `charging-live.ts` (a negative `charge_current_a` next to a positive `charge_power_kw`
+  marks the value as measured; stale snapshots do not count) with 5 tests. Vehicle live view:
+  measured → `AC · 5.65 kW · 17.9 A`, no `~`, label "Charge power (to battery)" (en/be/ru key
+  `vehicle.telemetry.chargePowerToBattery`); otherwise unchanged `AC · ~ 5.6 kW`. Telegram
+  widget: two decimals when measured. Session screen: two decimals only when the shown value
+  *is* the measured reading.
+- **Dashboard tile — built later the same day.** It was not a separate component: both
+  tile variants in `dashboard-view.tsx` printed `~ {fmt(chargingTileKw, 1)} kW` inline. Now a
+  single `chargingTileLabel` gives `5.65 kW` (two decimals, no `~`) when the tile value *is* the
+  measured reading, and `~ 5.6 kW` otherwise — the same rule as the session screen. Dashboard
+  lint still has one error that is also at `HEAD` (`setState` in an effect).
+- **Not built:** the resolver returning provenance — moved into the ETA plan below, which is
+  where it is needed. The three UIs (live view, session screen, dashboard tile) each repeat the
+  "measured → 2 decimals, else `~` 1 decimal" rule inline; a shared tested formatter would be a
+  small follow-up if a fourth place appears.
+- **Verified:** `tsc` clean; `charging-live` 24/24 tests; full suite 549/552 — the 3 failures
+  are not from this change: two modules import the `@/features` alias that plain Node cannot
+  resolve (`live-status-notifications.ts`, `telemetry-history.ts`, both untouched) and
+  `charging-math.test.mjs` "keeps battery gain distinct from grid energy" (code and test
+  untouched, so it fails at HEAD). ESLint: 0 new problems; `charging-session-screen.tsx` has
+  one pre-existing error (`setState` in an effect, also at HEAD).
+- **Not verified:** nothing was rendered in a browser, and the Telegram message formatting has
+  no test (its module imports the `@/` alias too).
+
+## ETA applies charger efficiency to a battery-side live power — proposed 2026-10-01
+
+### Research findings (all three call sites now read)
+
+- **What the maths expects.** `percentPerHour = chargerPowerKw / batteryCapacityKwh × 100`
+  (`charging-math.ts`): `chargerPowerKw` in the projection params is power **into the battery**.
+  The configured fallback `session.charger_power_kw` is the charger's nominal, i.e. **grid-side**,
+  power, so callers convert it with `× efficiencyPercent / 100`.
+- **Live view** (`vehicle-live-view.tsx:922`) and **session screen**
+  (`charging-session-screen.tsx:457`) multiply the resolved power by the efficiency. **Dashboard**
+  goes through `activeChargingTimeLeftSeconds`, which divides the remaining battery energy by the
+  efficiency (grid energy) and then by `powerKw`, i.e. it also treats `powerKw` as grid-side.
+  Same assumption, three places.
+- **The resolver mixes bases.** In `resolveChargingEtaPowerKw` the observed session average
+  (`chargedGridEnergyKwh / elapsed`) and the fallback are grid-side; the live reading is not. The
+  measured pack V × I (shipped 2026-10-01) is **battery-side**, so with it the ETA is too long by
+  a factor `1 / efficiency`: ≈ +2 % on AC (98 %) and ≈ +11 % on DC (90 %).
+- **Not a regression, but now visible.** di+'s old integer engine power was subject to the
+  same mix; whether it was battery- or grid-side is unknown (a `-5` for a real 5.65 kW
+  battery-side charge fits either). The measured value makes the size of the error known.
+- **Out of scope here:** the balancing tail near 100 % makes any "time to 100 %" optimistic on
+  AC; that is a different effect.
+
+### Options considered
+
+1. **Convert at the source (recommended).** `resolveChargingEtaPowerKw` takes
+   `efficiencyPercent` and a flag for a measured (battery-side) live value, and returns the
+   **grid-side equivalent** (`battery ÷ efficiency`) for it. All three call sites and the Telegram
+   widget keep their existing "grid-side in, × efficiency" logic and become correct with no change
+   to their own maths. One function plus its callers' arguments; display of the measured number is
+   unaffected (it already uses `measuredChargePowerKw` directly).
+2. **Convert at the consumers.** Make every consumer take battery-side power and convert the
+   fallback and the average instead. More churn across four files for the same result.
+3. **Leave it.** Accept an ETA 2 % (AC) / 11 % (DC) long. Cheapest, but the number is now known
+   to be off, and DC is where people watch the clock.
+
+### Proposed scope (option 1)
+
+- `charging-math.ts`: add optional `liveIsBatterySide` and `efficiencyPercent` to
+  `resolveChargingEtaPowerKw`; when set, the live value is divided by the efficiency before it is
+  compared with the observed average (so the "same integer bucket" workaround keeps comparing
+  like with like). Default behaviour unchanged for callers that do not pass them.
+- Pass `measured` and the session/car efficiency from the live view, dashboard, session screen
+  and `live-widget-charging.ts`; use `snapshotMeasuredChargePowerKw` / `measuredChargePowerKw`.
+- Tests with the real numbers (316 V, −17.9 A ⇒ 5.656 kW into the battery; AC 98 %, DC 90 %):
+  grid-side equivalent, unchanged integer-bucket path, unchanged fallback, DC vs AC.
+
+### Data ownership and location
+
+No new data. Efficiency already exists per tariff (`cars.default_efficiency_percent` AC,
+`cars.fast_dc_efficiency_percent` DC; session `efficiency_percent`) in Postgres.
+
+### Verification plan
+
+Resolver unit tests; `tsc`; and on `way` during a real charge compare the displayed "time left"
+with the actual time to reach a SOC milestone, before and after, on AC and (when available) DC.
+
+### Should I build this?
+
 ## Recover missed telemetry charges after delayed car setup or delivery — proposed 2026-09-30
 
 ### Research findings
@@ -86,133 +233,23 @@ these ownership and storage choices before implementation.
 
 ### Should I build this?
 
-## Measured charging power from pack voltage × current — proposed 2026-09-30
+## DC check for measured charging power (follow-up) — 2026-10-01
 
-### Research findings
+The main work shipped on 2026-10-01 and moved to [CHANGELOG.md](CHANGELOG.md) ("Charge power now
+comes from measured pack voltage × current"). It is verified on **AC** only. No code is planned
+here; this is a verification list, to be closed with a real charge on `way`:
 
-Charging power (`charge_power_kw`) is the predicate behind auto-start (`> 0.1 kW`, 4
-consecutive samples) and the 5-minute zero-power stall stop, and it feeds the power
-display. Today it is coarse:
+- **DC:** sign and size of `charge_current_a` on a fast charge. Known only from an older di+
+  session record (`−198.5 A`, 332 V, 65.9 kW), never seen live.
+- **Refresh rate:** how often di+ updates `batteryPackCurrent`. On steady AC it barely moves
+  (`−17.8 → −17.9` over minutes), so it cannot be read from the AC data.
+- **CPU at the real rate:** measured only at ~5 Hz (≈ +1.5 pp of one core per 1 Hz); the app
+  reads once per 5 s, so the real cost is expected to be small but is unmeasured.
+- **di+ 1.x cars:** no `/api/historyStatus`, so they keep the integer `charge_power_kw`. No
+  autoservice current FID is known and none is being pursued.
+- **Optional, not built:** show the amperage in the charging-session view.
 
-- **APK** (`BYDMate-own`, `TelemetrySnapshot.kt:126`): `charge_power_kw` is taken from
-  `powerKw`, i.e. the di+ engine-power field (`发动机功率`), an **integer kW** that reads
-  e.g. `-65` while the real value is 65.4. Not re-verified in this pass: the body of the
-  `if (isCharging == true)` branch at line 126 was not read; the source is inferred from
-  `docs/DIPLUS_DATA.md`.
-- **Voltage:** `battery_voltage_v` is already in the contract and DB. It comes from
-  autoservice `FID_CHARGE_BATTERY_VOLT` (`AutoserviceClient.kt:104`), as an **integer V**.
-- **Current:** **not read anywhere in the APK** — `ChargingReading` and `FidRegistry`
-  have no current field. The server contract (`ingest-payload.ts`,
-  `telemetry-sanitizer.ts`, `database.ts`) has no current column either.
-- **di+ internals:** `/api/vehicleSegments` and `/api/chargingSessions` expose pack
-  `batteryVoltageMin/Max` and `batteryCurrentMin/Max` per segment; `332.0 V × 198.5 A =
-  65.902 kW` equals `batteryPowerMax` exactly (`DIPLUS_DATA.md` ~L551), so P = V × I is the
-  right formula. These are **aggregates, not instantaneous** values; the open segment
-  refreshes roughly every 3 s. Fractional energy there is **not persisted** when a
-  segment closes (B-14 closed as a negative result) — do not revive that path.
-- **Precedent:** the third-party webhook mapper already computes
-  `abs(voltage × current)` (`bydmate-webhook-mapper.ts:91`), but only for that sender.
-- **New di+ build downloaded:** `BYDMate-own/research/diplus.2.0.0-beta8-3.apk`
-  (versionCode 168, sha256 `f9fe9b35…56ed`, from the beta manifest
-  `jt.x2x.fun:852/Update/dibeta.txt`). Its changelog (`v200b8.txt`, item 5) announces new
-  automation parameters for **instrument-cluster SOC and fractional SOC**.
-- **Discovery result (2026-09-30, decompiled beta8-3, written up in
-  `BYDMate-own/docs/DIPLUS_DATA.md` → "Live pack voltage and current exist in
-  `/api/historyStatus`"):** di+ **does** expose a live `batteryPackVoltage`,
-  `batteryPackCurrent` (negative while charging) and `batteryPower =
-  max(0, −V × I / 1000)` as doubles in `/api/historyStatus`. The same keys exist in
-  2.0.0b1, so no di+ upgrade is required on a 2.0 car. It is 2.0-only; 1.x cars have no
-  such endpoint. Still **unmeasured on the car:** the snapshot refresh rate, whether the
-  `"auth"` filter affects the APK's localhost call, and the cost of polling it (the reply
-  also runs several Room `COUNT(*)` queries).
-
-### Options considered
-
-1. **Do nothing.** Zero risk, keeps integer-kW power. Rejected: it stays blind to
-   sub-kW changes and to a charger tapering at low power.
-2. **Read live pack current/voltage from di+ `/api/historyStatus` in the APK, send
-   `charge_current_a` (and pack voltage), derive `charge_power_kw = |V × I|`
-   (recommended).** The fields exist (discovery 2026-09-30), are doubles, and di+ uses
-   the same formula internally. Works on di+ 2.0 cars only; 1.x cars keep the integer
-   reading. Cost: APK release + contract + migration, plus a measurement of refresh
-   rate and poll cost.
-3. **Read the charging current from autoservice (a new FID) instead.** Would also cover
-   di+ 1.x cars, but no current FID is known: `FidRegistry` has none, and finding one
-   means reverse-engineering more of the BYD service. Keep as a fallback only if step 0b
-   shows `/api/historyStatus` is too heavy to poll.
-4. **Consume di+ 2.0 segment aggregates (B-14 style).** ~3 s/20 s resolution, lost
-   when the segment closes. Rejected; option 2 is strictly better.
-
-### Recommendation
-
-Option 2. Discovery found a live source, so the open question is operational (refresh
-rate, poll cost, `auth`), not whether the data exists. Measure those on `way` (step 0b)
-before writing APK code. Keep the existing integer `charge_power_kw` as the fallback so
-1.x cars and invalid samples behave exactly as today.
-
-### Proposed scope
-
-0a. **Discovery, code side — DONE 2026-09-30.** Decompiled `diplus.2.0.0-beta8-3.apk`
-   and diffed its strings against 2.0.0-beta1; result recorded in
-   `BYDMate-own/docs/DIPLUS_DATA.md`.
-0b. **Discovery, car side — DONE for AC 2026-10-01; DC and refresh rate still open.**
-   Measured on `way` (di+ `2.0.0b8-2`), 60 samples under AC charge: no `auth` header
-   needed; round trip ≤ 211 ms including `adb`/`curl` start-up; `batteryPackCurrent` is
-   **negative while charging** (`−17.8…−18.0 A`, 0.1 A steps), voltage 1 V steps;
-   `batteryPower` = `|V × I| / 1000` exactly (5.625–5.688 kW). The integer engine power
-   read **`-5`** for all 60 samples while the real power was ≈ 5.65 kW, so the current
-   `charge_power_kw` under-reports by ≈ 0.65 kW (≈ 11 %) here. `rawChargingPower` is
-   `0.0` on AC. di+ CPU: ≈ **+1.5 pp of one core per 1 Hz** of polling (extrapolated from
-   one 5 Hz run, idle ≈ 28 %). **Still open:** how often di+ refreshes the current (it
-   barely moved on steady AC — needs a DC capture) and the DC sign/magnitude. Details
-   in `BYDMate-own/docs/DIPLUS_DATA.md`.
-1. **APK:** add a client for `/api/historyStatus` next to `DiParsClient` (same
-   `127.0.0.1:8988` host); read `batteryPackVoltage`/`batteryPackCurrent` only when
-   charging and only when the validity bits are set; add `chargeBatteryCurrentA` to
-   `VehicleTelemetrySnapshot`; send `charge_current_a`; compute `charge_power_kw` from
-   V × I when both are fresh and sane, else keep the existing value. Both senders
-   (`CloudTelemetrySender` **and** `CommandDaemon`, which builds its own payload) must
-   be changed.
-2. **Server — BUILT 2026-10-01, not deployed.** `charge_current_a` added to
-   `ingest-payload.ts`, `telemetry-sanitizer.ts` (range ±1000 A, rounded to 0.1 A) and
-   `database.ts`. **No migration was needed** (deviation from this plan): telemetry is
-   stored as `telemetry jsonb`, so a new key needs no column; the schema `.strip()` was
-   the only place that would have dropped it. 22 focused tests + `tsc` pass.
-   **APK — BUILT 2026-10-01, not released or installed:** new `HistoryStatusClient`
-   (rate-limited to one read per 5 s, only while a gun is connected, cache dropped after
-   15 s), wired into `TrackingService` and `CommandDaemon`. Deviation: power is
-   `max(0, −V × I / 1000)`, **not** `|V × I|`, because idle reads `+0.3 A` ≈ 0.095 kW,
-   right at the auto-start threshold. 104 APK unit tests pass (4 classes); the full suite
-   and `assembleDebug` were not run.
-3. **Consumers:** keep the strict start predicate and the tolerant sustained predicate
-   as they are. A `null` power is still never treated as zero. A measured current only
-   makes `charge_power_kw` more precise; it does not change the session rules. Energy and
-   cost stay SOC-derived (`kwh_charged` remains diagnostics only). Optionally show the
-   amperage in the session view.
-4. **Tests:** unit tests for V × I derivation (null, negative sign, out-of-range,
-   stale current) and sanitizer range; existing `auto-session.test.mjs` must keep passing.
-
-### Data ownership and location
-
-Vehicle telemetry is **owned by the user's vehicle/account** and stored in **Postgres**
-(`bydmate_telemetry_samples` / `bydmate_live_snapshots`), scoped by `auth.uid()` exactly
-as today. `charge_current_a` is one more column on those existing tables, not a new
-preference or tariff, so the client-side-storage default does not apply. **Please
-confirm both choices.**
-
-### Risks
-
-- The current FID may not exist or may need a different unit/sign; discovery decides.
-- Two senders and an APK release: behaviour only changes once the car updates.
-- Ingest is the hot path; one extra nullable numeric column adds no extra query.
-
-### Verification plan
-
-Discovery report first. Then focused unit tests, `npm run lint`, `npm run build`,
-a production read-only check of the new column with `scripts/prod-sql.sh`, and a real
-AC plus DC charge on `way` comparing measured kW with the old integer value.
-
-### Should I build this?
+Data ownership is unchanged: the user's vehicle telemetry, in Postgres (`telemetry` jsonb).
 
 ## Telegram community launch pack with isolated local VoltFlow demo — proposed 2026-09-29
 

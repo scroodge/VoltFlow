@@ -650,12 +650,14 @@ export const dictionaries = {
         title: "Recover charging from vehicle data",
         hint: "We found closed charging periods in your retained vehicle telemetry. Review each one before adding it to history.",
         confirmTitle: "Add recovered charging session?",
-        confirmHint: "Energy and battery levels come from vehicle telemetry. Cost is an estimate using your current tariff and can be corrected later.",
+        confirmHint:
+          "Energy and battery levels come from vehicle telemetry. Cost is an estimate using your current tariff and can be corrected later.",
         import: "Add to history",
         cancel: "Cancel",
         imported: "Charging session added from vehicle telemetry",
         badge: "Recovered",
-        setupWarning: "Vehicle telemetry is connected, but add your car profile before its retained history expires.",
+        setupWarning:
+          "Vehicle telemetry is connected, but add your car profile before its retained history expires.",
       },
     },
     cars: {
@@ -835,6 +837,7 @@ export const dictionaries = {
       telemetry: {
         charging: "Charging",
         chargePower: "Charge power",
+        chargePowerToBattery: "Charge power (to battery)",
         chargeType: "Charge type",
         batteryTemp: "Battery temp",
         cabinTemp: "Cabin temp",
@@ -2292,12 +2295,14 @@ export const dictionaries = {
         title: "Аднавіць зарадку з даных аўто",
         hint: "Мы знайшлі завершаныя зарадкі ў захаванай тэлеметрыі аўто. Праверце кожную перад даданнем у гісторыю.",
         confirmTitle: "Дадаць адноўленую сесію зарадкі?",
-        confirmHint: "Энергія і зарад батарэі атрыманы з тэлеметрыі аўто. Кошт ацэнены па бягучым тарыфе і яго можна скарэктаваць пазней.",
+        confirmHint:
+          "Энергія і зарад батарэі атрыманы з тэлеметрыі аўто. Кошт ацэнены па бягучым тарыфе і яго можна скарэктаваць пазней.",
         import: "Дадаць у гісторыю",
         cancel: "Скасаваць",
         imported: "Сесія зарадкі дададзена з тэлеметрыі аўто",
         badge: "Адноўлена",
-        setupWarning: "Тэлеметрыя аўто падключана, але дадайце профіль аўто, пакуль захаваная гісторыя не скончылася.",
+        setupWarning:
+          "Тэлеметрыя аўто падключана, але дадайце профіль аўто, пакуль захаваная гісторыя не скончылася.",
       },
     },
     cars: {
@@ -2475,6 +2480,7 @@ export const dictionaries = {
       telemetry: {
         charging: "Зарадка",
         chargePower: "Магутнасць зарадкі",
+        chargePowerToBattery: "Магутнасць зарадкі (у батарэю)",
         chargeType: "Тып зарадкі",
         batteryTemp: "Тэмп. батарэі",
         cabinTemp: "Тэмп. салона",
@@ -3934,12 +3940,14 @@ export const dictionaries = {
         title: "Восстановить зарядку из данных авто",
         hint: "В сохранённой телеметрии авто найдены завершённые зарядки. Проверьте каждую перед добавлением в историю.",
         confirmTitle: "Добавить восстановленную сессию зарядки?",
-        confirmHint: "Энергия и уровень батареи взяты из телеметрии авто. Стоимость оценена по текущему тарифу, её можно исправить позже.",
+        confirmHint:
+          "Энергия и уровень батареи взяты из телеметрии авто. Стоимость оценена по текущему тарифу, её можно исправить позже.",
         import: "Добавить в историю",
         cancel: "Отмена",
         imported: "Сессия зарядки добавлена из телеметрии авто",
         badge: "Восстановлено",
-        setupWarning: "Телеметрия авто подключена, но добавьте профиль автомобиля, пока сохранённая история не истекла.",
+        setupWarning:
+          "Телеметрия авто подключена, но добавьте профиль автомобиля, пока сохранённая история не истекла.",
       },
     },
     cars: {
@@ -4118,6 +4126,7 @@ export const dictionaries = {
       telemetry: {
         charging: "Зарядка",
         chargePower: "Мощность зарядки",
+        chargePowerToBattery: "Мощность зарядки (в батарею)",
         chargeType: "Тип зарядки",
         batteryTemp: "Темп. батареи",
         cabinTemp: "Темп. салона",
