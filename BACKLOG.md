@@ -173,11 +173,17 @@ before writing APK code. Keep the existing integer `charge_power_kw` as the fall
    V × I when both are fresh and sane, else keep the existing value. Both senders
    (`CloudTelemetrySender` **and** `CommandDaemon`, which builds its own payload) must
    be changed.
-2. **Server:** add `charge_current_a` to `ingest-payload.ts`,
-   `telemetry-sanitizer.ts` (range check) and `database.ts`; one new **idempotent**
-   migration (`add column if not exists`), applied to production with `psql`; if the
-   ingest RPC changes, re-`revoke execute … from public, anon, authenticated` and grant
-   explicitly. Never edit an applied migration.
+2. **Server — BUILT 2026-10-01, not deployed.** `charge_current_a` added to
+   `ingest-payload.ts`, `telemetry-sanitizer.ts` (range ±1000 A, rounded to 0.1 A) and
+   `database.ts`. **No migration was needed** (deviation from this plan): telemetry is
+   stored as `telemetry jsonb`, so a new key needs no column; the schema `.strip()` was
+   the only place that would have dropped it. 22 focused tests + `tsc` pass.
+   **APK — BUILT 2026-10-01, not released or installed:** new `HistoryStatusClient`
+   (rate-limited to one read per 5 s, only while a gun is connected, cache dropped after
+   15 s), wired into `TrackingService` and `CommandDaemon`. Deviation: power is
+   `max(0, −V × I / 1000)`, **not** `|V × I|`, because idle reads `+0.3 A` ≈ 0.095 kW,
+   right at the auto-start threshold. 104 APK unit tests pass (4 classes); the full suite
+   and `assembleDebug` were not run.
 3. **Consumers:** keep the strict start predicate and the tolerant sustained predicate
    as they are. A `null` power is still never treated as zero. A measured current only
    makes `charge_power_kw` more precise; it does not change the session rules. Energy and
