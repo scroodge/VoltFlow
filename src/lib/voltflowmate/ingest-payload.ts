@@ -46,6 +46,9 @@ export const telemetrySchema = z
     soh_percent: numericSchema,
     is_charging: booleanSchema,
     charge_power_kw: numericSchema,
+    // Pack current in amps, signed as di+ reports it (negative while charging). When both
+    // this and battery_voltage_v are present the sender derives charge_power_kw = |V × I|.
+    charge_current_a: numericSchema,
     charge_type: z.string().nullable().optional(),
     kwh_charged: numericSchema,
     range_est_km: numericSchema,
@@ -245,9 +248,15 @@ export function normalizePayloads(json: unknown) {
   if (batchParsed.success) {
     return {
       success: true as const,
-      payloads: Array.isArray(batchParsed.data) ? batchParsed.data : batchParsed.data.samples,
-      hourly: Array.isArray(batchParsed.data) ? [] : (batchParsed.data.hourly ?? []),
-      trips: Array.isArray(batchParsed.data) ? [] : (batchParsed.data.trips ?? []),
+      payloads: Array.isArray(batchParsed.data)
+        ? batchParsed.data
+        : batchParsed.data.samples,
+      hourly: Array.isArray(batchParsed.data)
+        ? []
+        : (batchParsed.data.hourly ?? []),
+      trips: Array.isArray(batchParsed.data)
+        ? []
+        : (batchParsed.data.trips ?? []),
     };
   }
 

@@ -1,5 +1,30 @@
 # Backlog — proposed plans awaiting go-ahead
 
+## History → Trips list shows every drive twice (telemetry + `byd_energydata` twin) — proposed 2026-10-01
+
+Reported by 765oliva567@gmail.com (screenshot: 7 rows for ~4 drives, pairs with identical times
+but different km, one with SOC and one `—→—%`). Prod check: each pair is one `source =
+'telemetry'` row (SOC, samples) plus one `source = 'byd_energydata'` row (the car's own trip log:
+no samples, no SOC, start/end to the second, km differs by 0.1). Over the last 30 days 11 users
+have 1,654 such twins, so this is not specific to one account. The twin is by-design data
+(migration `20260706190000`); 2026-08-12 deduped the *stats* with `dedupeTripsBySource()` but
+deliberately left the *list* raw, relying on the "logged from BYD" badge. With two near-identical
+rows per drive the badge is not enough.
+
+Data ownership: app-owned trip rows in Postgres; no schema change.
+
+1. **Leave as is.** Rejected: it reads as a bug to users.
+2. **Hide the twin in the list (recommended).** Apply `dedupeTripsBySource()` to the History
+   trips list so the telemetry row wins (it has SOC and a track); an energydata row is shown only
+   when no telemetry trip overlaps. Small, reuses the tested function and the same rule the stats
+   already use. Cost: the car-reported km (0.1 off) is no longer visible; could be shown as a
+   secondary "BYD: 7.8 km" line on the surviving row.
+3. **Merge in the database.** Collapse twins at ingest/with a migration. Loses the independent
+   second source and needs a backfill; riskier. Rejected for now.
+
+Note the overlap rule is interval-based with a tolerance, so back-to-back trips 1 min apart could
+in theory hide a real energydata-only trip; the existing function accepts this, tests cover it.
+
 ## Recover missed telemetry charges after delayed car setup or delivery — proposed 2026-09-30
 
 ### Research findings

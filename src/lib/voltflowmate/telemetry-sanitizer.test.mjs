@@ -139,6 +139,45 @@ test("drops the DiPlus negative SOC sentinel without discarding valid telemetry"
   assert.equal(result.droppedTelemetryFields, 1);
 });
 
+const chargeCurrentPayload = (telemetry) => [
+  {
+    schema_version: 1,
+    vehicle_id: "way",
+    device_time: "2026-10-01T09:00:00.000Z",
+    source: "BYDMate",
+    telemetry,
+    diplus: {},
+  },
+];
+
+test("keeps a negative pack charge current and rounds it to 0.1 A", () => {
+  const result = sanitizePayloadTelemetry(
+    chargeCurrentPayload({
+      soc: 62.4,
+      battery_voltage_v: 316,
+      charge_power_kw: 5.656,
+      charge_current_a: -17.899994,
+    }),
+    new Map(),
+  );
+
+  assert.equal(result.payloads[0].telemetry.charge_current_a, -17.9);
+  assert.equal(result.payloads[0].telemetry.charge_power_kw, 5.656);
+  assert.equal(result.droppedTelemetryFields, 0);
+});
+
+test("drops an impossible charge current without discarding the rest of the sample", () => {
+  const result = sanitizePayloadTelemetry(
+    chargeCurrentPayload({ soc: 62.4, charge_power_kw: 5.6, charge_current_a: -5000 }),
+    new Map(),
+  );
+
+  assert.equal(result.payloads[0].telemetry.charge_current_a, undefined);
+  assert.equal(result.payloads[0].telemetry.soc, 62.4);
+  assert.equal(result.payloads[0].telemetry.charge_power_kw, 5.6);
+  assert.equal(result.droppedTelemetryFields, 1);
+});
+
 test("filters persisted trip track points for legacy dirty trips", () => {
   const result = sanitizeTripTrackPoints([
     {

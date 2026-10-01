@@ -43,6 +43,22 @@ test("strips undeclared payload fields before persistence", () => {
   assert.equal("street_address" in result.payloads[0].location, false);
 });
 
+test("keeps charge_current_a and accepts null, instead of stripping the new key", () => {
+  const withCurrent = normalizePayloads({
+    ...basePayload,
+    telemetry: { ...basePayload.telemetry, charge_current_a: -17.9 },
+  });
+  assert.equal(withCurrent.success, true);
+  assert.equal(withCurrent.payloads[0].telemetry.charge_current_a, -17.9);
+
+  const withNull = normalizePayloads({
+    ...basePayload,
+    telemetry: { ...basePayload.telemetry, charge_current_a: null },
+  });
+  assert.equal(withNull.success, true);
+  assert.equal(withNull.payloads[0].telemetry.charge_current_a, null);
+});
+
 test("accepts BYDMate batch sample with null diplus", () => {
   const result = normalizePayloads({
     samples: [

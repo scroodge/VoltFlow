@@ -10,7 +10,8 @@ export type ChargingProviderType =
   | "user_provider"
   | "custom";
 
-export type ChargingSessionOrigin = "legacy" | "manual_receipt" | "telemetry_recovered";
+export type ChargingSessionOrigin =
+  "legacy" | "manual_receipt" | "telemetry_recovered";
 
 import type { PressureUnit } from "@/lib/pressure-units";
 
@@ -176,6 +177,7 @@ export type VoltflowMateTelemetry = {
   cabin_temp_c?: number | null;
   outside_temp_c?: number | null;
   battery_voltage_v?: number | null;
+  charge_current_a?: number | null;
   aux_voltage_v?: number | null;
   cell_voltage_min_v?: number | null;
   cell_voltage_max_v?: number | null;
@@ -244,7 +246,8 @@ export type VoltflowMateDiplus = {
   remote_lock_state?: string | number | null;
 };
 
-export type VehicleCommandStatus = "pending" | "sent" | "done" | "failed" | "rejected";
+export type VehicleCommandStatus =
+  "pending" | "sent" | "done" | "failed" | "rejected";
 
 export type VehicleCommandRow = {
   id: string;
@@ -322,7 +325,10 @@ export type MateAppReleaseRow = {
   created_at: string;
 };
 
-export type VoltflowMateTelemetryPointRow = Omit<VoltflowMateLiveSnapshotRow, "updated_at"> & {
+export type VoltflowMateTelemetryPointRow = Omit<
+  VoltflowMateLiveSnapshotRow,
+  "updated_at"
+> & {
   id: string;
 };
 

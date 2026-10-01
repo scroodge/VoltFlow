@@ -56,6 +56,7 @@ const numericTelemetryRules = {
   odometer_km: { min: 0, max: 2_000_000 },
   soh_percent: { min: 0, max: 100 },
   charge_power_kw: { min: 0, max: 250 },
+  charge_current_a: { min: -1000, max: 1000 },
   kwh_charged: { min: 0, max: 500 },
   range_est_km: { min: 0, max: 1000 },
   current_trip_distance_km: { min: 0, max: 2000 },
@@ -81,9 +82,12 @@ const roundingRules = {
   current_trip_distance_km: 3,
   current_trip_consumption_kwh_100km: 2,
   kwh_charged: 3,
+  charge_current_a: 1,
 } satisfies Partial<Record<keyof TelemetryPayloadData, number>>;
 
-const roundingKeys = Object.keys(roundingRules) as Array<keyof typeof roundingRules>;
+const roundingKeys = Object.keys(roundingRules) as Array<
+  keyof typeof roundingRules
+>;
 
 function finiteNumber(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -94,7 +98,10 @@ function roundTo(value: number, decimals: number) {
   return Math.round(value * factor) / factor;
 }
 
-function isWithinRule(value: number | null | undefined, rule: NumericTelemetryRule) {
+function isWithinRule(
+  value: number | null | undefined,
+  rule: NumericTelemetryRule,
+) {
   const n = finiteNumber(value);
   return n != null && n >= rule.min && n <= rule.max;
 }
@@ -112,7 +119,8 @@ function hasPlausibleSocJump(
 
   const delta = Math.abs(nextSoc - previousSoc);
   if (previousSoc <= 5 && nextSoc >= 20) return true;
-  if (elapsedMs <= MAX_SOC_FAST_JUMP_WINDOW_MS) return delta <= MAX_SOC_FAST_DELTA;
+  if (elapsedMs <= MAX_SOC_FAST_JUMP_WINDOW_MS)
+    return delta <= MAX_SOC_FAST_DELTA;
   return delta <= MAX_SOC_DAILY_DELTA;
 }
 
@@ -133,7 +141,8 @@ function hasPlausibleOdometerJump(
   if (deltaKm < -ODOMETER_JUMP_TOLERANCE_KM) return false;
 
   const elapsedHours = elapsedMs / (60 * 60 * 1000);
-  const maxDistanceKm = MAX_ODOMETER_JUMP_KM_PER_HOUR * elapsedHours + ODOMETER_JUMP_TOLERANCE_KM;
+  const maxDistanceKm =
+    MAX_ODOMETER_JUMP_KM_PER_HOUR * elapsedHours + ODOMETER_JUMP_TOLERANCE_KM;
   return deltaKm <= maxDistanceKm;
 }
 
@@ -169,7 +178,10 @@ export function sanitizeTelemetry(
   }
 
   const odometerKm = finiteNumber(sanitized.odometer_km);
-  if (odometerKm != null && !hasPlausibleOdometerJump(previous, odometerKm, deviceTimeMs)) {
+  if (
+    odometerKm != null &&
+    !hasPlausibleOdometerJump(previous, odometerKm, deviceTimeMs)
+  ) {
     delete sanitized.odometer_km;
     droppedFields += 1;
   }
@@ -183,7 +195,10 @@ function mergeAcceptedTelemetry(
 ) {
   const merged: TelemetryPayloadData = { ...previous };
   for (const [key, value] of Object.entries(next) as Array<
-    [keyof TelemetryPayloadData, TelemetryPayloadData[keyof TelemetryPayloadData]]
+    [
+      keyof TelemetryPayloadData,
+      TelemetryPayloadData[keyof TelemetryPayloadData],
+    ]
   >) {
     if (value != null) {
       merged[key] = value as never;
@@ -198,7 +213,11 @@ function mergeAcceptedTelemetry(
  * payload, but never let that invalid value reach flattened columns or raw analytics.
  */
 function sanitizeDiplusSoc(diplus: TelemetryPayload["diplus"]) {
-  if (!diplus || diplus.soc == null || isWithinRule(diplus.soc, numericTelemetryRules.soc)) {
+  if (
+    !diplus ||
+    diplus.soc == null ||
+    isWithinRule(diplus.soc, numericTelemetryRules.soc)
+  ) {
     return { diplus, droppedFields: 0 };
   }
 
@@ -215,7 +234,8 @@ function normalizeBearing(value: number | null | undefined) {
 
 function normalizeAccuracy(value: number | null | undefined) {
   const accuracy = finiteNumber(value);
-  if (accuracy == null || accuracy < 0 || accuracy > MAX_ACCEPTED_ACCURACY_M) return null;
+  if (accuracy == null || accuracy < 0 || accuracy > MAX_ACCEPTED_ACCURACY_M)
+    return null;
   return accuracy;
 }
 
@@ -227,15 +247,23 @@ export function hasPlausibleCoordinates(location: LocationPayload) {
   if (lat === 0 && lon === 0) return false;
 
   const accuracy = finiteNumber(location.accuracy_m);
-  if (accuracy != null && (accuracy < 0 || accuracy > MAX_ACCEPTED_ACCURACY_M)) return false;
-  if (accuracy != null && accuracy > MAX_LOW_CONFIDENCE_ACCURACY_M && location.bearing_deg == null) {
+  if (accuracy != null && (accuracy < 0 || accuracy > MAX_ACCEPTED_ACCURACY_M))
+    return false;
+  if (
+    accuracy != null &&
+    accuracy > MAX_LOW_CONFIDENCE_ACCURACY_M &&
+    location.bearing_deg == null
+  ) {
     return false;
   }
 
   return true;
 }
 
-function distanceKm(from: Pick<AcceptedLocation, "lat" | "lon">, to: Pick<AcceptedLocation, "lat" | "lon">) {
+function distanceKm(
+  from: Pick<AcceptedLocation, "lat" | "lon">,
+  to: Pick<AcceptedLocation, "lat" | "lon">,
+) {
   const earthRadiusKm = 6371;
   const lat1 = (from.lat * Math.PI) / 180;
   const lat2 = (to.lat * Math.PI) / 180;
@@ -248,7 +276,10 @@ function distanceKm(from: Pick<AcceptedLocation, "lat" | "lon">, to: Pick<Accept
   return 2 * earthRadiusKm * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function hasPlausibleJump(previous: AcceptedLocation | undefined, next: AcceptedLocation) {
+function hasPlausibleJump(
+  previous: AcceptedLocation | undefined,
+  next: AcceptedLocation,
+) {
   if (!previous) return true;
 
   const elapsedMs = next.deviceTimeMs - previous.deviceTimeMs;
@@ -332,7 +363,10 @@ export function sanitizePayloadLocations(
 
     if (result.accepted) {
       previousLocations.set(item.payload.vehicle_id, result.accepted);
-    } else if (item.payload.location?.lat != null || item.payload.location?.lon != null) {
+    } else if (
+      item.payload.location?.lat != null ||
+      item.payload.location?.lon != null
+    ) {
       droppedLocations += 1;
     }
 
@@ -345,7 +379,9 @@ export function sanitizePayloadLocations(
   return { payloads: sanitized, droppedLocations };
 }
 
-export function sanitizeTripTrackPoints<T extends TripTrackPointLike>(points: T[]) {
+export function sanitizeTripTrackPoints<T extends TripTrackPointLike>(
+  points: T[],
+) {
   let droppedPointCount = 0;
   let previous: AcceptedLocation | undefined;
   const sanitized: T[] = [];
@@ -376,14 +412,24 @@ export function sanitizeTripTrackPoints<T extends TripTrackPointLike>(points: T[
 }
 
 /** Keep all persisted track points for map display; only drop invalid coordinates. */
-export function filterDisplayTripTrackPoints<T extends TripTrackPointLike>(points: T[]) {
+export function filterDisplayTripTrackPoints<T extends TripTrackPointLike>(
+  points: T[],
+) {
   let droppedPointCount = 0;
   const filtered: T[] = [];
 
   for (const point of points) {
     const lat = finiteNumber(point.lat);
     const lon = finiteNumber(point.lon);
-    if (lat == null || lon == null || lat < -90 || lat > 90 || lon < -180 || lon > 180 || (lat === 0 && lon === 0)) {
+    if (
+      lat == null ||
+      lon == null ||
+      lat < -90 ||
+      lat > 90 ||
+      lon < -180 ||
+      lon > 180 ||
+      (lat === 0 && lon === 0)
+    ) {
       droppedPointCount += 1;
       continue;
     }
@@ -410,7 +456,11 @@ export function sanitizePayloadTelemetry(
   const sanitized = [...payloads];
   for (const item of ordered) {
     const previous = previousTelemetry.get(item.payload.vehicle_id);
-    const result = sanitizeTelemetry(item.payload.telemetry ?? {}, previous, item.deviceTimeMs);
+    const result = sanitizeTelemetry(
+      item.payload.telemetry ?? {},
+      previous,
+      item.deviceTimeMs,
+    );
     const diplus = sanitizeDiplusSoc(item.payload.diplus);
     droppedTelemetryFields += result.droppedFields + diplus.droppedFields;
 
@@ -442,9 +492,11 @@ export function acceptedLocationFromSnapshot(row: {
   if (!Number.isFinite(deviceTimeMs)) return null;
 
   const telemetry = telemetrySchema.safeParse(row.telemetry);
-  const speedKmh = telemetry.success && isWithinRule(telemetry.data.speed_kmh, numericTelemetryRules.speed_kmh)
-    ? telemetry.data.speed_kmh!
-    : null;
+  const speedKmh =
+    telemetry.success &&
+    isWithinRule(telemetry.data.speed_kmh, numericTelemetryRules.speed_kmh)
+      ? telemetry.data.speed_kmh!
+      : null;
 
   return {
     vehicleId: row.vehicle_id,
