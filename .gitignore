@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+/.next-telegram-demo/
 /out/
 
 # production
@@ -88,5 +89,4 @@ SKILLS.md
 /data/
 /postman/
 /research/
-
 

@@ -30,6 +30,7 @@ const env = {
   // unrelated pages loadable; any accidental SDK call is confined to loopback.
   OPENAI_API_KEY: "sk-local-demo-disabled",
   OPENAI_BASE_URL: "http://127.0.0.1:9/v1",
+  VOLTFLOW_TELEGRAM_DEMO_LOCAL: "1",
   REMOTE_COMMANDS_ENABLED: "false",
   ALLOW_DEBUG_DASHBOARD: "false",
 };
