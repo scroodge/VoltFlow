@@ -289,3 +289,31 @@ test("formatters render dash for missing values", () => {
   assert.equal(formatHeroDistanceKm(42.18), "42.2 km");
   assert.equal(formatKmPerPercent(4.2), "4.2 ");
 });
+
+test("dedupeTripsBySource collapses every telemetry/energydata pair seen on prod (2026-09-30)", () => {
+  const tel = (id, start, end) => ({ ...baseTrip, id, source: "telemetry", started_at: start, ended_at: end });
+  const byd = (id, start, end) => ({
+    ...baseTrip, id, source: "byd_energydata", started_at: start, ended_at: end,
+    soc_start: null, soc_end: null, sample_count: 0,
+  });
+  const trips = [
+    tel("t4", "2026-09-30T14:50:51.916Z", "2026-09-30T14:56:50.447Z"),
+    byd("b4", "2026-09-30T14:50:35Z", "2026-09-30T14:58:29Z"),
+    tel("t3", "2026-09-30T14:35:16.963Z", "2026-09-30T14:37:41.638Z"),
+    byd("b3", "2026-09-30T14:35:03Z", "2026-09-30T14:37:54Z"),
+    tel("t2", "2026-09-30T14:06:00.549Z", "2026-09-30T14:18:26.210Z"),
+    byd("b2", "2026-09-30T14:05:44Z", "2026-09-30T14:18:43Z"),
+    tel("t1", "2026-09-30T06:19:51.550Z", "2026-09-30T06:36:25.596Z"),
+    byd("b1", "2026-09-30T06:19:34Z", "2026-09-30T06:36:35Z"),
+  ];
+  assert.deepEqual(dedupeTripsBySource(trips).map((trip) => trip.id), ["t4", "t3", "t2", "t1"]);
+});
+
+test("every trip list fetcher dedupes twins in the shared query hook", async () => {
+  // Guard against a new fetcher returning raw rows and showing each drive twice again.
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("../../hooks/use-voltflowmate-trips-query.ts", import.meta.url), "utf8");
+  const rawReads = source.match(/\.from\("bydmate_trips"\)\s*\.select\("\*"\)/g) ?? [];
+  const dedupes = source.match(/dedupeTripsBySource\(\(?data/g) ?? [];
+  assert.equal(dedupes.length, rawReads.length);
+});

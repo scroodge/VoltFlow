@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { devFetch, isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { usePageVisible } from "@/hooks/use-page-visible";
 import { attachTripEnergy } from "@/lib/voltflowmate/attach-trip-energy";
+import { dedupeTripsBySource } from "@/lib/voltflowmate/hero-drive-metrics";
 import { createClient } from "@/lib/supabase/client";
 import { queryKeys } from "@/lib/query-keys";
 import type { VoltflowMateTripRow } from "@/types/database";
@@ -18,9 +19,14 @@ function localDateKeyFromIso(isoStr: string) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-async function fetchVoltflowMateTrips(date: string, vehicleId: string | null): Promise<VoltflowMateTripRow[]> {
+async function fetchVoltflowMateTrips(
+  date: string,
+  vehicleId: string | null,
+): Promise<VoltflowMateTripRow[]> {
   if (isDevAppRoute()) {
-    const response = await devFetch(`/api/vehicle/trips?${new URLSearchParams({ date })}`);
+    const response = await devFetch(
+      `/api/vehicle/trips?${new URLSearchParams({ date })}`,
+    );
     if (!response.ok) throw new Error("Failed to load trips");
     const payload = (await response.json()) as { trips: VoltflowMateTripRow[] };
     return payload.trips ?? [];
@@ -48,7 +54,8 @@ async function fetchVoltflowMateTrips(date: string, vehicleId: string | null): P
   return attachTripEnergy({
     supabase,
     userId: user.id,
-    trips: (data ?? []) as VoltflowMateTripRow[],
+    // One drive, one row: hide the `byd_energydata` twin of a telemetry trip here so every list agrees.
+    trips: dedupeTripsBySource((data ?? []) as VoltflowMateTripRow[]),
     vehicleId: vehicleId ?? undefined,
   });
 }
@@ -84,7 +91,7 @@ async function fetchLatestVoltflowMateTrips(
   const { data, error } = await query;
   if (error) throw error;
 
-  const trips = (data ?? []) as VoltflowMateTripRow[];
+  const trips = dedupeTripsBySource((data ?? []) as VoltflowMateTripRow[]);
   if (lite) return trips.slice(0, limit);
 
   return attachTripEnergy({
@@ -112,18 +119,25 @@ async function fetchTripMonthDates(
     startedAt = payload.startedAt ?? [];
   } else {
     const [yearText, monthText] = monthKey.split("-");
-    const lastDay = new Date(Date.UTC(Number(yearText), Number(monthText), 0)).getUTCDate();
+    const lastDay = new Date(
+      Date.UTC(Number(yearText), Number(monthText), 0),
+    ).getUTCDate();
     let query = createClient()
       .from("bydmate_trips")
       .select("started_at")
       .gte("started_at", `${monthKey}-01T00:00:00.000Z`)
-      .lte("started_at", `${monthKey}-${String(lastDay).padStart(2, "0")}T23:59:59.999Z`);
+      .lte(
+        "started_at",
+        `${monthKey}-${String(lastDay).padStart(2, "0")}T23:59:59.999Z`,
+      );
 
     if (vehicleId) query = query.eq("vehicle_id", vehicleId);
 
     const { data, error } = await query;
     if (error) throw error;
-    startedAt = ((data ?? []) as Array<{ started_at: string }>).map((row) => row.started_at);
+    startedAt = ((data ?? []) as Array<{ started_at: string }>).map(
+      (row) => row.started_at,
+    );
   }
 
   const dates = [
@@ -151,7 +165,9 @@ export function useVoltflowMateTripRealtimeInvalidation() {
         void Promise.all([
           queryClient.invalidateQueries({ queryKey: ["bydmate-trips"] }),
           queryClient.invalidateQueries({ queryKey: ["bydmate-latest-trips"] }),
-          queryClient.invalidateQueries({ queryKey: ["bydmate-trip-month-dates"] }),
+          queryClient.invalidateQueries({
+            queryKey: ["bydmate-trip-month-dates"],
+          }),
         ]);
       }, TRIP_REALTIME_DEBOUNCE_MS);
     };

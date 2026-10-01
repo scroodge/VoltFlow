@@ -9,6 +9,22 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-10-01
+
+### History → Trips no longer shows every drive twice
+
+- 765oliva567@gmail.com reported each trip duplicated with slightly different times, km and
+  `—→—%`. Each pair was a `telemetry` row (SOC, samples, track) plus its `byd_energydata`
+  twin (the car's own trip log, no SOC); 11 accounts had 1,654 twins in 30 days.
+- The 2026-08-12 stats fix deduped aggregates but left the lists raw. The shared hook
+  `src/hooks/use-voltflowmate-trips-query.ts` now applies `dedupeTripsBySource()` in both
+  fetchers (day list and latest list), so History, Dashboard and Vehicle lists agree. An
+  energydata row still shows when no telemetry trip overlaps it.
+- Prevention: a regression test with the real 2026-09-30 pairs and a guard test that fails if
+  a new raw `bydmate_trips` read in that hook skips the dedupe. No schema or data change.
+
+---
+
 ## 2026-09-30
 
 **Late-delivered charges now become history automatically.** Plan and options were in
