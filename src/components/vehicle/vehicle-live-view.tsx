@@ -986,6 +986,7 @@ function HeroMetric({
   supportingText,
   hint,
   valueCentered = false,
+  wide = false,
   explanation,
   onExplain,
 }: {
@@ -995,6 +996,8 @@ function HeroMetric({
   supportingText?: string;
   hint?: string;
   valueCentered?: boolean;
+  /** Span both columns of a two-column grid (a lone last tile, or a lead tile). */
+  wide?: boolean;
   explanation?: MetricExplanation;
   onExplain?: () => void;
 }) {
@@ -1029,7 +1032,7 @@ function HeroMetric({
   );
   const className = `w-full rounded-xl border border-border bg-white/[0.03] p-2.5 text-left ${explanation ? "relative cursor-pointer" : ""} ${
     valueCentered ? "relative min-h-[5.25rem]" : ""
-  }`;
+  } ${wide ? "col-span-2" : ""}`;
   return explanation ? (
     <button
       type="button"
@@ -1178,13 +1181,31 @@ function ChargingModeCard({
           ? "vehicle.telemetry.chargePowerToBattery"
           : "vehicle.telemetry.chargePower",
       ),
-      value: `${telemetry.charge_type ? `${telemetry.charge_type} · ` : ""}${
-        measuredPowerKw != null
-          ? `${fmt(measuredPowerKw, 2)} kW${
-              measuredCurrentA != null ? ` · ${fmt(measuredCurrentA, 1)} A` : ""
-            }`
-          : `~ ${fmt(chargeSummary?.chargePowerKw ?? telemetry.charge_power_kw, 1)} kW`
-      }`,
+      // Measured: a large reading with the charge type and amperage beside it (the tile is
+      // full width, so it stays on one line). Otherwise the approximate string, unchanged.
+      value:
+        measuredPowerKw != null ? (
+          <span className="flex flex-wrap items-baseline gap-x-2">
+            <span className="text-2xl leading-tight">
+              {fmt(measuredPowerKw, 2)} kW
+            </span>
+            <span className="text-sm font-medium text-muted-foreground">
+              {[
+                telemetry.charge_type,
+                measuredCurrentA != null
+                  ? `${fmt(measuredCurrentA, 1)} A`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
+          </span>
+        ) : (
+          `${telemetry.charge_type ? `${telemetry.charge_type} · ` : ""}~ ${fmt(
+            chargeSummary?.chargePowerKw ?? telemetry.charge_power_kw,
+            1,
+          )} kW`
+        ),
     },
     {
       key: "batteryTemp",
@@ -1208,6 +1229,12 @@ function ChargingModeCard({
   const visibleItems = items.filter(
     (item) => !isMissingMetricValue(item.value),
   );
+  // Charge power is the one live number in this card, so it leads, full width. The rest sit in
+  // a two-column grid; an odd count (cabin temp appears, or another tile is missing) would
+  // leave a tile alone on the last row, so the last one spans both columns.
+  const powerItem = visibleItems.find((item) => item.key === "chargePower");
+  const gridItems = visibleItems.filter((item) => item.key !== "chargePower");
+  const lastTileIsAlone = gridItems.length % 2 === 1;
 
   return (
     <Card className="border-cyan-300/20 bg-cyan-300/[0.06]">
@@ -1218,12 +1245,22 @@ function ChargingModeCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="grid grid-cols-2 gap-2 p-3 pt-0">
-        {visibleItems.map((item) => (
+        {powerItem ? (
+          <HeroMetric
+            key={powerItem.key}
+            icon={powerItem.icon}
+            label={powerItem.label}
+            value={powerItem.value}
+            wide
+          />
+        ) : null}
+        {gridItems.map((item, index) => (
           <HeroMetric
             key={item.key}
             icon={item.icon}
             label={item.label}
             value={item.value}
+            wide={lastTileIsAlone && index === gridItems.length - 1}
           />
         ))}
       </CardContent>

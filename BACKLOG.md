@@ -1,5 +1,78 @@
 # Backlog — proposed plans awaiting go-ahead
 
+## Charging card: make the charge-power tile the full-width top tile — BUILT 2026-10-01, not deployed
+
+### Research findings (from the user's screenshot of `/vehicle`, 390 px wide)
+
+- The "Charging" card (`ChargingModeCard`, `vehicle-live-view.tsx` ~L1212) renders `visibleItems`
+  as a `grid-cols-2` of `HeroMetric` tiles; a tile whose value is missing is dropped
+  (`isMissingMetricValue`). On the screenshot: Remaining, From charger, To battery, Cost at 100 %,
+  **Charge power**, Battery temp, Outside temp — cabin temp is hidden, so there are 7 tiles and
+  "Outside temp" sits alone on the last row.
+- **The tile I changed reads badly.** The longer label "CHARGE POWER (TO BATTERY)" wraps to two
+  lines, and `AC · 5.60 kW · 17.6 A` wraps with a lone `A` on the second line. Both come from my
+  2026-10-01 change (longer label + the amperage), in a half-width tile.
+- **It is the wrong place for the most important number.** Charge power is the only live,
+  continuously changing value in the card; Remaining, kWh and cost are estimates derived from SOC,
+  and the temperatures change slowly. It sits in row 3, beside a temperature.
+- `HeroMetric` has no width prop (`icon`, `label`, `value`, `supportingText`, `hint`,
+  `valueCentered`, `explanation`, `onExplain`), so a wide tile needs one small addition.
+
+### Options considered
+
+1. **Full width at the top of the Charging card (recommended).** The SOC and the `CHARGING` chip
+   are already in the hero card above, so power reads straight after "it is charging". Fixes both
+   wraps (one line has room), and the grid left with 6 tiles is an even 3 × 2 while cabin temp is
+   hidden.
+2. **Full width at the bottom.** Fixes the wraps but leaves the key number last and the lone
+   "Outside temp" above it. Not recommended.
+3. **Above the hero card (top of the page).** Strongest emphasis, but it splits the charging
+   information across two cards and moves the SOC hero down. More layout change than needed.
+4. **Keep the position, shorten the label and put the amperage on its own line.** Smallest change,
+   still a half-width tile in row 3.
+
+### Proposed scope (option 1)
+
+- `HeroMetric`: optional `wide` prop → `col-span-2`.
+- `ChargingModeCard`: take the `chargePower` item out of the grid and render it first with
+  `wide`; value as a large `5.60 kW` with `17.6 A · AC` as a smaller second part. Not measured:
+  unchanged `~ 5.6 kW`, label "Charge power". No change to the numbers, the labels' translation
+  keys or the other tiles.
+- **Odd tile count is part of this change, not a follow-up** (the user's point: cabin temp is
+  hidden today but appears when the car reports it). After the power tile is taken out, the
+  remaining tiles are 6 without cabin temp (even, 3 × 2) and **7 with it** — one would sit alone.
+  Rule: if the remaining count is odd, the **last tile spans both columns** (`wide`). It is a
+  general rule, so it also covers any other missing tile (e.g. no cost → 5 left), not only cabin
+  temp. With cabin temp the last tile is "Outside temp", full width, which reads fine.
+  If the charge-power tile itself is missing, nothing is taken out and the same rule applies to
+  all the tiles.
+
+### Data ownership and location
+
+No data. Layout only, no new storage.
+
+### Verification plan
+
+`tsc`, ESLint on the file, and a look at `/vehicle` at ~390 px and ~768 px, with a measured
+reading and a non-measured one, and each tile count that matters: 6 remaining (cabin temp absent),
+7 (cabin temp present), and an odd count caused by another missing tile.
+
+### Status (2026-10-01)
+
+Approved by the user ("строй"), including the odd-count rule.
+
+- **Built** (`vehicle-live-view.tsx` only): `HeroMetric` got an optional `wide` prop (`col-span-2`,
+  default off, so its other uses are unchanged). `ChargingModeCard` renders the charge-power tile
+  first and full width; measured → a large `5.60 kW` with `AC · 17.6 A` beside it, otherwise the
+  unchanged `AC · ~ 5.6 kW`. The other tiles follow in the two-column grid, and when their count
+  is odd the last one spans both columns — the rule is general (cabin temp appears, or any other
+  tile is missing), not tied to cabin temp.
+- **Verified:** `tsc` clean; ESLint 0 errors and the same 30 warnings as `HEAD`.
+- **Not verified:** nothing was rendered by me (the page needs a login), so the three cases that
+  matter — 6 remaining tiles, 7 with cabin temp, an odd count from another missing tile — and
+  the 390 px / 768 px widths have not been looked at. Reload `/vehicle` on the dev server while
+  the car is charging to see the measured case.
+
 ## Show measured charging power precisely — 2 decimals, no "≈", battery-side — BUILT 2026-10-01, not deployed
 
 ### Research findings
