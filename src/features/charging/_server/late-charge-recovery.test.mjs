@@ -18,7 +18,7 @@ const driving = (minute, soc) => ({
   telemetry: { soc, charge_power_kw: 0, speed_kmh: 40 },
 });
 const windows = [{ vehicleId: "v1", fromIso: at(-60), toIso: at(120) }];
-const closedCharge = [charging(0, 32), charging(1, 33), charging(2, 34), charging(3, 35), driving(82, 35)];
+const closedCharge = [charging(0, 32), charging(2, 33), charging(4, 34), charging(6, 35), driving(85, 35)];
 
 function ports(overrides = {}) {
   const inserted = [];
@@ -39,8 +39,8 @@ test("a late burst with a closed charge becomes one session", async () => {
   const result = await recoverLateCharges(windows, p);
   assert.equal(p.inserted.length, 1);
   assert.equal(p.inserted[0].startedAt, at(0));
-  // The car was silent for 79 min after the last charging sample: end there, not at 11:22.
-  assert.equal(p.inserted[0].stoppedAt, at(3));
+  // The car was silent for 79 min after the last charging sample: end there, not at 11:25.
+  assert.equal(p.inserted[0].stoppedAt, at(6));
   assert.deepEqual(result, { recovered: 1, sessionIds: ["s1"], errors: [] });
 });
 

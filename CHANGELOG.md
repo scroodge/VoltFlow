@@ -9,6 +9,52 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-09-30
+
+**Late-delivered charges now become history automatically.** Plan and options were in
+BACKLOG.md (moved here now that it shipped, `efa8fa1`). Cause found by read-only prod
+queries: a car that is offline or asleep keeps sampling and flushes the backlog in one burst
+when it reconnects, so every sample is older than the live auto-start window
+(`AUTO_START_WINDOW_MS`, 3 min) and the planner rightly refuses to open a session. 4 of 13
+accounts had ≥99% of their charging samples delivered >3 min late; one account lost all three
+of its September charges this way. The telemetry itself was never lost.
+
+Shipped: after each ingest batch, if any non-`live_only` sample was received >3 min after its
+`device_time`, `recoverLateChargesForBatch` re-scans that vehicle's persisted samples (12 h
+before the earliest late sample → newest sample) with the existing closed-window detector and
+inserts each closed, non-overlapping candidate as `completed` / `telemetry_recovered` through
+the shared `insertRecoveredSession` (also used by the History import; it now also refuses to
+overlap a still-open session). Best-effort — a failure is logged, never fails the request.
+The live planner and the strict start rule are untouched. The detector now ends a session at
+the last charging sample when the next reading comes after a >3 min silence (was: the distant
+next sample, e.g. a 14 h phantom duration). Its imports were made relative `.ts` so its test
+runs under the plain Node runner (it had never run since `bb24b7b`). Fresh batches cost no
+extra query.
+
+Verified end to end on prod 2026-10-01: car `way` charged with no internet, then reconnected;
+the 196 buffered samples arrived with up to 40 min lag and a `telemetry_recovered` session
+(57.1 → 61%, 1.79 kWh) was created 5 s later, one row, no errors in the deployment logs.
+Separately, at the owner's request, the 3 September charges of one affected account were
+inserted once by hand with the same detector's output (one-off SQL, not part of the code).
+
+Follow-up the same day: the first automatic insert on another account was a plug-in blip
+(6 samples, 57 s, SOC 33.2 → 33.3%). The detector now requires ≥5 min and ≥1% SOC gain for
+every candidate (History card and automatic path alike); 3 fragments of 1–3 min disappear from
+one account's candidate list, and all genuine sessions still pass. At the owner's request the
+other affected accounts were also backfilled once with the same detector: 5 sessions each for
+two accounts (10 rows, all ≥18 min and ≥4% SOC); the third account's firmware reports real
+`charge_power_kw` on ~0.3% of samples, so nothing meets the strict rule and nothing was
+inserted. The blip row itself is not yet removed (deletion needs the owner to run it).
+
+Known limits, deliberately not changed: a charge still open when the car reconnects is not
+imported (live path owns it and starts only from fresh samples, so the offline part of that
+charge is lost); only closed windows are recovered. Not done: one-off backfill for the other
+affected accounts (needs explicit go-ahead); why the sender stays silent while the car sleeps
+and whether its on-device buffer survives an app/head-unit restart (sender is not in this repo;
+its storage is not debuggable over ADB).
+
+---
+
 ## 2026-09-24
 
 **Agent tooling: cut Bash context injection.** Bash output was ~50% of injected agent

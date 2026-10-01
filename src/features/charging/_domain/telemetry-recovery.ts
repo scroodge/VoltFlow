@@ -30,6 +30,10 @@ export type TelemetryRecoveryCandidate = {
 };
 
 const MIN_SAMPLES = 4;
+// A plug-in blip (observed: 57 s, SOC +0.1%) must not become history now that late-delivered
+// charges are inserted without the owner confirming them.
+const MIN_DURATION_MS = 5 * 60_000;
+const MIN_SOC_GAIN_PERCENT = 1;
 const MAX_DURATION_MS = 24 * 60 * 60_000;
 // Match the live auto-start freshness window: retained samples separated by more
 // than this cannot safely be considered one continuous charging event.
@@ -55,7 +59,7 @@ function candidateFromRun(
   if (
     !Number.isFinite(startMs) ||
     !Number.isFinite(stoppedMs) ||
-    stoppedMs <= startMs ||
+    stoppedMs - startMs < MIN_DURATION_MS ||
     stoppedMs - startMs > MAX_DURATION_MS
   ) {
     return null;
@@ -66,7 +70,7 @@ function candidateFromRun(
   if (
     startPercent == null ||
     endPercent == null ||
-    endPercent <= startPercent ||
+    endPercent - startPercent < MIN_SOC_GAIN_PERCENT ||
     endPercent > 100
   )
     return null;

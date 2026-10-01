@@ -214,7 +214,9 @@ page may offer a **recovery candidate** for a matching car only when retained te
 closed, parked run of at least four real `charge_power_kw > 0.1` measurements with plausible,
 rising SOC, followed by an explicit non-charging sample. If the next sample arrives after more
 than the three-minute gap (car asleep/offline), the session ends at the **last charging
-sample**, never at that distant reading. Candidates found on demand are not stored until the
+sample**, never at that distant reading. A candidate must also last **at least 5 minutes**
+and gain **at least 1% SOC**: a plug-in blip (seen on prod: 57 s, +0.1%) is not history, which
+matters most for the automatic path below because nobody confirms it. Candidates found on demand are not stored until the
 owner confirms an import.
 
 **Automatic recovery of late deliveries.** A car that is offline or asleep keeps sampling and
