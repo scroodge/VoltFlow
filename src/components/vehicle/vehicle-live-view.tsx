@@ -135,6 +135,7 @@ import {
   chargingParamsFromSession,
   deriveSessionProgressFromSoc,
   energyNeededKwh,
+  gridSidePowerForEta,
   measuredChargeCurrentA,
   resolveChargingEtaPowerKw,
   resolveDisplayChargePowerKw,
@@ -1100,11 +1101,19 @@ function ChargingModeCard({
       params,
       params.targetPercent,
     ).estimatedCost;
+    // The resolver's value is grid-side, except a measured pack V × I reading, which is
+    // battery-side. Convert that one, or the `× efficiency` below applies the loss twice
+    // and the time left comes out ≈ 2 % (AC) / ≈ 11 % (DC) too long.
+    const etaGridPowerKw = gridSidePowerForEta(
+      chargePowerKw,
+      snapshotMeasuredChargePowerKw(snapshot, nowMs),
+      params.efficiencyPercent,
+    );
     const secsLeft = secondsUntilTargetSoc(
-      chargePowerKw != null
+      etaGridPowerKw != null
         ? {
             ...params,
-            chargerPowerKw: chargePowerKw * (params.efficiencyPercent / 100),
+            chargerPowerKw: etaGridPowerKw * (params.efficiencyPercent / 100),
           }
         : params,
       clampedSoc,

@@ -83,6 +83,7 @@ import {
   energyFromGridKwh,
   energyNeededKwh,
   formatDuration,
+  gridSidePowerForEta,
   resolveChargingEtaPowerKw,
   snapshotChargePowerKw,
   snapshotMeasuredChargePowerKw,
@@ -1107,6 +1108,15 @@ export function DashboardView({
             activeSession.tariff_type === "fast_dc" || liveChargeType === "DC",
         })
       : displayChargePowerKw;
+  // `dashboardChargePowerKw` is grid-side, except when it is the measured pack V × I reading,
+  // which is battery-side. The time-left maths divides energy by the efficiency itself, so
+  // that reading is converted first; otherwise the loss is applied twice and the ETA comes out
+  // ≈ 2 % (AC) / ≈ 11 % (DC) too long.
+  const dashboardEtaPowerKw = gridSidePowerForEta(
+    dashboardChargePowerKw,
+    snapshotMeasuredChargePowerKw(latestVoltflowMateSnapshot, nowMs),
+    activeSession?.efficiency_percent,
+  );
 
   const dashboardHeroDriveMetrics = useMemo(
     () =>
@@ -1252,7 +1262,7 @@ export function DashboardView({
       batteryCapacityKwh: capacityKwh,
       currentPercent: currentSoc,
       efficiencyPercent: activeSession.efficiency_percent,
-      powerKw: remainingGridEnergyKwh != null ? dashboardChargePowerKw : null,
+      powerKw: remainingGridEnergyKwh != null ? dashboardEtaPowerKw : null,
       fallbackSeconds: liveActive.remainingSeconds,
     });
 
@@ -1261,8 +1271,7 @@ export function DashboardView({
       chargedEnergyKwh: liveActive.chargedEnergyKwh,
       timeLeft: formatDuration(Math.round(timeLeftSeconds)),
       timeLeftSeconds,
-      timePowerKw:
-        remainingGridEnergyKwh != null ? dashboardChargePowerKw : null,
+      timePowerKw: remainingGridEnergyKwh != null ? dashboardEtaPowerKw : null,
       costToFull,
       packValue,
       currentSoc,
@@ -1272,7 +1281,7 @@ export function DashboardView({
     activeSession,
     currency,
     defaultPrice,
-    dashboardChargePowerKw,
+    dashboardEtaPowerKw,
     liveActive,
     locale,
   ]);

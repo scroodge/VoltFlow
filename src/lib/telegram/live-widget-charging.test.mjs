@@ -49,6 +49,56 @@ test("Telegram keeps live DC power", () => {
   assert.equal(metrics.chargePowerKw, 30);
 });
 
+// A measured pack V × I reading is battery-side. The time-to-full divides *grid* energy by the
+// power, so it must be converted first — otherwise the efficiency is counted twice.
+test("Telegram time-to-full uses a measured battery-side AC power without double efficiency", () => {
+  const metrics = resolveTelegramChargingMetrics({
+    soc: 78,
+    rawChargePowerKw: 5.656, // car `way`, AC: 316 V × 17.9 A
+    defaultChargePowerKw: 7,
+    batteryCapacityKwh: 49,
+    chargeType: "AC",
+    session: AC_SESSION,
+    nowMs: NOW,
+    measuredLivePowerKw: 5.656,
+  });
+  // Display value is the measurement itself, unchanged.
+  assert.equal(metrics.chargePowerKw, 5.656);
+  // Battery energy left ÷ battery power, exactly.
+  const expectedHours = (49 * (100 - 78)) / 100 / 5.656;
+  assert.ok(metrics.timeToFullHours != null);
+  assert.ok(Math.abs(metrics.timeToFullHours - expectedHours) < 1e-9);
+
+  // Without the measured flag the old behaviour (≈ +2 % on AC) is unchanged.
+  const legacy = resolveTelegramChargingMetrics({
+    soc: 78,
+    rawChargePowerKw: 5.656,
+    defaultChargePowerKw: 7,
+    batteryCapacityKwh: 49,
+    chargeType: "AC",
+    session: AC_SESSION,
+    nowMs: NOW,
+  });
+  assert.ok(Math.abs(legacy.timeToFullHours / expectedHours - 1 / 0.98) < 1e-9);
+});
+
+test("Telegram time-to-full corrects a measured DC power by the wider DC efficiency gap", () => {
+  const session = { ...AC_SESSION, tariff_type: "fast_dc", efficiency_percent: 90 };
+  const metrics = resolveTelegramChargingMetrics({
+    soc: 70,
+    rawChargePowerKw: 65.902,
+    defaultChargePowerKw: 7,
+    batteryCapacityKwh: 49,
+    chargeType: "DC",
+    session,
+    nowMs: NOW,
+    measuredLivePowerKw: 65.902,
+  });
+  const expectedHours = (49 * (100 - 70)) / 100 / 65.902;
+  assert.equal(metrics.chargePowerKw, 65.902);
+  assert.ok(Math.abs(metrics.timeToFullHours - expectedHours) < 1e-9);
+});
+
 test("Telegram retains raw/default behavior without an active session", () => {
   const metrics = resolveTelegramChargingMetrics({
     soc: 50,

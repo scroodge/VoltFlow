@@ -16,7 +16,9 @@ export const OBSERVED_ETA_MIN_ELAPSED_SECONDS = 15 * 60;
 export const OBSERVED_ETA_MIN_SOC_GAIN_PERCENT = 2;
 
 function positiveFinite(value: number | null | undefined): number | null {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : null;
 }
 
 /**
@@ -71,6 +73,41 @@ export function resolveChargingEtaPowerKw({
   }
 
   return livePower ?? positiveFinite(fallbackPowerKw);
+}
+
+/**
+ * Grid-side power for an ETA, from a value `resolveChargingEtaPowerKw` returned.
+ *
+ * Every ETA path assumes **grid-side** power (the charger's nominal power, or an average over
+ * the energy drawn from the grid) and converts it into battery power by `× efficiency`. A
+ * measured pack V × I reading is already **battery-side**, so passing it through unchanged
+ * applies the efficiency twice and stretches the ETA by `1 / efficiency` — ≈ +2 % on AC (98 %),
+ * ≈ +11 % on DC (90 %). This divides such a value by the efficiency first, so the existing
+ * `× efficiency` lands exactly on the measured battery power.
+ *
+ * Only a resolved value that *is* the measured reading is converted. A session average, the
+ * fallback, or an integer di+ reading is left alone — those were never battery-side. The
+ * efficiency must be a real fraction of power (0 < η ≤ 100 %); anything else leaves the value
+ * untouched rather than inventing a correction.
+ */
+export function gridSidePowerForEta(
+  resolvedPowerKw: number | null | undefined,
+  measuredBatteryPowerKw: number | null | undefined,
+  efficiencyPercent: number | null | undefined,
+): number | null {
+  const resolved = positiveFinite(resolvedPowerKw);
+  if (resolved == null) return null;
+  const measured = positiveFinite(measuredBatteryPowerKw);
+  if (measured == null || resolved !== measured) return resolved;
+  if (
+    typeof efficiencyPercent !== "number" ||
+    !Number.isFinite(efficiencyPercent) ||
+    efficiencyPercent <= 0 ||
+    efficiencyPercent > 100
+  ) {
+    return resolved;
+  }
+  return resolved / (efficiencyPercent / 100);
 }
 
 export function percentPerHour(params: ChargingParams): number {
@@ -138,13 +175,15 @@ export function chargingSecondsToFull({
   tariffType: "home" | "commercial_ac" | "fast_dc";
 }): number {
   if (tariffType !== "fast_dc") {
-    return chargingHoursFromEnergy(
-      energyFromGridKwh(
-        energyNeededKwh(batteryCapacityKwh, currentPercent, 100),
-        efficiencyPercent,
-      ),
-      powerKw,
-    ) * 3600;
+    return (
+      chargingHoursFromEnergy(
+        energyFromGridKwh(
+          energyNeededKwh(batteryCapacityKwh, currentPercent, 100),
+          efficiencyPercent,
+        ),
+        powerKw,
+      ) * 3600
+    );
   }
 
   const bands = [
@@ -220,7 +259,10 @@ export type DerivedChargingState = {
 export function deriveSessionProgressFromSoc(
   params: ChargingParams,
   soc: number,
-): Pick<DerivedChargingState, "currentPercent" | "chargedEnergyKwh" | "estimatedCost"> {
+): Pick<
+  DerivedChargingState,
+  "currentPercent" | "chargedEnergyKwh" | "estimatedCost"
+> {
   const currentPercent = Math.min(
     params.targetPercent,
     Math.max(params.startPercent, soc),
@@ -230,8 +272,14 @@ export function deriveSessionProgressFromSoc(
     params.startPercent,
     currentPercent,
   );
-  const chargedEnergyKwh = energyFromGridKwh(batteryEnergyKwh, params.efficiencyPercent);
-  const estimatedCost = costFromGridEnergy(chargedEnergyKwh, params.pricePerKwh);
+  const chargedEnergyKwh = energyFromGridKwh(
+    batteryEnergyKwh,
+    params.efficiencyPercent,
+  );
+  const estimatedCost = costFromGridEnergy(
+    chargedEnergyKwh,
+    params.pricePerKwh,
+  );
   return { currentPercent, chargedEnergyKwh, estimatedCost };
 }
 
@@ -253,10 +301,8 @@ export function deriveChargingState(
     : elapsedSeconds;
 
   const chargedEnergyKwh = (params.chargerPowerKw * activeSeconds) / 3600;
-  const estimatedCost = costPerSecond(
-    params.pricePerKwh,
-    params.chargerPowerKw,
-  ) * activeSeconds;
+  const estimatedCost =
+    costPerSecond(params.pricePerKwh, params.chargerPowerKw) * activeSeconds;
 
   const remainingPercent = Math.max(0, params.targetPercent - currentPercent);
   const remainingSeconds =
@@ -267,9 +313,7 @@ export function deriveChargingState(
     chargedEnergyKwh,
     estimatedCost,
     elapsedSeconds: activeSeconds,
-    remainingSeconds: Number.isFinite(remainingSeconds)
-      ? remainingSeconds
-      : 0,
+    remainingSeconds: Number.isFinite(remainingSeconds) ? remainingSeconds : 0,
     isComplete,
   };
 }

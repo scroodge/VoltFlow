@@ -402,6 +402,10 @@ export async function updateTelegramLiveWidgets({
     const rawChargePowerKw = finiteTelemetryNumber(
       lastSample.telemetry.charge_power_kw,
     );
+    // A measured pack V × I reading (negative charge_current_a) is shown as is, with two
+    // decimals. It is battery-side, so the time-to-full converts it to grid-side first.
+    const measuredPowerKw =
+      state === "charging" ? measuredChargePowerKw(lastSample.telemetry) : null;
     const chargingMetrics = resolveTelegramChargingMetrics({
       soc,
       rawChargePowerKw,
@@ -416,11 +420,8 @@ export async function updateTelegramLiveWidgets({
           ? (activeSessions.get(carInfo.id) ?? null)
           : null,
       nowMs,
+      measuredLivePowerKw: measuredPowerKw,
     });
-    // A measured pack V × I reading (negative charge_current_a) is shown as is, with two
-    // decimals; the ETA below still uses the resolver's value.
-    const measuredPowerKw =
-      state === "charging" ? measuredChargePowerKw(lastSample.telemetry) : null;
     const chargePowerKw = measuredPowerKw ?? chargingMetrics.chargePowerKw;
     const timeToFull =
       chargingMetrics.timeToFullHours != null

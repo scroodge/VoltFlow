@@ -74,6 +74,7 @@ import {
 import {
   deriveLiveChargingState,
   findFreshChargingSnapshot,
+  gridSidePowerForEta,
   snapshotChargePowerKw,
   snapshotMeasuredChargePowerKw,
 } from "../domain";
@@ -533,11 +534,19 @@ export function ChargingSessionScreen({
     );
 
   const chargeParams = toParams(session);
+  // `displayAcPowerKw` is grid-side, except when it is the measured pack V × I reading, which
+  // is battery-side: convert that one so the `× efficiency` below does not apply the loss twice
+  // (the ETA was ≈ 2 % (AC) / ≈ 11 % (DC) too long).
+  const etaGridPowerKw = gridSidePowerForEta(
+    displayAcPowerKw,
+    measuredLiveChargePowerKw,
+    chargeParams.efficiencyPercent,
+  );
   const projectionParams = {
     ...chargeParams,
     chargerPowerKw:
-      displayAcPowerKw > 0
-        ? displayAcPowerKw * (chargeParams.efficiencyPercent / 100)
+      etaGridPowerKw != null && etaGridPowerKw > 0
+        ? etaGridPowerKw * (chargeParams.efficiencyPercent / 100)
         : chargeParams.chargerPowerKw,
   };
   const startedAtMs = session.started_at

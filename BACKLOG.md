@@ -1,6 +1,6 @@
 # Backlog — proposed plans awaiting go-ahead
 
-## Show measured charging power precisely — 2 decimals, no "≈", battery-side — BUILT 2026-10-01 (partly), not deployed
+## Show measured charging power precisely — 2 decimals, no "≈", battery-side — BUILT 2026-10-01, not deployed
 
 ### Research findings
 
@@ -88,7 +88,7 @@ Approved by the user, who also chose: **keep one decimal and the `~` for inexact
 - **Not verified:** nothing was rendered in a browser, and the Telegram message formatting has
   no test (its module imports the `@/` alias too).
 
-## ETA applies charger efficiency to a battery-side live power — proposed 2026-10-01
+## ETA applies charger efficiency to a battery-side live power — BUILT 2026-10-01, not deployed
 
 ### Research findings (all three call sites now read)
 
@@ -145,7 +145,32 @@ No new data. Efficiency already exists per tariff (`cars.default_efficiency_perc
 Resolver unit tests; `tsc`; and on `way` during a real charge compare the displayed "time left"
 with the actual time to reach a SOC milestone, before and after, on AC and (when available) DC.
 
-### Should I build this?
+### Status (2026-10-01)
+
+Approved by the user ("да"). **Deviation from option 1:** the conversion is not inside
+`resolveChargingEtaPowerKw`. The session screen and the dashboard tile decide "measured?" by
+comparing the resolver's value with the measured reading (to show two decimals); a resolver that
+returned the grid-side equivalent would have broken that comparison and made them show a
+different, estimated number. So the resolver is unchanged and a new pure function,
+`gridSidePowerForEta(resolved, measured, efficiency)` in `charging-math.ts`, converts only at
+the four places that turn power into a time.
+
+- **Built:** `gridSidePowerForEta` — divides the resolved value by the efficiency only when it
+  *is* the measured battery-side reading; leaves a session average, the fallback and an integer
+  di+ reading alone; leaves the value untouched for an unusable efficiency (≤ 0 or > 100 %).
+  Wired into the live view ETA, the session screen projection, the dashboard
+  (`dashboardEtaPowerKw` feeds `activeChargingTimeLeftSeconds` and `timePowerKw`, which
+  `explainActiveChargeTime` also uses) and the Telegram time-to-full
+  (`measuredLivePowerKw` on `resolveTelegramChargingMetrics`). The displayed power is unchanged.
+- **Verified:** 4 new `charging-math` tests (including the real numbers: 5.656 kW into the
+  battery, 22 % left → the old ETA was exactly 1/0.98 ≈ +2.04 % long, the new one equals the
+  truth) and 2 new Telegram tests (AC 98 %, DC 90 %); `tsc` clean; full suite 555/558 — the
+  same three failures as before, none from this work. ESLint: no new problems.
+- **Not verified:** nothing rendered in a browser, and no real charge compared against the
+  displayed time. The DC correction (≈ +11 %) rests on the configured DC efficiency (90 %), which
+  was measured earlier but is not re-measured here. The Telegram no-session branch divides
+  battery energy by `rawChargePowerKw` with no efficiency at all; that was already so and is
+  left alone.
 
 ## Recover missed telemetry charges after delayed car setup or delivery — proposed 2026-09-30
 

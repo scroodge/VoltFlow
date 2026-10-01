@@ -4,7 +4,9 @@ import assert from "node:assert/strict";
 import {
   energyFromGridKwh,
   energyNeededKwh,
+  gridSidePowerForEta,
   resolveChargingEtaPowerKw,
+  secondsUntilTargetSoc,
 } from "./charging-math.ts";
 
 test("keeps battery gain distinct from grid energy", () => {
@@ -14,6 +16,67 @@ test("keeps battery gain distinct from grid energy", () => {
   assert.ok(Math.abs(batteryGainKwh - 41.943) < 1e-9);
   assert.ok(Math.abs(gridEnergyKwh - 45.59) < 1e-9);
   assert.ok(gridEnergyKwh > 45.1);
+});
+
+// ETA paths treat the resolved power as grid-side and multiply by efficiency. A measured pack
+// V × I reading is battery-side, so it is divided by the efficiency first (car `way`, AC,
+// 2026-10-01: 316 V × 17.9 A = 5.656 kW into the battery).
+test("a measured battery-side power is converted so × efficiency lands back on it", () => {
+  const ac = gridSidePowerForEta(5.656, 5.656, 98);
+  assert.ok(Math.abs(ac - 5.656 / 0.98) < 1e-12);
+  assert.ok(Math.abs(ac * 0.98 - 5.656) < 1e-12);
+
+  // DC: the efficiency gap is wider (≈ 90 %), so is the correction.
+  const dc = gridSidePowerForEta(65.902, 65.902, 90);
+  assert.ok(Math.abs(dc * 0.9 - 65.902) < 1e-12);
+});
+
+test("values that were never battery-side are left alone", () => {
+  // A session average or the fallback differs from the measured reading: untouched.
+  assert.equal(gridSidePowerForEta(5.8, 5.656, 98), 5.8);
+  // No measurement at all (di+ 1.x integer reading, stale snapshot): untouched.
+  assert.equal(gridSidePowerForEta(5, null, 98), 5);
+  assert.equal(gridSidePowerForEta(5, undefined, 98), 5);
+  // Nothing resolved: still nothing.
+  assert.equal(gridSidePowerForEta(null, 5.656, 98), null);
+  assert.equal(gridSidePowerForEta(0, 0, 98), null);
+});
+
+test("an unusable efficiency never invents a correction", () => {
+  for (const eff of [0, -5, 101, Number.NaN, null, undefined]) {
+    assert.equal(gridSidePowerForEta(5.656, 5.656, eff), 5.656);
+  }
+  // 100 % efficiency is a valid (lossless) case: nothing to convert.
+  assert.equal(gridSidePowerForEta(5.656, 5.656, 100), 5.656);
+});
+
+test("ETA on real numbers: measured power no longer counts the efficiency twice", () => {
+  const capacityKwh = 45.77;
+  const efficiency = 98;
+  const measuredBatteryKw = 5.656;
+  const base = {
+    startPercent: 78,
+    targetPercent: 100,
+    batteryCapacityKwh: capacityKwh,
+    efficiencyPercent: efficiency,
+    pricePerKwh: 0.2,
+  };
+  const truth = ((capacityKwh * 22) / 100 / measuredBatteryKw) * 3600; // seconds, 78 → 100 %
+
+  // Before: the measured battery-side value was multiplied by the efficiency again.
+  const before = secondsUntilTargetSoc(
+    { ...base, chargerPowerKw: measuredBatteryKw * (efficiency / 100) },
+    78,
+  );
+  // After: converted to grid-side first, so the same × efficiency lands on the measurement.
+  const gridKw = gridSidePowerForEta(measuredBatteryKw, measuredBatteryKw, efficiency);
+  const after = secondsUntilTargetSoc(
+    { ...base, chargerPowerKw: gridKw * (efficiency / 100) },
+    78,
+  );
+
+  assert.ok(Math.abs(after - truth) < 1e-6);
+  assert.ok(Math.abs(before / truth - 1 / 0.98) < 1e-9); // the old ETA was ≈ 2 % long
 });
 
 test("fresh live power wins over the whole-session average during DC taper", () => {
