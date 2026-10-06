@@ -298,7 +298,9 @@ async function sendOrEditWidget(
       await touchUpdatedAt(supabase, userId, vehicleId);
       return true;
     }
-    return false;
+    // The tracked message may have been deleted client-side (cleared chat
+    // history). Recreate the widget instead of editing a ghost every ingest.
+    if (!/not found|isn't accessible/i.test(result.error)) return false;
   }
 
   const result = await sendTelegramMessage(chatId ?? 0, html, {

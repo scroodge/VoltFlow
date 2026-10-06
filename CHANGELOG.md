@@ -32,6 +32,17 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 - Open: webhook samples still feed the hourly rollup alongside Mate's blocks, so `way`'s hourly
   energy may be double-counted since 2026-09-29 — not yet checked.
 
+### Telegram live widget recreates itself after the user deletes the message
+
+- Problem: clearing the bot chat history leaves the `telegram_live_messages` row pointing at a
+  deleted `message_id`; every ingest tried `editMessageText` on the ghost message and silently
+  failed, so the widget never came back (`live-widget.ts` `sendOrEditWidget`).
+- Fix: when the edit fails with "message to edit not found" / "message isn't accessible", fall
+  through to the send-new-message path, which upserts the row with the fresh `message_id`.
+  Other edit failures (blocked bot, transient errors) still return false.
+- Verified: `telegram-live-widget-message` + `live-widget-charging` tests, 15/15 pass. Takes
+  effect on deploy; the next accepted telemetry for that user+vehicle then recreates the widget.
+
 ---
 
 ## 2026-10-01
