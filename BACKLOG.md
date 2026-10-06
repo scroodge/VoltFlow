@@ -1,5 +1,109 @@
 # Backlog — proposed plans awaiting go-ahead
 
+## Range prediction ledger: grade the car's km estimate against the next discharge cycle — PROPOSED 2026-10-06
+
+> **Status 2026-10-06: Phase 1 BUILT, not deployed.** Migration
+> `20261006180000_charge_end_range_snapshot.sql` (columns + extended capture RPC + bounded
+> backfill), `src/lib/voltflowmate/range-prediction-capture.ts` (+ tests), docs updated;
+> `npm run test` green apart from 3 pre-existing failures, `tsc --noEmit` clean, estimator
+> ban tests still pass. The migration is NOT yet applied to the self-hosted prod DB (prod
+> op, needs explicit go-ahead). Deviation: the three new columns are deliberately **not**
+> mirrored into `ChargingSessionRow`/the client `SESSION_COLUMNS` SELECT lists — no client
+> consumer exists, and those lists are column-minimal for the 1 Hz poll; Phase 2 grading
+> reads them server-side, Phase 3 UI will read the observations table.
+
+### Research findings
+
+- A "cycle" = charge session N ends → charge session N+1 starts. Each cycle is a natural
+  experiment: the car promised a range at end of charge; driving either kept or broke it.
+- The car's promise already arrives in telemetry: `telemetry.range_est_km`
+  (`src/types/database.ts:196`, sanitized 0–1000 in `src/lib/voltflowmate/telemetry-sanitizer.ts:61`,
+  rounded in `bydmate_ingest_telemetry` per `20260617130000`). It is **never persisted to a
+  column and never displayed** — only the raw jsonb samples keep it.
+- The APK-range ban is scoped (verified in `src/lib/voltflowmate/range-estimate.test.mjs`):
+  it forbids `range_est_km` inside the *estimator dependency graph* and four hard-coded
+  user-visible modules (`range-estimate.ts`, `telegram/live-widget.ts`,
+  `telegram/live-widget-message.ts`, `push/live-status-notifications.ts`). A new grading module
+  that reads it for a *historical accuracy report* is outside that list — but the docs and the
+  test file should state the exemption explicitly so future edits don't "helpfully" wire the
+  car's number into the live estimate.
+- Session-close hook exists: every close path (auto, manual stop/complete, reconcile, recovery)
+  already calls `captureSessionEndDelta` (`src/lib/voltflowmate/charge-end-delta.ts`, SQL
+  `bydmate_capture_session_end_delta` per `20260717130000`), which derives peak SOC from
+  in-window `bydmate_telemetry_samples` and updates the session row. The end-of-charge range
+  snapshot should ride the same call — one hook, all close paths covered.
+- Actuals are available: `telemetry.odometer_km` (used by `src/lib/voltflowmate/trip-distance.ts`)
+  for distance, session `start_percent` for SOC, and per-cycle context (outside temp, speed,
+  AC state) inside `bydmate_telemetry_samples.telemetry`.
+- Architectural template: `src/lib/charging-efficiency-learning.ts` +
+  `charging_efficiency_observations` (`20260720120000`) — measured-vs-expected stored as
+  Postgres observations, graded at a later event, surfaced as suggestions.
+- Analytics UI conventions: card stack in `src/components/vehicle/vehicle-analytics-panels.tsx`,
+  data via `/api/vehicle/analytics?type=…` branch (`src/app/api/vehicle/analytics/route.ts`),
+  hand-rolled SVG charts, TanStack Query hooks, `resolveAnalyticsPanelState`, i18n en/be/ru in
+  `src/lib/i18n.ts`. New `charging_sessions` columns must be added to the SELECT lists in
+  `src/hooks/use-sessions-query.ts` and `src/components/dashboard/dashboard-bootstrap.ts`.
+
+### Options considered
+
+1. **Observation ledger, graded at next session close (recommended).** Snapshot the promise at
+   charge end onto the session row; when the *next* session closes, pair the cycles, measure
+   reality (odometer delta ÷ SOC consumed since last charge), and write one
+   `range_prediction_observations` row with error % + condition deltas ("what went wrong").
+   Auditable history, cheap analytics reads, matches the efficiency-observations precedent,
+   and the learned bias can later feed a corrected AI Range without touching the banned graph.
+   Downside: two migrations + a grading job on a hot close path (must be defensive/skippable).
+2. Compute on the fly in the analytics API from raw telemetry, no new tables. No schema
+   surface, but every panel load re-scans two sessions' worth of jsonb samples, results aren't
+   auditable, and attribution logic can't be backtested against stored history. Rejected for
+   cost + the repo's own observation pattern.
+3. Client-side (localStorage) ledger. Violates the data-ownership default for telemetry-derived
+   data (Postgres, app-owned); rejected.
+
+### Proposed scope (option 1)
+
+Phase 1 — capture the promise (ships first, starts accumulating data):
+- Migration: `ALTER TABLE charging_sessions ADD COLUMN IF NOT EXISTS end_range_est_km numeric,
+  end_range_soc numeric, end_voltflow_est_km numeric` (Voltflow's own `estimateVehicleRangeKm`
+  output at the same instant, so both models get graded).
+- Extend the `bydmate_capture_session_end_delta` SQL (or a sibling function called from the same
+  wrapper) to pick `range_est_km` + SOC from the last fresh in-window sample, plus compute
+  `end_voltflow_est_km` server-side at close time.
+- TS mirror `src/types/database.ts` + both session SELECT lists.
+
+Phase 2 — grade reality at next close:
+- New `src/lib/voltflowmate/range-prediction-grading.ts` (pure core + `.test.mjs`): find the
+  previous completed session for the same vehicle; actual km per % SOC =
+  `odometer_delta / (prev.end_soc − cur.start_percent)`; compare with the promise
+  (`end_range_est_km / end_soc` km-per-% extrapolated to 0%); skip rules for dirty cycles
+  (no prev session, stale telemetry, odometer regression, distance < ~2 km, manual sessions
+  without telemetry).
+- Migration: `range_prediction_observations` (vehicle-scoped, RLS like other bydmate tables;
+  predicted/actual km-per-%, error_pct, condition snapshot: avg temp, avg speed, AC-minutes,
+  phantom-drain km lost while parked, `grade_status`). Call grading from the same close paths
+  after capture; fire-and-forget-safe like `captureSessionEndDelta`.
+- New public `bydmate_*` function: `IF NOT EXISTS` idempotent, explicit revoke/grant per AGENTS.md.
+
+Phase 3 — surface it:
+- `/api/vehicle/analytics?type=range-prediction` returning per-cycle predicted-vs-actual +
+  aggregate bias by temperature band.
+- "Range prediction accuracy" card in the Analytics tab (`vehicle-analytics-panels.tsx`):
+  stat cards (`AnalyticsStat`) + per-cycle bar-pair chart (hand-rolled SVG,
+  `useAnalyticsBarCharts` pattern), worst-factor list from the stored condition deltas.
+  Keep it as a card in the existing `?tab=analytics` — no new HistoryTab until there's
+  enough data to warrant a full tab.
+- i18n en/be/ru; docs: `docs/DATABASE_SCHEMA.md`, a section in `docs/CHARGING_SESSIONS.md`
+  (capture hook), and a note in `docs/TRIPS.md` if odometer rules are reused. Update
+  `range-estimate.test.mjs` with a comment/test pinning the *grading* module's exemption so
+  the ban and the new read site are both explicit.
+
+### Data ownership note
+
+All inputs are telemetry-derived and multi-device: **Postgres, app-owned** observations
+(same decision as `charging_efficiency_observations`), RLS by `user_id`/vehicle, nothing in
+localStorage. The car's raw number is stored only as a historical prediction artifact being
+graded — it never enters the live user-visible estimate (ban preserved).
+
 ## Telegram live widget: inline Show/Hide buttons + /start recovery — PROPOSED 2026-10-06
 
 ### Research findings

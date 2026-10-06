@@ -25,7 +25,11 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 - Fix: `src/lib/voltflowmate/offline-buffer.ts` grants 4 GiB (the client's own ceiling; the
   client still clamps to device storage and persists the grant, so an offline car keeps the
   last value). Carried on both channels, like `live_fast_seconds`: the telemetry ingest
-  success response and all three command-poll responses. Test: `offline-buffer.test.mjs`.
+  success response and the command poll. On prod remote commands are off, so the poll is the
+  static `public/bydmate-commands-disabled.json` (rewrite in `next.config.ts`; the route
+  handler never runs, and the CDN answers 200 even without credentials) — the grant is baked
+  into that file too. Found on the first prod check: the route edit alone was inert there.
+  Test: `offline-buffer.test.mjs` (also asserts the static file matches the constant).
 - Effect starts at each car's first successful contact after deploy. Data already evicted
   on the car before then is not recoverable; the two lost sessions were not reconstructable
   from telemetry.

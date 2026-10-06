@@ -142,6 +142,9 @@ One row per charge event, live-updated during charging.
 | `end_max_cell_delta_v` | numeric | Maximum cell-voltage delta measured near the session's peak charging SOC (single sample, noise-sensitive) |
 | `end_delta_soc` | numeric | SOC at which `end_max_cell_delta_v` was measured |
 | `end_median_cell_delta_v` | numeric | Median cell-voltage delta over the same top-of-charge window (`20260914120000`) — noise-robust companion to `end_max_cell_delta_v`, the value Battery Consistency trends against. Null until a session closes under this definition; no backfill for older sessions |
+| `end_range_est_km` | numeric | Car-reported range (km) on the last charging sample of the session (`20261006180000`) — a historical prediction artifact for range-accuracy grading; never feeds the live user-visible estimate (`range-estimate.test.mjs` ban intact) |
+| `end_range_soc` | numeric | SOC at which `end_range_est_km` was reported; the km-per-% anchor shared by both predictions |
+| `end_voltflow_est_km` | numeric | Voltflow model estimate (km) at the same anchor SOC, captured at close by `src/lib/voltflowmate/range-prediction-capture.ts` (the estimator lives in TS and is not re-implemented in SQL) |
 | `started_at` | timestamptz | |
 | `stopped_at` | timestamptz | |
 | `created_at` | timestamptz | |

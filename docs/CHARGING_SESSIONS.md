@@ -240,6 +240,26 @@ for normal reconciliation. `recovery_key` makes the import idempotent, while the
 guard prevents a duplicate with an existing session. The feature does not relax the live
 three-minute auto-start rule.
 
+## End-of-charge range promise capture
+
+The same close hook also freezes the *range predictions* made at the top of a charge, so the
+next discharge cycle can be graded against them ("how true was the forecast, what went wrong"
+— phase 2). Raw samples are pruned (30 d free / 365 d premium), so the promise must be
+captured at close or it is lost (migration `20261006180000`):
+
+| Column | Written by | Meaning |
+| --- | --- | --- |
+| `end_range_est_km` | `bydmate_capture_session_end_delta()` (SQL) | The car's own `telemetry.range_est_km` on the last in-window charging sample that also carries SOC. |
+| `end_range_soc` | same RPC | The SOC that prediction belonged to — the km-per-% anchor. |
+| `end_voltflow_est_km` | `captureSessionEndVoltflowEstimate()` (TS, after the RPC) | Voltflow's `estimateRangeFromSoc()` at the same anchor SOC, read like the live display does (latest deduped drive, per-car capacity and reserve). |
+
+All three are **historical prediction artifacts**. The car's `range_est_km` must never enter
+the live user-visible estimate: the dependency-graph ban in
+`src/lib/voltflowmate/range-estimate.test.mjs` stays in force, and these columns are only
+ever read forward, at grading time. A capture failure never blocks session close; sessions
+closed before the migration keep nulls (a bounded backfill fills rows whose samples are
+still inside retention).
+
 ## Battery Consistency diagnostics
 
 `bydmate_capture_session_end_delta()` runs at every session-close path (manual stop, atomic

@@ -73,7 +73,10 @@ them on reconnect. Until a server response carries `offline_buffer_cap_bytes`, t
 a legacy 1000-row guard that silently deletes the oldest rows, so a long outage loses data.
 The telemetry success response and every command-poll response therefore carry
 `offline_buffer_cap_bytes` (4 GiB, `src/lib/voltflowmate/offline-buffer.ts`); the client clamps
-it to its device storage limit and persists it. Never remove the field: a car that stops
+it to its device storage limit and persists it. While remote commands are disabled the poll is
+served by the static `public/bydmate-commands-disabled.json` (a `next.config.ts` rewrite — the
+route handler never runs), so that file carries the same literal value; a test keeps the two in
+sync. Never remove the field: a car that stops
 receiving it falls back to the 1000-row guard only if its persisted grant is lost.
 
 When someone is actively watching a vehicle in VoltFlow, the command-poll response may grant a
