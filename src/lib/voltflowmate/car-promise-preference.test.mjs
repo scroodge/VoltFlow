@@ -25,10 +25,10 @@ const throwingStorage = {
   },
 };
 
-test("defaults to ON when nothing is stored or the value is unknown", () => {
-  assert.equal(parseCarPromiseEnabled(null), true);
-  assert.equal(parseCarPromiseEnabled(undefined), true);
-  assert.equal(parseCarPromiseEnabled("garbage"), true);
+test("defaults to OFF when nothing is stored or the value is unknown", () => {
+  assert.equal(parseCarPromiseEnabled(null), false);
+  assert.equal(parseCarPromiseEnabled(undefined), false);
+  assert.equal(parseCarPromiseEnabled("garbage"), false);
 });
 
 test("honours an explicit stored choice", () => {
@@ -46,8 +46,8 @@ test("write then read round-trips through storage", () => {
 });
 
 test("missing or throwing storage falls back to the default without throwing", () => {
-  assert.equal(readCarPromiseEnabled(null), true);
-  assert.equal(readCarPromiseEnabled(throwingStorage), true);
+  assert.equal(readCarPromiseEnabled(null), false);
+  assert.equal(readCarPromiseEnabled(throwingStorage), false);
   assert.equal(writeCarPromiseEnabled(null, false), false);
   assert.equal(writeCarPromiseEnabled(throwingStorage, false), false);
 });

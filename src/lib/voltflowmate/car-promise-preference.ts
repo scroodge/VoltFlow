@@ -1,12 +1,13 @@
 /**
  * Per-device preference: show the trust-corrected car range promise (phase 4c).
  *
- * User-owned display preference → client-side localStorage, never Postgres. Default ON so the
- * correction stays discoverable; storage can be missing or throw (private window, blocked
- * site data), so every access is guarded and falls back to the default.
+ * User-owned display preference → client-side localStorage, never Postgres. Default OFF: the
+ * correction is opt-in, so the headline range stays the model value until the user turns it
+ * on. Storage can be missing or throw (private window, blocked site data), so every access
+ * is guarded and falls back to the default.
  */
 export const CAR_PROMISE_STORAGE_KEY = "voltflow.carPromise.enabled";
-export const CAR_PROMISE_DEFAULT_ENABLED = true;
+export const CAR_PROMISE_DEFAULT_ENABLED = false;
 
 type StorageLike = Pick<Storage, "getItem" | "setItem">;
 

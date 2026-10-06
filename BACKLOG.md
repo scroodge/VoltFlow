@@ -97,7 +97,7 @@ remains pending, is retried by the detector, and can be picked up later by the d
 
 ### Proposed scope (option A)
 
-- New pure helper for the preference (key, default ON, safe read/write with try/catch) + test.
+- New pure helper for the preference (key, default OFF, safe read/write with try/catch) + test.
 - `useRangeTrustQuery` wired into the dashboard range card; corrected line shown only when
   `trust` is non-null and the car's `range_est_km` is plausible (reuse `correctCarPromise`).
 - Switch row inside `MetricExplainerSheet` for the range metrics; hidden when `trust` is null (never
@@ -117,7 +117,7 @@ remains pending, is retried by the detector, and can be picked up later by the d
 
 ### Open questions
 
-- Default ON (recommended, keeps the feature discoverable) or OFF?
+- Default: decided OFF (opt-in) by the user on 2026-10-06.
 - One shared switch for dashboard + `/vehicle` (recommended) or separate?
 
 ### Verification plan

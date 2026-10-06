@@ -20,7 +20,7 @@ and also controls the `/vehicle` chip. The block sits directly under the sheet h
 The switch is hidden when there is no trust factor or no plausible `range_est_km`. The
 chip was invisible for the whole charge (the hero grid is skipped while charging and
 `RestMetricsCard` had no entry); it is now in `RestMetricsCard` too. Preference is
-user-owned, client-side `localStorage` (`voltflow.carPromise.enabled`, default ON, no
+user-owned, client-side `localStorage` (`voltflow.carPromise.enabled`, default OFF (opt-in), no
 migration); trust factor stays app-owned and server-computed. New:
 `car-promise-preference.ts` (+4 tests), `use-car-promise-enabled.ts`; en/be/ru strings.
 The AI model computation is unchanged (only which number is displayed switches);
