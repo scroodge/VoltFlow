@@ -50,6 +50,8 @@ export type Car = {
   /** AC efficiency — home and commercial. Fast DC uses fast_dc_efficiency_percent. */
   default_efficiency_percent: number;
   fast_dc_efficiency_percent: number;
+  /** Range is estimated down to this SOC instead of 0%. 5%-step value, 0 = drain to empty. */
+  range_reserve_soc_percent: number;
   home_charger_lat?: number | null;
   home_charger_lon?: number | null;
   home_charger_radius_m?: number | null;

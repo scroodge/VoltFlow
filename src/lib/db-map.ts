@@ -53,6 +53,7 @@ export function mapCar(raw: Record<string, unknown>): Car {
       raw.fast_dc_efficiency_percent,
       DEFAULT_FAST_DC_EFFICIENCY_PERCENT,
     ),
+    range_reserve_soc_percent: num(raw.range_reserve_soc_percent, 0),
     home_charger_lat: raw.home_charger_lat != null ? num(raw.home_charger_lat) : null,
     home_charger_lon: raw.home_charger_lon != null ? num(raw.home_charger_lon) : null,
     home_charger_radius_m: raw.home_charger_radius_m != null ? num(raw.home_charger_radius_m, 150) : null,

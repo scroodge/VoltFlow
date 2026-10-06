@@ -73,7 +73,14 @@ function userMedianConsumption(trips: VoltflowMateTripRow[]): number {
 
 export type VehicleRangeEstimateOptions = {
   batteryCapacityKwh?: number | null;
+  /** Reserve SOC in percent (5%-step, 0-40). Energy below it is excluded from the estimate. */
+  reserveSocPercent?: number | null;
 };
+
+function validReserveSoc(value: number | null | undefined): number {
+  const reserve = validNumber(value);
+  return reserve != null ? clamp(reserve, 0, 100) : 0;
+}
 
 export function estimateVehicleRangeKm(
   snapshot: RangeEstimateSnapshot,
@@ -91,7 +98,8 @@ export function estimateVehicleRangeKm(
   if (usableBatteryKwh == null || usableBatteryKwh <= 0) {
     return { estimatedRangeKm: null, consumptionKwh100Km: null };
   }
-  const usableEnergyKwh = usableBatteryKwh * (clamp(soc, 0, 100) / 100);
+  const usableEnergyKwh =
+    usableBatteryKwh * (Math.max(0, clamp(soc, 0, 100) - validReserveSoc(options.reserveSocPercent)) / 100);
   const consumptionKwh100Km = estimateConsumptionKwh100Km(snapshot, recentTrips);
 
   if (consumptionKwh100Km == null || consumptionKwh100Km <= 0) {
@@ -108,10 +116,12 @@ export function estimateRangeFromSoc({
   soc,
   batteryCapacityKwh,
   recentTrips,
+  reserveSocPercent,
 }: {
   soc: number | null | undefined;
   batteryCapacityKwh?: number | null;
   recentTrips: VoltflowMateTripRow[];
+  reserveSocPercent?: number | null;
 }): RangeEstimate {
   const validSoc = validNumber(soc);
   if (validSoc == null) return { estimatedRangeKm: null, consumptionKwh100Km: null };
@@ -135,7 +145,9 @@ export function estimateRangeFromSoc({
   if (usableBatteryKwh == null) {
     return { estimatedRangeKm: null, consumptionKwh100Km: null };
   }
-  const usableEnergyKwh = usableBatteryKwh * (clamp(validSoc, 0, 100) / 100);
+  const usableEnergyKwh =
+    usableBatteryKwh *
+    (Math.max(0, clamp(validSoc, 0, 100) - validReserveSoc(reserveSocPercent)) / 100);
 
   return {
     estimatedRangeKm: (usableEnergyKwh / consumptionKwh100Km) * 100,

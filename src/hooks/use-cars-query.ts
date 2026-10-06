@@ -95,6 +95,7 @@ export function useCreateCarMutation() {
           Number(formData.get("default_efficiency_percent")) || DEFAULT_AC_EFFICIENCY_PERCENT,
         fast_dc_efficiency_percent:
           Number(formData.get("fast_dc_efficiency_percent")) || DEFAULT_FAST_DC_EFFICIENCY_PERCENT,
+        range_reserve_soc_percent: 0,
         created_at: new Date().toISOString(),
       };
 

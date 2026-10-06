@@ -410,6 +410,7 @@ function VehicleLiveContent({
   remoteCommandsEnabled?: boolean;
 }) {
   const { data: carsData } = useCarsQuery();
+  const { t } = useTranslation();
   const selectedCarId = useAppPreferences((state) => state.selectedCarId);
   const matchedCar = useMemo(() => {
     const cars = carsData?.cars;
@@ -423,6 +424,7 @@ function VehicleLiveContent({
   }, [carsData?.cars, selectedCarId, snapshot.vehicle_id]);
   const vehicleLabel = matchedCar?.name ?? snapshot.vehicle_id;
   const batteryCapacityKwh = matchedCar?.battery_capacity_kwh ?? null;
+  const reserveSocPercent = matchedCar?.range_reserve_soc_percent ?? 0;
   const vehicleMode = deriveDashboardVehicleMode({
     snapshot,
     nowMs,
@@ -522,6 +524,7 @@ function VehicleLiveContent({
     baseSnapshot: rangeBaseSnapshot,
     scopedVehicleId,
     batteryCapacityKwh,
+    reserveSocPercent,
     // Same rolling ~50 km trip window Math Distance uses (heroDriveMetrics.rangeEstimateTrips),
     // instead of a separate single-latest-trip fetch — keeps AI Distance from being anchored
     // to whichever one trip happened to run last (see CHANGELOG "AI Distance: share the
@@ -531,15 +534,25 @@ function VehicleLiveContent({
   });
   const rangeLabel =
     rangeEstimate.estimatedRangeKm != null
-      ? `≈ ${fmt(rangeEstimate.estimatedRangeKm, 0)} km`
+      ? `≈ ${fmt(rangeEstimate.estimatedRangeKm, 0)} km${
+          reserveSocPercent > 0
+            ? ` ${String(t("dashboard.rangeReserveSuffix", { soc: reserveSocPercent }))}`
+            : ""
+        }`
       : "—";
   const soc = snapshot.telemetry.soc;
   const mathRangeKm: number | null =
     typeof soc === "number" && heroDriveMetrics.kmPerPercentSoc != null
-      ? heroDriveMetrics.kmPerPercentSoc * soc
+      ? heroDriveMetrics.kmPerPercentSoc * Math.max(0, soc - reserveSocPercent)
       : null;
   const mathRangeLabel =
-    mathRangeKm != null ? `≈ ${fmt(mathRangeKm, 0)} km` : "—";
+    mathRangeKm != null
+      ? `≈ ${fmt(mathRangeKm, 0)} km${
+          reserveSocPercent > 0
+            ? ` ${String(t("dashboard.rangeReserveSuffix", { soc: reserveSocPercent }))}`
+            : ""
+        }`
+      : "—";
   const parkedAvgConsumptionKwh100 = useMemo(
     () => weightedAvgConsumptionKwh100(heroDriveMetrics.rangeEstimateTrips),
     [heroDriveMetrics.rangeEstimateTrips],
@@ -574,6 +587,7 @@ function VehicleLiveContent({
         heroDriveMetrics={heroDriveMetrics}
         rangeEstimate={rangeEstimate}
         batteryCapacityKwh={batteryCapacityKwh}
+        reserveSocPercent={reserveSocPercent}
         tripWindow={fixtureTrips ?? heroDriveMetrics.rangeEstimateTrips}
         allTrips={fixtureTrips ?? recentTrips}
         lastSession={findLastFinishedChargeSession(
@@ -725,6 +739,7 @@ function Hero({
   heroDriveMetrics,
   rangeEstimate,
   batteryCapacityKwh,
+  reserveSocPercent,
   tripWindow,
   allTrips,
   lastSession,
@@ -747,6 +762,7 @@ function Hero({
     consumptionKwh100Km: number | null;
   };
   batteryCapacityKwh: number | null;
+  reserveSocPercent: number;
   tripWindow: VoltflowMateTripRow[];
   allTrips: VoltflowMateTripRow[];
   lastSession: ChargingSessionRow | null;
@@ -765,6 +781,7 @@ function Hero({
         snapshot,
         recentTrips: tripWindow,
         batteryCapacityKwh,
+        reserveSocPercent,
         estimate: rangeEstimate,
       }),
       mathRange: explainMathRange({
@@ -772,6 +789,7 @@ function Hero({
         kmPerPercentSoc: heroDriveMetrics.kmPerPercentSoc,
         trips: tripWindow,
         batteryCapacityKwh,
+        reserveSocPercent,
         sourceAt: snapshot.received_at,
       }),
       kmPerPercent: explainKmPerPercent({
@@ -801,6 +819,7 @@ function Hero({
     snapshot,
     tripWindow,
     batteryCapacityKwh,
+    reserveSocPercent,
     rangeEstimate,
     heroDriveMetrics.kmPerPercentSoc,
     dedupedTrips,

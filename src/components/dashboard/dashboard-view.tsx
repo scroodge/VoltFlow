@@ -1144,14 +1144,20 @@ export function DashboardView({
       : baseVoltflowMateSnapshot,
     scopedVehicleId,
     batteryCapacityKwh: selectedCar?.battery_capacity_kwh,
+    reserveSocPercent: selectedCar?.range_reserve_soc_percent ?? 0,
     fallbackSoc: currentPercent,
     recentTripsOverride: forceDevMockMode
       ? []
       : dashboardHeroDriveMetrics?.rangeEstimateTrips,
   });
+  const rangeReserveSoc = selectedCar?.range_reserve_soc_percent ?? 0;
   const rangeDetail =
     rangeEstimate?.estimatedRangeKm != null
-      ? `≈ ${fmt(rangeEstimate.estimatedRangeKm)} km`
+      ? `≈ ${fmt(rangeEstimate.estimatedRangeKm)} km${
+          rangeReserveSoc > 0
+            ? ` ${String(t("dashboard.rangeReserveSuffix", { soc: rangeReserveSoc }))}`
+            : ""
+        }`
       : null;
   const rangeExplanation = useMemo(() => {
     const snapshot = forceDevMockMode
@@ -1164,7 +1170,7 @@ export function DashboardView({
         ? []
         : (dashboardHeroDriveMetrics?.rangeEstimateTrips ?? []),
       batteryCapacityKwh: selectedCar?.battery_capacity_kwh ?? null,
-      estimate: rangeEstimate,
+      reserveSocPercent: selectedCar?.range_reserve_soc_percent ?? 0,      estimate: rangeEstimate,
     });
   }, [
     forceDevMockMode,
@@ -1172,6 +1178,7 @@ export function DashboardView({
     baseVoltflowMateSnapshot,
     dashboardHeroDriveMetrics?.rangeEstimateTrips,
     selectedCar?.battery_capacity_kwh,
+    selectedCar?.range_reserve_soc_percent,
     rangeEstimate,
   ]);
 

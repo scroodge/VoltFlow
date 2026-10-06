@@ -28,11 +28,14 @@ import {
 } from "@/lib/vehicle/aux-battery-chemistry";
 import type { Car } from "@/types/database";
 
+export const rangeReserveSteps = [0, 5, 10, 15, 20, 25, 30, 35, 40] as const;
+
 export function CarRow({ car }: { car: Car }) {
   const { t } = useTranslation();
   const appPath = useAppPath();
   const qc = useQueryClient();
   const [chemistrySaving, setChemistrySaving] = useState(false);
+  const [reserveSaving, setReserveSaving] = useState(false);
   const generationLabel = t(
     `cars.generation.${car.model_generation}`,
   ) as string;
@@ -55,6 +58,25 @@ export function CarRow({ car }: { car: Car }) {
     }
     await qc.invalidateQueries({ queryKey: queryKeys.cars });
     toast.success(t("settings.auxBattery.saved") as string);
+  };
+
+  const handleReserveChange = async (value: string | null) => {
+    if (value == null) return;
+    const reserve = Number(value);
+    if (!(rangeReserveSteps as readonly number[]).includes(reserve)) return;
+    setReserveSaving(true);
+    const { error } = await createClient()
+      .from("cars")
+      .update({ range_reserve_soc_percent: reserve })
+      .eq("id", car.id)
+      .eq("user_id", car.user_id);
+    setReserveSaving(false);
+    if (error) {
+      toast.error(t("settings.rangeReserve.saveError") as string);
+      return;
+    }
+    await qc.invalidateQueries({ queryKey: queryKeys.cars });
+    toast.success(t("settings.rangeReserve.saved") as string);
   };
 
   const handleDelete = async () => {
@@ -117,6 +139,30 @@ export function CarRow({ car }: { car: Car }) {
           </Select>
           <p className="text-xs text-muted-foreground">
             {t("settings.auxBattery.help")}
+          </p>
+        </div>
+        <div className="mt-3 max-w-sm space-y-1.5">
+          <Label htmlFor={`range-reserve-${car.id}`}>
+            {t("settings.rangeReserve.label")}
+          </Label>
+          <Select
+            value={String(car.range_reserve_soc_percent ?? 0)}
+            onValueChange={(value) => void handleReserveChange(value)}
+            disabled={reserveSaving}
+          >
+            <SelectTrigger id={`range-reserve-${car.id}`} className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {rangeReserveSteps.map((step) => (
+                <SelectItem key={step} value={String(step)}>
+                  {step}%
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            {t("settings.rangeReserve.help")}
           </p>
         </div>
       </div>

@@ -326,6 +326,7 @@ export const dictionaries = {
     },
     dashboard: {
       eyebrow: "EV dashboard",
+      rangeReserveSuffix: "to {soc}%",
       title: "VoltFlow",
       subtitle: "Online control of your EV charging sessions",
       addEvTitle: "Add your EV",
@@ -1379,6 +1380,12 @@ export const dictionaries = {
           other: "Other / not sure",
         },
       },
+      rangeReserve: {
+        label: "Range reserve level",
+        help: "Estimated range is calculated down to this charge level, not to 0%. Step: 5%.",
+        saved: "Range reserve saved",
+        saveError: "Could not save range reserve",
+      },
       tariffMapTitle: "Tariff location map",
       openInOsm: "Open in OpenStreetMap",
       push: {
@@ -1971,6 +1978,7 @@ export const dictionaries = {
     },
     dashboard: {
       eyebrow: "EV-панэль",
+      rangeReserveSuffix: "да {soc}%",
       title: "VoltFlow",
       subtitle: "Вялікія кнопкі, жывая матэматыка, сінхранізацыя з Supabase.",
       addEvTitle: "Дадайце свой EV",
@@ -3020,6 +3028,12 @@ export const dictionaries = {
           other: "Іншы / не ўпэўнены",
         },
       },
+      rangeReserve: {
+        label: "Ніжняя мяжа ацэнкі запасу ходу",
+        help: "Запас ходу разлічваецца да гэтага ўзроўню зараду, а не да 0%. Крок — 5%.",
+        saved: "Ніжнюю мяжу захавана",
+        saveError: "Не ўдалося захаваць ніжнюю мяжу",
+      },
       tariffMapTitle: "Карта размяшчэння тарыфу",
       openInOsm: "Адкрыць у OpenStreetMap",
       push: {
@@ -3614,6 +3628,7 @@ export const dictionaries = {
     },
     dashboard: {
       eyebrow: "EV-панель",
+      rangeReserveSuffix: "до {soc}%",
       title: "VoltFlow",
       subtitle: "Большие кнопки, живые расчеты, синхронизация с Supabase.",
       addEvTitle: "Добавьте свой EV",
@@ -4664,6 +4679,12 @@ export const dictionaries = {
           lifepo4: "LiFePO4 · 13,3–13,4 В",
           other: "Другой / не уверен",
         },
+      },
+      rangeReserve: {
+        label: "Нижняя граница запаса хода",
+        help: "Запас хода рассчитывается до этого уровня заряда, а не до 0%. Шаг — 5%.",
+        saved: "Нижняя граница сохранена",
+        saveError: "Не удалось сохранить нижнюю границу",
       },
       tariffMapTitle: "Карта расположения тарифа",
       openInOsm: "Открыть в OpenStreetMap",

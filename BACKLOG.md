@@ -1,5 +1,57 @@
 # Backlog — proposed plans awaiting go-ahead
 
+## Telegram live widget: inline Show/Hide buttons + /start recovery — PROPOSED 2026-10-06
+
+### Research findings
+
+- Prod incident: user cleared the chat history **on their side only**. The widget message stays
+  visible to the bot, so `editMessageText` keeps **succeeding** (verified: `telegram_live_messages`
+  row touched at 09:06 UTC, `message_id` 131 unchanged, live snapshot fresh) while the user sees
+  nothing. Telegram gives no signal that the user's copy is gone — the 2026-10-06 edit-failure
+  fallback cannot catch this case. Only a user-initiated action can recover.
+- Today the widget has no user-facing controls at all: `/start` only replies with an "Open
+  VoltFlow" web-app button, and the webhook route ignores everything except `message` updates
+  (`allowed_updates: ["message", "edited_message"]` in `scripts/configure-telegram-bot.mjs`).
+- Callback identification: put **no** vehicle id in `callback_data` (aliases contain spaces,
+  64-byte limit). The hide callback arrives with the widget message's own `chat_id` +
+  `message_id`, which is the row lookup key in `telegram_live_messages`.
+
+### Options considered
+
+1. **Callback buttons on the widget + `/start` show (recommended).** Widget gets a second button
+   row "🙈 Скрыть" (`callback_data: lw:hide`). Handler: `deleteMessage` for everyone, set row
+   `status='hidden'`, `answerCallbackQuery`. `/start` reply gains a "Показать виджет" button
+   (`lw:show`) — handler flips the user's hidden rows back to `active`; the next ingest
+   recreates the widget within ~30-60 s. `live-widget.ts` skips `status='hidden'` vehicles so a
+   hidden widget is never silently resurrected. Solves both hide-by-choice and the cleared-history
+   recovery (press /start).
+2. `/start` re-attach only (no hide button). ~30 min of work, fixes recovery but the user cannot
+   stop the widget spam, and /start still can't recreate when the ghost edit "succeeds" — needs a
+   forced send-new on /start. Half a feature.
+3. PWA "resync widget" endpoint. Bigger surface (auth + app UI) for the same outcome; no inline
+   Telegram control. Defer unless we also want per-vehicle choice in the app.
+
+### Proposed scope (option 1)
+
+- `src/lib/telegram/bot-send.ts`: add `deleteTelegramMessage(chatId, messageId)` and
+  `answerTelegramCallback(callbackQueryId, text?)`.
+- `src/lib/telegram/live-widget.ts` / `live-widget-message.ts`: append the hide-button row to the
+  widget markup; in `updateTelegramLiveWidgets` skip vehicles whose row `status='hidden'`.
+- `src/app/api/telegram/webhook/route.ts`: extend `TelegramUpdate` with `callback_query`; handle
+  `lw:hide` (delete + set hidden, lookup row by chat_id+message_id) and `lw:show` (map
+  telegram_id → profiles.id, set that user's hidden rows active). `/start` reply gains the show
+  button. Needs `SUPABASE_SERVICE_ROLE_KEY` on the webhook host (same Vercel app - already set).
+- `scripts/configure-telegram-bot.mjs`: `allowed_updates` += `"callback_query"`; re-run
+  `npm run telegram:configure -- --webhook` after deploy (prod action, with go-ahead).
+- Docs: update `docs/VEHICLE_STATE_NOTIFICATIONS.md` (hide/show behavior, hidden-status rule).
+- Tests: message-composition test for the extra button row; hidden-skip eligibility kept to pure
+  functions where testable with the Node strip-types runner.
+
+### Data ownership note
+
+Widget visibility state is app-owned Telegram transport bookkeeping — stays in
+`telegram_live_messages.status` (Postgres), no new table, no user preference UI.
+
 ## Telegram live widget: show SOC with one decimal, matching the PWA dashboard — PROPOSED 2026-10-06
 
 ### Research findings

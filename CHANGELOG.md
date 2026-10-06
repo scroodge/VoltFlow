@@ -11,6 +11,27 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-10-06
 
+### Per-car range reserve: estimates count down to a user-set SOC, not 0%
+
+- Feature: each car can now carry a **range reserve** (0–40%, 5% steps, default 0).
+  Estimated range is the energy between the current SOC and that floor, so a driver who
+  never wants to approach empty sees "how far I can actually go" instead of the
+  drain-to-0% figure. Approved in-session 2026-10-06 (per-car ownership, Postgres-stored).
+- Data: `cars.range_reserve_soc_percent numeric not null default 0` with an in-list CHECK
+  for the 5% steps — migration `20261006120000_cars_range_reserve_soc.sql`.
+  **Not yet applied to prod** (self-hosted psql procedure); must be applied before deploy,
+  since `live-widget.ts` now selects the column.
+- Math: `estimateVehicleRangeKm` / `estimateRangeFromSoc` take `reserveSocPercent` and use
+  `max(0, soc − reserve)` of usable energy; SOC at/below the reserve yields 0 km, never
+  negative. Applied through `useVehicleRangeEstimate` to the dashboard hero, vehicle-live
+  AI Distance **and** Math Distance, the metric-explain panels, and the Telegram live widget.
+- UI: per-car select (0–40%) in Settings → car rows, same direct-write pattern as the 12V
+  chemistry selector; range labels gain a "to {soc}%" / "да {soc}%"/"до {soc}%" suffix when
+  a reserve is set (en/be/ru).
+- Tests: 4 new cases in `range-estimate.test.mjs` (scaling, below-reserve → 0, invalid
+  reserve → old behavior, `estimateRangeFromSoc` parity). Suite: 561 pass / 3 fail — the 3
+  failures are pre-existing on a clean tree (charging-math, live-status, telemetry-history).
+
 ### Webhook telemetry no longer creates phantom 0 km trips
 
 - Problem: on `way`, every real drive since 2026-09-29/30 had an extra server-built trip

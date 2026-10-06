@@ -84,6 +84,7 @@ type CarInfo = {
   name: string;
   battery_capacity_kwh: number;
   default_charger_power_kw: number;
+  range_reserve_soc_percent: number;
 };
 
 function isWidgetEditDue(existing: LiveWidgetRow | null, nowMs: number) {
@@ -147,7 +148,7 @@ async function loadCars(
   const { data } = await supabase
     .from("cars")
     .select(
-      "id, name, vehicle_alias, battery_capacity_kwh, default_charger_power_kw",
+      "id, name, vehicle_alias, battery_capacity_kwh, default_charger_power_kw, range_reserve_soc_percent",
     )
     .eq("user_id", userId)
     .in("vehicle_alias", vehicleIds);
@@ -161,6 +162,7 @@ async function loadCars(
         name: String(row.name ?? "Автомобиль"),
         battery_capacity_kwh: Number(row.battery_capacity_kwh ?? 0),
         default_charger_power_kw: Number(row.default_charger_power_kw ?? 4.4),
+        range_reserve_soc_percent: Number(row.range_reserve_soc_percent ?? 0),
       });
     }
   }
@@ -439,6 +441,7 @@ export async function updateTelegramLiveWidgets({
       capacityKwh != null && Number.isFinite(capacityKwh) && capacityKwh > 0
         ? estimateVehicleRangeKm(lastSample, recentTrips, {
             batteryCapacityKwh: capacityKwh,
+            reserveSocPercent: carInfo?.range_reserve_soc_percent ?? 0,
           }).estimatedRangeKm
         : null;
 

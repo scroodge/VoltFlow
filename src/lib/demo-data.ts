@@ -23,6 +23,7 @@ export const DEMO_CAR: Car = {
   default_charger_power_kw: 6.6,
   default_efficiency_percent: 98,
   fast_dc_efficiency_percent: 90,
+  range_reserve_soc_percent: 0,
   created_at: new Date(Date.now() - 30 * DAY_MS).toISOString(),
 };
 

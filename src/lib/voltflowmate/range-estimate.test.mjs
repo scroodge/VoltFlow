@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { estimateVehicleRangeKm } from "./range-estimate.ts";
+import { estimateRangeFromSoc, estimateVehicleRangeKm } from "./range-estimate.ts";
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 
@@ -133,4 +133,64 @@ test("uses car profile battery capacity when provided", () => {
 
   assert.ok(estimate.estimatedRangeKm > 209);
   assert.ok(estimate.estimatedRangeKm < 225);
+});
+
+test("reserve SOC scales the estimate by the usable SOC window", () => {
+  const snapshot = { ...baseSnapshot, telemetry: { soc: 100, speed_kmh: 0 } };
+  const trips = [
+    { avg_consumption_kwh_100km: 15, distance_km: 50, sample_count: 100 },
+  ];
+  const full = estimateVehicleRangeKm(snapshot, trips, { batteryCapacityKwh: 45 });
+  const reserved = estimateVehicleRangeKm(snapshot, trips, {
+    batteryCapacityKwh: 45,
+    reserveSocPercent: 20,
+  });
+
+  assert.ok(full.estimatedRangeKm != null);
+  assert.ok(Math.abs(reserved.estimatedRangeKm - full.estimatedRangeKm * 0.8) < 1e-9);
+});
+
+test("reserve at or above current SOC yields zero range, never negative", () => {
+  const snapshot = { ...baseSnapshot, telemetry: { soc: 12, speed_kmh: 0 } };
+  const trips = [
+    { avg_consumption_kwh_100km: 15, distance_km: 50, sample_count: 100 },
+  ];
+  const estimate = estimateVehicleRangeKm(snapshot, trips, {
+    batteryCapacityKwh: 45,
+    reserveSocPercent: 20,
+  });
+
+  assert.equal(estimate.estimatedRangeKm, 0);
+});
+
+test("missing or invalid reserve keeps the drain-to-empty estimate", () => {
+  const snapshot = { ...baseSnapshot, telemetry: { soc: 60, speed_kmh: 0 } };
+  const trips = [
+    { avg_consumption_kwh_100km: 15, distance_km: 50, sample_count: 100 },
+  ];
+  const baseline = estimateVehicleRangeKm(snapshot, trips, { batteryCapacityKwh: 45 });
+
+  assert.deepEqual(
+    estimateVehicleRangeKm(snapshot, trips, { batteryCapacityKwh: 45, reserveSocPercent: null }),
+    baseline,
+  );
+  assert.deepEqual(
+    estimateVehicleRangeKm(snapshot, trips, { batteryCapacityKwh: 45, reserveSocPercent: Number.NaN }),
+    baseline,
+  );
+});
+
+test("estimateRangeFromSoc applies the reserve too", () => {
+  const trips = [
+    { avg_consumption_kwh_100km: 15, distance_km: 50, sample_count: 100 },
+  ];
+  const full = estimateRangeFromSoc({ soc: 100, batteryCapacityKwh: 45, recentTrips: trips });
+  const reserved = estimateRangeFromSoc({
+    soc: 100,
+    batteryCapacityKwh: 45,
+    recentTrips: trips,
+    reserveSocPercent: 10,
+  });
+
+  assert.ok(Math.abs(reserved.estimatedRangeKm - full.estimatedRangeKm * 0.9) < 1e-9);
 });
