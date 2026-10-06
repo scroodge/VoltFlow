@@ -48,7 +48,29 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
   cap (trips query returned an arbitrary 1000 rows, blanking late-window cycles). Both the
   trips query and `fetchPeriodChargingSessions` now paginate in 1000-row pages.
 - Constraint honored: the trust factor lives outside the `range-estimate.ts` ban graph;
-  surfacing a corrected promise on live surfaces is a separate decision (BACKLOG phase 4b).
+  surfacing a corrected promise on live surfaces was made an explicit decision the same day
+  (phase 4b, next entry).
+
+### Car Promise chip: trust-corrected car range on the live page (phase 4b)
+
+- The vehicle live page now shows a "Car Promise" hero chip: the car's own live range display
+  multiplied by the learned trust factor (`227.9 km × 0.60 → ≈137 km` at today's prod sample),
+  en/be/ru. This is the approved, recorded **display-only exemption** from the `range_est_km`
+  ban — the exemption note lives in `range-estimate.test.mjs`, the 4 banned modules
+  (estimator, Telegram widget ×2, push) stay untouched, and the number never flows back into
+  any estimator input.
+- All-or-nothing rendering: `correctCarPromise()` returns `null` unless both a plausible
+  promise (0–1000 km) and a learned factor exist, so the chip hides rather than showing the
+  raw car number under a "corrected" label.
+- Plumbing: `?type=range-trust` slim branch on the analytics API (trust summary only, trailing
+  90 d), `src/hooks/use-range-trust-query.ts` with 1 h staleTime (the factor moves on a days
+  scale), wired into `VehicleLiveContent` → `Hero`. +3 tests (12 in the trust suite); full
+  `tsc --noEmit` clean; range-trust endpoint verified live (factor 0.60 from 65 cycles).
+- Verification note: the automated browser session could not finish loading `/vehicle` (the
+  dev server 404'd its `src/components/vehicle` client-chunk group; a production
+  `npm run build` compiles the same tree fine — a Turbopack dev-mode/memory-pressure glitch,
+  not a code defect). The user's own browser session loads the page and the new
+  `GET /api/vehicle/analytics?type=range-trust` call fires correctly.
 
 ### Phantom drain panel now follows the selected analytics range
 

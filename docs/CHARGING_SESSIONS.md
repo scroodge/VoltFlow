@@ -256,9 +256,11 @@ captured at close or it is lost (migration `20261006180000`):
 All three are **historical prediction artifacts**. The car's `range_est_km` must never enter
 the live user-visible estimate: the dependency-graph ban in
 `src/lib/voltflowmate/range-estimate.test.mjs` stays in force, and these columns are only
-ever read forward, at grading time. A capture failure never blocks session close; sessions
-closed before the migration keep nulls (a bounded backfill fills rows whose samples are
-still inside retention).
+ever read forward, at grading time. The single approved display consumer is the "Car Promise"
+chip on the vehicle live page (phase 4b below) — it shows the promise multiplied by the trust
+factor and never writes anything back into an estimator input. A capture failure never blocks
+session close; sessions closed before the migration keep nulls (a bounded backfill fills rows
+whose samples are still inside retention).
 
 ### Range trust factor (phase 4a)
 
@@ -270,8 +272,25 @@ car forms its promise washes out in weeks, not a quarter), requiring ≥3 sample
 `trust` inside the `?type=range-prediction` report (computed over the trailing window even
 when the display window is narrower) and shown as a "Trust factor … a promise usually means
 ≈X km" line on the Range forecast accuracy card. It never feeds `range-estimate.ts` — the ban
-above still applies, and putting a trust-corrected promise on live surfaces (vehicle page,
-dashboard, Telegram) requires a separate ban-exemption decision (BACKLOG.md phase 4b).
+above still applies.
+
+### Corrected car promise on the live page (phase 4b)
+
+Approved 2026-10-06 as the deliberate ban-exemption decision. `correctCarPromise(rangeEstKm,
+trust)` (in `range-trust-factor.ts`) scales the car's *current* live promise and the vehicle
+live page shows it as a "Car Promise" hero chip, fetched through the slim
+`?type=range-trust` API branch via `useRangeTrustQuery` (1 h staleTime — the factor moves on
+a days scale). Rules of the exemption:
+
+- **Display-only.** The corrected number is rendered as-is and never enters
+  `range-estimate.ts`, the Telegram widget, or push notifications — the 4 banned modules stay
+  banned; the exemption lives in `vehicle-live-view.tsx` only, recorded in
+  `range-estimate.test.mjs`.
+- **All-or-nothing.** `correctCarPromise` returns `null` unless both a plausible promise
+  (0–1000 km) and a learned factor exist; the chip is hidden rather than showing the raw car
+  number under a "corrected" label.
+- **Clearly labelled.** It is a separate chip ("Car Promise"), never merged into the
+  AI/Math Range values.
 
 ## Battery Consistency diagnostics
 

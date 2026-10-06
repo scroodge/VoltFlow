@@ -1,6 +1,74 @@
 # Backlog — proposed plans awaiting go-ahead
 
-## Corrected car promise on the live vehicle page (phase 4b) — PROPOSED 2026-10-06
+## Car-promise correction: dashboard line + on/off switch + charging-state gap (phase 4c) — PROPOSED 2026-10-06
+
+### Research findings
+
+- The corrected car promise (`correctCarPromise`, phase 4b) renders only in the `/vehicle` hero grid
+  (`vehicle-live-view.tsx`, the `carPromise` metric). `/dashboard` never mounts `VehicleLiveView`
+  and nothing there reads the trust factor.
+- **Gap in 4b:** while charging, the hero grid is skipped (`{!isCharging ? …}`) and the metrics move
+  to `RestMetricsCard`, which builds its own list (AI Range, Math Range, …) with **no** Car Promise
+  entry. So the chip is invisible for the whole charge.
+- The dashboard's AI Range has an "i" button → `MetricExplainerSheet`, rows built by
+  `explainAiRange` in `metric-explain.ts`. The trust factor is not part of it.
+- The AI Range is computed from battery / SOC / consumption. The trust factor corrects the car's own
+  `range_est_km` promise — a different quantity.
+
+### Options considered
+
+1. **A (recommended): extra corrected-promise line, switchable.** Dashboard range card and its
+   explainer sheet gain a line "Car says 228 → corrected 137 km (×0.60, 65 cycles)". A switch inside
+   the explainer sheet shows/hides that line (and the `/vehicle` chip, one shared setting).
+2. **B (rejected): switch changes the main AI Range number.** Multiplying a battery/SOC model by a
+   factor learned for `range_est_km` is a category error, and drags `range_est_km` toward the model
+   the ban protects.
+
+### Proposed scope (option A)
+
+- New pure helper for the preference (key, default ON, safe read/write with try/catch) + test.
+- `useRangeTrustQuery` wired into the dashboard range card; corrected line shown only when
+  `trust` is non-null and the car's `range_est_km` is plausible (reuse `correctCarPromise`).
+- Switch row inside `MetricExplainerSheet` for the range metrics; hidden when `trust` is null (never
+  an off switch for something that cannot show).
+- `/vehicle` chip honours the same setting.
+- Add the Car Promise item to `RestMetricsCard` so it is visible while charging.
+- i18n strings en/be/ru (switch label, hint, dashboard line).
+- `range_est_km` ban: display-only, same exemption as 4b; extend the exemption list in
+  `range-estimate.test.mjs` for any newly importing file.
+
+### Data ownership
+
+- **Trust factor:** app-owned, computed server-side from graded cycles (unchanged).
+- **Switch:** user-owned preference, lives in **client-side `localStorage`** (per-user preference
+  default; no migration, no RLS change). Trade-off: does not follow the user across devices; a
+  `profiles` column can replace it later if sync is wanted.
+
+### Open questions
+
+- Default ON (recommended, keeps the feature discoverable) or OFF?
+- One shared switch for dashboard + `/vehicle` (recommended) or separate?
+
+### Verification plan
+
+- Unit tests for the preference helper and the show/hide gating; `npm run test`, `npm run lint`,
+  `npm run build`.
+- Manual: toggle on `/dashboard`, confirm the `/vehicle` chip follows; confirm chip while charging.
+
+---
+
+## Corrected car promise on the live vehicle page (phase 4b) — BUILT 2026-10-06
+
+> **Status 2026-10-06: BUILT.** `correctCarPromise()` helper (+3 tests, 12 total in the suite);
+> `?type=range-trust` slim API branch; `useRangeTrustQuery` hook (1 h staleTime); a
+> "Car Promise" hero chip on the vehicle live page showing `range_est_km × trust`
+> (en/be/ru), rendered only when both a plausible promise and a learned factor exist.
+> Implemented as a chip next to AI/Math Range rather than a text line — same intent, fits
+> the hero grid. Prod check: factor 0.60 from 65 cycles; live promise 227.9 km would show
+> ≈137 km. Ban status: `vehicle-live-view.tsx` is an approved *display-only* consumer;
+> the exemption is recorded in `range-estimate.test.mjs`; the 4 banned modules stay banned.
+> Visual confirmation in the automated browser was blocked by a dev-server chunk glitch
+> (see CHANGELOG note); the user's own browser session already loads the hook successfully.
 
 > Chosen by the user 2026-10-06 from the "how to use the ledger data" options. This is the
 > deliberate ban-exemption decision foreshadowed in the phase-4a entry below.
@@ -40,8 +108,6 @@
 Same as phase 4a: computed on demand from Postgres app data; nothing persisted, no migration.
 Client fetches the factor via the API; no localStorage.
 
-**Should I build this?**
-
 ## Range trust factor: turn graded cycle errors into a forward correction — BUILT 2026-10-06
 
 > **Status 2026-10-06: Phase 4a BUILT** — `range-trust-factor.ts` (+9 tests), `trust` field on
@@ -51,7 +117,7 @@ Client fetches the factor via the API; no localStorage.
 > extrapolations ≈405–460 km/100% vs recent ≈230–290, ratios 0.73–1.03), so the factor now
 > converges toward current behavior within weeks. Verifying
 > surfaced a silent Supabase 1000-row cap on the widened queries — now paginated. Phase 4b
-> (live surfaces) still requires the separate ban-exemption decision below — not built.
+> (live surfaces) was approved and built the same day — see the entry above.
 
 > Builds on the Range prediction ledger below (Phase 2+3 live-graded variant). Prod data shows
 > the car's end-of-charge promise is systematically optimistic (−14 % to −53 % per cycle), so the

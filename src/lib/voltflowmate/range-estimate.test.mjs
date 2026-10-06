@@ -6,6 +6,13 @@ import { fileURLToPath } from "node:url";
 
 import { estimateRangeFromSoc, estimateVehicleRangeKm } from "./range-estimate.ts";
 
+// Recorded exemption (2026-10-06, BACKLOG.md phase 4b): the vehicle live page may DISPLAY
+// the car's own range promise multiplied by the learned trust factor
+// (`correctCarPromise` in range-trust-factor.ts). That display consumer is approved;
+// the number must never enter the estimator graph or the 4 modules asserted below.
+// The car-promise chip lives in vehicle-live-view.tsx, which is deliberately NOT in the
+// banned-modules list — keep it out of range-estimate.ts's import graph instead.
+
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 
 function runtimeDependencyGraph(entryPath) {
