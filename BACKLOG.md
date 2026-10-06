@@ -1,56 +1,31 @@
 # Backlog — proposed plans awaiting go-ahead
 
-## Phantom 0 km trips on `way`: webhook samples must not create trips — proposed 2026-10-04
+## Telegram live widget: show SOC with one decimal, matching the PWA dashboard — PROPOSED 2026-10-06
 
-### Problem (measured on prod, `way`)
+### Research findings
 
-- Every real drive since 2026-09-30 has an extra server-built trip: `source='telemetry'`,
-  `client_trip=false`, `distance_km=0`, whole-second `started_at`, integer SOC (e.g. `d0d361e2`
-  11:44 UTC, `9e89c69c` 12:17 UTC, `3efaf7bf` 13:24 UTC on 2026-10-04). Counts per day:
-  9 / 7 / 12 / 8 / 3. The webhook token was minted 2026-09-29 12:49 and 09-30 07:34 UTC.
-- Cause: `POST /api/bydmate/webhook-telemetry/[token]` (commit `3c76772`) calls
-  `bydmate_ingest_telemetry` with `source: "bydmate-app-webhook"`. Its comment says "no trip
-  inference", but the RPC creates/extends/closes a server-owned trip for any sample that lacks
-  `client_trip` — the webhook has no trip-meter delta, so the trip is 0 km. The webhook stream
-  (whole-second, ~1 Hz) interleaves with Mate's (ms timestamps) for the same `vehicle_id='way'`.
-  The RPC's trip branch was inferred from the data and the migration structure, not yet traced
-  line by line.
-- Risk, not yet observed: `bydmate_trips_open_unique` allows one open trip per user+vehicle, and
-  the RPC's stray-trip / 5-minute-gap close paths could close a still-open Mate client trip on a
-  webhook sample.
-- `isJunkTrip` does not hide the twins (hundreds of samples, max speed > 3 km/h), so they show as
-  0.0 km trips. `byd_energydata` twins are already hidden by `dedupeTripsBySource` (`bb272e3`).
+- The dashboard renders SOC through the shared `formatSocPercent` (`src/lib/format-soc-percent.ts`):
+  one decimal (0.1 % = Di+ resolution), plain "100" when full. The Telegram widget instead rounds
+  to an integer in `clampSoc` (`src/lib/telegram/live-widget.ts`) and prints `🔋 ${soc}%` plus
+  `<b>${soc}%</b>` (`live-widget-message.ts`). Observed live: dashboard `71.4 %`, widget `72%`.
+- The rounded value also feeds the ETA math in the widget (`resolveTelegramChargingMetrics`), so
+  start-SOC gain can be off by ~0.5 % vs the PWA (minor, but the same raw float fixes both).
+- A residual gap is inherent: the widget is throttled to one edit / 30 s and rides batch delivery,
+  so its decimal can be a few seconds behind the dashboard. Decimals make that visible, not worse.
 
-### Options
+### Options considered
 
-- **A (chosen).** In `bydmate_ingest_telemetry`, when `p_source = 'bydmate-app-webhook'`, skip all
-  trip logic (create/extend/close/gap-close/track points). Live snapshot, samples and hourly
-  blocks keep working, so the webhook data stays available for comparison.
-- B. Give the webhook its own `vehicle_id`. Separates streams fully but loses the A/B on one car.
-- C. Hide 0 km `client_trip=false` rows in the UI. Leaves the junk and the open-trip risk.
+1. **Use `formatSocPercent` at render, keep the raw float through the pipeline (recommended).**
+   One formatter everywhere, inherits the "100" and NaN rules, ETA gets the unrounded SOC.
+2. Round to 1 decimal inside `clampSoc` only. Duplicates the formatter and misses the 100 % rule.
+3. Leave the widget integer (bar chart is "coarse by design"). Keeps the parity complaint.
 
-### Plan (A)
+### Proposed scope (option 1)
 
-1. New migration redefining `bydmate_ingest_telemetry` (copy the latest body,
-   `20260902063209_canonical_charging_state.sql`, and diff to confirm only the guard is new; read
-   `docs/TRIPS.md` first). Keep the existing `revoke … from public, anon, authenticated` plus
-   grants to the same roles.
-2. Verify after apply with prod-sql: no new `client_trip=false` trip for `way` during a drive
-   while the webhook is on.
-3. One-off cleanup (separate, explicitly approved, with a count first): delete
-   `vehicle_id='way' and source='telemetry' and client_trip=false and distance_km=0 and
-   started_at >= '2026-09-29'` plus their track points. Review the list first — some rows may be
-   real server-owned trips from a daemon-only drive.
-4. Update the stale "no trip inference" comment in the route and the older webhook entry below.
-
-### Data ownership (to confirm)
-
-- Trips/telemetry are **app-owned**, stored in **Postgres**. No user preference or tariff data.
-
-### Follow-up question (not in this change)
-
-- Owner reports the webhook data looks better than Di+. Whether to promote it (e.g. for live SOC
-  or power) is a separate decision; this change only stops it corrupting trips.
+- `live-widget.ts`: `clampSoc` clamps to 0-100 without `Math.round`.
+- `live-widget-message.ts`: summary and bar lines use `formatSocPercent`; `socBar` fill unchanged.
+- Tests: update `src/lib/telegram-live-widget-message.test.mjs` expectations to one decimal +
+  the 100 % case; run `npm run test`.
 
 ## Charging card: make the charge-power tile the full-width top tile — BUILT 2026-10-01, not deployed
 

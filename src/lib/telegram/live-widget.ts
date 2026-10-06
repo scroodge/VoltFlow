@@ -37,7 +37,7 @@ const THROTTLE_MS = 30_000;
 
 function clampSoc(value: unknown): number | null {
   const n = finiteTelemetryNumber(value);
-  return n != null && n >= 0 && n <= 100 ? Math.round(n) : null;
+  return n != null && n >= 0 && n <= 100 ? n : null;
 }
 
 function clampOdometer(value: unknown): number | null {

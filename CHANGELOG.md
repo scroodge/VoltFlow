@@ -9,6 +9,31 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-10-06
+
+### Webhook telemetry no longer creates phantom 0 km trips
+
+- Problem: on `way`, every real drive since 2026-09-29/30 had an extra server-built trip
+  (`source='telemetry'`, `client_trip=false`, `distance_km=0`, whole-second timestamps, integer
+  SOC) next to the real client-owned trip. The third-party webhook route
+  (`/api/bydmate/webhook-telemetry/[token]`, `3c76772`) calls `bydmate_ingest_telemetry`, whose
+  server trip path ran for any sample without `client_trip`; the webhook has no trip-meter delta,
+  so each trip was 0 km. Its charging / gear-P / stray / gap closes could also end an open Mate trip.
+- Fix: migration `20261004150000_bydmate_webhook_skips_trip_ingest.sql` returns early for
+  `p_source = 'bydmate-app-webhook'` after the live snapshot, sample insert and hourly rollup.
+  Applied to prod 2026-10-06; an open twin stopped growing at ~06:41 UTC while webhook samples
+  continued.
+- The migration is based on the function **live on prod**, not on
+  `20260902063209_canonical_charging_state.sql`, which was never applied there
+  (`bydmate_canonical_is_charging` does not exist on prod). Applying it later must be re-based
+  on top of this guard.
+- Cleanup: deleted 45 twin rows (all overlapped a client trip, none were daemon-only); 54
+  client trips since 2026-09-29 untouched. Child tables cascade; raw samples were not deleted.
+- Open: webhook samples still feed the hourly rollup alongside Mate's blocks, so `way`'s hourly
+  energy may be double-counted since 2026-09-29 — not yet checked.
+
+---
+
 ## 2026-10-01
 
 ### Charge power now comes from measured pack voltage × current (di+ 2.0)

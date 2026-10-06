@@ -29,7 +29,10 @@ const MAX_WEBHOOK_BODY_BYTES = 20_000;
  * `bydmate_ingest_telemetry` RPC the canonical Mate ingest uses, but does not run
  * auto-charging-session detection, notifications, Telegram widgets, or rollups for this
  * source, and does not attempt trip inference (this sender has no per-trip distance
- * delta, only lifetime odometer). See BACKLOG.md for the full scope decision.
+ * delta, only lifetime odometer). That is enforced in the RPC, not here: for
+ * `source = 'bydmate-app-webhook'` it returns before any trip logic (migration
+ * `20261004150000`); without that guard every drive got a 0 km server-built twin trip and
+ * webhook samples could close an open Mate trip. See BACKLOG.md for the full scope decision.
  */
 export async function POST(
   request: Request,

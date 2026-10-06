@@ -48,6 +48,20 @@ test("live widget omits an unavailable range from the header", () => {
   assert.equal(lines[4], "🚗 Пробег 46632 км");
 });
 
+test("live widget shows SOC with one decimal like the PWA dashboard", () => {
+  const lines = message({ soc: 71.4 }).split("\n");
+
+  assert.equal(lines[0], "🔋 71.4% · ⚡ · ≈ 287 km");
+  assert.equal(lines[2], "<code>█████████░░░</code> <b>71.4%</b>");
+});
+
+test("live widget renders a rounded-full SOC as plain 100, not 100.0", () => {
+  const lines = message({ soc: 99.96 }).split("\n");
+
+  assert.equal(lines[0], "🔋 100% · ⚡ · ≈ 287 km");
+  assert.match(lines[2], /<b>100%<\/b>/);
+});
+
 test("live widget omits a stale driving range from the header", () => {
   const range = freshRangeEstimateKm(
     286.6,

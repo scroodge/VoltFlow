@@ -1,4 +1,5 @@
 import { translate, type Locale } from "../i18n.ts";
+import { formatSocPercent } from "../format-soc-percent.ts";
 
 // Driving and charging both move SOC materially; parked/offline cars can safely retain
 // an overnight estimate, but it still expires after a day to bound phantom-drain error.
@@ -74,7 +75,8 @@ export function composeTelegramLiveWidget(
   data: TelegramLiveWidgetMessage,
 ): string {
   const lines: string[] = [];
-  const battery = data.soc != null ? `🔋 ${data.soc}%` : "🔋 —";
+  const battery =
+    data.soc != null ? `🔋 ${formatSocPercent(data.soc)}%` : "🔋 —";
   const rangeKm = freshRangeEstimateKm(
     data.estimatedRangeKm,
     data.rangeSampleTime,
@@ -91,7 +93,9 @@ export function composeTelegramLiveWidget(
   );
 
   if (data.soc != null) {
-    lines.push(`<code>${socBar(data.soc)}</code> <b>${data.soc}%</b>`);
+    lines.push(
+      `<code>${socBar(data.soc)}</code> <b>${formatSocPercent(data.soc)}%</b>`,
+    );
   }
 
   const chargeParts: string[] = [];
