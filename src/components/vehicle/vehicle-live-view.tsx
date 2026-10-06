@@ -54,6 +54,7 @@ import { useVoltflowMateLiveQuery } from "@/hooks/use-voltflowmate-live-query";
 import { useProfileQuery } from "@/hooks/use-profile-query";
 import { useVehicleRangeEstimate } from "@/hooks/use-vehicle-range-estimate";
 import { useRangeTrustQuery } from "@/hooks/use-range-trust-query";
+import { useCarPromiseEnabled } from "@/hooks/use-car-promise-enabled";
 import { correctCarPromise } from "@/lib/voltflowmate/range-trust-factor";
 import type { RangeTrustSummary } from "@/lib/voltflowmate/range-trust-factor";
 import { useVehicleLastKnownLocation } from "@/hooks/use-vehicle-last-known-location";
@@ -566,7 +567,11 @@ function VehicleLiveContent({
   const { data: rangeTrustData } = useRangeTrustQuery(scopedVehicleId);
   const rangeTrust = rangeTrustData?.trust ?? null;
   const rawCarPromiseKm = snapshot.telemetry.range_est_km ?? null;
-  const correctedCarPromiseKm = correctCarPromise(rawCarPromiseKm, rangeTrust);
+  // Phase 4c: the per-device switch (toggled in the dashboard's AI Range sheet) hides the chip.
+  const [carPromiseEnabled] = useCarPromiseEnabled();
+  const correctedCarPromiseKm = carPromiseEnabled
+    ? correctCarPromise(rawCarPromiseKm, rangeTrust)
+    : null;
   const parkedRecentEnergyKwh =
     parkedAvgConsumptionKwh100 != null ? parkedAvgConsumptionKwh100 / 2 : null;
   const [selectedTripId, setSelectedTripId] = useState<
@@ -620,6 +625,8 @@ function VehicleLiveContent({
             snapshot={snapshot}
             rangeLabel={rangeLabel}
             mathRangeLabel={mathRangeLabel}
+            correctedCarPromiseKm={correctedCarPromiseKm}
+            rangeTrust={rangeTrust}
           />
           {!isStale ? <TirePressureCard snapshot={snapshot} /> : null}
           {activeChargingSession ? (
@@ -1327,10 +1334,15 @@ function RestMetricsCard({
   snapshot,
   rangeLabel,
   mathRangeLabel,
+  correctedCarPromiseKm,
+  rangeTrust,
 }: {
   snapshot: VoltflowMateLiveSnapshotRow;
   rangeLabel: string;
   mathRangeLabel: string;
+  /** Phase 4c: same corrected promise as the hero chip, which is hidden while charging. */
+  correctedCarPromiseKm: number | null;
+  rangeTrust: RangeTrustSummary | null;
 }) {
   const { locale, t: translate } = useTranslation();
   const t = translate as Translator;
@@ -1355,6 +1367,20 @@ function RestMetricsCard({
       value: mathRangeLabel,
       hint: t("vehicle.metrics.mathRangeHint"),
     },
+    ...(correctedCarPromiseKm != null && rangeTrust
+      ? [
+          {
+            key: "carPromise",
+            icon: Gauge,
+            label: t("vehicle.metrics.carPromise"),
+            value: `${fmt(correctedCarPromiseKm)} km`,
+            hint: t("vehicle.metrics.carPromiseHint", {
+              factor: rangeTrust.factor.toFixed(2),
+              count: rangeTrust.sampleCycles,
+            }),
+          },
+        ]
+      : []),
     ...heroCoreMetrics(snapshot, t, locale),
   ];
   const visibleItems = items.filter(

@@ -788,6 +788,12 @@ export const dictionaries = {
         formula: "Formula",
         updatedAgo: "Updated {value}",
         unavailable: "Unavailable",
+        carPromise: {
+          title: "Corrected car promise",
+          hint: "Show the car's own range scaled by how accurate it has been for you",
+          raw: "Car says",
+          factor: "Corrected (×{factor}, {count} cycles)",
+        },
         metrics: {
           aiRange: {
             title: "AI Range",
@@ -2463,6 +2469,12 @@ export const dictionaries = {
         formula: "Формула",
         updatedAgo: "Абноўлена {value}",
         unavailable: "Няма даных",
+        carPromise: {
+          title: "Скарэктаваны прагноз аўто",
+          hint: "Паказваць уласны запас ходу аўто з папраўкай на яго дакладнасць у вашым выпадку",
+          raw: "Аўто паказвае",
+          factor: "Скарэктавана (×{factor}, {count} цыклаў)",
+        },
         metrics: {
           aiRange: {
             title: "AI запас ходу",
@@ -4141,6 +4153,12 @@ export const dictionaries = {
         formula: "Формула",
         updatedAgo: "Обновлено {value}",
         unavailable: "Нет данных",
+        carPromise: {
+          title: "Скорректированный прогноз авто",
+          hint: "Показывать собственный запас хода авто с поправкой на его точность в вашем случае",
+          raw: "Авто показывает",
+          factor: "Скорректировано (×{factor}, {count} циклов)",
+        },
         metrics: {
           aiRange: {
             title: "AI запас хода",

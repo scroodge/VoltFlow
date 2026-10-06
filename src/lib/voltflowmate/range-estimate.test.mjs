@@ -10,7 +10,9 @@ import { estimateRangeFromSoc, estimateVehicleRangeKm } from "./range-estimate.t
 // the car's own range promise multiplied by the learned trust factor
 // (`correctCarPromise` in range-trust-factor.ts). That display consumer is approved;
 // the number must never enter the estimator graph or the 4 modules asserted below.
-// The car-promise chip lives in vehicle-live-view.tsx, which is deliberately NOT in the
+// Phase 4c: the per-device switch (use-car-promise-enabled.ts) and the explainer-sheet block
+// (metric-explainer-sheet.tsx) are further display-only consumers. The car-promise chip lives
+// in vehicle-live-view.tsx, which is deliberately NOT in the
 // banned-modules list — keep it out of range-estimate.ts's import graph instead.
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));

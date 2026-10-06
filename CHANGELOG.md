@@ -11,6 +11,22 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-10-06
 
+### Car-promise switch, dashboard line, and charging-state gap (phase 4c)
+The corrected car promise (phase 4b) now has a per-device on/off switch and shows in two
+more places. A switch row in the dashboard's AI Range explainer sheet shows or hides the
+"Car says X → Corrected Y (×factor, N cycles)" rows, swaps the sheet headline and the
+dashboard range badge between the corrected car promise (ON) and the AI model value (OFF),
+and also controls the `/vehicle` chip. The block sits directly under the sheet header.
+The switch is hidden when there is no trust factor or no plausible `range_est_km`. The
+chip was invisible for the whole charge (the hero grid is skipped while charging and
+`RestMetricsCard` had no entry); it is now in `RestMetricsCard` too. Preference is
+user-owned, client-side `localStorage` (`voltflow.carPromise.enabled`, default ON, no
+migration); trust factor stays app-owned and server-computed. New:
+`car-promise-preference.ts` (+4 tests), `use-car-promise-enabled.ts`; en/be/ru strings.
+The AI model computation is unchanged (only which number is displayed switches);
+`range_est_km` stays out of the estimator graph. Not done: the `/vehicle` sheet has no switch
+(it follows the dashboard's setting).
+
 ### Reorderable Analytics cards, order saved per user
 
 - The Analytics tab's ~11 cards (SOH, Battery health, Cell balance, 12 V, Phantom drain, Range

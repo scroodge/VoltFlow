@@ -92,6 +92,9 @@ import {
   validateQuickSessionInput,
 } from "@/features/charging/domain";
 import { useVehicleRangeEstimate } from "@/hooks/use-vehicle-range-estimate";
+import { useRangeTrustQuery } from "@/hooks/use-range-trust-query";
+import { useCarPromiseEnabled } from "@/hooks/use-car-promise-enabled";
+import { correctCarPromise } from "@/lib/voltflowmate/range-trust-factor";
 import { useVehicleLastKnownLocation } from "@/hooks/use-vehicle-last-known-location";
 import { resolveTariffLocationMatch } from "@/lib/charging-gps-location";
 import {
@@ -1156,15 +1159,36 @@ export function DashboardView({
       ? []
       : dashboardHeroDriveMetrics?.rangeEstimateTrips,
   });
-  const rangeReserveSoc = selectedCar?.range_reserve_soc_percent ?? 0;
-  const rangeDetail =
-    rangeEstimate?.estimatedRangeKm != null
-      ? `≈ ${fmt(rangeEstimate.estimatedRangeKm)} km${
-          rangeReserveSoc > 0
-            ? ` ${String(t("dashboard.rangeReserveSuffix", { soc: rangeReserveSoc }))}`
-            : ""
-        }`
+  // Phase 4c (BACKLOG.md): display-only trust-corrected car promise, shown in the AI Range
+  // explainer sheet behind a per-device switch. Never feeds rangeEstimate above.
+  const { data: rangeTrustData } = useRangeTrustQuery(scopedVehicleId);
+  const rangeTrust = rangeTrustData?.trust ?? null;
+  const rawCarPromiseKm =
+    latestVoltflowMateSnapshot?.telemetry.range_est_km ?? null;
+  const correctedCarPromiseKm = correctCarPromise(rawCarPromiseKm, rangeTrust);
+  const carPromiseExplain =
+    correctedCarPromiseKm != null && rangeTrust && rawCarPromiseKm != null
+      ? {
+          rawKm: rawCarPromiseKm,
+          correctedKm: correctedCarPromiseKm,
+          factor: rangeTrust.factor,
+          cycles: rangeTrust.sampleCycles,
+        }
       : null;
+  const rangeReserveSoc = selectedCar?.range_reserve_soc_percent ?? 0;
+  // Switch ON → the badge shows the corrected car promise; OFF → the AI model value. The
+  // corrected value has no reserve suffix: it is the car's own figure, not reserve-aware.
+  const [carPromiseEnabled] = useCarPromiseEnabled();
+  const rangeDetail =
+    carPromiseEnabled && carPromiseExplain
+      ? `≈ ${fmt(carPromiseExplain.correctedKm)} km`
+      : rangeEstimate?.estimatedRangeKm != null
+        ? `≈ ${fmt(rangeEstimate.estimatedRangeKm)} km${
+            rangeReserveSoc > 0
+              ? ` ${String(t("dashboard.rangeReserveSuffix", { soc: rangeReserveSoc }))}`
+              : ""
+          }`
+        : null;
   const rangeExplanation = useMemo(() => {
     const snapshot = forceDevMockMode
       ? latestVoltflowMateSnapshot
@@ -1848,9 +1872,7 @@ export function DashboardView({
                         setOpenMetric(rangeExplanation.metricKey);
                     }}
                     onReserve={
-                      selectedCar
-                        ? () => setReserveEditorOpen(true)
-                        : undefined
+                      selectedCar ? () => setReserveEditorOpen(true) : undefined
                     }
                   />
                 </div>
@@ -2396,6 +2418,7 @@ export function DashboardView({
         }}
         explanation={selectedExplanation ?? rangeExplanation}
         nowMs={nowMs}
+        carPromise={carPromiseExplain}
       />
     </div>
   );

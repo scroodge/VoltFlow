@@ -1,6 +1,77 @@
 # Backlog — proposed plans awaiting go-ahead
 
-## Car-promise correction: dashboard line + on/off switch + charging-state gap (phase 4c) — PROPOSED 2026-10-06
+## Telemetry-offline notice: notify the linked owner, otherwise stay silent — PROPOSED 2026-10-06
+
+### Problem
+
+The current cadence alarm is an admin-only operational page.  Its `low_24h_count`
+signal correctly establishes that a vehicle's sender has nearly stopped reporting, but
+the Telegram text supplies no owner action and is delivered roughly a day after the
+last contact.  The current incident had 268 samples in the detector's 24-hour window
+and no later sample; that fact is more useful to the owner of the vehicle than to an
+admin.  Conversely, `moving_gap` is a diagnostic signal for short in-motion holes and
+is not a suitable end-user "telemetry is offline" notice.
+
+The current immediate delivery loop and the once-daily digest are both admin-only.
+Changing only either Next.js route would be unsafe: an unlinked owner's audit row
+remains pending, is retried by the detector, and can be picked up later by the digest.
+
+### Options considered
+
+1. **Linked-owner offline notice only (recommended).** Send one plain-language Telegram
+   notice when `low_24h_count` first opens, but only when that owner already has a
+   linked Telegram account.  Do not send `moving_gap` to owners.  Keep both signals as
+   database audits for operations, but stop their Telegram digest delivery.  A recovered
+   sender resolves the open audit; a later outage can notify again.  Owners without a
+   Telegram link receive nothing and generate no delivery retries.
+2. **Send both signals to the owner.** Faster visibility of mid-drive holes, but a
+   short gap is neither clearly actionable nor equivalent to telemetry being offline.
+   Rejected: it recreates the noise problem for end users.
+3. **Keep the admin digest and add owner notices.** Retains a fleet-operations view,
+   but duplicates the same operational fact to two audiences and keeps a non-actionable
+   admin channel.  Rejected for this private deployment unless a later fleet-monitoring
+   need is established.
+4. **Remove all delivery and keep audits only.** Eliminates noise, but an owner loses
+   the only timely indication that live vehicle features are degraded.  Rejected.
+
+### Proposed scope (option 1)
+
+- Add a new idempotent migration that redefines
+  `bydmate_detect_telemetry_cadence_collapses()` without editing applied migrations:
+  enqueue an immediate HTTP delivery only for an open, unnotified
+  `low_24h_count` audit whose owner currently has `profiles.telegram_id`.
+- Unschedule the admin-only daily cadence digest.  It must no longer deliver old,
+  unlinked, cooldown-suppressed, or `moving_gap` alarms.  Retain its historical SQL,
+  route, and audit rows; they become inactive rather than being destructively removed.
+- Change the immediate cron route to select the alarm owner's existing Telegram ID
+  rather than `admin_users`, send a concise user-facing offline notice, and mark only a
+  successful Telegram send as `notified_at`.  Do not expose email or user IDs in the
+  owner message.  A send failure remains retryable; an unlinked owner is never enqueued.
+- Update the alarm-message unit tests and the SQL-contract test to prove: linked owner
+  delivery, no unlinked-owner enqueue, no `moving_gap` owner notice, digest schedule
+  removal, no identifying data in the owner message, retry after a Telegram send failure,
+  and a fresh notice after recovery then a new outage.
+
+### Data ownership and location
+
+- **Telegram link (`profiles.telegram_id`):** existing **user-owned** account preference,
+  stored in **Postgres**.  This plan only consults it; it adds no preference or UI.
+- **Cadence audits and notification state:** existing **app-owned** operational data,
+  stored in **Postgres**.  No new user-facing data model and no localStorage.
+
+### Verification plan
+
+- Focused Node tests for the message and cadence-alarm migration contract.
+- Apply the reviewed migration to self-hosted production one file at a time using the
+  private pooler procedure; confirm the detector/digest job definitions and function
+  privileges, then run read-only checks for an unlinked owner (no enqueue), a linked
+  owner (one offline notice), and recovery/new-outage lifecycle.
+
+### Should I build this?
+
+---
+
+## Car-promise correction: dashboard line + on/off switch + charging-state gap (phase 4c) — BUILT 2026-10-06
 
 ### Research findings
 
