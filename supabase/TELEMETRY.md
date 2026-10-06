@@ -68,6 +68,14 @@ The current Mate client adapts collection to vehicle state:
 The client supports offline delivery, optional GPS omission, and state-specific payload
 tiers.
 
+**Offline buffer grant.** The car queues samples locally while it has no internet and uploads
+them on reconnect. Until a server response carries `offline_buffer_cap_bytes`, the client keeps
+a legacy 1000-row guard that silently deletes the oldest rows, so a long outage loses data.
+The telemetry success response and every command-poll response therefore carry
+`offline_buffer_cap_bytes` (4 GiB, `src/lib/voltflowmate/offline-buffer.ts`); the client clamps
+it to its device storage limit and persists it. Never remove the field: a car that stops
+receiving it falls back to the 1000-row guard only if its persisted grant is lost.
+
 When someone is actively watching a vehicle in VoltFlow, the command-poll response may grant a
 short `live_fast_seconds` window. During that window, compatible app and car-off daemon senders
 can submit `live_only: true` status snapshots about every three seconds. A `live_only` sample

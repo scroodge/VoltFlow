@@ -27,6 +27,7 @@ import {
 import { createServiceClient } from "@/lib/supabase/service";
 import { resolveVoltflowMateApiKeyProfile } from "@/lib/voltflowmate/api-auth";
 import { liveFastSecondsFor } from "@/lib/voltflowmate/live-fast";
+import { offlineBufferGrantField } from "@/lib/voltflowmate/offline-buffer";
 import { fetchVehicleBatteryCapacityKwh } from "@/lib/voltflowmate/vehicle-battery-capacity";
 import { resolveVehicleKey } from "@/lib/voltflowmate/vehicle-identity";
 import {
@@ -589,6 +590,9 @@ export async function POST(request: Request) {
       // and it is what lets the command poll drop from 6s to 60s while remote commands are
       // suspended without stranding the live view at the slower cadence.
       live_fast_seconds: liveFastSecondsFor(profile, headerVehicleId),
+      // Lifts the car's legacy 1000-row offline guard so a long offline stretch queues
+      // locally instead of silently dropping the oldest samples. See offline-buffer.ts.
+      ...offlineBufferGrantField(),
       ...(batteryCapacityKwh != null
         ? { battery_capacity_kwh: batteryCapacityKwh }
         : {}),

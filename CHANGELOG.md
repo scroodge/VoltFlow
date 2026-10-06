@@ -11,6 +11,25 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-10-06
 
+### Server grants the car's offline buffer — telemetry no longer dropped while offline
+
+- Bug: user `765oliva567@gmail.com` lost both charging sessions of the 2026-10-03/04
+  weekend (32→53%, 53→100%). The car had no internet for ~29 h; the server received nothing
+  between 2026-10-03 08:37 UTC and 2026-10-04 13:27 UTC, and the reconnect delivered only
+  the last ~6 h (~1160 rows).
+- Cause: the Mate client (v0.5.5+, `OfflineBufferPolicy`) has a large local Room buffer with
+  state-aware compaction, but keeps a legacy **1000-row** guard (silent delete of the oldest
+  rows) *until a server response supplies `offline_buffer_cap_bytes`* (BYDMate
+  `docs/HOW_IT_WORKS.md` §4.3). The server never sent that field, so the rollout gate stayed
+  closed for every car.
+- Fix: `src/lib/voltflowmate/offline-buffer.ts` grants 4 GiB (the client's own ceiling; the
+  client still clamps to device storage and persists the grant, so an offline car keeps the
+  last value). Carried on both channels, like `live_fast_seconds`: the telemetry ingest
+  success response and all three command-poll responses. Test: `offline-buffer.test.mjs`.
+- Effect starts at each car's first successful contact after deploy. Data already evicted
+  on the car before then is not recoverable; the two lost sessions were not reconstructable
+  from telemetry.
+
 ### Per-car range reserve: estimates count down to a user-set SOC, not 0%
 
 - Feature: each car can now carry a **range reserve** (0–40%, 5% steps, default 0).
