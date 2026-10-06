@@ -260,6 +260,19 @@ ever read forward, at grading time. A capture failure never blocks session close
 closed before the migration keep nulls (a bounded backfill fills rows whose samples are
 still inside retention).
 
+### Range trust factor (phase 4a)
+
+`src/lib/voltflowmate/range-trust-factor.ts` turns graded cycles into a forward correction:
+`factor = recency-weighted median(actualKmAt100 / predictedKmAt100)` over cycles ending in a
+trailing 90-day window, where each cycle's weight halves every 14 days (so a change in how the
+car forms its promise washes out in weeks, not a quarter), requiring ≥3 samples, clamped to
+[0.5, 1.15], and `null` below that. It is served as
+`trust` inside the `?type=range-prediction` report (computed over the trailing window even
+when the display window is narrower) and shown as a "Trust factor … a promise usually means
+≈X km" line on the Range forecast accuracy card. It never feeds `range-estimate.ts` — the ban
+above still applies, and putting a trust-corrected promise on live surfaces (vehicle page,
+dashboard, Telegram) requires a separate ban-exemption decision (BACKLOG.md phase 4b).
+
 ## Battery Consistency diagnostics
 
 `bydmate_capture_session_end_delta()` runs at every session-close path (manual stop, atomic

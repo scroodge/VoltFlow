@@ -1,16 +1,81 @@
 # Backlog — proposed plans awaiting go-ahead
 
+## Range trust factor: turn graded cycle errors into a forward correction — BUILT 2026-10-06
+
+> **Status 2026-10-06: Phase 4a BUILT** — `range-trust-factor.ts` (+9 tests), `trust` field on
+> the `?type=range-prediction` report (trailing 90 d even for narrow display windows), trust
+> line on the Analytics card (en/be/ru). Prod sample: recency-weighted factor 0.60 from 64
+> cycles (14-day half-life); the car's promise regime changed in late September (earlier
+> extrapolations ≈405–460 km/100% vs recent ≈230–290, ratios 0.73–1.03), so the factor now
+> converges toward current behavior within weeks. Verifying
+> surfaced a silent Supabase 1000-row cap on the widened queries — now paginated. Phase 4b
+> (live surfaces) still requires the separate ban-exemption decision below — not built.
+
+> Builds on the Range prediction ledger below (Phase 2+3 live-graded variant). Prod data shows
+> the car's end-of-charge promise is systematically optimistic (−14 % to −53 % per cycle), so the
+> grading output is valuable as a *learned correction*, not just history.
+
+### Research findings
+
+- The graded report already contains everything needed: each cycle carries `promiseKm`,
+  `predictedKmAt100` and `actualKmAt100` (`src/lib/voltflowmate/range-prediction-grading.ts`),
+  and `fetchRangePredictionReport` (`src/lib/vehicle-analytics.ts`) computes it server-side.
+- The car's live promise `telemetry.range_est_km` exists in live snapshots but is **never
+  displayed** — the `range_est_km` ban (see ledger entry + `range-estimate.test.mjs`) forbids it
+  in the estimator graph and in `range-estimate.ts`, `telegram/live-widget.ts`,
+  `telegram/live-widget-message.ts`, `push/live-status-notifications.ts`. The ban exists
+  precisely because this number is unreliable — the ledger just quantified how unreliable.
+- The app's own range estimates (`estimateVehicleRangeKm` / "km per 1%" chips) are
+  measurement-based and do not use the car promise; the correction must not be silently folded
+  into them.
+
+### Proposed scope
+
+**Phase 4a — factor + analytics surface (this plan):**
+1. Pure module `src/lib/voltflowmate/range-trust-factor.ts`: from graded cycles in a trailing
+   ~90-day window, compute `factor = median(actualKmAt100 / predictedKmAt100)`; require ≥3
+   cycles, clamp to [0.5, 1.15], return `null` (no correction) below the minimum. Median so one
+   dirty cycle can't swing it; grading already drops dirty cycles. Node `--experimental-strip-types`
+   tests with synthetic cycle sets (optimistic, pessimistic, mixed, short-window, clamping).
+2. `fetchRangePredictionReport` attaches the factor summary (`{ factor, cycles, windowDays }`)
+   to `RangePredictionReport`; API `?type=range-prediction` response gains it for free.
+3. "Range forecast accuracy" card shows a trust line when the factor exists: e.g. "Trust factor
+   0.81 from 12 cycles — a 280 km promise means ≈227 km" (i18n en/be/ru). No new tables, no
+   estimator changes; the corrected number stays clearly labelled as a *promise correction*.
+
+**Phase 4b — decision point, NOT in this plan:** surfacing the corrected promise on live
+surfaces (vehicle page / dashboard / Telegram). That deliberately displays a value derived from
+`range_est_km` in user-visible code and needs an explicit ban-exemption amendment + doc update
+first. Do not build without separate approval.
+
+### Rejected alternatives
+
+- Feed the factor as a prior into `range-estimate.ts`: violates the ban graph and mixes two
+  independent estimate sources; deferred until there is evidence the measurement-based estimate
+  is itself miscalibrated.
+- Persist per-cycle factors in a table: the on-demand grading is cheap and reproducible from
+  retained trips/session rows; revisit only if the persisted-ledger need from the entry below appears.
+
+### Data ownership
+
+Computed on demand from Postgres app-owned data (`charging_sessions` promise columns +
+`bydmate_trips`); nothing in localStorage; no migration required.
+
+**Should I build this?**
+
 ## Range prediction ledger: grade the car's km estimate against the next discharge cycle — PROPOSED 2026-10-06
 
-> **Status 2026-10-06: Phase 1 BUILT, not deployed.** Migration
-> `20261006180000_charge_end_range_snapshot.sql` (columns + extended capture RPC + bounded
-> backfill), `src/lib/voltflowmate/range-prediction-capture.ts` (+ tests), docs updated;
-> `npm run test` green apart from 3 pre-existing failures, `tsc --noEmit` clean, estimator
-> ban tests still pass. The migration is NOT yet applied to the self-hosted prod DB (prod
-> op, needs explicit go-ahead). Deviation: the three new columns are deliberately **not**
-> mirrored into `ChargingSessionRow`/the client `SESSION_COLUMNS` SELECT lists — no client
-> consumer exists, and those lists are column-minimal for the 1 Hz poll; Phase 2 grading
-> reads them server-side, Phase 3 UI will read the observations table.
+> **Status 2026-10-06: Phase 1 BUILT + applied to prod** (migration live; backfill captured
+> 458 promises back to 2026-07-12; TS capture pending app deploy).
+> **Phase 2+3 BUILT as live-graded variant, not deployed:** instead of the
+> `range_prediction_observations` table, cycles are graded on demand
+> (`src/lib/voltflowmate/range-prediction-grading.ts` + `?type=range-prediction` +
+> "Range forecast accuracy" card in the Analytics tab). Actuals come from persisted
+> `bydmate_trips` distance sums, so no raw-telemetry rescan and the rejected-on-cost
+> "compute on the fly" concern doesn't apply. A persisted ledger can still be added later
+> if history beyond sample/trip retention must survive.
+> Prod data already shows the car's promise running systematically optimistic
+> (−17 % to −46 % error on September cycles).
 
 ### Research findings
 

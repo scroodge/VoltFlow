@@ -588,7 +588,9 @@ export function VehicleAnalyticsPanels({
   const rangePredictionPanelState = resolveAnalyticsPanelState({
     isLoading: !rangePredictionEnabled || rangePredictionQuery.isLoading,
     hasError: rangePredictionQuery.status === "error",
-    itemCount: rangePredictionQuery.data?.gradedCount ?? 0,
+    itemCount:
+      (rangePredictionQuery.data?.gradedCount ?? 0) +
+      (rangePredictionQuery.data?.trust ? 1 : 0),
   });
   const routeInsightsPanelState = resolveAnalyticsPanelState({
     isLoading: !routeInsightsEnabled || routeInsightsQuery.isLoading,
@@ -1290,6 +1292,22 @@ function RangePredictionReportView({
           value={report.avgActualKmAt100 == null ? "—" : `${fmt(report.avgActualKmAt100)} km`}
         />
       </div>
+      {report.trust ? (
+        <p className="mt-4 rounded-2xl border border-border bg-white/[0.02] p-3 text-sm text-muted-foreground">
+          {report.avgPredictedKmAt100 != null
+            ? tx("vehicle.analytics.rangePredictionTrust", {
+                factor: report.trust.factor.toFixed(2),
+                count: report.trust.sampleCycles,
+                promise: Math.round(report.avgPredictedKmAt100 / 10) * 10,
+                corrected:
+                  Math.round((report.avgPredictedKmAt100 / 10) * 10 * report.trust.factor),
+              })
+            : tx("vehicle.analytics.rangePredictionTrustRecent", {
+                factor: report.trust.factor.toFixed(2),
+                count: report.trust.sampleCycles,
+              })}
+        </p>
+      ) : null}
       <ul className="mt-4 space-y-1.5">
         {visible.map((cycle) => {
           const magnitude = Math.abs(cycle.errorPct);

@@ -1170,6 +1170,10 @@ export const dictionaries = {
         rangePredictionActual: "Actual / 100%",
         rangePredictionActualShort: "reality",
         rangePredictionMore: "+{count} more cycles in this period",
+        rangePredictionTrust:
+          "Trust factor {factor} from {count} cycles — a {promise} km promise usually means ≈{corrected} km.",
+        rangePredictionTrustRecent:
+          "Trust factor {factor} learned from {count} recent cycles outside this period.",
         costPerKmTitle: "Cost per km",
         costPerKm: "Cost / km",
         cost: "Charging cost",
@@ -2833,6 +2837,10 @@ export const dictionaries = {
         rangePredictionActual: "Рэальна / 100%",
         rangePredictionActualShort: "рэальна",
         rangePredictionMore: "+{count} цыклаў больш за перыяд",
+        rangePredictionTrust:
+          "Каэфіцыент даверу {factor} па {count} цыклах — абячанне {promise} km звычайна азначае ≈{corrected} km.",
+        rangePredictionTrustRecent:
+          "Каэфіцыент даверу {factor} па {count} нядаўніх цыклах па-за гэтым перыядам.",
         costPerKmTitle: "Кошт за км",
         costPerKm: "Кошт / км",
         cost: "Кошт зарадкі",
@@ -4500,6 +4508,10 @@ export const dictionaries = {
         rangePredictionActual: "Факт / 100%",
         rangePredictionActualShort: "факт",
         rangePredictionMore: "ещё +{count} циклов за период",
+        rangePredictionTrust:
+          "Коэффициент доверия {factor} по {count} циклам — обещание {promise} km обычно означает ≈{corrected} km.",
+        rangePredictionTrustRecent:
+          "Коэффициент доверия {factor} по {count} недавним циклам вне этого периода.",
         costPerKmTitle: "Стоимость за км",
         costPerKm: "Стоимость / км",
         cost: "Стоимость зарядки",

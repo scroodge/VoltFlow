@@ -13,6 +13,8 @@ export type GradingTrip = {
   distance_km: number | null;
 };
 
+import { computeRangeTrustFactor, type RangeTrustSummary } from "./range-trust-factor.ts";
+
 export type RangePredictionCycle = {
   /** Session that made the promise (the charge being graded against). */
   promiseSessionId: string;
@@ -42,6 +44,8 @@ export type RangePredictionReport = {
   pessimisticCount: number;
   avgPredictedKmAt100: number | null;
   avgActualKmAt100: number | null;
+  /** Forward correction learned from this report's cycles in a trailing window. */
+  trust: RangeTrustSummary | null;
 };
 
 const MIN_SOC_DROP_PERCENT = 2;
@@ -188,6 +192,7 @@ export function gradeRangePredictionCycles(
               cycles.length,
           )
         : null,
+    trust: computeRangeTrustFactor(cycles, { nowIso: window.to }),
   };
 }
 

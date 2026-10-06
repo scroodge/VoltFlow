@@ -70,9 +70,12 @@ Telegram's `editMessageText`, so the chat doesn't fill up with spam.
 - The inline keyboard is built by `telegramLiveWidgetReplyMarkup`
   (`live-widget-message.ts`): a web-app button deep-linking to `/vehicle`
   plus a "Скрыть виджет" callback button (`lw:hide`).
-- **Hide (callback `lw:hide`, handled in `/api/telegram/webhook`):** deletes
-  the widget message for everyone and sets the row `status='hidden'`; ingest
-  then skips that vehicle entirely until it is shown again.
+- **Hide (callback `lw:hide`, handled by `scripts/telegram-miniapp-server.py`
+  on the VPS — that Python server owns the live Telegram webhook
+  (`bot.voltflow.life/voltflow`); `src/app/api/telegram/webhook/route.ts`
+  keeps the same handlers as the Vercel mirror but is not the live path):**
+  deletes the widget message for everyone and sets the row `status='hidden'`;
+  ingest then skips that vehicle entirely until it is shown again.
 - **Show (`/start` → "Показать виджет", callback `lw:show`):** deletes the
   user's tracked rows (and the bot's copy of each active message first) so
   the next ingest recreates fresh widgets. This is also the recovery path
@@ -82,6 +85,18 @@ Telegram's `editMessageText`, so the chat doesn't fill up with spam.
   detect it.
 - A failed edit whose error is "message to edit not found" / "message isn't
   accessible" falls through to send-a-new-message and re-tracks the row.
+
+### Using the widget (user-facing)
+
+1. Open the chat with the bot (@Voltflowscr_bot) and press `/start`.
+2. Tap **"Показать виджет"** — you get an alert and, once the car sends its
+   next telemetry (≤60 s with Mate connected), a fresh widget message appears
+   with state/SOC/charge info and an "Открыть VoltFlow" button.
+3. Tap **"Скрыть виджет"** on the widget to remove it and stop updates; the
+   car's telemetry keeps ingesting, only the Telegram message goes away.
+4. To bring it back, repeat steps 1-2. Also use this if you cleared the chat
+   history — the old widget becomes invisible to you but the bot keeps
+   editing its own copy, so only Show can recover it.
 
 ## State table
 
@@ -104,6 +119,16 @@ telegram_live_messages (
 - Callback buttons only reach the bot if the webhook is registered with
   `callback_query` in `allowed_updates` — after deploying the handler, re-run
   `npm run telegram:configure -- --webhook`.
+- `TELEGRAM_WEBHOOK_SECRET` must be set on **both** sides and equal: it is
+  passed to `setWebhook` by the configure script (from the local `.env`) and
+  enforced by the Python server (`/opt/voltflow-telegram/.env` on the VPS).
+  A re-registration *without* it silently drops the secret Telegram attaches;
+  a server without it accepts forged webhook POSTs.
+- Ops: the Python webhook service deploys from this repo file — `scp` +
+  `systemctl restart voltflow-telegram` (helper: git-ignored
+  `local-scripts/bot-vps.sh`, modes `inspect` / `telegram-info` /
+  `telegram-deploy`). The Vercel Next.js deploy is separate and does not
+  update the bot server.
 
 ## 12V auxiliary-battery health alerts
 
@@ -133,6 +158,9 @@ and schema does not activate a production job automatically.
 | File | Role |
 |---|---|
 | `src/lib/telegram/live-widget.ts` | State detection, HTML rendering, send/edit + throttle |
+| `src/lib/telegram/live-widget-message.ts` | Widget copy + reply-keyboard builder (hide button) |
+| `scripts/telegram-miniapp-server.py` | **Live Telegram webhook** (VPS): `/start` reply, `lw:hide`/`lw:show` callbacks, group events |
+| `src/app/api/telegram/webhook/route.ts` | Vercel mirror of the same webhook handlers (not the live path) |
 | `src/lib/push/live-status-notifications.ts` | Live-status phase, throttle, and payloads |
 | `src/lib/push/web-push.ts` | Delivery with non-Apple endpoint filtering |
 | `src/lib/telegram/bot-send.ts` | `sendTelegramMessage`, `editTelegramMessageText` |

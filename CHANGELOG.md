@@ -11,6 +11,27 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-10-06
 
+### Range trust factor: learned correction for the car's end-of-charge promise
+
+- The "Range forecast accuracy" card (range prediction ledger, phases 1–3) showed the car's
+  promises running systematically optimistic; a median of graded cycles now turns that into a
+  forward **trust factor** (`median(actual/predicted)` km-per-100%, recency-weighted with a
+  14-day half-life, trailing 90 d, ≥3 cycles, clamped 0.5–1.15): "a 270 km promise usually
+  means ≈159 km."
+- Prod sample (Oct 2026): factor 0.60 from 64 cycles. Caveat visible in the same data: the
+  car changed its promise regime around late September (mid-year promises extrapolated to
+  ≈405–460 km/100%, recent ones to ≈230–290), so the 90-day median lags the current
+  accuracy — the last five cycles run ≈0.73–1.03.
+- Code: `src/lib/voltflowmate/range-trust-factor.ts` + 9 tests; `trust` attached to the
+  `?type=range-prediction` report by `fetchRangePredictionReport` (graded over the trailing
+  window even in day/week views); card shows the line in en/be/ru. No migration — computed
+  from existing session promise columns + trips.
+- Also fixed while verifying: widening the fetch window hit Supabase's silent 1000-row select
+  cap (trips query returned an arbitrary 1000 rows, blanking late-window cycles). Both the
+  trips query and `fetchPeriodChargingSessions` now paginate in 1000-row pages.
+- Constraint honored: the trust factor lives outside the `range-estimate.ts` ban graph;
+  surfacing a corrected promise on live surfaces is a separate decision (BACKLOG phase 4b).
+
 ### Phantom drain panel now follows the selected analytics range
 
 - Bug: the "Phantom drain" chart ignored the day/week/month selector — its query sent no
@@ -122,7 +143,20 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 - Verified: 16/16 live-widget message + charging tests; `tsc --noEmit` shows no errors in
   touched files (demo-data/dev-mock `ChargingSessionRow` gaps are pre-existing, concurrent
   range work).
-- Open: not yet deployed; webhook re-registration + first hide/show tap still pending.
+- Deployed & verified on prod 2026-10-06: webhook re-registered with
+  `callback_query` + `TELEGRAM_WEBHOOK_SECRET` (both local `.env` and
+  `/opt/voltflow-telegram/.env`), Python server updated on the VPS
+  (`systemd voltflow-telegram.service`); widget recreated via `/start` →
+  "Показать виджет" and confirmed visible in the bot chat.
+- Note: `TELEGRAM_WEBHOOK_SECRET` absent from the server `.env` means the
+  Python server accepts unauthenticated webhook POSTs — keep it set on both
+  sides (documented in `docs/VEHICLE_STATE_NOTIFICATIONS.md` §Limits).
+- Correction found during rollout: the **live** webhook is the Python server
+  (`scripts/telegram-miniapp-server.py`) running at `/opt/voltflow-telegram` on the
+  Contabo VPS, not the Vercel Next.js route (docs/ARCHITECTURE.md already said so).
+  The same `lw:hide` / `lw:show` handlers were ported into it (syntax-checked);
+  `route.ts` remains the Vercel mirror. Deploy via `./local-scripts/bot-vps.sh
+  telegram-info` → `telegram-deploy` (git-ignored local helper).
 
 ---
 

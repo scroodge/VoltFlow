@@ -183,17 +183,29 @@ export async function fetchPeriodChargingSessions({
   const sessionScope = chargingSessionAnalyticsScope(vehicleId, carId);
   if (sessionScope == null) return [];
 
-  const { data, error } = await supabase
-    .from("charging_sessions")
-    .select("*")
-    .eq("user_id", userId)
-    .match(sessionScope)
-    .gte("started_at", from)
-    .lte("started_at", to)
-    .order("started_at", { ascending: false });
+  // Supabase returns at most 1000 rows per select and does not error — paginate
+  // or long windows would silently lose data.
+  const PAGE = 1000;
+  const rows: ChargingSessionRow[] = [];
+  for (let offset = 0; ; offset += PAGE) {
+    const { data, error } = await supabase
+      .from("charging_sessions")
+      .select("*")
+      .eq("user_id", userId)
+      .match(sessionScope)
+      .gte("started_at", from)
+      .lte("started_at", to)
+      .order("started_at", { ascending: true })
+      .range(offset, offset + PAGE - 1);
 
-  if (error) throw error;
-  return (data ?? []) as ChargingSessionRow[];
+    if (error) throw error;
+    const page = (data ?? []) as ChargingSessionRow[];
+    rows.push(...page);
+    if (page.length < PAGE) break;
+  }
+  return rows.sort(
+    (a, b) => Date.parse(String(b.started_at)) - Date.parse(String(a.started_at)),
+  );
 }
 
 /**
@@ -202,7 +214,8 @@ export async function fetchPeriodChargingSessions({
  * in the discharge gap, and report the error. Trips are persistent aggregates, so no
  * raw-telemetry rescan is needed — cycles are graded on demand, nothing is stored yet.
  * The session window is widened 46 d back so the governing promise of the first
- * in-window cycle is found even when that charge itself predates the window.
+ * in-window cycle is found even when that charge itself predates the window, and up to a
+ * trailing 90 d for the learned trust factor.
  */
 export async function fetchRangePredictionReport({
   supabase,
@@ -217,39 +230,63 @@ export async function fetchRangePredictionReport({
   from: string;
   to: string;
 }): Promise<RangePredictionReport> {
-  const wideFrom = new Date(Date.parse(from) - 46 * 86_400_000).toISOString();
+  const DAY_MS = 86_400_000;
+  const TRUST_WINDOW_DAYS = 90;
+  // Trust is learned from a trailing 90-day window even when the display window
+  // is narrower (day/week views), so grading data must reach that far back too.
+  const trustFromMs = Math.min(Date.parse(from), Date.parse(to) - TRUST_WINDOW_DAYS * DAY_MS);
+  const wideFrom = new Date(trustFromMs - 46 * DAY_MS).toISOString();
 
-  const [sessions, tripsResult] = await Promise.all([
-    fetchPeriodChargingSessions({ supabase, userId, vehicleId, from: wideFrom, to }),
-    supabase
+  const sessions = await fetchPeriodChargingSessions({
+    supabase,
+    userId,
+    vehicleId,
+    from: wideFrom,
+    to,
+  });
+
+  const PAGE = 1000;
+  const tripRows: VoltflowMateTripRow[] = [];
+  for (let offset = 0; ; offset += PAGE) {
+    const { data, error } = await supabase
       .from("bydmate_trips")
       .select("started_at,ended_at,last_device_time,distance_km,source")
       .eq("user_id", userId)
       .eq("vehicle_id", vehicleId)
       .gte("started_at", wideFrom)
       .lte("started_at", to)
-      .order("started_at", { ascending: true }),
-  ]);
+      .order("started_at", { ascending: true })
+      .range(offset, offset + PAGE - 1);
 
-  if (tripsResult.error) throw tripsResult.error;
+    if (error) throw error;
+    const page = (data ?? []) as VoltflowMateTripRow[];
+    tripRows.push(...page);
+    if (page.length < PAGE) break;
+  }
 
-  const trips = dedupeTripsBySource((tripsResult.data ?? []) as VoltflowMateTripRow[]).map(
+  const trips = dedupeTripsBySource(tripRows).map(
     (trip) => ({ started_at: trip.started_at, distance_km: trip.distance_km }),
   );
 
-  return gradeRangePredictionCycles(
-    sessions.map((session) => ({
-      id: session.id,
-      status: session.status,
-      start_percent: session.start_percent,
-      started_at: session.started_at,
-      stopped_at: session.stopped_at,
-      end_range_est_km: session.end_range_est_km,
-      end_range_soc: session.end_range_soc,
-    })),
-    trips,
-    { from, to },
-  );
+  const gradingSessions = sessions.map((session) => ({
+    id: session.id,
+    status: session.status,
+    start_percent: session.start_percent,
+    started_at: session.started_at,
+    stopped_at: session.stopped_at,
+    end_range_est_km: session.end_range_est_km,
+    end_range_soc: session.end_range_soc,
+  }));
+
+  const report = gradeRangePredictionCycles(gradingSessions, trips, { from, to });
+
+  if (trustFromMs === Date.parse(from)) return report;
+
+  const trustReport = gradeRangePredictionCycles(gradingSessions, trips, {
+    from: new Date(trustFromMs).toISOString(),
+    to,
+  });
+  return { ...report, trust: trustReport.trust };
 }
 
 /**
