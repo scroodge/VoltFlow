@@ -11,6 +11,17 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-10-06
 
+### Phantom drain panel now follows the selected analytics range
+
+- Bug: the "Phantom drain" chart ignored the day/week/month selector — its query sent no
+  range and the API defaulted to `days=14`, so any selection still showed the last two
+  weeks of bars.
+- Fix: `type=phantom` accepts optional `from`/`to` (the `bydmate_phantom_drain_daily` RPC
+  already took precise `p_from`/`p_to`, so no migration). `fetchPhantomDrain` uses the
+  explicit window when valid and keeps the rolling-`days` default otherwise; the panel
+  passes `telemetryWindow.from/to` and keys the query on `historyRange` + `anchorDate`.
+  Empty-state copy in all three locales no longer promises "last two weeks".
+
 ### Server grants the car's offline buffer — telemetry no longer dropped while offline
 
 - Bug: user `765oliva567@gmail.com` lost both charging sessions of the 2026-10-03/04

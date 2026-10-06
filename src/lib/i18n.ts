@@ -1155,7 +1155,7 @@ export const dictionaries = {
         chargingSessionsInBar: "sessions",
         phantomTitle: "Phantom drain",
         phantomSubtitle: "SOC lost while parked (4+ idle hours).",
-        phantomEmpty: "No parked drain days detected in the last two weeks.",
+        phantomEmpty: "No parked drain days detected in the selected period.",
         phantomLoadError: "Could not load phantom drain. Please try again.",
         costPerKmTitle: "Cost per km",
         costPerKm: "Cost / km",
@@ -2803,7 +2803,7 @@ export const dictionaries = {
         phantomTitle: "Фантомны расход",
         phantomSubtitle: "Страта SOC на стаянцы (4+ гадзіны idle).",
         phantomEmpty:
-          "За апошнія два тыдні не знойдзена дзён з расходам на стаянцы.",
+          "За абраны перыяд не знойдзена дзён з расходам на стаянцы.",
         phantomLoadError:
           "Не ўдалося загрузіць фантомны расход. Паспрабуйце яшчэ раз.",
         costPerKmTitle: "Кошт за км",
@@ -4456,7 +4456,7 @@ export const dictionaries = {
         phantomTitle: "Фантомный разряд",
         phantomSubtitle: "Потеря SOC на стоянке (4+ часа idle).",
         phantomEmpty:
-          "За последние две недели дней с разрядом на стоянке не найдено.",
+          "За выбранный период дней с разрядом на стоянке не найдено.",
         phantomLoadError:
           "Не удалось загрузить фантомный разряд. Попробуйте ещё раз.",
         costPerKmTitle: "Стоимость за км",

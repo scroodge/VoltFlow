@@ -51,6 +51,8 @@ export async function GET(request: NextRequest) {
         userId: access.userId,
         vehicleId,
         days: Number.isFinite(days) ? days : 14,
+        from: params.get("from"),
+        to: params.get("to"),
       });
       return NextResponse.json({ rows });
     }

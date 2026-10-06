@@ -529,10 +529,10 @@ export function VehicleAnalyticsPanels({
   const [lifetimeMapSectionRef, lifetimeMapEnabled] = useDeferredAnalyticsSection(criticalQueriesSettled);
 
   const phantomQuery = useQuery({
-    queryKey: ["vehicle-analytics", "phantom", vehicleId],
+    queryKey: ["vehicle-analytics", "phantom", vehicleId, historyRange, anchorDate],
     queryFn: () =>
       fetchAnalytics<{ rows: { date: string; drainPercent: number; idleHours: number }[] }>(
-        `/api/vehicle/analytics?type=phantom&vehicle_id=${encodeURIComponent(vehicleId)}`,
+        `/api/vehicle/analytics?type=phantom&vehicle_id=${encodeURIComponent(vehicleId)}&from=${encodeURIComponent(telemetryWindow.from)}&to=${encodeURIComponent(telemetryWindow.to)}`,
       ),
     enabled: phantomEnabled,
     retry: false,

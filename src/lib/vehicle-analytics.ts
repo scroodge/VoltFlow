@@ -260,27 +260,43 @@ export async function fetchPhantomDrain({
   userId,
   vehicleId,
   days = 14,
+  from,
+  to,
 }: {
   supabase: SupabaseClient;
   userId: string;
   vehicleId: string;
   days?: number;
+  from?: string | null;
+  to?: string | null;
 }): Promise<PhantomDrainDay[]> {
-  const to = new Date();
-  const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
+  const parsedFrom = from != null ? Date.parse(from) : Number.NaN;
+  const parsedTo = to != null ? Date.parse(to) : Number.NaN;
+  const useExplicitWindow =
+    Number.isFinite(parsedFrom) && Number.isFinite(parsedTo) && parsedFrom <= parsedTo;
+  const windowTo = new Date(useExplicitWindow ? parsedTo : Date.now());
+  const windowFrom = useExplicitWindow
+    ? new Date(parsedFrom)
+    : new Date(windowTo.getTime() - days * 24 * 60 * 60 * 1000);
 
   const { data, error } = await supabase
     .rpc("bydmate_phantom_drain_daily", {
       p_user_id: userId,
       p_vehicle_id: vehicleId,
-      p_from: from.toISOString(),
-      p_to: to.toISOString(),
+      p_from: windowFrom.toISOString(),
+      p_to: windowTo.toISOString(),
     });
 
   // Keep the deployment-order compatibility path, but never amplify a timeout or
   // database failure into a paginated raw scan.
   if (error && isMissingDatabaseFunction(error, "bydmate_phantom_drain_daily")) {
-    return fetchPhantomDrainFallback({ supabase, userId, vehicleId, from, to });
+    return fetchPhantomDrainFallback({
+      supabase,
+      userId,
+      vehicleId,
+      from: windowFrom,
+      to: windowTo,
+    });
   }
   if (error) throw error;
 
