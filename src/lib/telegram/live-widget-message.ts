@@ -34,6 +34,30 @@ function socBar(soc: number): string {
   return "█".repeat(filled) + "░".repeat(SOC_BAR_LENGTH - filled);
 }
 
+/**
+ * Widget keyboard: open-app button + hide button. The hide callback carries no
+ * vehicle id — the widget row is looked up by the callback message's own
+ * (chat_id, message_id), which stays inside Telegram's 64-byte callback_data cap.
+ */
+export function telegramLiveWidgetReplyMarkup(locale: Locale, webAppUrl: string) {
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: translate(locale, "telegramLiveWidget.openVoltFlow") as string,
+          web_app: { url: webAppUrl },
+        },
+      ],
+      [
+        {
+          text: translate(locale, "telegramLiveWidget.hideWidget") as string,
+          callback_data: "lw:hide",
+        },
+      ],
+    ],
+  };
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")

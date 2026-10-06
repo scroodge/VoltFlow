@@ -134,6 +134,9 @@ export function mapChargingSession(
     end_max_cell_delta_v: nullableNum(raw.end_max_cell_delta_v),
     end_delta_soc: nullableNum(raw.end_delta_soc),
     end_median_cell_delta_v: nullableNum(raw.end_median_cell_delta_v),
+    end_range_est_km: nullableNum(raw.end_range_est_km),
+    end_range_soc: nullableNum(raw.end_range_soc),
+    end_voltflow_est_km: nullableNum(raw.end_voltflow_est_km),
     created_at: String(raw.created_at ?? ""),
     updated_at: String(raw.updated_at ?? ""),
   };

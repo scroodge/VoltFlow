@@ -67,7 +67,21 @@ Telegram's `editMessageText`, so the chat doesn't fill up with spam.
   place. If the vehicle just came back from `offline` (car was silent
   >10 min), a **new** message is sent instead of editing the old one, so
   the "car went offline" gap stays visible in the chat.
-- The inline keyboard button always deep-links to `/vehicle`.
+- The inline keyboard is built by `telegramLiveWidgetReplyMarkup`
+  (`live-widget-message.ts`): a web-app button deep-linking to `/vehicle`
+  plus a "Скрыть виджет" callback button (`lw:hide`).
+- **Hide (callback `lw:hide`, handled in `/api/telegram/webhook`):** deletes
+  the widget message for everyone and sets the row `status='hidden'`; ingest
+  then skips that vehicle entirely until it is shown again.
+- **Show (`/start` → "Показать виджет", callback `lw:show`):** deletes the
+  user's tracked rows (and the bot's copy of each active message first) so
+  the next ingest recreates fresh widgets. This is also the recovery path
+  when the user cleared the chat history **on their side only**: the bot's
+  copy survives, `editMessageText` keeps *succeeding* on a message the user
+  can no longer see, and Telegram gives no signal — nothing automatic can
+  detect it.
+- A failed edit whose error is "message to edit not found" / "message isn't
+  accessible" falls through to send-a-new-message and re-tracks the row.
 
 ## State table
 
@@ -75,7 +89,7 @@ Telegram's `editMessageText`, so the chat doesn't fill up with spam.
 telegram_live_messages (
   user_id, vehicle_id (PK),
   chat_id, message_id,
-  status,       -- 'active' (only status currently written)
+  status,       -- 'active' | 'hidden' (hide button)
   updated_at
 )
 ```
@@ -84,8 +98,12 @@ telegram_live_messages (
 
 - The Edge Function ingest path (`supabase/functions/bydmate-telemetry/`)
   does **not** update the live widget — only the Next.js route handler does.
-- Widget copy (labels, emoji, map link format) is Russian-only; there is no
-  i18n pass on this surface yet.
+- Widget body and button labels are localized (`telegramLiveWidget.*` in
+  `src/lib/i18n.ts`); the webhook's callback answers and `/start` reply are
+  Russian-only strings.
+- Callback buttons only reach the bot if the webhook is registered with
+  `callback_query` in `allowed_updates` — after deploying the handler, re-run
+  `npm run telegram:configure -- --webhook`.
 
 ## 12V auxiliary-battery health alerts
 

@@ -42,6 +42,9 @@ export function buildMockChargingSession(nowMs = Date.now()): ChargingSessionRow
     end_max_cell_delta_v: null,
     end_delta_soc: null,
     end_median_cell_delta_v: null,
+    end_range_est_km: null,
+    end_range_soc: null,
+    end_voltflow_est_km: null,
     created_at: createdAt,
     updated_at: createdAt,
   };

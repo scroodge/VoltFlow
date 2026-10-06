@@ -97,6 +97,13 @@ export type ChargingSessionRow = {
   end_delta_soc: number | null;
   /** Median cell delta over the same top-of-charge window; noise-robust companion to end_max_cell_delta_v. */
   end_median_cell_delta_v: number | null;
+  /** Car-reported range (km) at end of charge — a historical prediction artifact,
+   *  never an input to the live estimate. Null on client rows whose SELECT omits it. */
+  end_range_est_km: number | null;
+  /** SOC (%) the car reported `end_range_est_km` at; the km-per-% anchor. */
+  end_range_soc: number | null;
+  /** Voltflow model estimate (km) at the same anchor SOC (range-prediction-capture). */
+  end_voltflow_est_km: number | null;
   created_at: string;
   updated_at: string;
 };

@@ -24,6 +24,7 @@ import { isChargingTelemetry } from "@/lib/vehicle-live-mode";
 import { translate, type Locale } from "@/lib/i18n";
 import {
   composeTelegramLiveWidget,
+  telegramLiveWidgetReplyMarkup,
   type TelegramLiveVehicleState,
 } from "@/lib/telegram/live-widget-message";
 import { estimateVehicleRangeKm } from "@/lib/voltflowmate/range-estimate";
@@ -275,16 +276,7 @@ async function sendOrEditWidget(
   webAppUrl: string,
   locale: Locale,
 ): Promise<boolean> {
-  const replyMarkup = {
-    inline_keyboard: [
-      [
-        {
-          text: translate(locale, "telegramLiveWidget.openVoltFlow") as string,
-          web_app: { url: webAppUrl },
-        },
-      ],
-    ],
-  };
+  const replyMarkup = telegramLiveWidgetReplyMarkup(locale, webAppUrl);
 
   if (existingMessageId != null && chatId != null) {
     const result = await editTelegramMessageText(
@@ -363,9 +355,12 @@ export async function updateTelegramLiveWidgets({
       ),
     ),
   );
-  const eligibleVehicleIds = vehicleIds.filter((vehicleId) =>
-    isWidgetEditDue(existingByVehicle.get(vehicleId) ?? null, nowMs),
-  );
+  const eligibleVehicleIds = vehicleIds.filter((vehicleId) => {
+    const row = existingByVehicle.get(vehicleId) ?? null;
+    // Hide-button opt-out: a hidden widget is never resurrected by ingest.
+    if (row?.status === "hidden") return false;
+    return isWidgetEditDue(row, nowMs);
+  });
   if (!eligibleVehicleIds.length) return { updated: 0 };
 
   const cars = await loadCars(supabase, userId, eligibleVehicleIds);

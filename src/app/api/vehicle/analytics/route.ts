@@ -11,6 +11,7 @@ import {
   fetchMonthlyStats,
   fetchPeriodChargingSessions,
   fetchPhantomDrain,
+  fetchRangePredictionReport,
 } from "@/lib/vehicle-analytics";
 import { mapChargingSession } from "@/lib/db-map";
 import { devVehicleId, resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
@@ -149,6 +150,22 @@ export async function GET(request: NextRequest) {
           ? { estimatedNoChargeDayPricePerKwh: overview.estimatedNoChargeDayPricePerKwh }
           : {}),
       });
+    }
+
+    if (type === "range-prediction") {
+      const from = params.get("from");
+      const to = params.get("to");
+      if (!from || !to) {
+        return NextResponse.json({ error: "Missing from/to" }, { status: 400 });
+      }
+      const report = await fetchRangePredictionReport({
+        supabase: access.supabase,
+        userId: access.userId,
+        vehicleId,
+        from,
+        to,
+      });
+      return NextResponse.json(report);
     }
 
     if (type === "baseline") {

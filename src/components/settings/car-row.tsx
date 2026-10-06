@@ -26,9 +26,8 @@ import {
   deriveAuxBatteryChemistry,
   type AuxBatteryChemistry,
 } from "@/lib/vehicle/aux-battery-chemistry";
+import { isRangeReserveStep, rangeReserveSteps } from "@/lib/range-reserve";
 import type { Car } from "@/types/database";
-
-export const rangeReserveSteps = [0, 5, 10, 15, 20, 25, 30, 35, 40] as const;
 
 export function CarRow({ car }: { car: Car }) {
   const { t } = useTranslation();
@@ -63,7 +62,7 @@ export function CarRow({ car }: { car: Car }) {
   const handleReserveChange = async (value: string | null) => {
     if (value == null) return;
     const reserve = Number(value);
-    if (!(rangeReserveSteps as readonly number[]).includes(reserve)) return;
+    if (!isRangeReserveStep(reserve)) return;
     setReserveSaving(true);
     const { error } = await createClient()
       .from("cars")

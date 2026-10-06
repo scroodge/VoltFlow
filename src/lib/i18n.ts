@@ -1157,6 +1157,19 @@ export const dictionaries = {
         phantomSubtitle: "SOC lost while parked (4+ idle hours).",
         phantomEmpty: "No parked drain days detected in the selected period.",
         phantomLoadError: "Could not load phantom drain. Please try again.",
+        rangePredictionTitle: "Range forecast accuracy",
+        rangePredictionSubtitle:
+          "The car's range promise at the end of each charge vs. what the next discharge cycle actually delivered (km extrapolated to a full charge).",
+        rangePredictionEmpty:
+          "No gradeable cycles yet — promises are captured from the first charge after range snapshots were enabled.",
+        rangePredictionLoadError:
+          "Could not load range forecasts. Please try again.",
+        rangePredictionCyclesStat: "Cycles graded",
+        rangePredictionMeanError: "Avg error",
+        rangePredictionPromised: "Promised / 100%",
+        rangePredictionActual: "Actual / 100%",
+        rangePredictionActualShort: "reality",
+        rangePredictionMore: "+{count} more cycles in this period",
         costPerKmTitle: "Cost per km",
         costPerKm: "Cost / km",
         cost: "Charging cost",
@@ -1710,6 +1723,7 @@ export const dictionaries = {
       timeMinutes: "~{minutes}m",
       openMap: "Open map",
       openVoltFlow: "Open VoltFlow",
+      hideWidget: "Hide widget",
     },
     auxBatteryAlerts: {
       open: "Open VoltFlow",
@@ -2806,6 +2820,19 @@ export const dictionaries = {
           "За абраны перыяд не знойдзена дзён з расходам на стаянцы.",
         phantomLoadError:
           "Не ўдалося загрузіць фантомны расход. Паспрабуйце яшчэ раз.",
+        rangePredictionTitle: "Дакладнасць прагнозу запасу ходу",
+        rangePredictionSubtitle:
+          "Абяцанне запасу ходу аўто ў канцы кожнай зарадкі супраць таго, што даў наступны цыкл разраду (км з экстрапаляцыяй на поўны зарад).",
+        rangePredictionEmpty:
+          "Пакуль няма цыклаў для ацэнкі — абяцанні запісваюцца з першай зарадкі пасля ўключэння знимкаў запасу ходу.",
+        rangePredictionLoadError:
+          "Не ўдалося загрузіць прагнозы запасу ходу. Паспрабуйце яшчэ раз.",
+        rangePredictionCyclesStat: "Ацэнена цыклаў",
+        rangePredictionMeanError: "Сярэд. памылка",
+        rangePredictionPromised: "Абецавана / 100%",
+        rangePredictionActual: "Рэальна / 100%",
+        rangePredictionActualShort: "рэальна",
+        rangePredictionMore: "+{count} цыклаў больш за перыяд",
         costPerKmTitle: "Кошт за км",
         costPerKm: "Кошт / км",
         cost: "Кошт зарадкі",
@@ -3361,6 +3388,7 @@ export const dictionaries = {
       timeMinutes: "~{minutes}хв",
       openMap: "Адкрыць карту",
       openVoltFlow: "Адкрыць VoltFlow",
+      hideWidget: "Схаваць віджэт",
     },
     auxBatteryAlerts: {
       open: "Адкрыць VoltFlow",
@@ -4459,6 +4487,19 @@ export const dictionaries = {
           "За выбранный период дней с разрядом на стоянке не найдено.",
         phantomLoadError:
           "Не удалось загрузить фантомный разряд. Попробуйте ещё раз.",
+        rangePredictionTitle: "Точность прогноза запаса хода",
+        rangePredictionSubtitle:
+          "Обещание запаса хода авто в конце каждой зарядки против того, что показал следующий цикл разряда (км с экстраполяцией на полный заряд).",
+        rangePredictionEmpty:
+          "Пока нет циклов для оценки — обещания записываются с первой зарядки после включения снимков запаса хода.",
+        rangePredictionLoadError:
+          "Не удалось загрузить прогнозы запаса хода. Попробуйте ещё раз.",
+        rangePredictionCyclesStat: "Циклов оценено",
+        rangePredictionMeanError: "Ср. ошибка",
+        rangePredictionPromised: "Обещано / 100%",
+        rangePredictionActual: "Факт / 100%",
+        rangePredictionActualShort: "факт",
+        rangePredictionMore: "ещё +{count} циклов за период",
         costPerKmTitle: "Стоимость за км",
         costPerKm: "Стоимость / км",
         cost: "Стоимость зарядки",
@@ -5015,6 +5056,7 @@ export const dictionaries = {
       timeMinutes: "~{minutes}м",
       openMap: "Открыть карту",
       openVoltFlow: "Открыть VoltFlow",
+      hideWidget: "Скрыть виджет",
     },
     auxBatteryAlerts: {
       open: "Открыть VoltFlow",

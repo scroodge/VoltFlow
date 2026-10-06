@@ -122,6 +122,7 @@ import {
   ensurePushSubscription,
 } from "@/lib/push/client";
 import { queryKeys } from "@/lib/query-keys";
+import { rangeReserveSteps } from "@/lib/range-reserve";
 import { createClient } from "@/lib/supabase/client";
 import { formatTimeAgo } from "@/lib/time-ago";
 import { isIos, noopSubscribe } from "@/lib/pwa";
@@ -417,12 +418,17 @@ function RangeBadge({
   value,
   explanation,
   onExplain,
+  onReserve,
 }: {
   value: string | null;
   explanation?: MetricExplanation;
   onExplain?: () => void;
+  onReserve?: () => void;
 }) {
-  const longPressProps = useLongPress(onExplain ?? (() => {}));
+  const longPressProps = useLongPress(
+    onReserve ?? onExplain ?? (() => {}),
+    onExplain ?? (() => {}),
+  );
   if (!value && !explanation) return null;
 
   const className =
@@ -1170,7 +1176,8 @@ export function DashboardView({
         ? []
         : (dashboardHeroDriveMetrics?.rangeEstimateTrips ?? []),
       batteryCapacityKwh: selectedCar?.battery_capacity_kwh ?? null,
-      reserveSocPercent: selectedCar?.range_reserve_soc_percent ?? 0,      estimate: rangeEstimate,
+      reserveSocPercent: selectedCar?.range_reserve_soc_percent ?? 0,
+      estimate: rangeEstimate,
     });
   }, [
     forceDevMockMode,
@@ -1181,6 +1188,22 @@ export function DashboardView({
     selectedCar?.range_reserve_soc_percent,
     rangeEstimate,
   ]);
+
+  const [reserveEditorOpen, setReserveEditorOpen] = useState(false);
+  const handleReserveSelect = async (step: number) => {
+    if (!selectedCar) return;
+    const { error } = await createClient()
+      .from("cars")
+      .update({ range_reserve_soc_percent: step })
+      .eq("id", selectedCar.id)
+      .eq("user_id", selectedCar.user_id);
+    if (error) {
+      toast.error(t("settings.rangeReserve.saveError") as string);
+      return;
+    }
+    await qc.invalidateQueries({ queryKey: queryKeys.cars });
+    toast.success(t("settings.rangeReserve.saved") as string);
+  };
 
   const estimateLocation = useMemo(() => {
     const lat = latestVoltflowMateSnapshot?.location?.lat;
@@ -1824,6 +1847,11 @@ export function DashboardView({
                       if (rangeExplanation)
                         setOpenMetric(rangeExplanation.metricKey);
                     }}
+                    onReserve={
+                      selectedCar
+                        ? () => setReserveEditorOpen(true)
+                        : undefined
+                    }
                   />
                 </div>
               </div>
@@ -2329,6 +2357,36 @@ export function DashboardView({
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={reserveEditorOpen} onOpenChange={setReserveEditorOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {t("settings.rangeReserve.label")} — {selectedCar?.name ?? ""}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-5 gap-2">
+            {rangeReserveSteps.map((step) => (
+              <Button
+                key={step}
+                type="button"
+                size="sm"
+                variant={
+                  (selectedCar?.range_reserve_soc_percent ?? 0) === step
+                    ? "default"
+                    : "secondary"
+                }
+                className="rounded-full tabular-nums"
+                onClick={() => void handleReserveSelect(step)}
+              >
+                {step}%
+              </Button>
+            ))}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {t("settings.rangeReserve.help")}
+          </p>
         </DialogContent>
       </Dialog>
       <MetricExplainerSheet

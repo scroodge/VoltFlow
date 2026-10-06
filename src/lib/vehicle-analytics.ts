@@ -10,6 +10,10 @@ import {
   type PhantomDrainSample,
 } from "@/lib/voltflowmate/phantom-drain";
 import { chargingSessionAnalyticsScope } from "@/features/charging/domain";
+import {
+  gradeRangePredictionCycles,
+  type RangePredictionReport,
+} from "@/lib/voltflowmate/range-prediction-grading";
 import { collectPagedRows } from "@/lib/voltflowmate/paged-query";
 import { weightedAvgConsumptionKwh100 } from "@/lib/voltflowmate/trip-metrics";
 import { pickWalkBackSessionPrice } from "@/lib/history-day-summary";
@@ -190,6 +194,62 @@ export async function fetchPeriodChargingSessions({
 
   if (error) throw error;
   return (data ?? []) as ChargingSessionRow[];
+}
+
+/**
+ * Range prediction ledger (phase 2, live-graded): pair each closed session carrying an
+ * end-of-charge promise with the next charge, measure reality from summed trip distance
+ * in the discharge gap, and report the error. Trips are persistent aggregates, so no
+ * raw-telemetry rescan is needed — cycles are graded on demand, nothing is stored yet.
+ * The session window is widened 46 d back so the governing promise of the first
+ * in-window cycle is found even when that charge itself predates the window.
+ */
+export async function fetchRangePredictionReport({
+  supabase,
+  userId,
+  vehicleId,
+  from,
+  to,
+}: {
+  supabase: SupabaseClient;
+  userId: string;
+  vehicleId: string;
+  from: string;
+  to: string;
+}): Promise<RangePredictionReport> {
+  const wideFrom = new Date(Date.parse(from) - 46 * 86_400_000).toISOString();
+
+  const [sessions, tripsResult] = await Promise.all([
+    fetchPeriodChargingSessions({ supabase, userId, vehicleId, from: wideFrom, to }),
+    supabase
+      .from("bydmate_trips")
+      .select("started_at,ended_at,last_device_time,distance_km,source")
+      .eq("user_id", userId)
+      .eq("vehicle_id", vehicleId)
+      .gte("started_at", wideFrom)
+      .lte("started_at", to)
+      .order("started_at", { ascending: true }),
+  ]);
+
+  if (tripsResult.error) throw tripsResult.error;
+
+  const trips = dedupeTripsBySource((tripsResult.data ?? []) as VoltflowMateTripRow[]).map(
+    (trip) => ({ started_at: trip.started_at, distance_km: trip.distance_km }),
+  );
+
+  return gradeRangePredictionCycles(
+    sessions.map((session) => ({
+      id: session.id,
+      status: session.status,
+      start_percent: session.start_percent,
+      started_at: session.started_at,
+      stopped_at: session.stopped_at,
+      end_range_est_km: session.end_range_est_km,
+      end_range_soc: session.end_range_soc,
+    })),
+    trips,
+    { from, to },
+  );
 }
 
 /**

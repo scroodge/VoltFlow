@@ -129,3 +129,47 @@ export async function sendTelegramMessage(
     return { ok: false, error: err instanceof Error ? err.message : "fetch_failed" };
   }
 }
+
+export async function deleteTelegramMessage(
+  chatId: number | string,
+  messageId: number,
+): Promise<TelegramSendResult> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return { ok: false, error: "missing_bot_token" };
+
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
+    });
+
+    const payload = (await response.json().catch(() => null)) as
+      | { ok?: boolean; description?: string }
+      | null;
+
+    if (response.ok && payload?.ok) return { ok: true };
+    return { ok: false, error: payload?.description ?? `http_${response.status}` };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "fetch_failed" };
+  }
+}
+
+export async function answerTelegramCallback(
+  callbackQueryId: string,
+  text?: string,
+  showAlert = false,
+): Promise<void> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return;
+
+  await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      callback_query_id: callbackQueryId,
+      text,
+      show_alert: showAlert,
+    }),
+  }).catch(() => undefined);
+}

@@ -98,6 +98,32 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 - Verified: `telegram-live-widget-message` + `live-widget-charging` tests, 15/15 pass. Takes
   effect on deploy; the next accepted telemetry for that user+vehicle then recreates the widget.
 
+### Telegram live widget: inline Hide button + /start Show recovery
+
+- Context: the user cleared the chat history **on their side only**. The bot's copy of the
+  widget message survives, so `editMessageText` keeps *succeeding* on a message the user cannot
+  see (verified on prod: row touched 09:06 UTC, `message_id` 131 unchanged). Telegram gives no
+  signal for this — the edit-failure fallback above cannot catch it; only a user-initiated
+  action can.
+- Built: widget keyboard (new pure builder `telegramLiveWidgetReplyMarkup` in
+  `live-widget-message.ts`, localized en/be/ru) has a second row "Скрыть виджет"
+  (`callback_data: lw:hide`, row looked up by the callback message's own chat_id+message_id —
+  no vehicle id in callback_data). Webhook (`src/app/api/telegram/webhook/route.ts`) now handles
+  `callback_query`: **hide** → `deleteMessage` for everyone + row `status='hidden'`, and ingest
+  skips hidden vehicles (`live-widget.ts` eligibility filter). **show** (`/start` reply gained a
+  "Показать виджет" button → `lw:show`) → deletes the bot's copy of each tracked active message
+  plus all the user's rows, so the next ingest recreates fresh widgets; this is also the
+  recovery path for the cleared-history state above.
+- Transport: `deleteTelegramMessage` / `answerTelegramCallback` added to `bot-send.ts`.
+- `scripts/configure-telegram-bot.mjs`: webhook `allowed_updates` now includes
+  `callback_query` — after deploy, re-run `npm run telegram:configure -- --webhook`.
+- Docs: `docs/VEHICLE_STATE_NOTIFICATIONS.md` updated (hide/show behavior, `hidden` status,
+  corrected the stale "Russian-only widget copy" limit; callback-answer strings remain RU-only).
+- Verified: 16/16 live-widget message + charging tests; `tsc --noEmit` shows no errors in
+  touched files (demo-data/dev-mock `ChargingSessionRow` gaps are pre-existing, concurrent
+  range work).
+- Open: not yet deployed; webhook re-registration + first hide/show tap still pending.
+
 ---
 
 ## 2026-10-01

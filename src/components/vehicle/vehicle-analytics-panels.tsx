@@ -56,6 +56,7 @@ import {
   type TelemetryHistoryRange,
 } from "@/lib/voltflowmate/telemetry-ranges";
 import type { RouteInsightsResult } from "@/lib/voltflowmate/route-insights";
+import type { RangePredictionReport } from "@/lib/voltflowmate/range-prediction-grading";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import { devFetch, isDevAppRoute, withDevApiParams } from "@/lib/dev/dev-fetch";
 import { formatCurrencyAmount, type Locale, type TranslationKey } from "@/lib/i18n";
@@ -527,6 +528,7 @@ export function VehicleAnalyticsPanels({
   const [phantomSectionRef, phantomEnabled] = useDeferredAnalyticsSection(criticalQueriesSettled);
   const [routeInsightsSectionRef, routeInsightsEnabled] = useDeferredAnalyticsSection(criticalQueriesSettled);
   const [lifetimeMapSectionRef, lifetimeMapEnabled] = useDeferredAnalyticsSection(criticalQueriesSettled);
+  const [rangePredictionSectionRef, rangePredictionEnabled] = useDeferredAnalyticsSection(criticalQueriesSettled);
 
   const phantomQuery = useQuery({
     queryKey: ["vehicle-analytics", "phantom", vehicleId, historyRange, anchorDate],
@@ -535,6 +537,16 @@ export function VehicleAnalyticsPanels({
         `/api/vehicle/analytics?type=phantom&vehicle_id=${encodeURIComponent(vehicleId)}&from=${encodeURIComponent(telemetryWindow.from)}&to=${encodeURIComponent(telemetryWindow.to)}`,
       ),
     enabled: phantomEnabled,
+    retry: false,
+  });
+
+  const rangePredictionQuery = useQuery({
+    queryKey: ["vehicle-analytics", "range-prediction", vehicleId, historyRange, anchorDate],
+    queryFn: () =>
+      fetchAnalytics<RangePredictionReport>(
+        `/api/vehicle/analytics?type=range-prediction&vehicle_id=${encodeURIComponent(vehicleId)}&from=${encodeURIComponent(telemetryWindow.from)}&to=${encodeURIComponent(telemetryWindow.to)}`,
+      ),
+    enabled: rangePredictionEnabled,
     retry: false,
   });
 
@@ -572,6 +584,11 @@ export function VehicleAnalyticsPanels({
     isLoading: !phantomEnabled || phantomQuery.isLoading,
     hasError: phantomQuery.status === "error",
     itemCount: phantomQuery.data?.rows.length ?? 0,
+  });
+  const rangePredictionPanelState = resolveAnalyticsPanelState({
+    isLoading: !rangePredictionEnabled || rangePredictionQuery.isLoading,
+    hasError: rangePredictionQuery.status === "error",
+    itemCount: rangePredictionQuery.data?.gradedCount ?? 0,
   });
   const routeInsightsPanelState = resolveAnalyticsPanelState({
     isLoading: !routeInsightsEnabled || routeInsightsQuery.isLoading,
@@ -1074,6 +1091,30 @@ export function VehicleAnalyticsPanels({
         )}
       </section>
 
+      <section ref={rangePredictionSectionRef} className="voltflow-card p-5">
+        <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.rangePredictionTitle")}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.rangePredictionSubtitle")}</p>
+        {rangePredictionPanelState === "loading" ? (
+          <Skeleton className="mt-4 h-52 rounded-2xl" />
+        ) : rangePredictionPanelState === "error" ? (
+          <div className="mt-4">
+            <AnalyticsLoadError
+              message={tx("vehicle.analytics.rangePredictionLoadError")}
+              retrying={rangePredictionQuery.isFetching}
+              onRetry={() => void rangePredictionQuery.refetch()}
+            />
+          </div>
+        ) : rangePredictionPanelState === "empty" ? (
+          <p className="mt-4 text-sm text-muted-foreground">{t("vehicle.analytics.rangePredictionEmpty")}</p>
+        ) : (
+          <RangePredictionReportView
+            report={rangePredictionQuery.data as RangePredictionReport}
+            locale={locale}
+            tx={tx}
+          />
+        )}
+      </section>
+
       {tempConsumptionBuckets.length >= 2 ? (
         <section className="voltflow-card p-5">
           <h2 className="font-heading text-2xl font-semibold tracking-tight">
@@ -1217,6 +1258,66 @@ function AnalyticsStat({ label, value, hint }: { label: string; value: string; h
       <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
       <p className="mt-1 font-heading text-lg font-semibold tabular-nums">{value}</p>
       {hint ? <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{hint}</p> : null}
+    </div>
+  );
+}
+
+function RangePredictionReportView({
+  report,
+  locale,
+  tx,
+}: {
+  report: RangePredictionReport;
+  locale: Locale;
+  tx: Translator;
+}) {
+  const visible = report.cycles.slice(0, 8);
+  const mean = report.meanErrorPct;
+  return (
+    <div className="mt-4">
+      <div className="grid grid-cols-2 gap-3 min-[430px]:grid-cols-4">
+        <AnalyticsStat label={tx("vehicle.analytics.rangePredictionCyclesStat")} value={String(report.gradedCount)} />
+        <AnalyticsStat
+          label={tx("vehicle.analytics.rangePredictionMeanError")}
+          value={mean == null ? "—" : `${mean > 0 ? "+" : ""}${fmt(mean)} %`}
+        />
+        <AnalyticsStat
+          label={tx("vehicle.analytics.rangePredictionPromised")}
+          value={report.avgPredictedKmAt100 == null ? "—" : `${fmt(report.avgPredictedKmAt100)} km`}
+        />
+        <AnalyticsStat
+          label={tx("vehicle.analytics.rangePredictionActual")}
+          value={report.avgActualKmAt100 == null ? "—" : `${fmt(report.avgActualKmAt100)} km`}
+        />
+      </div>
+      <ul className="mt-4 space-y-1.5">
+        {visible.map((cycle) => {
+          const magnitude = Math.abs(cycle.errorPct);
+          const tone = magnitude <= 7 ? "text-emerald-600" : magnitude <= 15 ? "text-amber-600" : "text-rose-600";
+          return (
+            <li
+              key={`${cycle.promiseSessionId}:${cycle.nextSessionId}`}
+              className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm"
+            >
+              <span className="w-14 shrink-0 text-xs uppercase tracking-wide text-muted-foreground">
+                {new Date(cycle.cycleEndedAt).toLocaleDateString(locale, { month: "short", day: "numeric" })}
+              </span>
+              <span className="min-w-0 flex-1 text-muted-foreground">
+                {`${fmt(cycle.promiseKm)} km @ ${fmt(cycle.anchorSoc)} % → ${fmt(cycle.predictedKmAt100)} km`}
+                {` · ${tx("vehicle.analytics.rangePredictionActualShort")} ${fmt(cycle.actualKmAt100)} km`}
+              </span>
+              <span className={`font-semibold tabular-nums ${tone}`}>
+                {`${cycle.errorPct > 0 ? "+" : ""}${fmt(cycle.errorPct)} %`}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {report.cycles.length > visible.length ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          {tx("vehicle.analytics.rangePredictionMore", { count: report.cycles.length - visible.length })}
+        </p>
+      ) : null}
     </div>
   );
 }

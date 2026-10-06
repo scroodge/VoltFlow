@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { siteUrl } from "@/lib/site-url";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  answerTelegramCallback,
+  deleteTelegramMessage,
+} from "@/lib/telegram/bot-send";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,6 +14,15 @@ type TelegramUpdate = {
   message?: {
     chat?: { id?: number | string };
     text?: string;
+  };
+  callback_query?: {
+    id?: string;
+    data?: string;
+    message?: {
+      message_id?: number;
+      chat?: { id?: number | string };
+    };
+    from?: { id?: number };
   };
 };
 
@@ -35,6 +49,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  if (update.callback_query) {
+    await handleCallbackQuery(update.callback_query);
+    return NextResponse.json({ ok: true });
+  }
+
   const chatId = update.message?.chat?.id;
   if (!chatId) return NextResponse.json({ ok: true });
 
@@ -44,6 +63,65 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ ok: true });
+}
+
+async function handleCallbackQuery(
+  cq: NonNullable<TelegramUpdate["callback_query"]>,
+) {
+  const queryId = cq.id;
+  const data = cq.data;
+
+  if (data === "lw:hide") {
+    const chatId = cq.message?.chat?.id;
+    const messageId = cq.message?.message_id;
+    if (typeof chatId !== "number" || messageId == null) {
+      await answerTelegramCallback(queryId ?? "");
+      return;
+    }
+    await deleteTelegramMessage(chatId, messageId);
+    await getSupabaseAdmin()
+      .from("telegram_live_messages")
+      .update({ status: "hidden" })
+      .eq("chat_id", chatId)
+      .eq("message_id", messageId);
+    await answerTelegramCallback(queryId ?? "", "Скрыто. /start — вернуть виджет", true);
+    return;
+  }
+
+  if (data === "lw:show") {
+    const telegramId = cq.from?.id;
+    if (typeof telegramId !== "number") {
+      await answerTelegramCallback(queryId ?? "");
+      return;
+    }
+    const supabase = getSupabaseAdmin();
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("telegram_id", telegramId)
+      .maybeSingle();
+    if (!profile) {
+      await answerTelegramCallback(queryId ?? "", "Telegram не привязан к аккаунту VoltFlow", true);
+      return;
+    }
+    // Drop the tracked messages so the next ingest recreates fresh widgets.
+    // Active rows are deleted on Telegram first — after a client-side history
+    // clear the bot still owns an invisible copy the user can never remove.
+    const { data: rows } = await supabase
+      .from("telegram_live_messages")
+      .select("chat_id,message_id,status")
+      .eq("user_id", profile.id);
+    for (const row of rows ?? []) {
+      if (row.status === "active") {
+        await deleteTelegramMessage(row.chat_id, row.message_id).catch(() => undefined);
+      }
+    }
+    await supabase
+      .from("telegram_live_messages")
+      .delete()
+      .eq("user_id", profile.id);
+    await answerTelegramCallback(queryId ?? "", "Виджет появится с ближайшей телеметрией", true);
+  }
 }
 
 async function sendTelegramMessage(botToken: string, chatId: number | string) {
@@ -61,6 +139,12 @@ async function sendTelegramMessage(botToken: string, chatId: number | string) {
             {
               text: "Открыть VoltFlow",
               web_app: { url: webAppUrl },
+            },
+          ],
+          [
+            {
+              text: "Показать виджет",
+              callback_data: "lw:show",
             },
           ],
         ],
