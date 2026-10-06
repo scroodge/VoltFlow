@@ -53,6 +53,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useVoltflowMateLiveQuery } from "@/hooks/use-voltflowmate-live-query";
 import { useProfileQuery } from "@/hooks/use-profile-query";
 import { useVehicleRangeEstimate } from "@/hooks/use-vehicle-range-estimate";
+import { useRangeTrustQuery } from "@/hooks/use-range-trust-query";
+import { correctCarPromise } from "@/lib/voltflowmate/range-trust-factor";
+import type { RangeTrustSummary } from "@/lib/voltflowmate/range-trust-factor";
 import { useVehicleLastKnownLocation } from "@/hooks/use-vehicle-last-known-location";
 import {
   useVoltflowMateTripRealtimeInvalidation,
@@ -557,6 +560,13 @@ function VehicleLiveContent({
     () => weightedAvgConsumptionKwh100(heroDriveMetrics.rangeEstimateTrips),
     [heroDriveMetrics.rangeEstimateTrips],
   );
+  // Phase 4b (BACKLOG.md): approved *display-only* exemption from the range_est_km ban.
+  // The car's raw promise is scaled by the trust factor learned from graded discharge
+  // cycles; this value is shown as-is and must never flow into range-estimate.ts.
+  const { data: rangeTrustData } = useRangeTrustQuery(scopedVehicleId);
+  const rangeTrust = rangeTrustData?.trust ?? null;
+  const rawCarPromiseKm = snapshot.telemetry.range_est_km ?? null;
+  const correctedCarPromiseKm = correctCarPromise(rawCarPromiseKm, rangeTrust);
   const parkedRecentEnergyKwh =
     parkedAvgConsumptionKwh100 != null ? parkedAvgConsumptionKwh100 / 2 : null;
   const [selectedTripId, setSelectedTripId] = useState<
@@ -579,6 +589,9 @@ function VehicleLiveContent({
         isCharging={isCharging}
         rangeLabel={rangeLabel}
         mathRangeLabel={mathRangeLabel}
+        correctedCarPromiseKm={correctedCarPromiseKm}
+        rawCarPromiseKm={rawCarPromiseKm}
+        rangeTrust={rangeTrust}
         vehicleLabel={vehicleLabel}
         hasMounted={hasMounted}
         distanceSinceChargeKm={heroDriveMetrics.distanceSinceChargeKm}
@@ -731,6 +744,9 @@ function Hero({
   isCharging,
   rangeLabel,
   mathRangeLabel,
+  correctedCarPromiseKm,
+  rawCarPromiseKm,
+  rangeTrust,
   vehicleLabel,
   hasMounted,
   distanceSinceChargeKm,
@@ -751,6 +767,10 @@ function Hero({
   isCharging: boolean;
   rangeLabel: string;
   mathRangeLabel: string;
+  /** Car promise scaled by the learned trust factor; null → chip hidden (phase 4b). */
+  correctedCarPromiseKm: number | null;
+  rawCarPromiseKm: number | null;
+  rangeTrust: RangeTrustSummary | null;
   vehicleLabel: string;
   hasMounted: boolean;
   distanceSinceChargeKm: number | null;
@@ -854,6 +874,20 @@ function Hero({
       hint: t("vehicle.metrics.mathRangeHint"),
       explanation: explanations.mathRange,
     },
+    ...(correctedCarPromiseKm != null && rangeTrust && rawCarPromiseKm != null
+      ? [
+          {
+            key: "carPromise",
+            icon: Gauge,
+            label: t("vehicle.metrics.carPromise"),
+            value: `${fmt(correctedCarPromiseKm)} km`,
+            hint: t("vehicle.metrics.carPromiseHint", {
+              factor: rangeTrust.factor.toFixed(2),
+              count: rangeTrust.sampleCycles,
+            }),
+          },
+        ]
+      : []),
     coreMetrics[0],
     ...coreMetrics.slice(1),
   ];

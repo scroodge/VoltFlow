@@ -85,6 +85,9 @@ export function mapProfile(raw: Record<string, unknown>): Profile {
     notify_channel: enumValue(raw.notify_channel, ["web_push", "telegram", "both"] as const, "web_push"),
     live_status_mode: enumValue(raw.live_status_mode, ["off", "charging", "charging_parked"] as const, "charging"),
     aux_battery_alerts_enabled: raw.aux_battery_alerts_enabled !== false,
+    analytics_card_order: Array.isArray(raw.analytics_card_order)
+      ? raw.analytics_card_order.filter((item): item is string => typeof item === "string")
+      : null,
     is_premium: raw.is_premium === true,
     created_at: String(raw.created_at ?? ""),
   };

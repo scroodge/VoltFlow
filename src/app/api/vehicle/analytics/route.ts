@@ -168,6 +168,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(report);
     }
 
+    // Slim endpoint for live surfaces: only the learned trust factor over a trailing
+    // 90-day window, no cycle list (phase 4b, BACKLOG.md).
+    if (type === "range-trust") {
+      const to = new Date().toISOString();
+      const from = new Date(Date.now() - 90 * 86_400_000).toISOString();
+      const report = await fetchRangePredictionReport({
+        supabase: access.supabase,
+        userId: access.userId,
+        vehicleId,
+        from,
+        to,
+      });
+      return NextResponse.json({ trust: report.trust });
+    }
+
     if (type === "baseline") {
       const days = Number(params.get("days") ?? "30");
       const baseline = await fetchConsumptionBaseline({

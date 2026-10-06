@@ -29,6 +29,8 @@ export type Profile = {
   telegram_username?: string | null;
   notify_channel?: "web_push" | "telegram" | "both";
   aux_battery_alerts_enabled?: boolean;
+  /** User-owned Analytics-tab card order (ids per `src/lib/analytics-card-order.ts`); null = default. */
+  analytics_card_order?: string[] | null;
   /** Android live lock-screen status pushes (tag-replaced); iOS endpoints are skipped. */
   live_status_mode?: "off" | "charging" | "charging_parked";
   is_premium: boolean;

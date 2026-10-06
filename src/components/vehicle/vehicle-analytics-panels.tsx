@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { AnalyticsDayView } from "@/components/vehicle/analytics-day-view";
@@ -62,6 +70,33 @@ import { devFetch, isDevAppRoute, withDevApiParams } from "@/lib/dev/dev-fetch";
 import { formatCurrencyAmount, type Locale, type TranslationKey } from "@/lib/i18n";
 import type { VoltflowMateTripRow, VoltflowMateTripTrackPointRow, ChargingSessionRow } from "@/types/database";
 import { auxLowVoltage, resolveAuxBatteryChemistry } from "@/lib/vehicle/aux-battery-chemistry";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { Check, GripVertical } from "lucide-react";
+
+import { AnalyticsSortableCard } from "@/components/vehicle/analytics-sortable-card";
+import { useProfileQuery } from "@/hooks/use-profile-query";
+import { useUpdateProfile } from "@/hooks/use-update-profile";
+import {
+  DEFAULT_ANALYTICS_CARD_ORDER,
+  loadStoredCardOrder,
+  normalizeCardOrder,
+  storeCardOrderLocally,
+  type AnalyticsCardId,
+} from "@/lib/analytics-card-order";
 
 const HISTORY_RANGES: TelemetryHistoryRange[] = ["day", "week", "month", "quarter", "year"];
 
@@ -728,6 +763,398 @@ export function VehicleAnalyticsPanels({
       }
     : null;
 
+  const { data: profile } = useProfileQuery();
+  const updateProfile = useUpdateProfile();
+  const [localCardOrder, setLocalCardOrder] = useState<AnalyticsCardId[]>(
+    () => loadStoredCardOrder() ?? [...DEFAULT_ANALYTICS_CARD_ORDER],
+  );
+  const [reorderMode, setReorderMode] = useState(false);
+
+  // The profile is the cross-device copy and wins when it has a value; the browser's
+  // instant localStorage copy covers renders before the profile loads and signed-out use.
+  // Reordering writes both, so they converge.
+  const profileCardOrder = profile?.analytics_card_order;
+  const cardOrder = useMemo(() => {
+    if (profileCardOrder?.length) {
+      return normalizeCardOrder(profileCardOrder);
+    }
+    return localCardOrder;
+  }, [profileCardOrder, localCardOrder]);
+
+  const reorderSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleCardDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const from = cardOrder.indexOf(active.id as AnalyticsCardId);
+    const to = cardOrder.indexOf(over.id as AnalyticsCardId);
+    if (from < 0 || to < 0) return;
+    const next = arrayMove(cardOrder, from, to);
+    setLocalCardOrder(next);
+    storeCardOrderLocally(next);
+    void updateProfile({ analytics_card_order: next });
+  };
+
+  // Each Analytics card as a keyed node; rendered in the user's saved order.
+  const cardSections: Record<AnalyticsCardId, ReactNode> = {
+  soh: (
+      <section className="voltflow-card p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-heading text-2xl font-semibold tracking-tight">
+              {t("vehicle.analytics.sohTitle")}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {sohPanelState === "single" && latestSohReading
+                ? t("vehicle.analytics.sohLatestReading", {
+                    date: new Date(latestSohReading.device_time).toLocaleString(locale, {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                    }),
+                  })
+                : t("vehicle.analytics.sohSubtitle")}
+            </p>
+          </div>
+          {latestSohPercent != null ? (
+            <p className="font-heading text-4xl font-bold tabular-nums tracking-tight text-[var(--voltflow-cyan)]">
+              {fmt(latestSohPercent, 1)}
+              <span className="ml-0.5 text-xl font-semibold text-muted-foreground">%</span>
+            </p>
+          ) : null}
+        </div>
+        <div className="mt-4">
+          {sohPanelState === "loading" ? (
+            <Skeleton className="h-40 rounded-2xl" />
+          ) : sohPanelState === "error" ? (
+            <div className="rounded-2xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
+              <p className="text-destructive">{t("vehicle.analytics.sohLoadError")}</p>
+              <button
+                type="button"
+                className="mt-3 rounded-full border border-border px-3 py-1.5 font-semibold text-foreground transition hover:border-primary/40 disabled:opacity-50"
+                disabled={sohQuery.isFetching}
+                onClick={() => void sohQuery.refetch()}
+              >
+                {t("vehicle.analytics.sohRetry")}
+              </button>
+            </div>
+          ) : sohPanelState === "empty" ? (
+            <p className="rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
+              {t("vehicle.analytics.sohNoData")}
+            </p>
+          ) : sohPanelState === "single" ? (
+            <p className="rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
+              {t("vehicle.analytics.sohSinglePoint")}
+            </p>
+          ) : retentionQuery.data?.isPremium ? (
+            <SohTrendChart points={sohQuery.data ?? []} locale={locale} />
+          ) : (
+            <PremiumFeatureGate title={t("settings.premiumGates.diagnosticsTitle")}>
+              <p className="text-sm text-muted-foreground">
+                {t("settings.premiumGates.diagnosticsBody")}
+              </p>
+            </PremiumFeatureGate>
+          )}
+        </div>
+      </section>
+  ),
+
+  battery_health: (
+      <section className="voltflow-card p-5">
+        <div>
+          <h2 className="font-heading text-2xl font-semibold tracking-tight">
+            {t("vehicle.analytics.batteryHealthTitle")}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("vehicle.analytics.batteryHealthSubtitle")}
+          </p>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="rounded-2xl border border-border bg-white/[0.03] p-4">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              {t("vehicle.analytics.batteryHealthSohLabel")}
+            </p>
+            {latestSohPercent != null ? (
+              <p className="mt-1 font-heading text-3xl font-bold tabular-nums tracking-tight text-[var(--voltflow-cyan)]">
+                {fmt(latestSohPercent, 1)}
+                <span className="ml-0.5 text-lg font-semibold text-muted-foreground">%</span>
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t("vehicle.analytics.batteryHealthStatusInsufficientData")}
+              </p>
+            )}
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("vehicle.analytics.batteryHealthSohEstimateNote")}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-white/[0.03] p-4">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              {t("vehicle.analytics.batteryHealthConsistencyLabel")}
+            </p>
+            {batteryConsistency.latest ? (
+              <>
+                <p className="mt-1 font-heading text-3xl font-bold tabular-nums tracking-tight text-[var(--voltflow-cyan)]">
+                  {fmt(batteryConsistency.latest.cellDeltaMv, 0)}
+                  <span className="ml-0.5 text-lg font-semibold text-muted-foreground">mV</span>
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t("vehicle.analytics.batteryHealthConsistencyAtSoc", {
+                    value: fmt(batteryConsistency.latest.deltaSoc, 0),
+                  })}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                  <span className="rounded-full border border-border px-2.5 py-1 font-semibold text-foreground">
+                    {t(BATTERY_HEALTH_STATUS_KEY[batteryConsistency.status])}
+                  </span>
+                  <span className="rounded-full border border-border px-2.5 py-1 text-muted-foreground">
+                    {t(BATTERY_HEALTH_TREND_KEY[batteryConsistency.trend])}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t("vehicle.analytics.batteryHealthNoData")}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <ul className="mt-4 space-y-1.5 border-t border-border/70 pt-3 text-xs text-muted-foreground">
+          <li>{t("vehicle.analytics.batteryHealthCannotIdentifyCell")}</li>
+          <li>{t("vehicle.analytics.batteryHealthTemperatureNote")}</li>
+        </ul>
+      </section>
+  ),
+
+  cell_balance: (
+      <section className="voltflow-card p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-heading text-2xl font-semibold tracking-tight">
+              {t("vehicle.analytics.cellDeltaTitle")}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t("vehicle.analytics.cellDeltaSubtitle")}
+            </p>
+          </div>
+          {chargeDeltaTrend.fullCharges.length > 0 ? (
+            <div className="text-right">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                {t("vehicle.analytics.cellDeltaLatest")}
+              </p>
+              <p className="font-heading text-4xl font-bold tabular-nums tracking-tight text-[var(--voltflow-cyan)]">
+                {(
+                  chargeDeltaTrend.fullCharges[chargeDeltaTrend.fullCharges.length - 1].deltaV * 1000
+                ).toFixed(0)}
+                <span className="ml-0.5 text-xl font-semibold text-muted-foreground">mV</span>
+              </p>
+            </div>
+          ) : null}
+        </div>
+        <div className="mt-4">
+          {periodOverviewState === "loading" ? (
+            <Skeleton className="h-40 rounded-2xl" />
+          ) : periodOverviewState === "error" ? (
+            <AnalyticsLoadError
+              message={tx("vehicle.analytics.periodOverviewLoadError")}
+              retrying={periodOverviewQuery.isFetching}
+              onRetry={() => void periodOverviewQuery.refetch()}
+            />
+          ) : chargeDeltaTrend.fullCharges.length === 0 ? (
+            <p className="rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
+              {t("vehicle.analytics.cellDeltaNoData")}
+            </p>
+          ) : retentionQuery.data?.isPremium ? (
+            <ChargeDeltaTrendChart trend={chargeDeltaTrend} locale={locale} tx={tx} />
+          ) : (
+            <PremiumFeatureGate title={t("settings.premiumGates.diagnosticsTitle")}>
+              <p className="text-sm text-muted-foreground">
+                {t("settings.premiumGates.diagnosticsBody")}
+              </p>
+            </PremiumFeatureGate>
+          )}
+        </div>
+      </section>
+  ),
+
+  aux_12v: (
+      <section className="voltflow-card p-5">
+        <h2 className="font-heading text-2xl font-semibold tracking-tight">{tx("vehicle.analytics.aux12vTitle")}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{tx("vehicle.analytics.aux12vSubtitle")}</p>
+        {auxVoltageQuery.isLoading && !isDayRange ? (
+          <Skeleton className="mt-4 h-52 rounded-2xl" />
+        ) : auxVoltageQuery.error && !isDayRange ? (
+          <p className="mt-4 rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">{tx("vehicle.analytics.aux12vNoData")}</p>
+        ) : (isDayRange ? historyPoints.some((point) => typeof point.telemetry.aux_voltage_v === "number") : visibleAuxDailyPoints.length > 0) ? (
+          <>
+            <div className="mt-4">
+              <AuxVoltageTrendChart range={historyRange} dailyPoints={visibleAuxDailyPoints} dayPoints={historyPoints} baseline={auxBaseline.baseline} chemistry={auxBatteryChemistry} locale={locale} tx={tx} />
+            </div>
+            {auxWindowExtremes ? <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-2">
+              <AnalyticsStat label={t("auxVoltageStats.minimum") as string} {...formatAuxExtreme(auxWindowExtremes.min)} />
+              <AnalyticsStat label={t("auxVoltageStats.maximum") as string} {...formatAuxExtreme(auxWindowExtremes.max)} />
+              {!isDayRange && auxBaseline.restingNow != null ? <AnalyticsStat label={tx("vehicle.analytics.aux12vRestingNow")} value={`${fmt(auxBaseline.restingNow, 2)} V`} /> : null}
+              {!isDayRange && auxBaseline.sufficient ? <AnalyticsStat label={tx("vehicle.analytics.aux12vBaseline")} value={`${fmt(auxBaseline.baseline, 2)} V`} /> : null}
+              {!isDayRange && auxBaseline.sufficient ? <AnalyticsStat label={tx("vehicle.analytics.aux12vChange")} value={`${(auxBaseline.change ?? 0) >= 0 ? "+" : ""}${fmt(auxBaseline.change, 2)} V`} /> : null}
+            </div> : null}
+            {!isDayRange && !auxBaseline.sufficient ? (
+              <p className="mt-3 rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">{tx("vehicle.analytics.aux12vNotEnough", { count: auxBaseline.restingDayCount, required: AUX_MIN_RESTING_DAYS })}</p>
+            ) : null}
+            {!isDayRange && auxBaseline.sufficient ? <p className="mt-3 text-xs text-muted-foreground">{tx("vehicle.analytics.aux12vBasedOn", { count: auxBaseline.restingDayCount })}</p> : null}
+            {lowAuxDayCount > 0 ? <p className="mt-2 text-sm text-amber-400">{tx("vehicle.analytics.aux12vLowDays", { count: lowAuxDayCount })}</p> : null}
+            {!retentionQuery.data?.isPremium && (historyRange === "quarter" || historyRange === "year") ? <p className="mt-2 text-xs text-muted-foreground">{tx("vehicle.analytics.aux12vPremiumHistory")}</p> : null}
+          </>
+        ) : (
+          <p className="mt-4 rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">{tx("vehicle.analytics.aux12vNoData")}</p>
+        )}
+      </section>
+  ),
+
+  charging_trends: !isDayRange && chargingBarCharts.length > 0 ? (
+        <section className="voltflow-card p-5">
+          <h2 className="font-heading text-2xl font-semibold tracking-tight">
+            {t("vehicle.analytics.chargingTrendsTitle")}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("vehicle.analytics.chargingTrendsSubtitle")}
+          </p>
+          {periodOverviewQuery.isLoading ? (
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              <Skeleton className="h-52 rounded-2xl" />
+              <Skeleton className="h-52 rounded-2xl" />
+            </div>
+          ) : (
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              {chargingBarCharts.map((chart) => (
+                <TelemetryBarChart key={chart.title} chart={chart} />
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null,
+
+  phantom: (
+      <section ref={phantomSectionRef} className="voltflow-card p-5">
+        <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.phantomTitle")}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.phantomSubtitle")}</p>
+        {phantomPanelState === "loading" ? (
+          <Skeleton className="mt-4 h-52 rounded-2xl" />
+        ) : phantomPanelState === "error" ? (
+          <div className="mt-4">
+            <AnalyticsLoadError
+              message={tx("vehicle.analytics.phantomLoadError")}
+              retrying={phantomQuery.isFetching}
+              onRetry={() => void phantomQuery.refetch()}
+            />
+          </div>
+        ) : phantomPanelState === "empty" ? (
+          <p className="mt-4 text-sm text-muted-foreground">{t("vehicle.analytics.phantomEmpty")}</p>
+        ) : (
+          <div className="mt-4">
+            <PhantomDrainBarChart rows={phantomQuery.data?.rows ?? []} />
+          </div>
+        )}
+      </section>
+  ),
+
+  range_prediction: (
+      <section ref={rangePredictionSectionRef} className="voltflow-card p-5">
+        <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.rangePredictionTitle")}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.rangePredictionSubtitle")}</p>
+        {rangePredictionPanelState === "loading" ? (
+          <Skeleton className="mt-4 h-52 rounded-2xl" />
+        ) : rangePredictionPanelState === "error" ? (
+          <div className="mt-4">
+            <AnalyticsLoadError
+              message={tx("vehicle.analytics.rangePredictionLoadError")}
+              retrying={rangePredictionQuery.isFetching}
+              onRetry={() => void rangePredictionQuery.refetch()}
+            />
+          </div>
+        ) : rangePredictionPanelState === "empty" ? (
+          <p className="mt-4 text-sm text-muted-foreground">{t("vehicle.analytics.rangePredictionEmpty")}</p>
+        ) : (
+          <RangePredictionReportView
+            report={rangePredictionQuery.data as RangePredictionReport}
+            locale={locale}
+            tx={tx}
+          />
+        )}
+      </section>
+  ),
+
+  consumption_vs_temp: tempConsumptionBuckets.length >= 2 ? (
+        <section className="voltflow-card p-5">
+          <h2 className="font-heading text-2xl font-semibold tracking-tight">
+            {t("vehicle.analytics.consumptionVsTemp")}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.consumptionVsTempSubtitle")}</p>
+          <div className="mt-4">
+            <TempConsumptionBarChart buckets={tempConsumptionBuckets} />
+          </div>
+        </section>
+      ) : null,
+
+  route_insights: (
+      <section ref={routeInsightsSectionRef} className="voltflow-card p-5">
+        <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.routeInsightsTitle")}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.routeInsightsSubtitle")}</p>
+        <RouteInsightsSection
+          routes={routeInsightsQuery.data?.routes ?? []}
+          parkedRoutes={routeInsightsQuery.data?.parkedRoutes ?? []}
+          isLoading={routeInsightsPanelState === "loading"}
+          hasError={routeInsightsPanelState === "error"}
+          onRetry={() => void routeInsightsQuery.refetch()}
+          isRetrying={routeInsightsQuery.isFetching}
+          vehicleId={vehicleId}
+        />
+      </section>
+  ),
+
+  lifetime_map: (
+      <section ref={lifetimeMapSectionRef} className="voltflow-card p-5">
+        <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.lifetimeMapTitle")}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.lifetimeMapSubtitle")}</p>
+        <div className="mt-4">
+          <RouteMap
+            trackPoints={mapQuery.data?.points ?? []}
+            isLoading={!lifetimeMapEnabled || mapQuery.isLoading}
+            hasError={Boolean(mapQuery.error)}
+            embedded
+          />
+        </div>
+      </section>
+  ),
+
+  export: (
+      <section className="voltflow-card p-5">
+        <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.exportTitle")}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.exportSubtitle")}</p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Button asChild variant="outline">
+            <a href={exportUrl} download>{t("vehicle.analytics.exportCsv")}</a>
+          </Button>
+          <Button asChild variant="outline">
+            <a
+              href={exportUrl.replace("format=csv", "format=json")}
+              download
+            >
+              {t("vehicle.analytics.exportJson")}
+            </a>
+          </Button>
+        </div>
+      </section>
+  ),
+  };
+
+  const visibleCardIds = cardOrder.filter((id) => cardSections[id] != null);
+
   return (
     <div className="grid gap-3">
       <section className="voltflow-card p-5">
@@ -756,8 +1183,36 @@ export function VehicleAnalyticsPanels({
                 {t(`vehicle.analytics.range.${range}`)}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => setReorderMode((value) => !value)}
+              aria-pressed={reorderMode}
+              aria-label={reorderMode
+                ? tx("vehicle.analytics.reorderDone")
+                : tx("vehicle.analytics.reorderMode")}
+              title={reorderMode
+                ? tx("vehicle.analytics.reorderDone")
+                : tx("vehicle.analytics.reorderMode")}
+              className={
+                "inline-flex size-9 items-center justify-center rounded-full border transition " +
+                (reorderMode
+                  ? "border-primary bg-primary text-[#06110B]"
+                  : "border-primary/50 bg-primary/15 text-primary hover:bg-primary/25")
+              }
+            >
+              {reorderMode ? (
+                <Check className="size-5" aria-hidden />
+              ) : (
+                <GripVertical className="size-5" aria-hidden />
+              )}
+            </button>
           </div>
         </div>
+        {reorderMode ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            {tx("vehicle.analytics.reorderHint")}
+          </p>
+        ) : null}
         <AnalyticsRangeAnchorPicker
           range={historyRange}
           anchorDate={anchorDate}
@@ -840,339 +1295,24 @@ export function VehicleAnalyticsPanels({
         )}
       </section>
 
-      <section className="voltflow-card p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="font-heading text-2xl font-semibold tracking-tight">
-              {t("vehicle.analytics.sohTitle")}
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {sohPanelState === "single" && latestSohReading
-                ? t("vehicle.analytics.sohLatestReading", {
-                    date: new Date(latestSohReading.device_time).toLocaleString(locale, {
-                      year: "numeric",
-                      month: "short",
-                      day: "numeric",
-                    }),
-                  })
-                : t("vehicle.analytics.sohSubtitle")}
-            </p>
-          </div>
-          {latestSohPercent != null ? (
-            <p className="font-heading text-4xl font-bold tabular-nums tracking-tight text-[var(--voltflow-cyan)]">
-              {fmt(latestSohPercent, 1)}
-              <span className="ml-0.5 text-xl font-semibold text-muted-foreground">%</span>
-            </p>
-          ) : null}
-        </div>
-        <div className="mt-4">
-          {sohPanelState === "loading" ? (
-            <Skeleton className="h-40 rounded-2xl" />
-          ) : sohPanelState === "error" ? (
-            <div className="rounded-2xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
-              <p className="text-destructive">{t("vehicle.analytics.sohLoadError")}</p>
-              <button
-                type="button"
-                className="mt-3 rounded-full border border-border px-3 py-1.5 font-semibold text-foreground transition hover:border-primary/40 disabled:opacity-50"
-                disabled={sohQuery.isFetching}
-                onClick={() => void sohQuery.refetch()}
-              >
-                {t("vehicle.analytics.sohRetry")}
-              </button>
-            </div>
-          ) : sohPanelState === "empty" ? (
-            <p className="rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
-              {t("vehicle.analytics.sohNoData")}
-            </p>
-          ) : sohPanelState === "single" ? (
-            <p className="rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
-              {t("vehicle.analytics.sohSinglePoint")}
-            </p>
-          ) : retentionQuery.data?.isPremium ? (
-            <SohTrendChart points={sohQuery.data ?? []} locale={locale} />
-          ) : (
-            <PremiumFeatureGate title={t("settings.premiumGates.diagnosticsTitle")}>
-              <p className="text-sm text-muted-foreground">
-                {t("settings.premiumGates.diagnosticsBody")}
-              </p>
-            </PremiumFeatureGate>
-          )}
-        </div>
-      </section>
 
-      <section className="voltflow-card p-5">
-        <div>
-          <h2 className="font-heading text-2xl font-semibold tracking-tight">
-            {t("vehicle.analytics.batteryHealthTitle")}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {t("vehicle.analytics.batteryHealthSubtitle")}
-          </p>
-        </div>
-
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="rounded-2xl border border-border bg-white/[0.03] p-4">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              {t("vehicle.analytics.batteryHealthSohLabel")}
-            </p>
-            {latestSohPercent != null ? (
-              <p className="mt-1 font-heading text-3xl font-bold tabular-nums tracking-tight text-[var(--voltflow-cyan)]">
-                {fmt(latestSohPercent, 1)}
-                <span className="ml-0.5 text-lg font-semibold text-muted-foreground">%</span>
-              </p>
-            ) : (
-              <p className="mt-1 text-sm text-muted-foreground">
-                {t("vehicle.analytics.batteryHealthStatusInsufficientData")}
-              </p>
-            )}
-            <p className="mt-1 text-xs text-muted-foreground">
-              {t("vehicle.analytics.batteryHealthSohEstimateNote")}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-border bg-white/[0.03] p-4">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              {t("vehicle.analytics.batteryHealthConsistencyLabel")}
-            </p>
-            {batteryConsistency.latest ? (
-              <>
-                <p className="mt-1 font-heading text-3xl font-bold tabular-nums tracking-tight text-[var(--voltflow-cyan)]">
-                  {fmt(batteryConsistency.latest.cellDeltaMv, 0)}
-                  <span className="ml-0.5 text-lg font-semibold text-muted-foreground">mV</span>
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t("vehicle.analytics.batteryHealthConsistencyAtSoc", {
-                    value: fmt(batteryConsistency.latest.deltaSoc, 0),
-                  })}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                  <span className="rounded-full border border-border px-2.5 py-1 font-semibold text-foreground">
-                    {t(BATTERY_HEALTH_STATUS_KEY[batteryConsistency.status])}
-                  </span>
-                  <span className="rounded-full border border-border px-2.5 py-1 text-muted-foreground">
-                    {t(BATTERY_HEALTH_TREND_KEY[batteryConsistency.trend])}
-                  </span>
-                </div>
-              </>
-            ) : (
-              <p className="mt-1 text-sm text-muted-foreground">
-                {t("vehicle.analytics.batteryHealthNoData")}
-              </p>
-            )}
-          </div>
-        </div>
-
-        <ul className="mt-4 space-y-1.5 border-t border-border/70 pt-3 text-xs text-muted-foreground">
-          <li>{t("vehicle.analytics.batteryHealthCannotIdentifyCell")}</li>
-          <li>{t("vehicle.analytics.batteryHealthTemperatureNote")}</li>
-        </ul>
-      </section>
-
-      <section className="voltflow-card p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="font-heading text-2xl font-semibold tracking-tight">
-              {t("vehicle.analytics.cellDeltaTitle")}
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {t("vehicle.analytics.cellDeltaSubtitle")}
-            </p>
-          </div>
-          {chargeDeltaTrend.fullCharges.length > 0 ? (
-            <div className="text-right">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                {t("vehicle.analytics.cellDeltaLatest")}
-              </p>
-              <p className="font-heading text-4xl font-bold tabular-nums tracking-tight text-[var(--voltflow-cyan)]">
-                {(
-                  chargeDeltaTrend.fullCharges[chargeDeltaTrend.fullCharges.length - 1].deltaV * 1000
-                ).toFixed(0)}
-                <span className="ml-0.5 text-xl font-semibold text-muted-foreground">mV</span>
-              </p>
-            </div>
-          ) : null}
-        </div>
-        <div className="mt-4">
-          {periodOverviewState === "loading" ? (
-            <Skeleton className="h-40 rounded-2xl" />
-          ) : periodOverviewState === "error" ? (
-            <AnalyticsLoadError
-              message={tx("vehicle.analytics.periodOverviewLoadError")}
-              retrying={periodOverviewQuery.isFetching}
-              onRetry={() => void periodOverviewQuery.refetch()}
-            />
-          ) : chargeDeltaTrend.fullCharges.length === 0 ? (
-            <p className="rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
-              {t("vehicle.analytics.cellDeltaNoData")}
-            </p>
-          ) : retentionQuery.data?.isPremium ? (
-            <ChargeDeltaTrendChart trend={chargeDeltaTrend} locale={locale} tx={tx} />
-          ) : (
-            <PremiumFeatureGate title={t("settings.premiumGates.diagnosticsTitle")}>
-              <p className="text-sm text-muted-foreground">
-                {t("settings.premiumGates.diagnosticsBody")}
-              </p>
-            </PremiumFeatureGate>
-          )}
-        </div>
-      </section>
-
-      <section className="voltflow-card p-5">
-        <h2 className="font-heading text-2xl font-semibold tracking-tight">{tx("vehicle.analytics.aux12vTitle")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{tx("vehicle.analytics.aux12vSubtitle")}</p>
-        {auxVoltageQuery.isLoading && !isDayRange ? (
-          <Skeleton className="mt-4 h-52 rounded-2xl" />
-        ) : auxVoltageQuery.error && !isDayRange ? (
-          <p className="mt-4 rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">{tx("vehicle.analytics.aux12vNoData")}</p>
-        ) : (isDayRange ? historyPoints.some((point) => typeof point.telemetry.aux_voltage_v === "number") : visibleAuxDailyPoints.length > 0) ? (
-          <>
-            <div className="mt-4">
-              <AuxVoltageTrendChart range={historyRange} dailyPoints={visibleAuxDailyPoints} dayPoints={historyPoints} baseline={auxBaseline.baseline} chemistry={auxBatteryChemistry} locale={locale} tx={tx} />
-            </div>
-            {auxWindowExtremes ? <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-2">
-              <AnalyticsStat label={t("auxVoltageStats.minimum") as string} {...formatAuxExtreme(auxWindowExtremes.min)} />
-              <AnalyticsStat label={t("auxVoltageStats.maximum") as string} {...formatAuxExtreme(auxWindowExtremes.max)} />
-              {!isDayRange && auxBaseline.restingNow != null ? <AnalyticsStat label={tx("vehicle.analytics.aux12vRestingNow")} value={`${fmt(auxBaseline.restingNow, 2)} V`} /> : null}
-              {!isDayRange && auxBaseline.sufficient ? <AnalyticsStat label={tx("vehicle.analytics.aux12vBaseline")} value={`${fmt(auxBaseline.baseline, 2)} V`} /> : null}
-              {!isDayRange && auxBaseline.sufficient ? <AnalyticsStat label={tx("vehicle.analytics.aux12vChange")} value={`${(auxBaseline.change ?? 0) >= 0 ? "+" : ""}${fmt(auxBaseline.change, 2)} V`} /> : null}
-            </div> : null}
-            {!isDayRange && !auxBaseline.sufficient ? (
-              <p className="mt-3 rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">{tx("vehicle.analytics.aux12vNotEnough", { count: auxBaseline.restingDayCount, required: AUX_MIN_RESTING_DAYS })}</p>
-            ) : null}
-            {!isDayRange && auxBaseline.sufficient ? <p className="mt-3 text-xs text-muted-foreground">{tx("vehicle.analytics.aux12vBasedOn", { count: auxBaseline.restingDayCount })}</p> : null}
-            {lowAuxDayCount > 0 ? <p className="mt-2 text-sm text-amber-400">{tx("vehicle.analytics.aux12vLowDays", { count: lowAuxDayCount })}</p> : null}
-            {!retentionQuery.data?.isPremium && (historyRange === "quarter" || historyRange === "year") ? <p className="mt-2 text-xs text-muted-foreground">{tx("vehicle.analytics.aux12vPremiumHistory")}</p> : null}
-          </>
-        ) : (
-          <p className="mt-4 rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">{tx("vehicle.analytics.aux12vNoData")}</p>
-        )}
-      </section>
-
-      {!isDayRange && chargingBarCharts.length > 0 ? (
-        <section className="voltflow-card p-5">
-          <h2 className="font-heading text-2xl font-semibold tracking-tight">
-            {t("vehicle.analytics.chargingTrendsTitle")}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {t("vehicle.analytics.chargingTrendsSubtitle")}
-          </p>
-          {periodOverviewQuery.isLoading ? (
-            <div className="mt-5 grid gap-3 md:grid-cols-2">
-              <Skeleton className="h-52 rounded-2xl" />
-              <Skeleton className="h-52 rounded-2xl" />
-            </div>
-          ) : (
-            <div className="mt-5 grid gap-3 md:grid-cols-2">
-              {chargingBarCharts.map((chart) => (
-                <TelemetryBarChart key={chart.title} chart={chart} />
-              ))}
-            </div>
-          )}
-        </section>
-      ) : null}
-
-      <section ref={phantomSectionRef} className="voltflow-card p-5">
-        <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.phantomTitle")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.phantomSubtitle")}</p>
-        {phantomPanelState === "loading" ? (
-          <Skeleton className="mt-4 h-52 rounded-2xl" />
-        ) : phantomPanelState === "error" ? (
-          <div className="mt-4">
-            <AnalyticsLoadError
-              message={tx("vehicle.analytics.phantomLoadError")}
-              retrying={phantomQuery.isFetching}
-              onRetry={() => void phantomQuery.refetch()}
-            />
-          </div>
-        ) : phantomPanelState === "empty" ? (
-          <p className="mt-4 text-sm text-muted-foreground">{t("vehicle.analytics.phantomEmpty")}</p>
-        ) : (
-          <div className="mt-4">
-            <PhantomDrainBarChart rows={phantomQuery.data?.rows ?? []} />
-          </div>
-        )}
-      </section>
-
-      <section ref={rangePredictionSectionRef} className="voltflow-card p-5">
-        <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.rangePredictionTitle")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.rangePredictionSubtitle")}</p>
-        {rangePredictionPanelState === "loading" ? (
-          <Skeleton className="mt-4 h-52 rounded-2xl" />
-        ) : rangePredictionPanelState === "error" ? (
-          <div className="mt-4">
-            <AnalyticsLoadError
-              message={tx("vehicle.analytics.rangePredictionLoadError")}
-              retrying={rangePredictionQuery.isFetching}
-              onRetry={() => void rangePredictionQuery.refetch()}
-            />
-          </div>
-        ) : rangePredictionPanelState === "empty" ? (
-          <p className="mt-4 text-sm text-muted-foreground">{t("vehicle.analytics.rangePredictionEmpty")}</p>
-        ) : (
-          <RangePredictionReportView
-            report={rangePredictionQuery.data as RangePredictionReport}
-            locale={locale}
-            tx={tx}
-          />
-        )}
-      </section>
-
-      {tempConsumptionBuckets.length >= 2 ? (
-        <section className="voltflow-card p-5">
-          <h2 className="font-heading text-2xl font-semibold tracking-tight">
-            {t("vehicle.analytics.consumptionVsTemp")}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.consumptionVsTempSubtitle")}</p>
-          <div className="mt-4">
-            <TempConsumptionBarChart buckets={tempConsumptionBuckets} />
-          </div>
-        </section>
-      ) : null}
-
-      <section ref={routeInsightsSectionRef} className="voltflow-card p-5">
-        <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.routeInsightsTitle")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.routeInsightsSubtitle")}</p>
-        <RouteInsightsSection
-          routes={routeInsightsQuery.data?.routes ?? []}
-          parkedRoutes={routeInsightsQuery.data?.parkedRoutes ?? []}
-          isLoading={routeInsightsPanelState === "loading"}
-          hasError={routeInsightsPanelState === "error"}
-          onRetry={() => void routeInsightsQuery.refetch()}
-          isRetrying={routeInsightsQuery.isFetching}
-          vehicleId={vehicleId}
-        />
-      </section>
-
-      <section ref={lifetimeMapSectionRef} className="voltflow-card p-5">
-        <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.lifetimeMapTitle")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.lifetimeMapSubtitle")}</p>
-        <div className="mt-4">
-          <RouteMap
-            trackPoints={mapQuery.data?.points ?? []}
-            isLoading={!lifetimeMapEnabled || mapQuery.isLoading}
-            hasError={Boolean(mapQuery.error)}
-            embedded
-          />
-        </div>
-      </section>
-
-      <section className="voltflow-card p-5">
-        <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.exportTitle")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.exportSubtitle")}</p>
-        <div className="mt-4 flex flex-wrap gap-3">
-          <Button asChild variant="outline">
-            <a href={exportUrl} download>{t("vehicle.analytics.exportCsv")}</a>
-          </Button>
-          <Button asChild variant="outline">
-            <a
-              href={exportUrl.replace("format=csv", "format=json")}
-              download
-            >
-              {t("vehicle.analytics.exportJson")}
-            </a>
-          </Button>
-        </div>
-      </section>
+      {reorderMode ? (
+        <DndContext
+          sensors={reorderSensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleCardDragEnd}
+        >
+          <SortableContext items={visibleCardIds} strategy={verticalListSortingStrategy}>
+            {visibleCardIds.map((id) => (
+              <AnalyticsSortableCard key={id} id={id} label={id}>
+                {cardSections[id]}
+              </AnalyticsSortableCard>
+            ))}
+          </SortableContext>
+        </DndContext>
+      ) : (
+        visibleCardIds.map((id) => <Fragment key={id}>{cardSections[id]}</Fragment>)
+      )}
     </div>
   );
 }

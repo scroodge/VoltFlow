@@ -85,6 +85,7 @@ Mirror of `auth.users`. Created automatically on signup via trigger.
 | `premium_until` | timestamptz | Time-limited premium expiry (`20260617133000`) |
 | `last_active_at` | timestamptz | Last telemetry or login (`20260706120000`) |
 | `inactivity_warning_sent_at` | timestamptz | Set when the 30-day inactivity warning email is sent; account is eligible for deletion once `last_active_at` is >60 days old **and** this is set |
+| `analytics_card_order` | jsonb | User-owned Analytics-tab card order (string ids); NULL = default order (`20261006210000`) |
 | `created_at` | timestamptz | |
 
 Effective premium = `is_admin OR is_premium OR premium_until > now()`, computed by

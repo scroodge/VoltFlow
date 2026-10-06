@@ -83,3 +83,26 @@ export function computeRangeTrustFactor(
     windowDays,
   };
 }
+
+/**
+ * Apply the learned trust factor to the car's *current* live range promise
+ * (`telemetry.range_est_km`). Returns null when either input is missing or implausible —
+ * callers must hide the correction entirely rather than show an uncorrected car number
+ * under a "corrected" label. Approved display use of `range_est_km` (phase 4b,
+ * BACKLOG.md); the result must never flow back into `range-estimate.ts`.
+ */
+export function correctCarPromise(
+  rangeEstKm: number | null | undefined,
+  trust: RangeTrustSummary | null,
+): number | null {
+  if (!trust) return null;
+  if (
+    typeof rangeEstKm !== "number" ||
+    !Number.isFinite(rangeEstKm) ||
+    rangeEstKm <= 0 ||
+    rangeEstKm > 1000
+  ) {
+    return null;
+  }
+  return Math.round(rangeEstKm * trust.factor);
+}

@@ -11,6 +11,24 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-10-06
 
+### Reorderable Analytics cards, order saved per user
+
+- The Analytics tab's ~11 cards (SOH, Battery health, Cell balance, 12 V, Phantom drain, Range
+  forecast, …) are now a keyed `cardSections` record rendered in a user-chosen order; the
+  Telemetry-history range header stays pinned because it drives every card. Conditional cards
+  (Charging trends, Consumption vs temp) simply drop out of the visible list when their range
+  condition is false.
+- "Переставить/Reorder" toggle in the header chip row enters an @dnd-kit edit mode:
+  250 ms long-press activation (normal scrolling unaffected), keyboard-sortable, grip badge on
+  each card. Order saves on drop.
+- Data ownership (user-confirmed): instant `localStorage` copy + `profiles.analytics_card_order`
+  jsonb column as the cross-device sync; the profile value wins when present. New pure lib
+  `src/lib/analytics-card-order.ts` (`normalizeCardOrder` drops unknown/dup ids and appends
+  future cards; 5 tests). Written through the existing `useUpdateProfile` allowlist path.
+- Migration `20261006210000_profile_analytics_card_order.sql` is **created but not yet applied**
+  to the self-hosted prod DB (user chose to apply it themselves); until then the feature runs
+  localStorage-only. Verified in browser: drag reorder, persistence across reload, clean console.
+
 ### Range trust factor: learned correction for the car's end-of-charge promise
 
 - The "Range forecast accuracy" card (range prediction ledger, phases 1–3) showed the car's

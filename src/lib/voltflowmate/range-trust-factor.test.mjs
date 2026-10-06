@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { computeRangeTrustFactor } from "./range-trust-factor.ts";
+import { computeRangeTrustFactor, correctCarPromise } from "./range-trust-factor.ts";
 
 const DAY_MS = 86_400_000;
 const NOW = "2026-10-06T12:00:00.000Z";
@@ -115,4 +115,21 @@ test("custom window size is honored", () => {
   assert.equal(trust.sampleCycles, 3);
   assert.equal(trust.windowDays, 30);
   assert.equal(trust.factor, 0.8);
+});
+
+test("correctCarPromise scales a plausible promise", () => {
+  const trust = { factor: 0.85, sampleCycles: 5, windowDays: 90 };
+  assert.equal(correctCarPromise(245, trust), 208); // 245 × 0.85 = 208.25
+  assert.equal(correctCarPromise(120, trust), 102);
+});
+
+test("correctCarPromise returns null without a learned trust factor", () => {
+  assert.equal(correctCarPromise(245, null), null);
+});
+
+test("correctCarPromise rejects implausible promises instead of scaling them", () => {
+  const trust = { factor: 0.85, sampleCycles: 5, windowDays: 90 };
+  for (const bad of [null, undefined, 0, -50, Number.NaN, 1200]) {
+    assert.equal(correctCarPromise(bad, trust), null);
+  }
 });

@@ -153,7 +153,7 @@ function DeltaPlot({
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
   const topPoints = useMemo(
-    () => points.filter((point) => point.soc >= 99 && point.soc <= 100),
+    () => points.filter((point) => point.soc >= 95 && point.soc <= 100),
     [points],
   );
   const plotPoints = zoomMode === "top" && topPoints.length > 0 ? topPoints : points;
@@ -220,7 +220,7 @@ function DeltaPlot({
         <div>
           <h2 className="font-heading text-lg font-semibold tracking-tight">Delta by SOC</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            {vehicleId} · {zoomMode === "top" && canZoomTop ? "99-100% SOC focus" : "charge path 0-100% SOC"}
+            {vehicleId} · {zoomMode === "top" && canZoomTop ? "95-100% SOC focus" : "charge path 0-100% SOC"}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -263,11 +263,11 @@ function DeltaPlot({
             onClick={() => setZoomMode("top")}
           >
             <Plus className="size-3.5" aria-hidden />
-            99-100
+            95-100
           </Button>
         </div>
         <span className="text-xs text-muted-foreground">
-          {canZoomTop ? `${topPoints.length} pts in 99-100%` : "No 99-100% points"}
+          {canZoomTop ? `${topPoints.length} pts in 95-100%` : "No 95-100% points"}
         </span>
       </div>
 

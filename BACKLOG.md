@@ -1,5 +1,47 @@
 # Backlog — proposed plans awaiting go-ahead
 
+## Corrected car promise on the live vehicle page (phase 4b) — PROPOSED 2026-10-06
+
+> Chosen by the user 2026-10-06 from the "how to use the ledger data" options. This is the
+> deliberate ban-exemption decision foreshadowed in the phase-4a entry below.
+
+### Research findings
+
+- The car's live promise is already on the vehicle page's data path: `telemetry.range_est_km`
+  exists in the live snapshot (`src/types/database.ts:203`, `useVoltflowMateLiveQuery` →
+  `/api/vehicle/live`). It is simply never displayed.
+- The learned correction already exists and is served: `trust` on the `?type=range-prediction`
+  report (`range-trust-factor.ts`, recency-weighted, ≥3 cycles else null).
+- The `range_est_km` ban (`range-estimate.test.mjs`) forbids the car's number inside the
+  estimator dependency graph and in 4 named modules (`range-estimate.ts`,
+  `telegram/live-widget.ts`, `telegram/live-widget-message.ts`,
+  `push/live-status-notifications.ts`). `vehicle-live-view.tsx` is not one of them — a display
+  line can multiply the snapshot promise by the trust factor outside the graph, never writing
+  the result back into any estimator input.
+
+### Proposed scope
+
+1. Pure helper `correctCarPromise(rangeEstKm, trust)` in `range-trust-factor.ts`: returns the
+   corrected km or null (no promise / no trust); trivially testable, +2–3 cases.
+2. Lightweight `?type=range-trust` branch on the analytics route returning only the trust
+   summary (reuses `fetchRangePredictionReport` server-side; the client queries it with a long
+   staleTime — the factor moves on a days-scale, minute-scale freshness is pointless).
+3. Vehicle live page: one extra line under the existing range-estimate chips —
+   "car promises {X} km · Voltflow-corrected ≈{Y} km" (en/be/ru), rendered only when both the
+   snapshot promise and a trust factor exist. Clearly labelled as a promise correction, never
+   merged into the AI/Math range numbers.
+4. Explicit exemption recorded: comment block in `range-estimate.test.mjs` + docs
+   (CHARGING_SESSIONS.md §trust factor) stating the live-view line is an approved display
+   consumer; the 4 banned modules stay banned, Telegram/push keep showing only app estimates.
+   Dashboard gets the same line only if the user asks later.
+
+### Data ownership
+
+Same as phase 4a: computed on demand from Postgres app data; nothing persisted, no migration.
+Client fetches the factor via the API; no localStorage.
+
+**Should I build this?**
+
 ## Range trust factor: turn graded cycle errors into a forward correction — BUILT 2026-10-06
 
 > **Status 2026-10-06: Phase 4a BUILT** — `range-trust-factor.ts` (+9 tests), `trust` field on

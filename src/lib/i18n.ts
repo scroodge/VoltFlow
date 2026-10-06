@@ -777,6 +777,9 @@ export const dictionaries = {
         mathRange: "Math Range",
         mathRangeHint:
           "Distance left at your measured efficiency over the last ~50 km",
+        carPromise: "Car Promise",
+        carPromiseHint:
+          "The car's own range display, corrected by your trust factor {factor} learned from {count} graded discharge cycles",
         sinceLastCharge: "Since last charge",
         kmPerPercent: "km per 1%",
       },
@@ -1014,6 +1017,10 @@ export const dictionaries = {
             "Not enough trips today to compare regen and consumption.",
         },
         telemetryChartsTitle: "Telemetry charts",
+        reorderMode: "Reorder",
+        reorderDone: "Done",
+        reorderHint:
+          "Press and hold a card, then drag it to a new place. The order is saved automatically.",
         teaserTitle: "Analytics & trends",
         teaserSubtitle:
           "Weekly bars, phantom drain, route insights, and exports live in History.",
@@ -2445,6 +2452,9 @@ export const dictionaries = {
         mathRange: "Мат. запас ходу",
         mathRangeHint:
           "Адлегласць пры вымеранай эфектыўнасці за апошнія ~50 км",
+        carPromise: "Прогназ аўто",
+        carPromiseHint:
+          "Запас ходу па ўласным паказанні аўто, скалікаваны на каэфіцыент даверу {factor} з {count} ацэненых цыклаў разраду",
         sinceLastCharge: "Пасля зарадцы",
         kmPerPercent: "км за 1%",
       },
@@ -2681,6 +2691,10 @@ export const dictionaries = {
             "Замала паездак, каб параўнаць рэкуперацыю і расход.",
         },
         telemetryChartsTitle: "Графікі тэлеметрыі",
+        reorderMode: "Перапарадкаваць",
+        reorderDone: "Гатова",
+        reorderHint:
+          "Затрымайце пальцеў на картцы і перацягніце яе. Парадак захоўваецца аўтаматычна.",
         teaserTitle: "Аналітыка і тренды",
         teaserSubtitle:
           "Тыднёвыя слупкі, фантомны расход, маршруты і экспарт — у Гісторыі.",
@@ -4116,6 +4130,9 @@ export const dictionaries = {
         mathRange: "Мат. запас хода",
         mathRangeHint:
           "Расстояние при измеренной эффективности за последние ~50 км",
+        carPromise: "Прогноз авто",
+        carPromiseHint:
+          "Запас хода по собственному показанию авто, скорректированный на коэффициент доверия {factor} из {count} оценённых циклов разряда",
         sinceLastCharge: "Пройдено после зарядки",
         kmPerPercent: "км за 1%",
       },
@@ -4353,6 +4370,10 @@ export const dictionaries = {
             "Мало поездок, чтобы сравнить рекуперацию и расход.",
         },
         telemetryChartsTitle: "Графики телеметрии",
+        reorderMode: "Переставить",
+        reorderDone: "Готово",
+        reorderHint:
+          "Удерживайте палец на карточке и перетащите её. Порядок сохраняется автоматически.",
         teaserTitle: "Аналитика и тренды",
         teaserSubtitle:
           "Недельные столбцы, фантомный разряд, маршруты и экспорт — в Истории.",
