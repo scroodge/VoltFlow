@@ -11,8 +11,6 @@ export type GradingSession = {
 export type GradingTrip = {
   started_at: string;
   distance_km: number | null;
-  /** `ended_at`, or `last_device_time` while open; lets the plausibility guard check speed. */
-  ended_at?: string | null;
 };
 
 import {

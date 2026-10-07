@@ -295,8 +295,6 @@ export async function fetchRangePredictionReport({
   const trips = dedupeTripsBySource(tripRows).map((trip) => ({
     started_at: trip.started_at,
     distance_km: trip.distance_km,
-    // Open trips have no ended_at yet; last_device_time bounds their duration.
-    ended_at: trip.ended_at ?? trip.last_device_time ?? null,
   }));
 
   const gradingSessions = sessions.map((session) => ({

@@ -125,10 +125,12 @@ test("skips a cycle that contains an odometer-scale trip (44,123 km in 6 minutes
   assert.equal(report.trust, null);
 });
 
-test("skips a cycle whose trip implies an impossible speed below the km cap", () => {
-  // 90 km in 5 minutes = 1080 km/h
+test("keeps a cycle whose trip has a truncated duration but a plausible distance", () => {
+  // 90 km recorded over only 5 minutes: the duration is unreliable on some client trips (their
+  // distance agrees with their energy), so only the km cap may reject a trip, never implied speed.
   const report = gradeRangePredictionCycles(ab, [tripAt(1, 90, 300)], window);
-  assert.equal(report.gradedCount, 0);
+  assert.equal(report.gradedCount, 1);
+  assert.equal(report.cycles[0].distanceTraveledKm, 90);
 });
 
 test("a dirty cycle does not poison its clean neighbour", () => {

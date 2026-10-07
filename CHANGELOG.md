@@ -40,6 +40,32 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-10-07
 
+### Junk filter Rule C skipped for client trips (applied to prod)
+Migration `20261007160000_bydmate_discard_junk_rule_c_skip_client_trips.sql`: `bydmate_discard_trip_if_junk`
+Rule C (implied speed = distance ÷ recorded duration) no longer applies to `client_trip` rows. Some client
+trips carry a truncated duration (15–122 s) with a correct distance, and Rule C deleted those real trips
+at close since 2026-09-17 (≈ 0.23 % of client trips, ~2–3 lost and unrecoverable). Odometer phantoms on the
+client path are rejected by the 1,500 km cap before storage. Rules A/B, the legacy telemetry path, signature
+and privileges are unchanged. Rehearsed in a rolled-back transaction (client 8.6 km/122 s, 14.3 km/84 s and
+6.6 km/32 s trips kept; legacy 4.5 km/16 s/max 38 still deleted; Rule A/B still delete blips on the client
+path; healthy trip kept; end-to-end closing blocks keep the trips intact), then applied and verified live.
+`docs/TRIPS.md` updated. Not yet observed on a real drive.
+
+### Trip-distance guard made cap-only + stage 3 repair of 7 stored rows (applied to prod)
+An energy cross-check showed the implied-speed half of the guard was wrong: 6 `client_trip` rows
+flagged by speed alone (and 8 `byd_energydata` rows) have **correct** distances (net energy ÷ stored
+consumption agrees within ~10 %) and only a truncated recorded duration, while all 7 genuine
+odometer-scale phantoms (> 15,000 km) exceed the 1,500 km cap. Without the fix, stage 2 would have
+replaced such a correct distance with a wrong-small odometer delta (8.6 → 0.8 km). Migrations
+`20261007150000_bydmate_trip_distance_plausible_cap_only.sql` (SQL guard = cap only, same signature) and
+`20261007151000_bydmate_trips_repair_odometer_scale_distance.sql` (explicit ids, `distance_km > 1500`
+guard, idempotent): `a62052e8` → 2.4 km, `ca8ba735` → 6.2 km, five real drives → `NULL` distance, **no
+deletes**; no row above the cap remains; speed-only and energydata rows untouched. TypeScript guard is
+cap-only too (`trip-distance-plausibility.ts`, grader, tests). Rehearsed in a rolled-back transaction
+first; backup of the 7 rows' previous values kept locally outside the repo. Found, **not fixed**: the
+server junk filter's Rule C still deletes truncated-duration real client trips at close (~0.23 % of client
+trips since 2026-09-17); plan in BACKLOG.md ("Rule C on the client path"). `docs/TRIPS.md` documents both.
+
 ### Trip-distance plausibility guard, stage 2 (server write-time, applied to prod)
 Migration `20261007130000_bydmate_client_trip_distance_guard.sql`: new
 `bydmate_trip_distance_plausible` (SQL twin of the TS check: > 1,500 km or > 250 km/h) and

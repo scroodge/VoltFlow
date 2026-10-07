@@ -191,7 +191,76 @@ Postgres, scoped per user by RLS. Nothing stored client-side, nothing sent to a 
 **Verification:** `npm run test`, `npm run lint`, `npm run build`; replay on the user's real
 trips: the open 27,583 km trip must show a null distance and not move today's total or AI Range.
 
-### Stage 3 plan: historical cleanup of the 21 stored rows — PAUSED, PLAN CORRECTED 2026-10-07
+### Rule C on the client path (`bydmate_discard_trip_if_junk`) — BUILT AND APPLIED 2026-10-07 (option A)
+
+> **Applied:** `20261007160000_bydmate_discard_junk_rule_c_skip_client_trips.sql` — Rule C now requires
+> `not coalesce(v_trip.client_trip, false)`; Rules A/B, the legacy path, signature, `SECURITY DEFINER`,
+> `search_path` and grants are unchanged (live check: `anon`/`authenticated` denied). Rehearsed in a
+> rolled-back transaction first: client 8.6 km/122 s, 14.3 km/84 s and 6.6 km/32 s trips **kept**; the
+> legacy June case (4.5 km/16 s/max 38) **still deleted**; Rule A blip and Rule B maneuver on the client
+> path **still deleted**; a healthy client trip kept; end to end, the closing block that used to delete the
+> 8.6 and 14.3 km trips now leaves them intact (8.6 / 14.3 km). **Not yet seen on a real drive** (none has
+> closed since). Trips already lost since 2026-09-17 (~2–3) cannot be recovered.
+>
+> The original plan follows.
+
+**Evidence.** In the rolled-back rehearsal of the cap-only guard, a closing block for a real trip
+(8.6 km, recorded duration 122 s, energy agrees) was **deleted** by `bydmate_discard_trip_if_junk`
+(`row_kept = 0`), and a second (14.3 km / 84 s) likewise. Rule C reads distance ÷ recorded duration
+> max(max_speed × 1.5, 80 km/h) as an impossible, inherited-meter phantom. That reasoning fits the
+legacy telemetry path (distance from the car's trip meter, June 2026 "4.5 km / 16 s" case) but not client
+trips, whose distance comes from odometer baselines and whose **duration is sometimes truncated**. Rule C
+has been wired into the client path since `20260917120000`: of ~1,184 client trips since then, ~0.23 %
+(≈ 2–3) were probably real trips deleted this way; unrecoverable (audit and track rows cascade).
+
+**Options.**
+1. **A (recommended): skip Rule C for `client_trip` rows.** `bydmate_discard_trip_if_junk` keeps Rules A and
+   B for everyone; Rule C only when `client_trip` is not true. Odometer phantoms on the client path are
+   already stopped by the 1,500 km cap in `bydmate_apply_client_trip`.
+2. B: keep Rule C for client trips but require the row's own energy to disagree with its distance
+   (net energy ÷ consumption). More precise, more code, and the energy fields can themselves be missing.
+3. C: raise the Rule C threshold. Does not fix a truncated duration (122 s for 8.6 km still reads as 254 km/h).
+4. D: leave as is and accept ~0.23 % real-trip loss.
+
+**Proposal (A).** One idempotent migration replacing `bydmate_discard_trip_if_junk(uuid)` with the live
+body (read it with `pg_get_functiondef` first; it also runs on the legacy telemetry Close path, which must
+be unchanged) plus `and not coalesce(v_trip.client_trip, false)` on Rule C; same `SECURITY DEFINER`,
+`search_path`, and grants (`postgres`, `service_role` only). Update `docs/TRIPS.md` (Rule C table and the
+"Known problem" note). Tests are SQL: rehearse in a rolled-back transaction that (i) an 8.6 km / 122 s client
+trip and a 14.3 km / 84 s one are **kept**, (ii) a legacy (non-client) 4.5 km / 16 s / max 38 trip is still
+**deleted**, (iii) Rules A and B still delete a parking blip on both paths, (iv) privileges unchanged.
+
+**Risks.** A genuinely junk client trip that Rule C used to drop would now survive. Counter-evidence: every
+client trip flagged by the speed test alone over 2,650 trips was real, and Rules A/B still remove parking
+blips. The function runs on every trip close, so a mistake affects all users; rollback is re-applying the
+current body (save it first).
+
+**Data ownership:** no new data model; changes only which existing app-owned trip rows are kept.
+
+**Open question.** Apply option A, or prefer the more conservative B?
+
+---
+
+### Stage 3 plan: historical cleanup — BUILT AND APPLIED 2026-10-07 (revised scope, 7 updates, no deletes)
+
+> **Applied:** `20261007150000_bydmate_trip_distance_plausible_cap_only.sql` (SQL guard is now the 1,500 km
+> cap only; same signature) and `20261007151000_bydmate_trips_repair_odometer_scale_distance.sql`
+> (explicit ids, each also requires `distance_km > 1500`, so it can never touch a healthy row). Result on
+> prod: `a62052e8` → 2.40 km and `ca8ba735` → 6.20 km (odometer delta; GPS agreed within 3–7 %); five real
+> drives `3c5adf11 b9135a90 05796b26 a0fa14a1 368c70ec` → `distance_km = NULL` (kept, user decision); **no
+> row above 1,500 km remains**; the 6 speed-only client rows and the 8 energydata rows are untouched
+> (distances right). Backup of the 7 rows' previous values:
+> `~/voltflow-backups/stage3-bydmate_trips-before-20261007.csv` (outside the repo, mode 600; restore
+> `distance_km` from it to roll back). Rehearsed first in a rolled-back transaction (second run `UPDATE 0`
+> twice = idempotent; apply-function cases for repair with samples, `NULL` without, open phantom, later
+> phantom not overwriting, healthy passthrough, privileges). TypeScript guard made cap-only to match
+> (`trip-distance-plausibility.ts`, grader, tests; `tsc` clean, suite 613/616 with the same 3 unrelated
+> failures). **Not fixed here:** Rule C still deletes truncated-duration real client trips at close (plan
+> above).
+>
+> The corrected plan and the superseded one follow.
+
+### Stage 3 plan (corrected, then superseded): historical cleanup of the 21 stored rows — PAUSED, PLAN CORRECTED 2026-10-07
 
 > **Correction (2026-10-07, found while building; nothing was written to prod for stage 3).**
 > The table below classified six `client_trip` rows (groups B/C and `7ccbba5d`) as junk or as

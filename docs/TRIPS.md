@@ -50,8 +50,13 @@ trip meter reads 11.6 km). `bydmate_apply_client_trip` no longer copies such a v
 | implausible | still open | the previous value if plausible, else `NULL` — never the phantom |
 | implausible | closing block (`ended_at`) | `bydmate_trip_distance_from_samples` (odometer delta over the trip's own samples), else `NULL` |
 
-*Implausible* = `bydmate_trip_distance_plausible` is false: **> 1,500 km, or implied speed
-> 250 km/h** (speed checked only above 1 km and with a known positive duration). It is the SQL twin of
+*Implausible* = `bydmate_trip_distance_plausible` is false: **> 1,500 km, and nothing else**
+(migration `20261007150000`; the first version also rejected an implied speed > 250 km/h and was
+removed). **Do not judge a client trip's distance by distance ÷ recorded duration:** some trips carry a
+truncated duration (15–122 s) with a *correct* distance (net energy ÷ consumption agrees within ~10 %;
+e.g. 8.6 km stored, 8.6 km from energy). On 2,650 client trips (2026-08-01…09-17) 6 were flagged by
+speed alone and all 6 were false positives, while all 7 genuine odometer-scale phantoms (> 15,000 km)
+are above the cap (every vehicle's odometer is ≥ 5,155 km). It is the SQL twin of
 `src/lib/voltflowmate/trip-distance-plausibility.ts`; **change both together**.
 `bydmate_trip_distance_from_samples` needs ≥ 2 positive odometer samples within 2 minutes of both
 the trip's start and end, so late-delivered samples fail to `NULL` rather than to a wrong-small
@@ -91,10 +96,19 @@ matches. Current deployed logic is migration **`20260613150000_fix_junk_trip_dis
 |---|---|---|
 | **A** | `distance_km ≤ 0.1` AND `max_speed_kmh ≤ 3` | pure parking jitter |
 | **B** | `duration < 60 s` AND `max_speed_kmh < 10` | slow short maneuvers |
-| **C** | `distance_km > 0.3` AND implied speed `distance·3600/duration > max(max_speed·1.5, 80)` | inherited trip-meter phantoms — a genuine trip's average can never exceed its max instantaneous speed |
+| **C** | `distance_km > 0.3` AND implied speed `distance·3600/duration > max(max_speed·1.5, 80)` | inherited trip-meter phantoms — a genuine trip's average can never exceed its max instantaneous speed. **Legacy (non-`client_trip`) trips only** since `20261007160000` |
 
 Rule C is the decisive one for inherited-distance phantoms: it caught a `4.5 km / 16 s`
 (992 km/h implied, max 38) trip that Rule B missed.
+
+> **Rule C no longer applies to `client_trip` rows (since `20261007160000`).** Some client trips carry a
+> truncated duration (15–122 s) with a *correct* distance, so Rule C read "8.6 km / 122 s" as impossible
+> and deleted a real trip at close. From `20260917120000` (when the junk filter was wired into the client
+> path) until the fix, an estimated ~0.23 % of client trips (≈ 2–3 of 1,184) were lost this way and cannot
+> be recovered (their audit/track rows cascade away). Rule C is for **legacy telemetry trips** whose
+> distance came from the car's trip meter; for client trips distance comes from odometer baselines and the
+> 1,500 km cap in `bydmate_apply_client_trip` is the guard. Rules A and B still apply to both paths.
+> Rollback: re-apply the function body without the `client_trip` condition on Rule C.
 
 > **Migration gotcha:** an earlier fix (`20260613130000`) was *edited after it had already been
 > applied*, so its Rule B never reached the DB — `supabase db push` skips applied migrations.
