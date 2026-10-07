@@ -44,6 +44,33 @@ odometer, speed, and an optional map link. Instead of posting a new message
 per update, the widget is created once and then edited in place via
 Telegram's `editMessageText`, so the chat doesn't fill up with spam.
 
+## Telemetry-offline Telegram notice
+
+This is separate from the editable live widget. A ten-minute database detector opens a
+`low_24h_count` audit when a recently-contacted vehicle has fewer than 500 accepted
+telemetry samples in 24 hours. If—and only if—the owner already linked Telegram
+(`profiles.telegram_id`), the cron delivery route sends one ordinary message saying that
+telemetry is no longer arriving. It includes the last contact and sample count, explains
+that live status, remote commands, and automatic charging updates may be unavailable,
+and directs the owner to check VoltFlow Mate, network access, and Android background
+permissions.
+
+- An owner without a Telegram link is ignored: no message is queued and no retry is
+  created.
+- A failed Telegram send is retried; successful delivery is recorded on the operational
+  cadence-audit row. Recovery (at least 500 samples/24h) closes the row, so a later
+  outage may notify again.
+- `moving_gap` alarms remain diagnostic-only. They are not equivalent to a sender being
+  offline and are never delivered to the owner.
+- The notice uses the existing user-owned Telegram link in Postgres. Its audit/delivery
+  state is app-owned Postgres operational data; it does not add an opt-in or local
+  preference, and it never includes account email or ID in the Telegram text.
+
+> **Release status (2026-10-07):** the production database selector is live, but the
+> matching Next.js route requires a scoped Vercel deployment before owner delivery is
+> live end-to-end. The old deployed route must not be treated as this owner-notice
+> behavior.
+
 - **Detection/render/send:** `src/lib/telegram/live-widget.ts` —
   `updateTelegramLiveWidgets()`
 - **Transport:** `sendTelegramMessage` / `editTelegramMessageText` in

@@ -90,6 +90,12 @@ read the DiLink head unit or render private live telemetry. The separate Telegra
 widget is generated server-side after an accepted telemetry sample, so it remains useful
 when the PWA is closed.
 
+Telemetry health is a separate, event-style Telegram surface: the database's
+`low_24h_count` cadence detector may notify the linked vehicle owner that telemetry has
+stopped arriving. It is not a live-widget edit and never sends diagnostic moving-gap
+events to owners. Its current behavior and release boundary are documented in
+[Telemetry](../supabase/TELEMETRY.md#telemetry-cadence-monitoring).
+
 ### Visible-view fast status
 
 Normal delivery is deliberately batched to control backend work. While a user has a live
@@ -172,7 +178,7 @@ restores. Breaking one of them causes the classic bugs (frozen percent, false
 | **Charging sessions** | Start/stop, ~1 Hz progress, auto sessions, reconcile, tariffs | [CHARGING_SESSIONS.md](CHARGING_SESSIONS.md) | `src/features/charging/` (public entry points plus private domain/server/client/UI implementation) |
 | **Trips** | Server-side trip inference, junk filtering, distance deltas, GPS tracks | [TRIPS.md](TRIPS.md) | `bydmate_ingest_telemetry` (SQL), `src/lib/voltflowmate/trip-*` |
 | **Analytics & charts** | History→Analytics, trip charts, route maps, route insights | [TRIPS.md](TRIPS.md) | `src/components/vehicle/*`, `src/lib/voltflowmate/telemetry-*` |
-| **Notifications** | Charge-threshold web push, Android live-status web push, and Telegram live-status widget | [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | `src/lib/push/*`, `src/lib/telegram/*` |
+| **Notifications** | Charge-threshold web push, Android live-status web push, Telegram live-status widget, and linked-owner telemetry-offline notice | [VEHICLE_STATE_NOTIFICATIONS.md](VEHICLE_STATE_NOTIFICATIONS.md) | `src/lib/push/*`, `src/lib/telegram/*` |
 | **Telegram bot** | Mini App login/link (Next.js) + group-message capture, LLM classification, and marketplace draft creation (**separate Python edge server**, not this Next.js app) | DATABASE_SCHEMA.md §Community marketplace | `src/app/api/telegram/{auth,link}/route.ts`; `scripts/telegram-miniapp-server.py` owns the real registered webhook — `src/app/api/telegram/webhook/route.ts` only sends the PWA deep-link reply and is not the live group-event path |
 | **Remote commands** | Abstract commands PWA → Mate poller or car-off shell daemon (lock, set SOC limit, …) | [VoltFlow Mate API](../supabase/VOLTFLOW_MATE_API.md) | `src/app/api/bydmate/commands/*`, `vehicle_commands` |
 | **Premium & retention** | Entitlements, tiered telemetry retention, admin tools | [PREMIUM_ADMIN.md](PREMIUM_ADMIN.md) | `is_user_premium()`, `purge_old_bydmate_telemetry_by_tier()` |

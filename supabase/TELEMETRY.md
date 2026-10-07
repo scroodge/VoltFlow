@@ -38,6 +38,39 @@ The authenticated telemetry endpoint accepts one sample or a batch. Each sample 
 - required `telemetry` and `location` objects;
 - optional `diplus`, `autoservice`, and `mate_version` metadata.
 
+## Telemetry cadence monitoring
+
+The server runs `bydmate_detect_telemetry_cadence_collapses()` every ten minutes. It
+writes app-owned operational audit rows to
+`bydmate_telemetry_cadence_alarm_audits`; these rows are not a user-facing telemetry
+data model and are not exposed through client RLS.
+
+- `low_24h_count` opens when an otherwise recently-contacted vehicle has fewer than
+  500 accepted samples in the trailing 24 hours. It resolves after the count reaches
+  500 again. This is the sustained sender-offline signal.
+- `moving_gap` records an in-motion gap larger than eight seconds between consecutive
+  moving samples. It is diagnostic-only: it is retained for operations but never
+  sends an owner notification.
+- The detector skips a vehicle that has already been completely stale for 24 hours;
+  it does not manufacture a new episode from an old disconnected snapshot.
+
+For a newly-opened `low_24h_count`, delivery is eligible only when the same profile
+already has a linked `profiles.telegram_id`. The owner receives one plain-language
+Telegram notice with the vehicle name, last contact, sample count, affected features
+(live status, remote commands, automatic charging updates), and on-device checks.
+No linked Telegram account means no enqueue, message, or retry. A Telegram send failure
+is retryable; a recovered sender followed by another outage opens a new eligible notice.
+The notice never includes the owner's email or account ID.
+
+`profiles.telegram_id` is existing **user-owned** account-link data in Postgres. The
+cadence audit and delivery fields are **app-owned** operational data in Postgres. No
+new preference, client storage, or telemetry table is created for this feature.
+
+> **Release status (2026-10-07):** the database migration is applied to production and
+> the application route is committed, but the route still needs a scoped Vercel
+> deployment. Until that deployment completes, this policy is enforced at enqueue time,
+> while the previously deployed route remains the delivery handler.
+
 The server validates the authenticated vehicle identity, normalizes accepted values,
 sanitizes location data, and processes retries idempotently. A client retains queued data
 until it receives a complete application-level acknowledgement.
