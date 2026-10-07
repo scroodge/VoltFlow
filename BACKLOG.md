@@ -1,73 +1,304 @@
 # Backlog — proposed plans awaiting go-ahead
 
-## Telemetry-offline notice: notify the linked owner, otherwise stay silent — PROPOSED 2026-10-06
+## Self-hosted Supabase outage alarm (PostgREST wedge) — PARTLY BUILT 2026-10-07
+
+> **Built:** the host cron watchdog (alert + auto-restart), logged in CHANGELOG.md.
+> **Still proposed:** Grafana rules (option 1a–c), compose restart policy, external
+> uptime service (option 3), and finding the root cause of the wedge. Needs the step-1
+> discovery output (Grafana/compose layout) before anything more is built.
 
 ### Problem
 
-The current cadence alarm is an admin-only operational page.  Its `low_24h_count`
-signal correctly establishes that a vehicle's sender has nearly stopped reporting, but
-the Telegram text supplies no owner action and is delivered roughly a day after the
-last contact.  The current incident had 268 samples in the detector's 24-hour window
-and no later sample; that fact is more useful to the owner of the vehicle than to an
-admin.  Conversely, `moving_gap` is a diagnostic signal for short in-motion holes and
-is not a suitable end-user "telemetry is offline" notice.
+2026-10-07: every `/rest/v1/*` call returned `PGRST003 Timed out acquiring connection
+from connection pool` while Postgres was healthy (34/100 connections). `supabase-rest`
+had been up 3 months and was `unhealthy`; its logs looped on "Failed to load the schema
+cache". `docker restart supabase-rest` fixed it at once. Nothing alerted: the existing
+Grafana rules cover only GoTrue 5xx (`sb-auth-5xx*`, see `docs/OPS_LOCAL.md` →
+Monitoring). Start of outage is **not proven**: telemetry ingest fell to 31 rows at
+2026-10-06 21:00 UTC and resumed 2026-10-07 05:00 UTC after the restart, but the car is
+also silent overnight on 10-05, so the data cannot separate "outage" from "car off".
+Root cause of the wedge is unknown.
 
-The current immediate delivery loop and the once-daily digest are both admin-only.
-Changing only either Next.js route would be unsafe: an unlinked owner's audit row
-remains pending, is retried by the detector, and can be picked up later by the digest.
+### Options
+
+1. **Extend the existing Grafana/Prometheus alerts (recommended).** Add rules for
+   (a) `supabase-rest` container health != healthy for 2 min, (b) PostgREST 5xx rate,
+   (c) an external HTTP probe of `https://supabase.voltflow.life/rest/v1/` expecting 401
+   (a 5xx or timeout fires). Route to the existing Telegram admin contact point. Reuses
+   what is already running; no new service.
+2. **Self-heal: autoheal sidecar / restart-on-unhealthy.** Restarts a wedged
+   `supabase-rest` automatically. Shortens the outage from hours to ~1 min but can
+   mask the cause and loop; ship only *with* option 1, alert on every restart.
+3. **External uptime service (UptimeRobot etc.).** Catches a whole-VPS outage that
+   in-box Grafana cannot. Cheap complement, not a replacement.
+4. **App-side check** (a cron route pinging PostgREST). Rejected: runs on Vercel,
+   spends invocations, and dies with the same dependency.
+
+### Data ownership
+
+No user-facing data model: operational config only, app-owned, lives on the VPS
+(Grafana/compose) and, for option 3, a third-party account. No Postgres or
+localStorage storage.
+
+### Caveats
+
+The VPS is shared (Contabo is multi-tenant); a restart policy or probe change touches
+the shared host, so it needs your confirmation per step. Agent SSH to the host is
+currently denied by the permission classifier, so host changes would be yours to run
+unless you grant it.
+
+### Recommendation
+
+Options 1 + 2, with 3 as a later add-on.
+
+## Odometer-scale trip distances (`bydmate_trips.distance_km`) — STAGE 1 (grader) BUILT 2026-10-07; stages 2–3 and other consumers PROPOSED
+
+> **Status 2026-10-07:** `isPlausibleTripDistance` (`trip-distance-plausibility.ts`, cap 1,500 km or
+> 250 km/h) is built and used by `gradeRangePredictionCycles`, which now skips any cycle containing
+> an implausible trip; `vehicle-analytics.ts` passes `ended_at ?? last_device_time` so open trips
+> are checked too. Replayed on the user's real cycles: 1 of 66 dropped (the 44,269 km one), max
+> ratio 188 → 1.03, median 0.597 → 0.593 (factor moves ≤ 0.01). **Not yet covered** — these still
+> read `distance_km` unguarded and need the same check at a central trip-loading point (to be
+> planned, not blind-patched): `range-estimate.ts` (AI Range consumption), `hero-drive-metrics.ts`,
+> `day-insights.ts`, `history-day-summary.ts`, `analytics-day-view.tsx`, `history-view.tsx`,
+> `dashboard-view.tsx`, `dashboard-deferred-summaries.tsx`, `trip-energy.ts`, `route-insights.ts`,
+> `api/vehicle/export/route.ts`. The open phantom trip (27,583 km) may currently affect any of
+> these for its owner until it closes.
+
+### Research findings (read-only prod checks, 2026-10-07)
+
+- **Symptom:** trips whose `distance_km` is the car's odometer, not a per-trip delta. Example
+  `a62052e8` (2026-08-01): reported 44,122.9 km, odometer that day ≈ 44,126, true trip 2.4 km
+  (odometer delta = trip-meter delta in the raw samples). Signature: `soc_start = -1`,
+  `trip_meter_baseline_km = 0`, `client_trip = true`.
+- **Root cause (server side, already documented in migration `20260917120000`):**
+  `bydmate_apply_client_trip` writes `distance_km` straight from the Mate APK's cumulative trip
+  block (`coalesce(p_block->>'distance_km', distance_km)`) with no baseline recomputation. Until
+  2026-09-17 it also never ran `bydmate_discard_trip_if_junk`. The APK sends odometer-scale values
+  when its local trip state was never initialised (the `soc_start = -1` sentinel suggests no first
+  sample was captured). That client bug is **outside this repo** and is not fixed by anything here.
+- **Prevalence (implied speed > 250 km/h, an unambiguous cut):**
+
+  | | closed, before 09-17 fix | closed, after fix | open now |
+  |---|---|---|---|
+  | `client_trip` | 13 rows, 7 users, 196,325 km total (2026-08-01 … 09-16) | **0** | 1 (`ee4a6e67`, 27,583 km, started 10-06 15:10) |
+  | legacy/telemetry | 8 rows, 221 km total (2026-03-29 … 08-26) | 0 | 0 |
+
+  The 09-17 guard works for closed trips. Two gaps remain: (1) the 21 historical rows persist
+  (the filter only fires on new closes); (2) a trip that is **open** is not filtered until it
+  closes, so its phantom distance is visible to every consumer in the meantime.
+- **Recoverable?** Where raw samples exist, `odometer` delta equals the trip-meter delta
+  (a62052e8 → 2.4 km, ca8ba735 → 6.2, 368c70ec → 6.3, ee4a6e67 → 8.6). Four trips of one account
+  (`sed`, 08-21 … 09-02, ~25,000 km each) have **no** samples in their `device_time` window, so
+  they cannot be repaired this way. Several small legacy rows (3–32 km) also have no samples.
+- **Consumers hurt:** every sum over `distance_km` (the day/period "Пробег" totals; the
+  range-trust grader, where one cycle read 44,269 km and a ratio of 188, absorbed only because the
+  factor is a median). Real trips top out at 286 km among ≈ 17,700 healthy rows, so a plausibility
+  cut separates cleanly.
+- **Do not bulk-delete with the deployed Rule C.** When `max_speed_kmh` is null its threshold
+  falls back to 80 km/h and matches legitimate highway averages (e.g. 90.6 km / 4025 s = 81 km/h).
+  Use implied speed > 250 km/h (or review each row) for any cleanup.
+
+### Stage 1b plan: central read-side guard — PROPOSED 2026-10-07
+
+**Research (grep of `src`, 2026-10-07).** There are 19 `from("bydmate_trips")` sites in ~12 files, so
+there is no single DB-read choke point. But `dedupeTripsBySource` (`hero-drive-metrics.ts`,
+"one drive, one row") is already the shared cleanup step and is called by: both trip hooks in
+`use-voltflowmate-trips-query.ts` (which feed `vehicle-live-view`, `dashboard-view`,
+`history-view`, `use-vehicle-range-estimate` → `range-estimate.ts`), `hero-drive-metrics`,
+`history-day-summary`, `vehicle-analytics`, `telemetry-buckets`, `range-prediction-capture`,
+`telegram/live-widget`. **Not** behind it: `route-insights.ts` (2 queries),
+`telemetry-history.ts`, `api/vehicle/trips/route.ts` (3), `api/vehicle/export/route.ts`, a dev page.
+`day-insights.ts` and `trip-energy.ts` were not opened; verify how they receive trips while building.
+
+**Proposal.**
+1. Add pure `sanitizeTripDistances(trips)` to `trip-distance-plausibility.ts`: returns each trip
+   unchanged unless `isPlausibleTripDistance` fails (using `ended_at ?? last_device_time`), in which
+   case the copy has `distance_km: null`. **Null, not drop:** the drive still appears with its
+   time/route, but no sum, consumption or range figure can use the bogus distance. Never mutates the
+   input; rows in Postgres are untouched.
+2. Add one exported wrapper (working name `cleanTrips` = `dedupeTripsBySource` then
+   `sanitizeTripDistances`) and switch the ~10 `dedupeTripsBySource` call sites to it. Preferred over
+   hiding the sanitising inside the function named "dedupe" (surprising coupling), at the price of ~10
+   mechanical one-line edits.
+3. Apply `sanitizeTripDistances` directly in the sites that bypass dedupe and drive a visible total or
+   estimate: `route-insights.ts`, `telemetry-history.ts`, and the list responses of
+   `api/vehicle/trips/route.ts`. Leave `api/vehicle/export/route.ts` raw (it is the user's own data
+   export), and the dev page alone.
+4. Tests: sanitizer (nulls only the implausible, keeps 90.6 km / 4025 s and 286 km, does not mutate,
+   handles open trips via `last_device_time`), the wrapper (dedupe + sanitize together), and one
+   consumer test proving the phantom does not change `range-estimate` consumption and the day
+   distance sum.
+
+**Why this is not enough alone:** it hides the symptom at read time only. Stage 2 (server write-time
+guard) is what stops new bad values being stored, and stage 3 cleans the 21 old rows; this stage is
+the safety net that makes both non-urgent and covers the open trip meanwhile.
+
+**Risks / open points.**
+- A null `distance_km` must not make `trip-filter.ts` treat a real drive as a stationary junk trip
+  (it falls back to speed/track evidence); confirm with a test.
+- Consumers that assume `distance_km` is non-null for lists (formatting) need a "—" fallback;
+  check each while building.
+- Cap constants stay in one place (`MAX_PLAUSIBLE_TRIP_KM` 1,500, `MAX_PLAUSIBLE_TRIP_SPEED_KMH` 250).
+
+**Data ownership:** no new data model; derived at read time from existing app-owned rows in
+Postgres, scoped per user by RLS. Nothing stored client-side, nothing sent to a third party.
+
+**Verification:** `npm run test`, `npm run lint`, `npm run build`; replay on the user's real
+trips: the open 27,583 km trip must show a null distance and not move today's total or AI Range.
 
 ### Options considered
 
-1. **Linked-owner offline notice only (recommended).** Send one plain-language Telegram
-   notice when `low_24h_count` first opens, but only when that owner already has a
-   linked Telegram account.  Do not send `moving_gap` to owners.  Keep both signals as
-   database audits for operations, but stop their Telegram digest delivery.  A recovered
-   sender resolves the open audit; a later outage can notify again.  Owners without a
-   Telegram link receive nothing and generate no delivery retries.
-2. **Send both signals to the owner.** Faster visibility of mid-drive holes, but a
-   short gap is neither clearly actionable nor equivalent to telemetry being offline.
-   Rejected: it recreates the noise problem for end users.
-3. **Keep the admin digest and add owner notices.** Retains a fleet-operations view,
-   but duplicates the same operational fact to two audiences and keeps a non-actionable
-   admin channel.  Rejected for this private deployment unless a later fleet-monitoring
-   need is established.
-4. **Remove all delivery and keep audits only.** Eliminates noise, but an owner loses
-   the only timely indication that live vehicle features are degraded.  Rejected.
+1. **A: app-side plausibility guard only (pure code).** A shared `isPlausibleTripDistance`
+   (implied speed ≤ 250 km/h, distance ≤ a generous cap) used by `gradeRangePredictionCycles` and the
+   distance-summing analytics, with tests. No prod writes; protects every consumer regardless of
+   what is stored, including open trips. Does not fix stored data or the source.
+2. **B: server write-time guard (migration).** In `bydmate_apply_client_trip`, when the block's
+   distance implies > 250 km/h, ignore it and recompute from the trip's own samples (odometer
+   delta), else keep the previous value; applies to open **and** closed trips, so the open phantom
+   stops being published. Needs a new idempotent migration (never edit an applied one) and
+   `revoke execute … from public, anon, authenticated` plus explicit grants.
+3. **C: one-time historical repair.** For the 21 closed rows: repair from samples where they exist
+   (≈ 5 rows), and for the rest either null/zero the distance (keep the trip) or delete via the
+   junk function. Destructive on prod for several users; needs a row-by-row preview and your
+   approval, and `docs/TRIPS.md` "One-time historical cleanup" as the procedure.
+4. **D: fix the Mate APK** so it never sends odometer-scale distance. Separate repo; file the
+   issue with the signature above. Cannot be built here.
+5. **E: do nothing.** New closed trips are already guarded; the median absorbs the one bad cycle.
+   Cheapest, but the open phantom, the 21 stored rows and the "Пробег" totals stay wrong.
 
-### Proposed scope (option 1)
+### Recommendation
 
-- Add a new idempotent migration that redefines
-  `bydmate_detect_telemetry_cadence_collapses()` without editing applied migrations:
-  enqueue an immediate HTTP delivery only for an open, unnotified
-  `low_24h_count` audit whose owner currently has `profiles.telegram_id`.
-- Unschedule the admin-only daily cadence digest.  It must no longer deliver old,
-  unlinked, cooldown-suppressed, or `moving_gap` alarms.  Retain its historical SQL,
-  route, and audit rows; they become inactive rather than being destructively removed.
-- Change the immediate cron route to select the alarm owner's existing Telegram ID
-  rather than `admin_users`, send a concise user-facing offline notice, and mark only a
-  successful Telegram send as `notified_at`.  Do not expose email or user IDs in the
-  owner message.  A send failure remains retryable; an unlinked owner is never enqueued.
-- Update the alarm-message unit tests and the SQL-contract test to prove: linked owner
-  delivery, no unlinked-owner enqueue, no `moving_gap` owner notice, digest schedule
-  removal, no identifying data in the owner message, retry after a Telegram send failure,
-  and a fresh notice after recovery then a new outage.
+Stage 1 = **A** (code only, safe, protects the range-trust factor immediately). Stage 2 = **B**
+(closes the open-trip gap at the source). Stage 3 = **C** only after a reviewed preview and your
+explicit go-ahead. **D** filed in parallel with the APK repo. Each stage can ship alone.
 
-### Data ownership and location
+### Data ownership
 
-- **Telegram link (`profiles.telegram_id`):** existing **user-owned** account preference,
-  stored in **Postgres**.  This plan only consults it; it adds no preference or UI.
-- **Cadence audits and notification state:** existing **app-owned** operational data,
-  stored in **Postgres**.  No new user-facing data model and no localStorage.
+- No new data model. The rows are existing app-owned telemetry-derived records in **Postgres**
+  (`bydmate_trips`), scoped per user by RLS; nothing here is a user preference or GPS/tariff data.
+- Repair reads only the owner's own samples; nothing is sent to a third party.
+
+### Decisions (user, 2026-10-07)
+
+- **Unrecoverable historical rows → delete** (no samples to repair from, so a kept row would carry
+  no trustworthy distance). Repairable rows are repaired from the odometer delta instead. Both
+  still go through a reviewed row-by-row preview before anything is written (stage 3).
+- **Guard cap confirmed:** implied speed > 250 km/h **or** > 1,500 km per trip.
+- **Mate APK issue:** authorised. `scroodge/BYDMate-own` (fork of `AndyShaman/BYDMate`) has
+  Issues **disabled**, and I did not file against the upstream project, so the issue was filed in
+  this repo's tracker as **scroodge/VoltFlow#43**, with an anonymised signature and code pointers
+  (`TripRollupAccumulator.kt`: baseline set only from the first payload, never in `fold()`). The
+  exact point where the odometer-scale value is produced is **not yet verified** (client vs the
+  server's own path); #43 asks for the trip block JSON and `versionCode` of the next bad trip.
 
 ### Verification plan
 
-- Focused Node tests for the message and cadence-alarm migration contract.
-- Apply the reviewed migration to self-hosted production one file at a time using the
-  private pooler procedure; confirm the detector/digest job definitions and function
-  privileges, then run read-only checks for an unlinked owner (no enqueue), a linked
-  owner (one offline notice), and recovery/new-outage lifecycle.
+- A: unit tests with the real signatures (44,122 km / 6 min; 81 km/h legitimate; null max speed);
+  confirm the grader reproduces 0.60 and drops the 188× cycle; `npm run test`, `lint`, `build`.
+- B: apply to prod with `psql -f`; check `has_function_privilege('anon', …)` is false; replay the
+  `a62052e8` block against a copy and expect 2.4 km; confirm the open `ee4a6e67` no longer shows
+  27,583 km.
+- C: preview list reviewed by you; row counts before/after; re-run
+  `scripts/analyze-range-trust-cycles.sql` (should show no cycle > ~12 km per SOC point).
 
-### Should I build this?
+---
+
+## Sharper trust factor: condition the car-promise correction on temperature and speed (phase 5) — A DONE 2026-10-06, B–D DEFERRED
+
+### Research findings (read-only prod checks, 2026-10-06)
+
+- The trust factor (`computeRangeTrustFactor`) is one recency-weighted median of
+  `actualKmAt100 / predictedKmAt100` over a 90-day window. It uses **no** conditions.
+  Independently recomputed from raw rows: 0.602 (telemetry-source trips, 66 cycles) vs the app's
+  0.60 (65 cycles). Middle half of cycles spans 0.51–0.71, so a share of the spread may be
+  explainable.
+- Already stored, per sample (`bydmate_telemetry_samples`, ~1M rows since 2026-05-18):
+  `outside_temp_c` 99%, `battery_temp_c` 99%, `speed_kmh`, `power_kw`, SOC. `cabin_temp_c` is 0%
+  (the car never reports it). Per trip: `bydmate_trip_insight_inputs.outside_temp_avg` /
+  `battery_temp_avg`, `bydmate_trips` avg/max speed, regen and traction energy. Hourly rollups:
+  `bydmate_telemetry_hourly` (outside temp 81%). A/C is a flag only (live snapshot, 63%).
+- **Not collected:** wind, precipitation, humidity, sun, elevation/slope (track points have lat/lon
+  but no altitude), A/C power draw, payload. No weather API exists in the code.
+- Existing use of conditions: `environmentConsumptionFactor` in `range-estimate.ts` uses
+  hand-set temperature bands for the AI Range; the trust factor does not.
+- **Data limit:** the user's last 90 days span 9–37 °C (mean 19 °C), i.e. summer only. A cold-weather
+  effect cannot be learned from own data until winter. ~66 cycles also thin out quickly when sliced
+  into bands (2–3 bands is the realistic ceiling).
+- Raw samples can be pruned (`bydmate_prune_telemetry_samples`); hourly rollups and trip inputs are
+  the durable layer.
+
+### Result of option A (2026-10-06, user's 66 graded cycles, 90 d, `scripts/analyze-range-trust-cycles.sql`)
+
+- Baseline reproduced: median ratio **0.597** (app: 0.60).
+- **Temperature and speed explain nothing in this data.** Rank correlation with the ratio:
+  temp 0.06, avg speed −0.03. Band medians are flat: temp <18 °C / 18–22 / ≥22 → 0.60 / 0.59 /
+  0.59 (n = 30 / 21 / 15); speed <35 / 35–45 / ≥45 km/h → 0.59 / 0.55 / 0.62 (n = 5 / 11 / 50).
+  **Option B (banded factor) is not supported by summer data (11–31 °C).** Winter is untested; re-run
+  the saved script in Dec–Feb before deciding.
+- Weak signals only: distance 0.30, parked days 0.22, SOC drop 0.18. Short cycles are noisy
+  (<10 km: median 0.33, n = 4). The factor is **robust to weighting**: unweighted 0.597,
+  weighted by SOC drop 0.610, cycles with ≥20 pp drop only 0.589.
+- Early check on trip-level temperature was misleading: `bydmate_trip_insight_inputs` covers only
+  175 of 969 recent trips (18%), which left 22 cycles with a biased 0.50 median. Hourly rollups
+  (`bydmate_telemetry_hourly`, driving hours only) cover all 66 cycles and are the right
+  temperature source for any future work.
+- **Data-quality finding (separate issue):** 1 of the 66 cycles shows 44,269 km driven in 1.9 days
+  (ratio 188). Cause: 7 `bydmate_trips` rows across 5 users with `distance_km` > 10,000 (≈ the
+  odometer), `soc_start = -1` and `trip_meter_baseline_km = 0` — the per-trip delta was never
+  applied. The median absorbs it, but any mean/sum over `distance_km` (and the grader's
+  distance-weighted views) is wrong for those cycles. Proposed (not built): a plausibility cap in
+  `gradeRangePredictionCycles` (e.g. drop cycles whose km per SOC point is implausible) and a
+  separate fix/backfill for those trips, to be planned on its own.
+
+### Options considered
+
+1. **A (done): read-only analysis, no code.** For the user's ~66 graded cycles, join
+   average outside temp, average speed (trip table), SOC drop and parked days, then check how much
+   of the 0.51–0.71 spread each explains. Output a short findings note; decides whether 2 or 3 is
+   worth building.
+2. **B: banded factor.** Compute the median per outside-temperature band (e.g. <10, 10–25, >25 °C),
+   falling back to the global factor when a band has fewer than ~10 cycles. Smallest change to
+   `computeRangeTrustFactor`; needs cycles tagged with their average temperature.
+3. **C: small regression** `ratio ~ a + b·temp + c·avg_speed`, clamped like today. More
+   expressive, but 66 samples make it fragile and harder to explain in the "i" sheet.
+4. **D: external weather (Open-Meteo or similar).** Adds wind, rain, humidity. Sends trip
+   time/location to a third party, so it needs an explicit privacy decision. Not recommended until
+   A–C show the on-car temperature is not enough.
+
+### Proposed scope (A, then B only if A supports it)
+
+- A: one-off SQL/script analysis under `scripts/`, results summarised here; no migration, no app
+  change.
+- B (conditional): extend `RangePredictionCycle` with `avgOutsideTempC` and `avgSpeedKmh` (computed
+  where cycles are graded, from `bydmate_trip_insight_inputs` / `bydmate_trips`); add a banded
+  option to `computeRangeTrustFactor` with a documented fallback; unit tests; the explainer sheet
+  shows which band the factor came from.
+- Persist the per-cycle features when a cycle is graded (or snapshot them on the session row) so
+  long-term analysis does not depend on raw samples that may be pruned. Any new column needs the
+  `revoke execute … from public, anon, authenticated` pattern for functions and an
+  `IF NOT EXISTS` migration.
+- `range_est_km` ban: unchanged. This reads historical cycles only and stays out of
+  `range-estimate.ts`.
+
+### Data ownership
+
+- Cycle features and the learned factor: **app-owned**, derived server-side from the user's own
+  telemetry; **Postgres** (they must survive raw-sample pruning).
+- Display preference (the on/off switch): unchanged, user-owned, client-side `localStorage`.
+- Any external weather data (option D): app-owned if ever added, and only after a privacy decision.
+
+### Open questions
+
+- Is the analysis (A) enough to start, or should B be built straight away?
+- Is sending trip location/time to an external weather service acceptable at all (D)?
+- Wait for winter data before enabling a cold-weather band, or ship B with the global fallback now?
+
+### Verification plan
+
+- A: reproduce the 0.602 baseline first, then report variance explained per feature.
+- B: tests for banding, the thin-band fallback and the clamp; `npm run test`, `npm run lint`,
+  `npm run build`; compare banded vs global factor on the prod cycles.
 
 ---
 
@@ -725,6 +956,17 @@ here; this is a verification list, to be closed with a real charge on `way`:
 Data ownership is unchanged: the user's vehicle telemetry, in Postgres (`telemetry` jsonb).
 
 ## Telegram community launch pack with isolated local VoltFlow demo — proposed 2026-09-29
+
+### Approved continuation — 2026-10-07
+
+User approved continuing the isolated OrbStack/Supabase demo and preparing Russian
+screenshot-backed FAQ materials for `@voltflowfaq`. This supersedes the static-only
+storage proposal below: demo values are app-owned fictional fixtures, seeded only
+into local Postgres on loopback ports 55321/55322. The app uses port 3037 and
+`.next-telegram-demo`. Continue the existing scripts for fidelity to the real UI;
+restore the local schema without resetting volumes, add service/knowledge fixtures,
+capture the feature screens, and inspect every PNG. Prepare posts and a coverage
+manifest. Channel setup and publication are separate from local preparation.
 
 ### Research findings and boundary
 

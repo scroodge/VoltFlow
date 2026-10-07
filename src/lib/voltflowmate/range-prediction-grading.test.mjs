@@ -100,3 +100,60 @@ test("summary aggregates across cycles", () => {
   assert.equal(report.meanErrorPct, -60);
   assert.equal(report.medianErrorPct, -60);
 });
+
+const ab = [
+  session("a", { stopDay: 0, promise: 300, anchor: 100 }),
+  session("b", { stopDay: 5, startDay: 4, startPercent: 50 }),
+];
+
+function tripAt(day, distanceKm, durationS) {
+  const started = iso(day);
+  return {
+    started_at: started,
+    distance_km: distanceKm,
+    ended_at: new Date(Date.parse(started) + durationS * 1000).toISOString(),
+  };
+}
+
+test("skips a cycle that contains an odometer-scale trip (44,123 km in 6 minutes)", () => {
+  const report = gradeRangePredictionCycles(
+    ab,
+    [tripAt(1, 44122.9, 353), tripAt(2, 50, 3600)],
+    window,
+  );
+  assert.equal(report.gradedCount, 0);
+  assert.equal(report.trust, null);
+});
+
+test("skips a cycle whose trip implies an impossible speed below the km cap", () => {
+  // 90 km in 5 minutes = 1080 km/h
+  const report = gradeRangePredictionCycles(ab, [tripAt(1, 90, 300)], window);
+  assert.equal(report.gradedCount, 0);
+});
+
+test("a dirty cycle does not poison its clean neighbour", () => {
+  const sessions = [
+    session("a", { stopDay: 0, promise: 300, anchor: 100 }),
+    session("b", { stopDay: 5, startDay: 4, startPercent: 50, promise: 250, anchor: 100 }),
+    session("c", { stopDay: 10, startDay: 9, startPercent: 25 }),
+  ];
+  const report = gradeRangePredictionCycles(
+    sessions,
+    [tripAt(1, 44122.9, 353), tripAt(6, 75, 3600)],
+    window,
+  );
+  assert.equal(report.gradedCount, 1);
+  assert.equal(report.cycles[0].promiseSessionId, "b");
+  assert.equal(report.cycles[0].distanceTraveledKm, 75);
+});
+
+test("legitimate trips with an end time are graded exactly as before", () => {
+  const report = gradeRangePredictionCycles(
+    ab,
+    [tripAt(1, 50, 3600), tripAt(2, 50, 3600)],
+    window,
+  );
+  assert.equal(report.gradedCount, 1);
+  assert.equal(report.cycles[0].actualKmAt100, 200);
+  assert.equal(report.cycles[0].tripCount, 2);
+});

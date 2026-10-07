@@ -17,7 +17,11 @@ import {
 import { collectPagedRows } from "@/lib/voltflowmate/paged-query";
 import { weightedAvgConsumptionKwh100 } from "@/lib/voltflowmate/trip-metrics";
 import { pickWalkBackSessionPrice } from "@/lib/history-day-summary";
-import type { VoltflowMateTelemetry, ChargingSessionRow, VoltflowMateTripRow } from "@/types/database";
+import type {
+  VoltflowMateTelemetry,
+  ChargingSessionRow,
+  VoltflowMateTripRow,
+} from "@/types/database";
 
 /** How many recent finished sessions to walk back through when estimating a
  * no-charge day's cost. Bounded by battery capacity vs. daily consumption in
@@ -131,8 +135,14 @@ export async function fetchMonthlyStats({
     });
   }
 
-  let regenKwh = tripRows.reduce((sum, trip) => sum + (trip.regen_energy_kwh ?? 0), 0);
-  let tractionKwh = tripRows.reduce((sum, trip) => sum + (trip.traction_energy_kwh ?? 0), 0);
+  let regenKwh = tripRows.reduce(
+    (sum, trip) => sum + (trip.regen_energy_kwh ?? 0),
+    0,
+  );
+  let tractionKwh = tripRows.reduce(
+    (sum, trip) => sum + (trip.traction_energy_kwh ?? 0),
+    0,
+  );
 
   if (vehicleId && (regenKwh === 0 || tractionKwh === 0)) {
     const { data: hourlyRows } = await supabase
@@ -156,11 +166,20 @@ export async function fetchMonthlyStats({
   return {
     month: monthKey,
     tripCount: tripRows.length,
-    distanceKm: tripRows.reduce((sum, trip) => sum + (trip.distance_km ?? 0), 0),
+    distanceKm: tripRows.reduce(
+      (sum, trip) => sum + (trip.distance_km ?? 0),
+      0,
+    ),
     regenKwh,
     tractionKwh,
-    chargedKwh: sessionRows.reduce((sum, session) => sum + session.charged_energy_kwh, 0),
-    chargingCost: sessionRows.reduce((sum, session) => sum + session.estimated_cost, 0),
+    chargedKwh: sessionRows.reduce(
+      (sum, session) => sum + session.charged_energy_kwh,
+      0,
+    ),
+    chargingCost: sessionRows.reduce(
+      (sum, session) => sum + session.estimated_cost,
+      0,
+    ),
     sessionCount: sessionRows.length,
     avgConsumptionKwh100: weightedAvgConsumptionKwh100(tripRows),
   };
@@ -204,7 +223,8 @@ export async function fetchPeriodChargingSessions({
     if (page.length < PAGE) break;
   }
   return rows.sort(
-    (a, b) => Date.parse(String(b.started_at)) - Date.parse(String(a.started_at)),
+    (a, b) =>
+      Date.parse(String(b.started_at)) - Date.parse(String(a.started_at)),
   );
 }
 
@@ -234,7 +254,10 @@ export async function fetchRangePredictionReport({
   const TRUST_WINDOW_DAYS = 90;
   // Trust is learned from a trailing 90-day window even when the display window
   // is narrower (day/week views), so grading data must reach that far back too.
-  const trustFromMs = Math.min(Date.parse(from), Date.parse(to) - TRUST_WINDOW_DAYS * DAY_MS);
+  const trustFromMs = Math.min(
+    Date.parse(from),
+    Date.parse(to) - TRUST_WINDOW_DAYS * DAY_MS,
+  );
   const wideFrom = new Date(trustFromMs - 46 * DAY_MS).toISOString();
 
   const sessions = await fetchPeriodChargingSessions({
@@ -264,9 +287,12 @@ export async function fetchRangePredictionReport({
     if (page.length < PAGE) break;
   }
 
-  const trips = dedupeTripsBySource(tripRows).map(
-    (trip) => ({ started_at: trip.started_at, distance_km: trip.distance_km }),
-  );
+  const trips = dedupeTripsBySource(tripRows).map((trip) => ({
+    started_at: trip.started_at,
+    distance_km: trip.distance_km,
+    // Open trips have no ended_at yet; last_device_time bounds their duration.
+    ended_at: trip.ended_at ?? trip.last_device_time ?? null,
+  }));
 
   const gradingSessions = sessions.map((session) => ({
     id: session.id,
@@ -278,7 +304,10 @@ export async function fetchRangePredictionReport({
     end_range_soc: session.end_range_soc,
   }));
 
-  const report = gradeRangePredictionCycles(gradingSessions, trips, { from, to });
+  const report = gradeRangePredictionCycles(gradingSessions, trips, {
+    from,
+    to,
+  });
 
   if (trustFromMs === Date.parse(from)) return report;
 
@@ -337,7 +366,9 @@ export async function estimateNoChargeDayPrice({
   const vehicleFilter = vehicleId ? { vehicle_id: vehicleId } : {};
   const { data: tripRows, error: tripsError } = await supabase
     .from("bydmate_trips")
-    .select("distance_km, traction_energy_kwh, avg_consumption_kwh_100km, started_at")
+    .select(
+      "distance_km, traction_energy_kwh, avg_consumption_kwh_100km, started_at",
+    )
     .eq("user_id", userId)
     .match(vehicleFilter)
     .gt("started_at", lowerBoundIso)
@@ -346,7 +377,10 @@ export async function estimateNoChargeDayPrice({
   if (tripsError) throw tripsError;
   const trips = (tripRows ?? []) as Pick<
     VoltflowMateTripRow,
-    "distance_km" | "traction_energy_kwh" | "avg_consumption_kwh_100km" | "started_at"
+    | "distance_km"
+    | "traction_energy_kwh"
+    | "avg_consumption_kwh_100km"
+    | "started_at"
   >[];
 
   return pickWalkBackSessionPrice(candidates, trips);
@@ -370,23 +404,27 @@ export async function fetchPhantomDrain({
   const parsedFrom = from != null ? Date.parse(from) : Number.NaN;
   const parsedTo = to != null ? Date.parse(to) : Number.NaN;
   const useExplicitWindow =
-    Number.isFinite(parsedFrom) && Number.isFinite(parsedTo) && parsedFrom <= parsedTo;
+    Number.isFinite(parsedFrom) &&
+    Number.isFinite(parsedTo) &&
+    parsedFrom <= parsedTo;
   const windowTo = new Date(useExplicitWindow ? parsedTo : Date.now());
   const windowFrom = useExplicitWindow
     ? new Date(parsedFrom)
     : new Date(windowTo.getTime() - days * 24 * 60 * 60 * 1000);
 
-  const { data, error } = await supabase
-    .rpc("bydmate_phantom_drain_daily", {
-      p_user_id: userId,
-      p_vehicle_id: vehicleId,
-      p_from: windowFrom.toISOString(),
-      p_to: windowTo.toISOString(),
-    });
+  const { data, error } = await supabase.rpc("bydmate_phantom_drain_daily", {
+    p_user_id: userId,
+    p_vehicle_id: vehicleId,
+    p_from: windowFrom.toISOString(),
+    p_to: windowTo.toISOString(),
+  });
 
   // Keep the deployment-order compatibility path, but never amplify a timeout or
   // database failure into a paginated raw scan.
-  if (error && isMissingDatabaseFunction(error, "bydmate_phantom_drain_daily")) {
+  if (
+    error &&
+    isMissingDatabaseFunction(error, "bydmate_phantom_drain_daily")
+  ) {
     return fetchPhantomDrainFallback({
       supabase,
       userId,
@@ -397,13 +435,15 @@ export async function fetchPhantomDrain({
   }
   if (error) throw error;
 
-  return ((data ?? []) as {
-    date: string;
-    soc_start: number | string;
-    soc_end: number | string;
-    drain_percent: number | string;
-    idle_hours: number | string;
-  }[])
+  return (
+    (data ?? []) as {
+      date: string;
+      soc_start: number | string;
+      soc_end: number | string;
+      drain_percent: number | string;
+      idle_hours: number | string;
+    }[]
+  )
     .map((row) => ({
       date: row.date,
       socStart: Number(row.soc_start),
@@ -460,17 +500,15 @@ async function fetchPhantomDrainFallback({
   }
 
   return calculatePhantomDrainDays(
-    samples.map(
-      (sample): PhantomDrainSample => ({
-        deviceTime: sample.device_time,
-        soc: sample.telemetry.soc,
-        speedKmh: sample.telemetry.speed_kmh,
-        powerKw: sample.telemetry.power_kw,
-        chargePowerKw: sample.telemetry.charge_power_kw,
-        isCharging: sample.telemetry.is_charging,
-        chargeGunState: sample.diplus_charge_gun_state,
-      }),
-    ),
+    samples.map((sample): PhantomDrainSample => ({
+      deviceTime: sample.device_time,
+      soc: sample.telemetry.soc,
+      speedKmh: sample.telemetry.speed_kmh,
+      powerKw: sample.telemetry.power_kw,
+      chargePowerKw: sample.telemetry.charge_power_kw,
+      isCharging: sample.telemetry.is_charging,
+      chargeGunState: sample.diplus_charge_gun_state,
+    })),
   );
 }
 
@@ -512,14 +550,12 @@ export async function fetchCostPerKm({
           .in("status", ["completed", "stopped"]),
   ]);
 
-  const distanceKm = ((trips ?? []) as Pick<VoltflowMateTripRow, "distance_km">[]).reduce(
-    (sum, trip) => sum + (trip.distance_km ?? 0),
-    0,
-  );
-  const chargingCost = ((sessions ?? []) as Pick<ChargingSessionRow, "estimated_cost">[]).reduce(
-    (sum, session) => sum + session.estimated_cost,
-    0,
-  );
+  const distanceKm = (
+    (trips ?? []) as Pick<VoltflowMateTripRow, "distance_km">[]
+  ).reduce((sum, trip) => sum + (trip.distance_km ?? 0), 0);
+  const chargingCost = (
+    (sessions ?? []) as Pick<ChargingSessionRow, "estimated_cost">[]
+  ).reduce((sum, session) => sum + session.estimated_cost, 0);
 
   return {
     from: fromDate,
@@ -546,7 +582,9 @@ export async function fetchLifetimeTrackPoints({
     fetchPage: async (from, to) => {
       const { data, error } = await supabase
         .from("bydmate_trip_track_points")
-        .select("lat, lon, device_time, trip_id, bydmate_trips!inner(vehicle_id)")
+        .select(
+          "lat, lon, device_time, trip_id, bydmate_trips!inner(vehicle_id)",
+        )
         .eq("user_id", userId)
         .eq("bydmate_trips.vehicle_id", vehicleId)
         .order("device_time", { ascending: false })
@@ -595,7 +633,12 @@ export async function fetchConsumptionBaseline({
 
   if (error) throw error;
 
-  const consumptions = ((data ?? []) as Pick<VoltflowMateTripRow, "avg_consumption_kwh_100km" | "distance_km">[])
+  const consumptions = (
+    (data ?? []) as Pick<
+      VoltflowMateTripRow,
+      "avg_consumption_kwh_100km" | "distance_km"
+    >[]
+  )
     .filter(
       (trip) =>
         (trip.distance_km ?? 0) >= 2 &&
@@ -607,7 +650,7 @@ export async function fetchConsumptionBaseline({
 
   const medianKwh100 =
     consumptions.length > 0
-      ? consumptions[Math.floor(consumptions.length / 2)] ?? null
+      ? (consumptions[Math.floor(consumptions.length / 2)] ?? null)
       : null;
 
   return {

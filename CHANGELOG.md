@@ -9,7 +9,58 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-10-07
+
+- **Telemetry-offline Telegram notices now reach the linked vehicle owner.** Migration
+  `20261007110000_owner_telemetry_offline_notices.sql` keeps both cadence signals as
+  app-owned Postgres audit history but delivers only a newly-opened `low_24h_count` to
+  that owner's existing `profiles.telegram_id`. The plain-language message gives the
+  last contact, sample count, affected live features, and on-device checks; it contains
+  no email or account ID. `moving_gap` is now diagnostic-only, and owners without a
+  Telegram link produce no delivery attempt or retry. The former admin digest has been
+  unscheduled, so unlinked and diagnostic alarms cannot surface through a second path.
+  No user-facing data model was added: the Telegram link remains user-owned Postgres
+  account data; audits/notification state remain app-owned Postgres operational data.
+  Verified: focused tests 21/21, `npx tsc --noEmit` clean, migration applied to prod;
+  live cron retains only the ten-minute detector, deployed predicate requires a linked
+  owner and `low_24h_count`, and anon/authenticated still lack detector execute. Four
+  pre-existing open low-count audits belonged to unlinked owners and remain silent.
+
+- **PostgREST outage watchdog (self-hosted Supabase).** `supabase-rest` wedged with
+  `PGRST003 Timed out acquiring connection from connection pool` while Postgres was
+  healthy (34/100 connections); container was `unhealthy` after 3 months and nothing
+  alerted. Fixed by restart; added `scripts/ops/rest-watchdog.sh` (cron on the VPS:
+  real-query probe, Telegram alert, rate-limited auto-restart). Install and caveats in
+  `docs/OPS_LOCAL.md` → PostgREST watchdog. Not built: Grafana rules, a compose restart
+  policy, an external uptime probe (still in BACKLOG). Root cause of the wedge unknown.
+
+## 2026-10-07
+
+### Trip-distance plausibility guard, stage 1 (range-trust grader)
+New pure `isPlausibleTripDistance` (`src/lib/voltflowmate/trip-distance-plausibility.ts`, +6 tests):
+a trip is implausible above 1,500 km or when its implied speed exceeds 250 km/h (not
+coupled to the junk-filter Rule C, whose 80 km/h fallback matches real highway trips).
+`gradeRangePredictionCycles` skips any cycle containing such a trip (+4 tests), and
+`fetchRangePredictionReport` now passes `ended_at ?? last_device_time` so open trips are checked
+too. On the user's real data: 1 of 66 cycles dropped (a 44,269 km odometer-scale trip), max
+ratio 188 → 1.03, median 0.597 → 0.593. No prod writes. Not done: the other consumers of
+`distance_km` (listed in BACKLOG.md), the server write-time guard (stage 2) and the historical
+repair/delete (stage 3). Related: scroodge/VoltFlow#43 (Mate APK sends odometer-scale distance).
+
 ## 2026-10-06
+
+### Trust-factor conditions analysis (phase 5, option A) — no app change
+Read-only check of whether temperature, speed or cycle shape explain the spread of the
+range-trust cycles. Independent SQL recompute reproduced the app's factor (0.597 vs 0.60;
+66 vs 65 cycles; the app dedupes `byd_energydata`/`telemetry` trips, and counting both
+double-counted distance). Temperature (rank corr 0.06) and speed (−0.03) explain nothing in
+the user's 9–31 °C summer data; band medians are flat, and the factor is stable under
+weighting (0.589–0.610). Banded factor (option B) is deferred until winter data; re-run
+`scripts/analyze-range-trust-cycles.sql` then. Found a data-quality issue: 7 `bydmate_trips`
+rows (5 users) with `distance_km` ≈ odometer (> 10,000 km, `soc_start = -1`, baseline 0); one
+sits in a graded cycle (44,269 km) and is only absorbed by the median. Logged in BACKLOG.md;
+not fixed. Trip-level temperature (`bydmate_trip_insight_inputs`) covers only ~18% of trips —
+use hourly rollups for temperature.
 
 ### Car-promise switch, dashboard line, and charging-state gap (phase 4c)
 The corrected car promise (phase 4b) now has a per-device on/off switch and shows in two

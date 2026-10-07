@@ -11,9 +11,15 @@ export type GradingSession = {
 export type GradingTrip = {
   started_at: string;
   distance_km: number | null;
+  /** `ended_at`, or `last_device_time` while open; lets the plausibility guard check speed. */
+  ended_at?: string | null;
 };
 
-import { computeRangeTrustFactor, type RangeTrustSummary } from "./range-trust-factor.ts";
+import {
+  computeRangeTrustFactor,
+  type RangeTrustSummary,
+} from "./range-trust-factor.ts";
+import { isPlausibleTripDistance } from "./trip-distance-plausibility.ts";
 
 export type RangePredictionCycle = {
   /** Session that made the promise (the charge being graded against). */
@@ -115,18 +121,29 @@ export function gradeRangePredictionCycles(
 
     let distanceTraveledKm = 0;
     let tripCount = 0;
+    let hasImplausibleTrip = false;
     for (const trip of trips) {
       const started = Date.parse(trip.started_at);
-      if (started <= Date.parse(chargeEndedAt) || started > Date.parse(cycleEndedAt)) {
+      if (
+        started <= Date.parse(chargeEndedAt) ||
+        started > Date.parse(cycleEndedAt)
+      ) {
         continue;
       }
       const distance = finiteNumber(trip.distance_km);
       if (distance == null || distance <= 0) continue;
+      if (!isPlausibleTripDistance(trip)) {
+        hasImplausibleTrip = true;
+        break;
+      }
       distanceTraveledKm += distance;
       tripCount += 1;
     }
 
     if (
+      // An odometer-scale trip has no trustworthy distance, so the cycle's true km is unknown:
+      // skip it rather than grade noise (or silently under-count by dropping just that trip).
+      hasImplausibleTrip ||
       socDrop < MIN_SOC_DROP_PERCENT ||
       cycleDays > MAX_CYCLE_DAYS ||
       distanceTraveledKm < MIN_CYCLE_DISTANCE_KM
@@ -154,7 +171,9 @@ export function gradeRangePredictionCycles(
     });
   }
 
-  cycles.sort((a, b) => Date.parse(b.cycleEndedAt) - Date.parse(a.cycleEndedAt));
+  cycles.sort(
+    (a, b) => Date.parse(b.cycleEndedAt) - Date.parse(a.cycleEndedAt),
+  );
 
   const errors = cycles.map((cycle) => cycle.errorPct);
   const mean =
