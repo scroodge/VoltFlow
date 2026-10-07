@@ -11,6 +11,20 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-10-07
 
+- **Charge-detail pending-query render loop (local working-tree fix).**
+  `ChargingSessionScreen` now uses typed, stable empty fallbacks for provider rows
+  and live snapshots. This prevents pending queries from creating fresh Select/
+  live-sync dependencies on each render. The preceding approved selector change
+  reuses provider options and memoizes tariff options. No telemetry values,
+  charging rules, tariff-save behaviour or persistence paths changed. Browser
+  regression helper `scripts/telegram-demo-verify-detail.mjs`: three ordinary
+  loads and three loads with live queries delayed eight seconds passed, opening
+  both selectors each time, with no recorded browser/HTTP errors. The delayed
+  probe intercepted three live queries. Verified against the isolated local
+  demo, not production; no build, lint or application test suite was run.
+  The broader Telegram screenshot pack remains separate and is not yet approved
+  for publication.
+
 - **Telemetry-offline owner notices (database phase deployed; app deployment pending).**
   Migration `20261007110000_owner_telemetry_offline_notices.sql` keeps both cadence
   signals as app-owned Postgres audit history but queues only a newly-opened

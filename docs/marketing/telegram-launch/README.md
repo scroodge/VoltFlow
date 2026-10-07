@@ -11,11 +11,17 @@ is [manifest.json](screenshots/current/manifest.json). Only files listed in that
 manifest belong to the current capture; older PNGs elsewhere are previous attempts.
 `complete: true` means the automated capture passed. Visual approval is separate.
 
-Current status (2026-10-07): **not ready for publication**. The latest full run
-stopped after three screens when charge detail hit a `SelectRoot` update loop;
-history also reported a hydration mismatch. A focused FAQ check passed. Earlier
-screenshots remain provisional. See the Telegram demo entry in `BACKLOG.md` for
-the proposed narrow app fix; it has not been implemented.
+Current status (2026-10-07): **not ready for publication**. The approved
+selector identity and stable-empty-query fixes are implemented. Charge detail
+passed three normal loads and three loads with telemetry queries delayed eight
+seconds, including both dropdowns, without recorded browser/HTTP errors. Earlier
+screenshots remain provisional until a clean full capture and visual review.
+The latest full attempt stopped after ten screens when the stronger check
+rejected an unready car-settings page. Earlier contact-sheet review found
+analytics loading placeholders and explorer-preview trip data, so those images
+must not be used as evidence of populated fictional history. Full capture also
+encountered development manifest/hydration errors; these are separate from the
+verified charge-detail fallback fix.
 
 ## Feature coverage
 
@@ -70,6 +76,9 @@ In a second terminal:
 ```sh
 node scripts/telegram-demo-capture.mjs
 node scripts/telegram-demo-gallery.mjs
+# Focused charge-detail regression check (existing local fixtures):
+node scripts/telegram-demo-verify-detail.mjs
+node scripts/telegram-demo-verify-detail.mjs --delay-live
 ```
 
 The schema helper replays four existing, idempotent schema additions needed by

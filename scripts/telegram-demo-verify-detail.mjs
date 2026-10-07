@@ -7,9 +7,15 @@ const origin = "http://127.0.0.1:3037";
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const errors = [];
-await context.route("**/*", (route) => {
+const delayLive = process.argv.includes("--delay-live");
+let delayedLiveRequests = 0;
+await context.route("**/*", async (route) => {
   const url = new URL(route.request().url());
   if (["127.0.0.1", "localhost"].includes(url.hostname) && ["3037", "55321"].includes(url.port)) {
+    if (delayLive && url.pathname === "/rest/v1/bydmate_live_snapshots") {
+      delayedLiveRequests++;
+      await new Promise((resolve) => setTimeout(resolve, 8000));
+    }
     if (url.pathname === "/api/bydmate/latest-release")
       return route.fulfill({ status: 200, contentType: "application/json", body: "null" });
     return route.continue();
@@ -48,7 +54,7 @@ try {
     const page = await context.newPage(); observe(page);
     await page.goto(`${origin}/history/${charges.at(-1).id}`, { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.locator("#session-provider-type").waitFor({ timeout: 30000 });
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(delayLive ? 10000 : 2000);
     for (const selector of ["#session-provider-type", "#session-tariff-type"]) {
       await page.locator(selector).click();
       await page.getByRole("option").first().waitFor();
@@ -62,4 +68,11 @@ try {
     console.log(`Detail run ${run}: rendered; both selectors opened; no browser/HTTP errors`);
     await page.close();
   }
+  if (delayLive && !delayedLiveRequests) throw new Error("Delayed-query probe did not intercept any live queries");
+  if (delayLive) console.log(`Delayed live queries exercised: ${delayedLiveRequests}`);
+} catch (error) {
+  console.error(`Regression failure: ${error.message}`);
+  for (const message of [...new Set(errors)]) console.error(message);
+  console.error(`Delayed live requests: ${delayedLiveRequests}`);
+  process.exitCode = 1;
 } finally { await browser.close(); }

@@ -15,6 +15,56 @@ sending a test notification to an unrelated user.
 
 ---
 
+## SECURITY: Kong Admin API (port 8001) was public — contain, then rotate Supabase keys — STEP 1 DONE 2026-10-07, STEP 2 DECLINED
+
+> **Status 2026-10-07:** Step 1 applied and verified (`8001` bound to `127.0.0.1`; from the
+> internet `:8001` no longer answers, REST/auth still return 401 as expected). **Step 2 (key
+> rotation) was declined by the owner: "do not change keys".** Residual risk, accepted: the
+> `anon` and `service_role` keys were readable by anyone for ≥79 days and have not been
+> changed, so a copy taken earlier still works. Revisit if there is any sign of misuse
+> (unexpected rows, new users, traffic from unknown IPs). Compose backup:
+> `/opt/supabase/docker-compose.yml.bak.*`.
+
+### Problem
+
+`/opt/supabase/docker-compose.yml` publishes Kong's Admin API (`- 8001:8001/tcp`, with
+`KONG_ADMIN_LISTEN: 0.0.0.0:8001`) on every interface with no authentication. Verified
+2026-10-07 from the internet: `GET :8001/` → 200 (`Server: kong/3.9.1`,
+`X-Kong-Admin-Latency`). On the host, `GET /key-auths` returned **4 credentials**, i.e. the
+`anon` and `service_role` API keys (and possibly others) were readable by anyone. The compose
+file was last modified 2026-07-20 with the mapping already present, so exposure is **at least
+79 days**. `service_role` bypasses RLS: full read/write of all user data. The Kong admin
+access log is not in `docker logs` (our own probes did not appear), so past access **cannot be
+ruled out**.
+
+### Step 1 — contain (immediate, small, reversible)
+
+Change `- 8001:8001/tcp` → `- 127.0.0.1:8001:8001/tcp` and recreate only Kong
+(`docker compose up -d kong`, ~5 s API blip). Prometheus's `kong` job must scrape over the
+Docker network (`supabase-kong:8001`), not the public address — verify before applying.
+
+### Step 2 — rotate (needs explicit go-ahead)
+
+1. **Rotate `JWT_SECRET`, `ANON_KEY`, `SERVICE_ROLE_KEY` and the Studio dashboard password
+   (recommended).** Only a new `JWT_SECRET` invalidates already-leaked signed keys. Update
+   `/opt/supabase/.env`, recreate GoTrue/PostgREST/Realtime/Storage/Kong/Studio, then every
+   client: Vercel env (`NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`),
+   `.env.local`, `/etc/voltflow-watchdog.env` (anon key), the Telegram Mini App server, any
+   edge-function env, and a PWA rebuild/redeploy (anon key is baked into the bundle).
+   Cost: a coordinated cutover with brief API errors; clients holding old access tokens
+   must refresh. Grep the repo and hosts for every key use before starting.
+2. **Do not rotate; add monitoring.** Rejected: cannot prove no access, and the impact of a
+   leaked `service_role` is total.
+
+### Data ownership
+
+Operational secrets, app-owned: `/opt/supabase/.env` on the VPS and the Vercel project env.
+No user-facing data model; nothing in Postgres or localStorage.
+
+### Recommendation
+
+Step 1 now; Step 2 option 1 after a dependency inventory, in a quiet window.
+
 ## Self-hosted Supabase outage alarm (PostgREST wedge) — PARTLY BUILT 2026-10-07
 
 > **Built:** the host cron watchdog (alert + auto-restart) and Grafana rules
@@ -23,6 +73,15 @@ sending a test notification to an unrelated user.
 > **Still proposed:** external uptime service (option 3, catches a dead VPS); retire or
 > retarget the useless `sb-pgrst-pool` rule; find the root cause of the wedge; stop
 > exposing Grafana on `0.0.0.0:3000` over plain HTTP (bind to 127.0.0.1 / TLS proxy).
+>
+> **Port exposure (found 2026-10-07, `/opt/monitoring/docker-compose.yml`, `ufw` inactive):**
+> `grafana` publishes `3000:3000` and `loki` publishes `3100:3100` on all interfaces; Loki
+> has no authentication. Plan: (a) Grafana → `127.0.0.1:3000:3000`, reach it via
+> `ssh -N -L 3300:localhost:3000 contabo` — **approved 2026-10-07**; (b) Loki → same
+> `127.0.0.1` bind **only after** confirming promtail reaches it over the Docker network
+> (check `promtail` client URL) — awaiting confirmation; (c) list every other published
+> port on the host (`docker ps --format '{{.Names}} {{.Ports}}'`) and review each. Note
+> `grafana/grafana:latest` is unpinned.
 >
 > **Root-cause lead (2026-10-07):** host, DB, cron, role limits and schema reloads are ruled
 > out (see `docs/OPS_LOCAL.md`). **Root cause still unknown.** `pgrst_db_pool_available`
@@ -1282,6 +1341,36 @@ manifest. Channel setup and publication are separate from local preparation.
 
 #### Screenshot blockers found during continuation
 
+**Approved selector change, 2026-10-07:** provider Select now receives the existing
+memoized options directly; tariff options are memoized and shared by Select and
+its children. The first capture reached thirteen screens, including detail, with
+no recorded browser/HTTP failures before the FAQ navigation timeout. This is not
+enough to declare the crash fixed: the new browser regression helper,
+`scripts/telegram-demo-verify-detail.mjs`, passed one load with both dropdowns open
+and then caught an update loop on a later load.
+
+**New evidence and next proposal:** that loop's stack points to
+`useChargingSessionLiveSync` → `onLiveDerived` → `setLiveDerived` (Zustand), not
+SelectRoot. In `ChargingSessionScreen`, `data: voltflowMateLive = []` allocates a
+new empty array while the live query is pending. The live-sync effect depends on
+the scoped snapshot array and writes a fresh static-derived object for a closed
+session; that store write rerenders the subscribed screen. This gives a concrete
+pending-query feedback-loop path. Ranked alternatives: (1) unstable empty query
+fallbacks, (2) another live-sync dependency changing identity, (3) dev-runtime/HMR
+interference. Prediction for (1): holding live-query delivery pending should no
+longer crash once the screen's empty fallback arrays have stable identities.
+
+Options: **recommended**, hoist typed empty fallbacks in this screen for live
+snapshots and provider rows, then verify delayed-query loads and normal loads;
+alternatively add equality suppression in the shared derived-state store (broader
+behaviour change), or disable sync on historical screens (changes behaviour).
+No new data or ownership/storage changes; the proposed fallback fix changes only
+array identity, not telemetry values or persistence rules. This additional fix
+was approved and implemented on 2026-10-07. The completed fix and six passing
+browser regression loads are recorded in `CHANGELOG.md`; this historical research
+is retained only as context for the still-unfinished launch pack. No build/lint/
+application tests run.
+
 The local browser repeatedly crashes on `/history/<demo-session-id>` with
 `Maximum update depth exceeded` in Base UI `SelectRoot`. Correcting legacy
 fixture provider values and preserving/replacing the demo build directory did
@@ -1292,18 +1381,24 @@ Alternative: omit charge-detail screenshots, leaving feature coverage incomplete
 or patch the shared Select wrapper, which has a broader regression surface.
 Recommend the screen-local fix. No data ownership/storage changes.
 
-**Latest verification, 2026-10-07:** Webpack rendered the detail in an earlier
-attempt, but the full rerun reproduced the `SelectRoot` update loop, plus a
-history hydration mismatch. Separate build directories were verified for the
-normal and demo servers; shared-cache collision is not supported by that check.
-A focused public FAQ browser check passed without page errors. Memoizing detail
-options remains a hypothesis to verify, not a proven root cause or completed fix.
-The latest capture manifest is incomplete (three screens before the detail
-failure). Earlier PNGs remain provisional and are not publication-approved.
-Local fixtures, capture/schema/gallery helpers and Russian drafts are prepared;
-the launch pack remains unfinished pending an approved app-level fix and a clean
-20-screen capture with visual review. No production database changes or Telegram
-publication were performed.
+**Current boundary, 2026-10-07:** the approved selector and empty-fallback fixes
+are built and passed six focused browser loads (see `CHANGELOG.md`). Separate
+build directories were verified for the normal and demo servers. Full capture
+still has independent development-runtime problems: malformed Next manifest
+reads, interrupted hydration and initially blank screenshots. The harness now
+requires detail controls and rejects short/empty page content. Knowledge pages
+are navigated through visible tab buttons; authenticated direct-link hydration
+is not verified. Local fixtures, helpers and Russian drafts are prepared, but
+the launch pack remains unfinished until a clean 20-screen capture and visual
+review. No production database changes or Telegram publication were performed.
+
+Latest capture/visual review: the stricter harness stopped after ten screens on
+an unready car-settings page; the manifest remains `complete: false`. Contact
+sheets from the preceding run showed analytics loading placeholders and
+explorer-preview trips rather than the intended seeded history. Follow-up must
+verify demo connection-status fixtures and loaded analytics, not merely count
+PNGs. The fallback fix passed all six focused loads and is complete; the remaining
+launch-pack issues are not declared fixed.
 
 ### Research findings and boundary
 

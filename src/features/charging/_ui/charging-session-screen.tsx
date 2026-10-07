@@ -86,9 +86,15 @@ import type {
   ChargingProviderType,
   ChargingSessionRow,
   ChargingTariffType,
+  UserProviderRow,
+  VoltflowMateLiveSnapshotRow,
 } from "@/types/database";
 
 const toParams = chargingParamsFromSession;
+
+// Pending queries must not create new effect/Select dependencies on each render.
+const EMPTY_USER_PROVIDERS: UserProviderRow[] = [];
+const EMPTY_LIVE_SNAPSHOTS: VoltflowMateLiveSnapshotRow[] = [];
 
 const tariffProviderKey = (provider: ChargingProviderType) =>
   `charging.tariff.providers.${provider}` as TranslationKey;
@@ -125,9 +131,9 @@ export function ChargingSessionScreen({
 
   const { data: session, error, isLoading } = useSessionQuery(sessionId);
   const { data: carsResult } = useCarsQuery();
-  const { data: userProviderRows = [] } = useUserProvidersQuery();
+  const { data: userProviderRows = EMPTY_USER_PROVIDERS } = useUserProvidersQuery();
   const userProviderMap = useUserProviderMap();
-  const { data: voltflowMateLive = [] } = useVoltflowMateLiveQuery();
+  const { data: voltflowMateLive = EMPTY_LIVE_SNAPSHOTS } = useVoltflowMateLiveQuery();
   const devSource = useChargingDevSource();
   const devOverrideActive = devSource?.isOverrideActive ?? false;
   const sessionVehicleId = useMemo(

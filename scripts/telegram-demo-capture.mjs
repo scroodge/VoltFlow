@@ -75,6 +75,7 @@ async function capture(id, feature) {
   });
   const body = (await page.locator("body").innerText()).replace(/\s+/g, " ");
   if (/Application error|Internal Server Error|Что-то пошло не так/.test(body)) throw new Error(`Error page: ${id}`);
+  if (body.length < 250) throw new Error(`Unready or empty page: ${id}`);
   const filename = `${id}.png`;
   await page.screenshot({ path: resolve(output, filename), animations: "disabled", fullPage: true });
   const panels = [];
@@ -116,18 +117,23 @@ try {
   // Auth is verified independently of the development router's transition.
   // visit() opens a fresh page with the same context/cookies after they settle.
   await page.waitForTimeout(1000);
+  const authenticatedCookies = await context.cookies();
   console.log("Local sign-in verified: 200");
   await visit("/dashboard", "Последняя зарядка");
   await page.locator("#park-estimate-provider").click();
   await page.getByRole("option", { name: "Home", exact: true }).click();
   await capture("01-dashboard", "Главная: SOC, пробег, последняя поездка и зарядка");
-  await visit("/history?tab=charging"); await capture("03-charging-history", "История зарядок");
+  await visit("/history?tab=charging");
+  await page.getByRole("button", { name: "Добавить пропущенную зарядку", exact: true }).waitFor();
+  await capture("03-charging-history", "История зарядок");
   await page.getByRole("button", { name: "Добавить пропущенную зарядку", exact: true }).click();
   await page.getByRole("dialog").waitFor();
   await capture("02-manual-charge", "Добавление зарядки по чеку — форма без сохранения");
   await page.getByRole("button", { name: "Отмена", exact: true }).click();
   if (!process.argv.includes("--skip-detail")) {
-    await visit(`/history/${charges.at(-1).id}`); await capture("04-charge-detail", "Завершённая зарядка: энергия, стоимость, график");
+    await visit(`/history/${charges.at(-1).id}`);
+    await page.locator("#session-provider-type").waitFor();
+    await capture("04-charge-detail", "Завершённая зарядка: энергия, стоимость, график");
   }
   await visit("/history?tab=trips"); await capture("05-trips", "История поездок");
   await visit("/history?tab=analytics&range=month"); await capture("06-analytics", "Аналитика поездок и расходов");
@@ -137,17 +143,30 @@ try {
   if (await stats.count()) { await stats.click(); await page.waitForTimeout(600); await capture("09-service-stats", "Расходы на обслуживание"); }
   await visit("/settings", "BYD Yuan Up"); await capture("10-settings", "Настройки, автомобиль и тарифы");
   await visit(`/cars/${DEMO_CAR_ID}/edit`); await capture("11-car-settings", "Параметры батареи и эффективности");
+  // Knowledge is public. Capture its anonymous experience, independently of
+  // authenticated car-generation auto-detection; restore local auth below.
+  await context.clearCookies();
   await visit("/knowledge?gen=gen1_2024", "Как читать стоимость зарядки"); await capture("12-knowledge", "База знаний");
   await visit("/knowledge/article/demo-charge-cost", "От процента к энергии"); await capture("13-article", "Статья базы знаний");
-  await visit("/knowledge?tab=faq&gen=gen1_2024", "Можно ли пользоваться VoltFlow"); await capture("14-faq", "Вопросы и ответы");
-  await visit("/knowledge?tab=more&gen=gen1_2024", "Калькулятор зарядки"); await capture("15-tools", "Дополнительные инструменты");
-  await visit("/knowledge?tab=buy&gen=gen1_2024", "Органайзер багажника"); await capture("16-accessories", "Каталог аксессуаров");
+  // Exercise the public chrome's navigation rather than depending on initial
+  // query-parameter hydration while authenticated generation state settles.
+  await visit("/knowledge?gen=gen1_2024", "Как читать стоимость зарядки");
+  await page.getByRole("button", { name: "Открыть Вопросы", exact: true }).click();
+  await page.getByText("Можно ли пользоваться VoltFlow", { exact: false }).first().waitFor();
+  await capture("14-faq", "Вопросы и ответы");
+  await page.getByRole("button", { name: "Открыть Калькулятор", exact: true }).click();
+  await page.getByText("Калькулятор зарядки", { exact: false }).first().waitFor();
+  await capture("15-tools", "Дополнительные инструменты");
+  await page.getByRole("button", { name: "Открыть Каталог", exact: true }).click();
+  await page.getByText("Органайзер багажника", { exact: false }).first().waitFor();
+  await capture("16-accessories", "Каталог аксессуаров");
   await page.getByRole("button", { name: "Запчасти", exact: true }).click();
   await page.getByText("Салонный фильтр — демо", { exact: false }).first().waitFor();
   await capture("17-spare-parts", "Каталог запчастей");
   await page.getByRole("button", { name: "Сервис", exact: true }).click();
   await page.getByText("Демо-сервис BYD", { exact: false }).first().waitFor();
   await capture("18-service-catalog", "Каталог сервисов");
+  await context.addCookies(authenticatedCookies);
   execFileSync(process.execPath, [resolve(root, "scripts/telegram-demo-seed.mjs"), "--charging"], {
     cwd: root, stdio: "ignore",
   });
