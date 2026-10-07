@@ -13,10 +13,13 @@ const seedOutput = execFileSync(process.execPath, [resolve(root, "scripts/telegr
   cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
 });
 JSON.parse(seedOutput.trim().split("\n").at(-1)); // Confirm the seed completed its final step.
+const dataEvidence = JSON.parse(execFileSync(process.execPath, [resolve(root, "scripts/telegram-demo-verify-data.mjs")], {
+  cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
+}));
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2,
   locale: "ru-BY", timezoneId: "Europe/Minsk", colorScheme: "dark" });
-const report = { capturedAt: new Date().toISOString(), viewport: "390×844 DPR 2", screens: [],
+const report = { capturedAt: new Date().toISOString(), viewport: "390×844 DPR 2", dataEvidence, screens: [],
   externalRequests: [], failedLocal: [], browserErrors: [], browserWarnings: [], mockedLocal: ["/api/bydmate/latest-release"], complete: false };
 await context.route("**/*", async (route) => {
   const url = new URL(route.request().url());
@@ -29,9 +32,17 @@ await context.route("**/*", async (route) => {
       return route.fulfill({ status: 200, contentType: "application/json", body: "null" });
     return route.continue();
   }
-  report.externalRequests.push({ origin: url.origin, path: url.pathname });
-  if (url.hostname === "va.vercel-scripts.com")
+  const external = { origin: url.origin, path: url.pathname, handling: "blocked" };
+  report.externalRequests.push(external);
+  if (url.hostname === "va.vercel-scripts.com") {
+    external.handling = "local-placeholder";
     return route.fulfill({ status: 200, contentType: "application/javascript", body: "" });
+  }
+  if (url.hostname === "www.openstreetmap.org" && url.pathname === "/export/embed.html") {
+    external.handling = "local-placeholder";
+    return route.fulfill({ status: 200, contentType: "text/html", body:
+      '<!doctype html><html lang="ru"><meta charset="utf-8"><style>body{margin:0;display:grid;place-content:center;height:100vh;background:#17212b;color:#afc8bb;text-align:center;font:13px system-ui;padding:0 12px;box-sizing:border-box}</style><body>Карта отключена в демо<br>GPS и внешние тайлы не используются</body></html>' });
+  }
   return route.abort();
 });
 let page = await context.newPage();
@@ -68,7 +79,7 @@ async function visit(path, text) {
   if (target.pathname === "/history") {
     const tab = target.searchParams.get("tab") ?? "charging";
     await page.getByRole("button", { name: { charging: "Зарядка", trips: "Поездки", analytics: "Аналитика" }[tab], exact: true }).click();
-    if (tab === "analytics") await page.getByRole("button", { name: "Месяц", exact: true }).click();
+    if (tab === "analytics") await page.getByRole("button", { name: /^месяц$/i }).click();
   }
   if (target.pathname === "/vehicle") {
     await page.getByRole("button", { name: target.searchParams.get("tab") === "service" ? "Сервис" : "Live", exact: true }).click();
@@ -116,6 +127,7 @@ async function capture(id, feature) {
     for (let offset = dimensions.height - 120, panel = 2; offset < dimensions.total; offset += dimensions.height - 120, panel++) {
       await scroller.evaluate((el, y) => { el.scrollTop = y; }, offset);
       await settleVisible();
+      dimensions.total = await scroller.evaluate((el) => el.scrollHeight);
       const panelFile = `${id}-panel-${String(panel).padStart(2, "0")}.png`;
       await page.screenshot({ path: resolve(output, panelFile), animations: "disabled" });
       panels.push(panelFile);
@@ -173,7 +185,9 @@ try {
   await visit(`/cars/${DEMO_CAR_ID}/edit`, "Полезная батарея"); await capture("11-car-settings", "Параметры батареи и эффективности");
   // Knowledge is public. Capture its anonymous experience, independently of
   // authenticated car-generation auto-detection; restore local auth below.
+  const authenticatedPage = page;
   await context.clearCookies();
+  page = await context.newPage(); page.setDefaultTimeout(45000); bindPage(page);
   await visit("/knowledge?gen=gen1_2024", "Как читать стоимость зарядки"); await capture("12-knowledge", "База знаний");
   await visit("/knowledge/article/demo-charge-cost", "От процента к энергии"); await capture("13-article", "Статья базы знаний");
   // Exercise the public chrome's navigation rather than depending on initial
@@ -195,14 +209,15 @@ try {
   await page.getByText("Демо-сервис BYD", { exact: false }).first().waitFor();
   await capture("18-service-catalog", "Каталог сервисов");
   await context.addCookies(authenticatedCookies);
+  const publicPage = page; page = authenticatedPage; await publicPage.close();
   execFileSync(process.execPath, [resolve(root, "scripts/telegram-demo-seed.mjs"), "--charging"], {
     cwd: root, stdio: "ignore",
   });
-  await visit("/dashboard", "BYD Yuan Up"); await capture("19-live-charging", "Активная зарядка — имитация локального состояния");
-  await visit("/vehicle", "BYD YUAN UP"); await capture("20-charging-vehicle", "Телеметрия активной зарядки — имитация");
+  await visit("/dashboard", "62.0"); await capture("19-live-charging", "Активная зарядка — имитация локального состояния");
+  await visit("/vehicle", "62.0"); await capture("20-charging-vehicle", "Телеметрия активной зарядки — имитация");
   report.complete = report.screens.length === 20 && !report.browserErrors.length && !report.failedLocal.length &&
     !process.argv.includes("--skip-detail") &&
-    report.externalRequests.every((request) => request.origin === "https://va.vercel-scripts.com");
+    dataEvidence.verified && report.externalRequests.every((request) => request.handling === "local-placeholder");
 } catch (error) {
   report.browserErrors.push(error.message); console.error(error.message);
   report.failurePath = new URL(page.url()).pathname;

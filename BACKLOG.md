@@ -15,6 +15,44 @@ sending a test notification to an unrelated user.
 
 ---
 
+## Admin `/admin/users` is slow (58–80 s) — IN PROGRESS 2026-10-07 (owner: "add to plan and start")
+
+### Problem (read-only prod measurements, 2026-10-07)
+
+`admin_users_user_metrics(20 ids)` takes **58–80 s**: it `count(*)`s `bydmate_telemetry_samples`
+(3.5 M rows, 5 GB; 1.8 M in the last 30 d) for 7 d / 30 d. The planner picks a Seq Scan reading
+~384 k buffers every call (`shared_buffers` = 128 MB, so nothing stays cached); the telemetry
+CTE alone is ~18 s. Other RPCs are cheap (`dashboard_stats` 0.4 s, `activity_filter_ids` 0.16 s,
+`attention_queue` 13 ms, trips CTE 78 ms). The API route also re-runs stats + attention on every
+infinite-scroll page, runs `loadAllAdminIds` / filters / profiles serially, and keeps a dead
+`premium_until` fallback and a constant-false `negateLastSeen`.
+
+### Options
+
+- **A. Daily rollup of telemetry counts (chosen).** `admin_user_activity_daily(user_id, day,
+  telemetry_count)` + `admin_user_activity_days_done(day)` marker. A lazy
+  `admin_users_refresh_activity_daily()` fills only missing *completed* UTC days (one ~60 k-row
+  range scan per day, advisory-locked); `admin_users_user_metrics` sums the rollup and counts
+  *today* live. Cost: seconds → milliseconds. Trade-off: 7 d / 30 d become calendar-day windows
+  (today + 6 / 29 previous UTC days) instead of rolling; no ingest hot-path change.
+- **B. Show telemetry counts only in the expanded card.** Smaller change, but keeps the
+  expensive query per click. Not chosen.
+- **C. Trim the endpoint (chosen, alongside A).** `stats` / `attention` only on `page = 1`
+  (client keeps them across later pages); run `loadAllAdminIds` + filter RPCs in parallel; drop the
+  dead `premium_until` fallback and `negateLastSeen`.
+
+### Data ownership
+
+App-owned operational counters, derived from telemetry, in **Postgres**, service-role only
+(same pattern as `admin_user_lifecycle_daily`). No user-owned preference data.
+
+### Verification
+
+`EXPLAIN ANALYZE` of the new metrics RPC on prod (target < 1 s), `has_function_privilege('anon', …)`
+on every new function, `npm run lint`, focused tests, `npm run build`.
+
+---
+
 ## SECURITY: VPS hardening after the 2026-10-07 audit — IN PROGRESS (owner approved "close all ports and apply good security")
 
 Audit (host `vmi3078244`, read-only, 2026-10-07): **30,657 failed SSH logins in 24 h**,
@@ -1378,6 +1416,15 @@ and settled charts, and reject loading/preview screenshots. Alternatives are
 long fixed sleeps (flaky) or app SSR/query changes (broader, not needed yet).
 Demo fixtures remain app-owned fictional data in local Postgres; capture browser
 preferences remain disposable localStorage. No production targets or publishing.
+
+Visual review also found missing derived read models: monthly telemetry reads
+`bydmate_telemetry_hourly`, and older SOH points read daily rollups. The fixture
+seed only populated raw samples. Within the approved data repair, rebuild the
+demo vehicle's hourly aggregates with the existing sample aggregation RPC and
+materialize completed SOH days. This preserves the canonical read path instead
+of mocking analytics API responses. All targets are local, fictional, scoped to
+the demo owner/vehicle; no schema or production changes. Verify rollups through
+authenticated RLS and require nonempty month/SOH charts in the capture.
 
 **Approved selector change, 2026-10-07:** provider Select now receives the existing
 memoized options directly; tariff options are memoized and shared by Select and

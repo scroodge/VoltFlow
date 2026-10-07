@@ -213,6 +213,23 @@ assert(await supabase.from("bydmate_telemetry_samples").delete()
   .eq("user_id", userId).eq("vehicle_id", DEMO_VEHICLE_ID), "clear local demo samples");
 assert(await supabase.from("bydmate_telemetry_samples").insert(samples), "telemetry samples");
 
+// Monthly charts read compact aggregates, not raw fixture rows. Rebuild only
+// this fictional local vehicle so rerunning cannot double-count samples.
+assert(await supabase.from("bydmate_telemetry_hourly").delete()
+  .eq("user_id", userId).eq("vehicle_id", DEMO_VEHICLE_ID), "clear demo hourly aggregates");
+for (const sample of [...samples].sort((a, b) => a.device_time.localeCompare(b.device_time))) {
+  assert(await supabase.rpc("bydmate_apply_hourly_rollup_sample", {
+    p_user_id: userId, p_vehicle_id: DEMO_VEHICLE_ID,
+    p_device_time: sample.device_time, p_telemetry: sample.telemetry,
+  }), "aggregate demo sample");
+}
+for (const day of new Set(samples.filter((s) => s.telemetry.soh_percent != null)
+  .map((s) => s.device_time.slice(0, 10)))) {
+  assert(await supabase.rpc("bydmate_materialize_soh_day", {
+    p_user_id: userId, p_vehicle_id: DEMO_VEHICLE_ID, p_date: day,
+  }), "materialize demo SOH day");
+}
+
 const snapshotTime = new Date().toISOString();
 assert(await supabase.from("bydmate_live_snapshots").upsert({
   id: "66666666-6666-4666-8666-666666666666",
