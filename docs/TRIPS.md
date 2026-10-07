@@ -39,6 +39,28 @@ is deliberately skipped for a `client_trip` row, because it could close an activ
 trip while later cumulative blocks are still arriving. It remains the fallback for legacy APKs
 and untagged daemon traffic.
 
+#### Client `distance_km` guard (since `20261007130000`)
+
+Some `client_trip` blocks carry the car's **odometer** as `distance_km` (e.g. 27,608 km while the
+trip meter reads 11.6 km). `bydmate_apply_client_trip` no longer copies such a value:
+
+| Block distance | Trip | Stored `distance_km` |
+|---|---|---|
+| plausible | any | the block value (as before) |
+| implausible | still open | the previous value if plausible, else `NULL` — never the phantom |
+| implausible | closing block (`ended_at`) | `bydmate_trip_distance_from_samples` (odometer delta over the trip's own samples), else `NULL` |
+
+*Implausible* = `bydmate_trip_distance_plausible` is false: **> 1,500 km, or implied speed
+> 250 km/h** (speed checked only above 1 km and with a known positive duration). It is the SQL twin of
+`src/lib/voltflowmate/trip-distance-plausibility.ts`; **change both together**.
+`bydmate_trip_distance_from_samples` needs ≥ 2 positive odometer samples within 2 minutes of both
+the trip's start and end, so late-delivered samples fail to `NULL` rather than to a wrong-small
+number (on healthy trips it agrees with the stored distance to within max(0.5 km, 5%) for 194 of
+198 repairable trips, worst 2.5 km). A real drive with a bad client distance is therefore **kept**
+(repaired or `NULL`) instead of being deleted by Rule C; parking blips are still dropped by
+Rules A/B. Readers treat a `NULL` distance as unknown (`cleanTrips` / `sanitizeTripDistances`).
+Rollback: re-apply the `bydmate_apply_client_trip` body from `20260917120000`.
+
 A final client-owned trip also reaches the same deferred route-insight projection trigger when
 its `ended_at` is accepted. It therefore has the same compact route data when it contains GPS,
 while summary-only inputs with no track remain absent from route analytics.

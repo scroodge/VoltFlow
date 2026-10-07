@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync, spawn } from "node:child_process";
 import { resolve } from "node:path";
+import { readFileSync, existsSync } from "node:fs";
 
 const root = resolve(import.meta.dirname, "..");
 const status = JSON.parse(execFileSync("supabase", ["status", "--output", "json"], {
@@ -18,8 +19,18 @@ if (
   throw new Error("Refusing to start: local demo Supabase is not available");
 }
 
-const env = {
-  ...process.env,
+const env = { ...process.env };
+// Empty every project env key first: Next otherwise imports unset secrets and
+// remote endpoints from .env.local even when the demo overrides Supabase.
+for (const name of [".env", ".env.local", ".env.development", ".env.development.local"]) {
+  const path = resolve(root, name);
+  if (!existsSync(path)) continue;
+  for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
+    const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+    if (match) env[match[1]] = "";
+  }
+}
+Object.assign(env, {
   NEXT_PUBLIC_SUPABASE_URL: status.API_URL,
   NEXT_PUBLIC_SUPABASE_ANON_KEY: status.ANON_KEY,
   SUPABASE_SERVICE_ROLE_KEY: status.SERVICE_ROLE_KEY,
@@ -33,7 +44,7 @@ const env = {
   VOLTFLOW_TELEGRAM_DEMO_LOCAL: "1",
   REMOTE_COMMANDS_ENABLED: "false",
   ALLOW_DEBUG_DASHBOARD: "false",
-};
+});
 for (const key of [
   "BYDMATE_API_KEY_PEPPER", "BYDMATE_LINK_CODE_PEPPER", "BYDMATE_WEBHOOK_TOKEN_PEPPER",
   "CRON_SECRET", "GITHUB_TOKEN", "RESEND_API_KEY",
@@ -43,7 +54,9 @@ for (const key of [
 ]) env[key] = "";
 
 console.log("Starting VoltFlow against local demo Supabase only (127.0.0.1:3037).");
-const app = spawn("npm", ["run", "dev", "--", "--hostname", "127.0.0.1", "--port", "3037"], {
+// Webpack avoids unstable lazy-chunk references seen during multi-page capture
+// with this project's Turbopack development output. Normal dev is unchanged.
+const app = spawn("npm", ["run", "dev", "--", "--webpack", "--hostname", "127.0.0.1", "--port", "3037"], {
   cwd: root,
   env,
   stdio: "inherit",

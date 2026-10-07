@@ -1,4 +1,4 @@
-// Fictional, user-owned records for the local Telegram screenshot account.
+// App-owned fictional fixtures, written only to the local screenshot database.
 // Energy in charging_sessions is grid-side: SOC delta * 45.1 / efficiency.
 export const DEMO_EMAIL = "demo@voltflow.test";
 export const DEMO_PASSWORD = "VoltFlowLocalDemo2026!";

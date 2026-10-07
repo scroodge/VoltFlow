@@ -8,6 +8,7 @@ import {
 
 const status = JSON.parse(execFileSync("supabase", ["status", "--output", "json"], {
   encoding: "utf8",
+  stdio: ["ignore", "pipe", "ignore"],
 }));
 const apiUrl = new URL(status.API_URL);
 const dbUrl = new URL(status.DB_URL);
@@ -30,9 +31,7 @@ function assert(result, label) {
 
 const users = assert(await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }), "list users");
 let user = users.users.find((candidate) => candidate.email === DEMO_EMAIL);
-if (user) {
-  assert(await supabase.auth.admin.updateUserById(user.id, { password: DEMO_PASSWORD }), "update local demo password");
-} else {
+if (!user) {
   user = assert(await supabase.auth.admin.createUser({
     email: DEMO_EMAIL,
     password: DEMO_PASSWORD,
@@ -40,6 +39,9 @@ if (user) {
   }), "create local demo user").user;
 }
 const userId = user.id;
+const activeDemoId = "99999999-9999-4999-8999-999999999999";
+assert(await supabase.from("charging_sessions").delete()
+  .eq("id", activeDemoId).eq("user_id", userId), "clear prior active demo scenario");
 
 assert(await supabase.from("profiles").update({
   preferred_locale: "ru",
@@ -81,6 +83,9 @@ for (const [label, home, ac, dc, isDefault] of providerPrices) {
   }
 }
 
+const providers = assert(await supabase.from("user_providers")
+  .select("id,label").eq("user_id", userId), "read seeded providers");
+
 assert(await supabase.from("cars").upsert({
   id: DEMO_CAR_ID,
   user_id: userId,
@@ -110,7 +115,9 @@ const chargeRows = charges.map((charge) => {
     charger_power_kw: charge.power,
     efficiency_percent: charge.efficiency,
     tariff_type: charge.tariff,
-    provider_type: charge.provider,
+    provider_type: "user_provider",
+    user_provider_id: providers.find((provider) => provider.label ===
+      (charge.provider === "home" ? "Home" : "Malanka")).id,
     price_per_kwh: charge.price,
     charged_energy_kwh: gridEnergy,
     estimated_cost: round(gridEnergy * charge.price),
@@ -177,17 +184,22 @@ for (const trip of tripRows) {
   }
 }
 for (const [index, charge] of chargeRows.entries()) {
-  for (const [suffix, time, soc] of [
-    ["1", charge.started_at, charge.start_percent],
-    ["2", charge.stopped_at, charge.current_percent],
-  ]) {
+  for (let point = 0; point <= 12; point++) {
+    const fraction = point / 12;
+    const time = new Date(Date.parse(charge.started_at) + fraction *
+      (Date.parse(charge.stopped_at) - Date.parse(charge.started_at))).toISOString();
+    const soc = round(charge.start_percent + fraction * (charge.current_percent - charge.start_percent), 2);
     samples.push({
-      id: `55555555-5555-4555-8555-${String(index + 1).padStart(11, "0")}${suffix}`,
+      id: `55555555-5555-4555-8555-${String(index * 100 + point + 1).padStart(12, "0")}`,
       user_id: userId,
       vehicle_id: DEMO_VEHICLE_ID,
       device_time: time,
       received_at: time,
-      telemetry: { soc, speed_kmh: 0, charge_power_kw: charge.charger_power_kw, is_charging: true },
+      telemetry: { soc, speed_kmh: 0, charge_power_kw: charge.charger_power_kw,
+        is_charging: true, battery_temp_c: round(24 + fraction * 5),
+        outside_temp_c: 16, battery_voltage_v: round(330 + fraction * 12),
+        cell_voltage_min_v: 3.28, cell_voltage_max_v: 3.295, cell_delta_v: 0.015,
+        soh_percent: 98.5 },
       diplus_soc: soc,
       diplus_speed_kmh: 0,
       diplus_power_kw: charge.charger_power_kw,
@@ -211,15 +223,99 @@ assert(await supabase.from("bydmate_live_snapshots").upsert({
   device_time: snapshotTime,
   received_at: snapshotTime,
   updated_at: snapshotTime,
-  telemetry: { soc: 56, speed_kmh: 0, odometer_km: odometer, power_kw: 0 },
-  diplus: {},
+  telemetry: { soc: 56, speed_kmh: 0, odometer_km: odometer, power_kw: 0,
+    battery_temp_c: 25, outside_temp_c: 16, cabin_temp_c: 21,
+    battery_voltage_v: 332, aux_voltage_v: 13.2, soh_percent: 98.5,
+    cell_voltage_min_v: 3.28, cell_voltage_max_v: 3.295, cell_delta_v: 0.015,
+    is_charging: false, charge_power_kw: 0 },
+  diplus: { gear: "P", charge_gun_state: 1, voltage_12v: 13.2,
+    min_cell_voltage_v: 3.28, max_cell_voltage_v: 3.295, cell_delta_v: 0.015,
+    tire_press_fl_kpa: 240, tire_press_fr_kpa: 240,
+    tire_press_rl_kpa: 235, tire_press_rr_kpa: 235 },
   location: {},
   raw_payload: {},
   diplus_soc: 56,
   diplus_speed_kmh: 0,
   diplus_mileage_km: odometer,
   diplus_power_kw: 0,
+  diplus_min_cell_voltage_v: 3.28, diplus_max_cell_voltage_v: 3.295,
+  diplus_cell_delta_v: 0.015, diplus_voltage_12v: 13.2,
 }), "live snapshot");
 
 console.log(`Seeded local demo: ${DEMO_EMAIL}, 1 car, ${chargeRows.length} charges, ${tripRows.length} trips, ${samples.length} samples.`);
 console.log("All records are fictional and exist only in local Supabase.");
+
+const serviceRows = [
+  ["77777777-7777-4777-8777-777777777701", "Замена салонного фильтра", "cabin_filter", 18, 18057, 35, 15],
+  ["77777777-7777-4777-8777-777777777702", "Сезонная смена шин", "tires", 9, 18277, 0, 80],
+  ["77777777-7777-4777-8777-777777777703", "Проверка тормозной системы", "brakes", 2, 18448, 0, 45],
+].map(([id, title, category, daysAgo, mileage, parts, labor]) => ({
+  id, user_id: userId, car_id: DEMO_CAR_ID, title, category,
+  service_type: "maintenance", performed_date: demoTime(daysAgo, 9).slice(0, 10),
+  odometer_km: mileage, vendor_name: "Демо-сервис", parts_cost: parts,
+  labor_cost: labor, total_cost: parts + labor, currency: "BYN",
+  notes: "Вымышленная запись для демонстрации интерфейса.", next_due_km: mileage + 10000,
+}));
+assert(await supabase.from("vehicle_service_records").upsert(serviceRows), "service records");
+
+const categoryId = "88888888-8888-4888-8888-888888888801";
+assert(await supabase.from("knowledge_categories").upsert({
+  id: categoryId, slug: "demo-charging", title: "Зарядка и расходы",
+  description: "Демонстрационные материалы VoltFlow", sort_order: -10,
+}), "knowledge category");
+assert(await supabase.from("knowledge_articles").upsert({
+  id: "88888888-8888-4888-8888-888888888802", slug: "demo-charge-cost",
+  title: "Как читать стоимость зарядки в VoltFlow", category_id: categoryId,
+  summary: "Демонстрационный пример: SOC, энергия из сети и ваш тариф.",
+  content: [
+    { heading: "От процента к энергии", body: "В этом вымышленном примере батарея имеет ёмкость 45,1 кВт·ч. Зарядка с 51% до 86% при КПД 98% соответствует примерно 16,107 кВт·ч из сети." },
+    { heading: "Ваш тариф", body: "При демонстрационной цене 0,55 BYN за кВт·ч стоимость составляет 8,86 BYN. Фактическую стоимость можно уточнить по чеку провайдера." },
+  ], tags: ["зарядка", "тариф", "демо"], status: "published",
+  published_at: demoTime(10, 12), source_label: "Демонстрационные данные", sort_order: -10,
+}), "knowledge article");
+assert(await supabase.from("faq_items").upsert({
+  id: "88888888-8888-4888-8888-888888888803", category_id: categoryId,
+  question: "Можно ли пользоваться VoltFlow без подключения автомобиля?",
+  answer: "Можно вручную вести зарядки и сервисные записи и читать базу знаний. Живой статус, автоматические поездки и зарядки требуют поступающей телеметрии. Этот экран использует вымышленные демоданные.",
+  status: "published", tags: ["начало", "демо"], sort_order: -10,
+}), "FAQ");
+console.log("Seeded 3 service records, 1 article and 1 FAQ in local demo only.");
+
+assert(await supabase.from("accessories").upsert({
+  id: "88888888-8888-4888-8888-888888888804", title: "Органайзер багажника — демо",
+  category_id: categoryId, use_case: "Хранение кабеля и небольших вещей",
+  why_useful: "Пример карточки аксессуара, а не рекомендация к покупке.",
+  what_to_check: ["Размеры багажника", "Способ крепления"], priority: "optional",
+  status: "published", sort_order: -10,
+}), "accessory");
+assert(await supabase.from("spare_parts").upsert({
+  id: "88888888-8888-4888-8888-888888888805", title: "Салонный фильтр — демо",
+  description: "Вымышленная карточка для демонстрации каталога.",
+  category_id: categoryId, compatibility: "Совместимость нужно уточнять по автомобилю",
+  status: "published", sort_order: -10,
+}), "spare part");
+assert(await supabase.from("service_providers").upsert({
+  id: "88888888-8888-4888-8888-888888888806", name: "Демо-сервис BYD",
+  description: "Вымышленная организация. Не является реальным предложением услуг.",
+  services: ["Осмотр", "Сезонная смена шин"], status: "published", sort_order: -10,
+}), "service provider");
+if (process.argv.includes("--charging")) {
+  const startedAt = new Date(Date.now() - 23 * 60_000).toISOString();
+  const now = new Date().toISOString();
+  assert(await supabase.from("charging_sessions").upsert({
+    ...chargeRows[0], id: activeDemoId, start_percent: 56, current_percent: 62,
+    target_percent: 90, status: "charging", started_at: startedAt, stopped_at: null,
+    created_at: startedAt, updated_at: now,
+    charged_energy_kwh: round(6 * BATTERY_KWH / 100 / 0.98, 3),
+    estimated_cost: round(6 * BATTERY_KWH / 100 / 0.98 * 0.34),
+  }), "active charging scenario");
+  assert(await supabase.from("bydmate_live_snapshots").update({
+    device_time: now, received_at: now, updated_at: now, diplus_soc: 62,
+    diplus_charging_status: "charging",
+    telemetry: { soc: 62, speed_kmh: 0, charge_power_kw: 7, is_charging: true,
+      odometer_km: odometer, battery_voltage_v: 332, charge_current_a: -21.08,
+      battery_temp_c: 28, outside_temp_c: 16, soh_percent: 98.5 },
+    diplus: { gear: "P", charge_gun_state: 0, charging_status: "charging" },
+  }).eq("user_id", userId).eq("vehicle_id", DEMO_VEHICLE_ID), "charging snapshot");
+}
+console.log(JSON.stringify({ homeProviderId: providers.find((provider) => provider.label === "Home").id }));

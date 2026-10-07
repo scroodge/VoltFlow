@@ -1,0 +1,28 @@
+{
+  "capturedAt": "2026-10-07T08:05:57.970Z",
+  "viewport": "390×844 DPR 2",
+  "screens": [],
+  "externalRequests": [
+    {
+      "origin": "https://va.vercel-scripts.com",
+      "path": "/v1/script.debug.js"
+    },
+    {
+      "origin": "https://va.vercel-scripts.com",
+      "path": "/v1/speed-insights/script.debug.js"
+    }
+  ],
+  "failedLocal": [],
+  "browserErrors": [
+    "page.waitForURL: Timeout 60000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation to \"**/dashboard\" until \"commit\"\n============================================================"
+  ],
+  "browserWarnings": [
+    "The Content Security Policy directive 'upgrade-insecure-requests' is ignored when delivered in a report-only policy."
+  ],
+  "mockedLocal": [
+    "/api/bydmate/latest-release"
+  ],
+  "complete": false,
+  "failurePath": "/login",
+  "failureText": "EN\nBY\nRU\nИдентификация VoltFlow\nВойдите, чтобы следить за зарядкой, поездками и состоянием батареи вашего электромобиля.\nВойти\nРегистрация\nEmail\nПароль\nЗабыли пароль?\nПродолжить\nИЛИ\nПродолжить с Google\n\nПодсказка для offline: меню Safari → Добавить на экран «Домой».\n\nНазад к старту\nПолитика конфиденциальности\nУсловия использования"
+}

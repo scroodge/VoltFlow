@@ -40,6 +40,19 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-10-07
 
+### Trip-distance plausibility guard, stage 2 (server write-time, applied to prod)
+Migration `20261007130000_bydmate_client_trip_distance_guard.sql`: new
+`bydmate_trip_distance_plausible` (SQL twin of the TS check: > 1,500 km or > 250 km/h) and
+`bydmate_trip_distance_from_samples` (odometer delta over the trip's own samples, `NULL` unless
+samples cover both ends within 2 min), and `bydmate_apply_client_trip` rewritten so an odometer-scale
+`distance_km` is never stored: open trip → previous plausible value or `NULL`; closing block →
+repaired from samples or `NULL`. Real drives are kept instead of deleted by Rule C. Validated in a
+rolled-back transaction first (13/13 parity cases; repairs 2.4 and 6.2 km; `NULL` where samples are
+missing; 194/198 healthy trips within max(0.5 km, 5%), worst 2.5 km; open/closing/passthrough
+behaviours), then applied; privileges checked (`anon`/`authenticated` denied). `docs/TRIPS.md`
+documents the guard. Not yet observed on a real drive; stage 3 (21 historical rows) and the Mate
+app (scroodge/VoltFlow#43) remain.
+
 ### Trip-distance plausibility guard, stage 1b (read-side, every trip consumer)
 New `sanitizeTripDistances` (nulls an implausible `distance_km` on a copy; the drive stays listed;
 open trips are judged by `last_device_time`) and `cleanTrips` = `dedupeTripsBySource` + sanitize in

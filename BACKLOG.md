@@ -23,6 +23,14 @@ sending a test notification to an unrelated user.
 > **Still proposed:** external uptime service (option 3, catches a dead VPS); retire or
 > retarget the useless `sb-pgrst-pool` rule; find the root cause of the wedge; stop
 > exposing Grafana on `0.0.0.0:3000` over plain HTTP (bind to 127.0.0.1 / TLS proxy).
+>
+> **Root-cause lead (2026-10-07):** host, DB, cron, role limits and schema reloads are ruled
+> out (see `docs/OPS_LOCAL.md`). `pgrst_db_pool_available` (25–26) exceeded
+> `pgrst_db_pool_max` (10) from at least 16:00 UTC, ~6 h before the first timeouts —
+> pool-accounting drift in PostgREST 14.12. Next, if wanted: (1) read `available − max`
+> over 10+ days to see the lead time; (2) alert on `available > max` as an early warning
+> that would have fired ~6 h earlier; (3) compare 14.12 with newer PostgREST releases for a
+> pool fix; (4) consider a scheduled `supabase-rest` restart (e.g. weekly) until fixed.
 
 ### Problem
 
@@ -182,6 +190,105 @@ Postgres, scoped per user by RLS. Nothing stored client-side, nothing sent to a 
 
 **Verification:** `npm run test`, `npm run lint`, `npm run build`; replay on the user's real
 trips: the open 27,583 km trip must show a null distance and not move today's total or AI Range.
+
+### Stage 2 plan: server write-time guard — BUILT AND APPLIED TO PROD 2026-10-07
+
+> **Applied** as `supabase/migrations/20261007130000_bydmate_client_trip_distance_guard.sql`
+> (`psql -f` via the pooler; live definitions and privileges verified: `anon`/`authenticated` have no
+> execute, `service_role` does). Decisions taken on the user's behalf because they did not answer:
+> real drives with no usable odometer delta are **kept with `NULL` distance**; `soc_start = -1`
+> left out of scope. Validated first in a rolled-back transaction: 13/13 plausibility cases match the
+> TS tests; repair gives 2.4 km and 6.2 km on two traced trips; `NULL` (not a guess) for the four
+> ~25,000 km trips with no samples and for a trip whose samples start 8 min after it began; on 200
+> healthy trips 198 get a repair and 194 are within max(0.5 km, 5%) (worst 2.5 km, the 2-minute edge
+> tolerance at highway speed); open phantom → `NULL`, later plausible value stored, later phantom
+> does not overwrite it; closing + no samples keeps the row with `NULL`; plausible values pass through
+> unchanged. **Not yet seen live:** no real drive has run since the apply (the account's new trip was
+> idle, distance 0.0); confirm on the next drive that an open trip never shows the odometer.
+> `docs/TRIPS.md` updated (new "Client `distance_km` guard" section); `MIGRATIONS_AUDIT.md` is not kept
+> per migration and was left alone. Still open: stage 3 (21 historical rows), Mate app (#43).
+>
+> The original plan follows.
+
+**New evidence (read-only, today's live phantom `68dfb9ff`, 2026-10-07).**
+- `distance_km` = **27,608.0 = the car's current odometer (27,608)**, updating live, while
+  `current_trip_distance_km` (the trip meter) reads **11.6 km** — the true trip distance. So the
+  stored value is `odometer − 0`, not odometer plus anything.
+- First samples of the trip again have no `odometer_km` and no `soc` (odometer appears at 06:58:11);
+  stored `soc_start = -1`, `trip_meter_baseline_km = 0`, `client_trip = true`. Same vehicle/account
+  as the four ~25,000 km trips of 08-21 … 09-02.
+- **Correction to issue #43 / earlier hypothesis:** the Mate client code I read
+  (`TripRollupAccumulator.kt`) sends **no** `distance_km` when its first odometer is null
+  (`distanceKmOf` returns null), and the telemetry sanitizer does not null `odometer_km = 0`. So that
+  client path alone does not explain an odometer-scale value. The producer is **still unidentified**
+  (another app build or path; `bydmate_devices.app_version`/`version_code` are empty for this
+  account, so the build is unknown). Stage 2 is designed to not depend on finding it.
+- The server's own legacy path does not mix the odometer into trip distance (no public function
+  references both), and for `client_trip` rows it leaves `distance_km` to the client block
+  (`distance_km = coalesce(block, existing)`), so once a bad block lands it stays.
+- The trip's own raw samples hold the truth: odometer delta == trip-meter delta (2.4, 6.2, 6.3,
+  8.6 km on the four traced trips).
+
+**Proposal (one new idempotent migration, `psql -f`, never edit an applied one).**
+1. `bydmate_trip_distance_plausible(distance, started_at, ended_at)` — SQL twin of
+   `isPlausibleTripDistance` (> 1,500 km or implied > 250 km/h, speed check only above 1 km, unknown
+   duration → km cap only). `IMMUTABLE`. Constants duplicated from the TS helper, so both carry a
+   comment pointing at each other; SQL cannot be covered by the node tests (parity risk — see below).
+2. `bydmate_trip_distance_from_samples(user, vehicle, from, to)` — odometer max − min over the
+   trip's own samples (`device_time` window, ≥ 2 odometer samples, delta ≥ 0, result must itself be
+   plausible), else `null`. **Also the repair primitive for stage 3**, so repair and guard share one
+   definition of "true distance".
+3. Replace `bydmate_apply_client_trip` (full body, based on the live definition and migration
+   `20260917120000`): when the block's `distance_km` is implausible,
+   - **open trip** (no `ended_at` in the block): do not store it; keep the previous distance only if
+     that is plausible, else `null`. The phantom is never published, even for seconds.
+   - **closing block** (`ended_at` present): recompute with `bydmate_trip_distance_from_samples`,
+     else `null`; then run the existing `bydmate_discard_trip_if_junk` as today.
+   Real drives are therefore **kept with a correct (or unknown) distance instead of deleted by
+   Rule C**; parking blips are still dropped by Rules A/B.
+4. Grants: new functions `revoke execute … from public, anon, authenticated`, explicit grant only to
+   the role(s) `bydmate_apply_client_trip` is already granted to; verify with
+   `has_function_privilege('anon', …)`. `SECURITY DEFINER` + `set search_path = public` like the
+   existing function.
+
+**Not in this stage:** fixing `soc_start = -1` (server sentinel; Stage 1b readers already tolerate
+it), the 21 historical rows (stage 3), and the Mate app (issue #43, to be corrected with the
+new facts).
+
+**Risks.**
+- **Samples may lag the closing block** (bulk delivery), so the odometer delta could undercount;
+  mitigation: only trust it if it is plausible and ≥ the block's own track-based evidence is not
+  available, otherwise `null`. A wrong-small distance is worse than null, so a minimum sample count
+  is required; wrong cases must fail to `null`, never to a guess.
+- **SQL/TS parity:** the 1,500 km / 250 km/h constants live in two places. Mitigation: an
+  assertion query in the verification plan and a comment in both files.
+- **Hot path:** `bydmate_apply_client_trip` runs on every block. Added cost is one immutable
+  function call; the samples query runs only on an implausible closing block.
+- **Replacing a `SECURITY DEFINER` function** that ingests every client trip: a mistake breaks trip
+  ingest for all users. Rollback = re-apply the `20260917120000` definition; applied on prod only
+  after a read-only replay of the four known trips.
+
+**Data ownership:** no new data model. Server-side repair of existing app-owned
+`bydmate_trips` rows in Postgres, from the same owner's own samples. Nothing is sent to a third
+party; nothing is stored client-side.
+
+**Verification plan.**
+- Before applying: call the new `…_from_samples` read-only for the 8 traced bad trips and expect
+  2.4 / 6.2 / 6.3 / 8.6 km where samples exist, `null` where they do not (the four ~25,000 km trips).
+- Plausibility parity: `select` the SQL function over a table of cases mirroring
+  `trip-distance-plausibility.test.mjs` (44,123 km/6 min → false; 90.6 km/4025 s → true; 286 km/3 h
+  → true; 1,500 / 1,501 km).
+- After applying: privilege check; wait for the next drive of the affected account and confirm the
+  open trip shows `null`/plausible distance (not the odometer) and the closed row keeps a real distance.
+- `npm run test`, `lint` unchanged (no TS change); `docs/TRIPS.md` and `supabase/MIGRATIONS_AUDIT.md`
+  updated in the same change.
+
+**Open questions.**
+- Trip kept with `null` distance when the odometer delta is unavailable (my recommendation), or
+  discarded as before? (You chose delete for the *historical unrepairable rows*; for new trips I'd
+  keep the drive, since it is real.)
+- Should the migration also null `soc_start < 0` while replacing the function (tiny hygiene), or
+  stay strictly scoped to distance?
 
 ### Options considered
 
@@ -1003,6 +1110,18 @@ into local Postgres on loopback ports 55321/55322. The app uses port 3037 and
 restore the local schema without resetting volumes, add service/knowledge fixtures,
 capture the feature screens, and inspect every PNG. Prepare posts and a coverage
 manifest. Channel setup and publication are separate from local preparation.
+
+#### Screenshot blockers found during continuation
+
+The local browser repeatedly crashes on `/history/<demo-session-id>` with
+`Maximum update depth exceeded` in Base UI `SelectRoot`. Correcting legacy
+fixture provider values and preserving/replacing the demo build directory did
+not remove it. The detail screen passes newly mapped `items` arrays to both
+selectors on every render. Proposed narrow fix: memoize those selector option
+arrays (same values and labels) and verify the real detail page in the browser.
+Alternative: omit charge-detail screenshots, leaving feature coverage incomplete;
+or patch the shared Select wrapper, which has a broader regression surface.
+Recommend the screen-local fix. No data ownership/storage changes.
 
 ### Research findings and boundary
 
