@@ -12,7 +12,7 @@ mkdirSync(output, { recursive: true });
 const seedOutput = execFileSync(process.execPath, [resolve(root, "scripts/telegram-demo-seed.mjs")], {
   cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
 });
-const seed = JSON.parse(seedOutput.trim().split("\n").at(-1));
+JSON.parse(seedOutput.trim().split("\n").at(-1)); // Confirm the seed completed its final step.
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2,
   locale: "ru-BY", timezoneId: "Europe/Minsk", colorScheme: "dark" });
@@ -153,7 +153,7 @@ try {
   });
   await visit("/dashboard", "BYD Yuan Up"); await capture("19-live-charging", "Активная зарядка — имитация локального состояния");
   await visit("/vehicle", "BYD YUAN UP"); await capture("20-charging-vehicle", "Телеметрия активной зарядки — имитация");
-  report.complete = !report.browserErrors.length && !report.failedLocal.length &&
+  report.complete = report.screens.length === 20 && !report.browserErrors.length && !report.failedLocal.length &&
     !process.argv.includes("--skip-detail") &&
     report.externalRequests.every((request) => request.origin === "https://va.vercel-scripts.com");
 } catch (error) {

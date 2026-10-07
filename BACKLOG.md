@@ -191,6 +191,104 @@ Postgres, scoped per user by RLS. Nothing stored client-side, nothing sent to a 
 **Verification:** `npm run test`, `npm run lint`, `npm run build`; replay on the user's real
 trips: the open 27,583 km trip must show a null distance and not move today's total or AI Range.
 
+### Stage 3 plan: historical cleanup of the 21 stored rows — PAUSED, PLAN CORRECTED 2026-10-07
+
+> **Correction (2026-10-07, found while building; nothing was written to prod for stage 3).**
+> The table below classified six `client_trip` rows (groups B/C and `7ccbba5d`) as junk or as
+> repairable. An energy cross-check (net energy ÷ stored consumption) shows their **distances are
+> real**: 8.6 km stored vs 8.6 km from energy (`7ccbba5d`), 7.4 vs 7.1, 3.3 vs 3.0, 8.4 vs 8.2,
+> 6.6 vs 6.4, 14.3 vs 13.4 — within ~10 %. Only their recorded **durations** (15–122 s) are wrong, so
+> the "impossible speed" test flagged real trips. By contrast the **7 rows above 1,500 km** are true
+> odometer phantoms (energy implies 2–13 km). Counts on 2,650 closed client trips (08-01…09-17): 7 flagged
+> by the 1,500 km cap (all genuine), **6 flagged by the speed rule alone (all false positives)**.
+> Consequences, none yet corrected:
+> - **Stage 2 (applied) shares the flaw:** for a closing block with a truncated duration and a correct
+>   distance it would call the distance implausible and replace it by an odometer delta over the *truncated*
+>   window (e.g. 8.6 km → 0.8 km, as `from_samples` returns for `7ccbba5d`) or `NULL`. No client trip has
+>   closed since the apply (07:45 UTC), so nothing has been damaged yet. At ~0.23 % of client trips this is
+>   ~1 in 430.
+> - **The server junk filter (Rule C) on the client path, live since 2026-09-17**, deletes the same real
+>   trips at close. At that rate ~2–3 of the 1,184 client trips since 09-17 were probably deleted
+>   (unrecoverable: the audit rows cascade away with them).
+> - **Stage 1b/1 TS check** nulls the distance of those 6 rows and the 8 `byd_energydata` rows in every reader.
+> - Fleet check: 18 vehicles, lowest odometer 5,156 km, so the **1,500 km cap alone catches every
+>   odometer-scale phantom today** (any car under 1,500 km would need an extra test).
+>
+> **Revised proposal (needs the user's go-ahead; user decisions so far: group D keep with `NULL`; the
+> "group C delete" decision was based on the wrong classification and is withdrawn):**
+> 1. **Drop the speed rule from the distance guard**, keep only the 1,500 km cap: TS
+>    (`trip-distance-plausibility.ts` + tests + the grader) and SQL (`bydmate_trip_distance_plausible`,
+>    new migration; `bydmate_apply_client_trip` itself is unchanged). This also resolves the energydata
+>    read-side issue.
+> 2. **Stage 3 shrinks to 7 row updates, no deletes:** repair `a62052e8` → 2.4 km and `ca8ba735` → 6.2 km
+>    (odometer delta, GPS agrees within 3–7 %); set `distance_km = NULL` for the five odometer-scale
+>    real drives (`3c5adf11 b9135a90 05796b26 a0fa14a1 368c70ec`). The six speed-only client rows and the
+>    eight energydata rows are **left untouched** (their distances are right).
+> 3. **Rule C on the client path** (`bydmate_discard_trip_if_junk`) needs its own decision: it deletes real
+>    trips with truncated durations. Options: skip Rule C for `client_trip` rows, or require agreement with the
+>    row's own energy. Not in scope until you choose.
+> 4. Backup before any write, idempotent migration with an explicit id list, rollback from the backup.
+>
+> The original (superseded) plan follows.
+
+**Research (read-only prod checks, 2026-10-07, after stage 2 was applied).** 21 closed rows fail
+`bydmate_trip_distance_plausible` (0 open; none since 09-17; stage 2 stops new ones). They are **not**
+one kind of problem, and a blanket "delete the unrepairable" would destroy real data:
+
+| Group | Rows | What they are | Evidence |
+|---|---|---|---|
+| **E** `byd_energydata` | 8 (`fefc0455 43d96913 3b030689 1e6c5976 8463d67a ef237a77 e5df435c ce79eed0`) | The car's own trip summaries. Distances 4–96 km look like real trips; the **duration** is wrong (34–199 s). Their `avg_speed_kmh` is just distance ÷ duration, so "impossible speed" is a timestamp artefact. 8 of 12,373 energydata rows; the junk filter never ran on them (aggregate-only, no samples/GPS). | No samples within ±20 min of any, so the distances can be neither confirmed nor refuted. `ef237a77` (95.9 km in 47 s, 5 neighbouring trips) deserves a human look. |
+| **A** repairable from samples | 3 (`a62052e8 ca8ba735 7ccbba5d`) | `client_trip`, odometer-scale or inflated distance | Odometer delta 2.4 / 6.2 / 0.8 km; GPS path 2.23 / 6.00 / 0.44 (within 3–7 % on the two longer trips, poor on the short one) |
+| **B** zero-distance hop | 1 (`434bb113`) | 15 s, 0.0 km by both odometer and GPS | junk (Rules A/B class) |
+| **C** short hops, inflated | 4 (`fbf011c4 c9f33eb4 9c8cb9fa c99a935e`) | 16–84 s `client_trip`s with 3–14 km stored; estimated real 0.1–0.8 km | The old "inherited trip meter" class that Rule C would have deleted at close |
+| **D** real drives, no trustworthy distance | 5 (`3c5adf11 b9135a90 05796b26 a0fa14a1`, `368c70ec`) | 5–20 min drives (avg 30–39 km/h; estimated 3–10 km each), `client_trip`, **no samples and no GPS** for four of them; `368c70ec` has samples only for its last ~7 of 15 min (both odometer and GPS say 6.2 km, a floor) | Not repairable; estimate from avg speed × duration is ±10 % at best and poor on short trips |
+
+Dependents: `bydmate_trip_track_points`, `bydmate_trip_insight_inputs`,
+`bydmate_trip_finalization_audits` all reference `bydmate_trips` with **ON DELETE CASCADE**, so a delete
+also removes route/GPS/insight data (group D: `368c70ec` has 66 track points; the four `sed` trips have none).
+
+**Proposal.**
+1. **Read-only preview** (no writes): one query printing every row with its proposed action, for you to
+   review row by row before anything is written.
+2. **Backup first:** `\copy` the 21 rows **and** their child rows (track points, insight inputs, audits) to a
+   local file **outside the repo** (it contains user ids), so every change is reversible.
+3. **One idempotent migration** (`psql -f`, repo is the only history on self-hosted) with an **explicit id
+   list** and a `where not bydmate_trip_distance_plausible(...) and source <> 'byd_energydata'` guard, so it
+   can never touch a healthy row and a re-run is a no-op:
+   - **A:** `update … set distance_km = bydmate_trip_distance_from_samples(...)` (the deployed stage-2
+     primitive; result must be non-null or the row is skipped).
+   - **B and C:** delete through `bydmate_discard_trip_if_junk` semantics (explicit `delete … where id = any(…)`).
+   - **D:** per your earlier decision, **delete**. See the open question below: this is the one group where
+     I would change my recommendation.
+   - **E:** not touched.
+4. **Code follow-up (small, TS):** `isPlausibleTripDistance` / `sanitizeTripDistances` currently null the
+   distance of those 8 energydata rows in every read path (stage 1b side effect: ~221 km of probably-real
+   trips now show no distance). For `source === 'byd_energydata'` skip the **speed** check (their timestamps
+   are unreliable) and keep only the 1,500 km cap; add tests. The SQL helper is unaffected (client trips only).
+5. **After:** 0 implausible closed rows except group E; re-run `scripts/analyze-range-trust-cycles.sql` (cycle
+   count and factor should not move materially); spot-check a day total on an affected account.
+6. **Rollback:** re-insert the deleted rows + children from the backup, and restore the repaired rows'
+   previous `distance_km` from it.
+
+**Risks.**
+- **Other users' data:** the rows belong to 7 accounts (all within the app owner's database); effect on
+  each owner is limited to a few trips disappearing from or being corrected in their lists.
+- **Deleting real drives** (group D) removes their energy/route data permanently except from the backup.
+- **Repair is not exact:** odometer delta is exact when coverage is good; the three repairs are within ~0.2 km.
+- **Idempotency vs. concurrency:** none of the 21 rows is open or being updated (all closed, none after 09-16).
+
+**Data ownership:** no new data model; one-time repair/removal of existing app-owned `bydmate_trips` rows in
+Postgres. Nothing stored client-side; nothing sent to a third party; backup stays local.
+
+**Open questions for you.**
+1. **Group D (5 real drives): delete or keep with `NULL` distance?** You said *delete* for unrepairable rows. New
+   facts: these are real 5–20 min drives (about 40 km in total), not junk, and since stage 2 the same situation
+   for **new** trips is kept with `NULL`. Deleting makes old and new inconsistent and loses their energy data;
+   keeping with `NULL` costs nothing (readers already treat `NULL` as unknown). I recommend **NULL**; delete only
+   if you prefer a clean table.
+2. **Group C (4 short hops):** delete (my recommendation, they are junk-class) or `NULL`?
+3. **Group E:** leave untouched and fix the read side (my recommendation), or also review `ef237a77` manually?
+
 ### Stage 2 plan: server write-time guard — BUILT AND APPLIED TO PROD 2026-10-07
 
 > **Applied** as `supabase/migrations/20261007130000_bydmate_client_trip_distance_guard.sql`
