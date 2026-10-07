@@ -11,6 +11,19 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-10-07
 
+- **Closed two public admin ports on the VPS.** Grafana (`3000`) and Kong's Admin API
+  (`8001`, unauthenticated; served the `anon`/`service_role` key-auth credentials for at
+  least 79 days) are now bound to `127.0.0.1` in `/opt/monitoring/docker-compose.yml` and
+  `/opt/supabase/docker-compose.yml`; verified from outside. Keys were **not** rotated (owner
+  decision); see BACKLOG. Same day, after a read-only audit: Kong `8000`/`8443`, Loki
+  `3100`, Prometheus `9090`, node_exporter `9100`, cAdvisor `8088` and blackbox `9115` were
+  also rebound to `127.0.0.1` (nginx reaches Kong at `127.0.0.1:8000`; Prometheus scrapes by
+  container name; blackbox was a hand-started `docker run`, recreated on `monitoring_default`).
+  fail2ban installed (sshd jail, 1-day bans) and `/etc/ssh/sshd_config.d/00-hardening.conf`
+  sets key-only SSH (`PasswordAuthentication no`, `PermitRootLogin prohibit-password`,
+  `MaxAuthTries 3`, no X11) after 30,657 failed logins in 24 h. All verified from outside.
+  Still public by design: 22, 80, 443, pooler 5432/6543, VPN UDP.
+
 - **Charge-detail pending-query render loop (local working-tree fix).**
   `ChargingSessionScreen` now uses typed, stable empty fallbacks for provider rows
   and live snapshots. This prevents pending queries from creating fresh Select/

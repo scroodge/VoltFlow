@@ -35,6 +35,7 @@ await context.route("**/*", async (route) => {
   return route.abort();
 });
 let page = await context.newPage();
+page.setDefaultTimeout(45000);
 function bindPage(currentPage) {
 currentPage.on("pageerror", (error) => report.browserErrors.push(`${new URL(currentPage.url()).pathname}: ${error.stack || error.message}`));
 currentPage.on("console", (message) => {
@@ -52,16 +53,43 @@ currentPage.on("response", (response) => {
 }
 bindPage(page);
 async function visit(path, text) {
-  // Keep authentication/preferences in the context, but isolate each page from
-  // development hot-reload and in-flight router transitions on the prior screen.
-  const previous = page;
-  page = await context.newPage(); bindPage(page); await previous.close();
-  await page.goto(`${origin}${path}`, { waitUntil: "domcontentloaded", timeout: 90000 });
+  const target = new URL(path, origin);
+  const exactLink = page.locator(`a[href="${path}"]`).first();
+  const baseLink = page.locator(`a[href="${target.pathname}"]`).first();
+  if (await exactLink.count()) {
+    await exactLink.click();
+    await page.waitForURL((url) => url.pathname === target.pathname);
+  } else if (await baseLink.count()) {
+    await baseLink.click();
+    await page.waitForURL((url) => url.pathname === target.pathname);
+  } else if (new URL(page.url()).pathname !== target.pathname) {
+    await page.goto(target.href, { waitUntil: "domcontentloaded", timeout: 90000 });
+  }
+  if (target.pathname === "/history") {
+    const tab = target.searchParams.get("tab") ?? "charging";
+    await page.getByRole("button", { name: { charging: "Зарядка", trips: "Поездки", analytics: "Аналитика" }[tab], exact: true }).click();
+    if (tab === "analytics") await page.getByRole("button", { name: "Месяц", exact: true }).click();
+  }
+  if (target.pathname === "/vehicle") {
+    await page.getByRole("button", { name: target.searchParams.get("tab") === "service" ? "Сервис" : "Live", exact: true }).click();
+  }
   if (text) await page.getByText(new RegExp(text, "i")).first().waitFor({ timeout: 45000 });
   await page.evaluate(() => document.fonts.ready); await page.waitForTimeout(2200);
   if (new URL(page.url()).pathname === "/login") throw new Error(`Lost session on ${path}`);
 }
+async function settleVisible() {
+  await page.waitForFunction(() => {
+    const visible = (el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && r.top < innerHeight && r.bottom > 0 && getComputedStyle(el).visibility !== "hidden";
+    };
+    return ![...document.querySelectorAll('[data-slot="skeleton"], [aria-busy="true"]')].some(visible) &&
+      ![...document.querySelectorAll("p")].some((el) => visible(el) && /Формируем сводку|Сопоставляем GPS|Анализ повторных маршрутов/.test(el.innerText));
+  }, undefined, { timeout: 60000 });
+  await page.waitForTimeout(800);
+}
 async function capture(id, feature) {
+  await settleVisible();
   await page.evaluate(() => document.fonts.ready); await page.waitForTimeout(600);
   // Add the screenshot label after hydration, so it cannot alter React's SSR tree.
   await page.evaluate(() => {
@@ -87,7 +115,7 @@ async function capture(id, feature) {
     const dimensions = await scroller.evaluate((el) => ({ height: el.clientHeight, total: el.scrollHeight }));
     for (let offset = dimensions.height - 120, panel = 2; offset < dimensions.total; offset += dimensions.height - 120, panel++) {
       await scroller.evaluate((el, y) => { el.scrollTop = y; }, offset);
-      await page.waitForTimeout(350);
+      await settleVisible();
       const panelFile = `${id}-panel-${String(panel).padStart(2, "0")}.png`;
       await page.screenshot({ path: resolve(output, panelFile), animations: "disabled" });
       panels.push(panelFile);
@@ -135,14 +163,14 @@ try {
     await page.locator("#session-provider-type").waitFor();
     await capture("04-charge-detail", "Завершённая зарядка: энергия, стоимость, график");
   }
-  await visit("/history?tab=trips"); await capture("05-trips", "История поездок");
-  await visit("/history?tab=analytics&range=month"); await capture("06-analytics", "Аналитика поездок и расходов");
+  await visit("/history?tab=trips", "34.0 km"); await capture("05-trips", "История поездок");
+  await visit("/history?tab=analytics&range=month", "Месяц в цифрах"); await capture("06-analytics", "Аналитика поездок и расходов");
   await visit("/vehicle", "BYD Yuan Up"); await capture("07-vehicle", "Состояние автомобиля");
   await visit("/vehicle?tab=service", "Замена салонного фильтра"); await capture("08-service", "Сервисный журнал");
   const stats = page.getByRole("button", { name: "Статистика", exact: true });
   if (await stats.count()) { await stats.click(); await page.waitForTimeout(600); await capture("09-service-stats", "Расходы на обслуживание"); }
   await visit("/settings", "BYD Yuan Up"); await capture("10-settings", "Настройки, автомобиль и тарифы");
-  await visit(`/cars/${DEMO_CAR_ID}/edit`); await capture("11-car-settings", "Параметры батареи и эффективности");
+  await visit(`/cars/${DEMO_CAR_ID}/edit`, "Полезная батарея"); await capture("11-car-settings", "Параметры батареи и эффективности");
   // Knowledge is public. Capture its anonymous experience, independently of
   // authenticated car-generation auto-detection; restore local auth below.
   await context.clearCookies();

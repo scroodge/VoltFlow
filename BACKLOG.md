@@ -15,6 +15,33 @@ sending a test notification to an unrelated user.
 
 ---
 
+## SECURITY: VPS hardening after the 2026-10-07 audit — IN PROGRESS (owner approved "close all ports and apply good security")
+
+Audit (host `vmi3078244`, read-only, 2026-10-07): **30,657 failed SSH logins in 24 h**,
+`PasswordAuthentication yes`, `PermitRootLogin yes`, `X11Forwarding yes`, fail2ban inactive;
+`ufw` inactive and `DOCKER-USER` empty; public unauthenticated Loki `3100`, Prometheus
+`9090`, node_exporter `9100`, cAdvisor `8088`, blackbox `9115`, plus Kong `8000`/`8443`
+(nginx proxies `supabase.*` to `127.0.0.1:8000`, so only localhost needs them; nothing in the
+repo uses them directly); `reboot-required` pending; 4,646 zombie processes (3,819 under a
+`python` parent, 794 `node`, 29 `edge-runtime`). Prometheus scrapes by container name, so
+binding monitoring ports to `127.0.0.1` is safe; its 3 `vmi3318627...` targets are the
+separate Nextcloud host. Must stay public: `22`, `80`, `443`, pooler `5432`/`6543` (Vercel has
+no fixed IP), the VPN UDP ports (another tenant). Steps, each confirmed and verified
+separately: A fail2ban + SSH key-only (keep one session open; test a second login first);
+B bind monitoring ports to `127.0.0.1`; C bind Kong `8000`/`8443` to `127.0.0.1`; D find the
+zombie parents; E planned reboot in a quiet window. Not doing: key rotation (declined), changes
+to the VPN or other tenants' services.
+
+> **Status 2026-10-07:** A, B, C **done and verified from outside** (see CHANGELOG). **D open,
+> low priority:** zombies are under `f1-news-bot-f1-news-main-1` (3,819, separate project),
+> `supabase-meta` (794) and `supabase-edge-functions` (29) — long-running processes not reaping
+> exited children, likely healthchecks; fix is `init: true` per service. Cost is a process-table
+> slot each (~50/day), not an emergency. **E open:** a kernel update awaits a reboot, which
+> restarts every service on the shared host — pick a quiet window; first list containers without
+> a restart policy. Also open: add a second SSH key / keep the Contabo VNC console as the only
+> fallback (single key in `authorized_keys`); `grafana/grafana:latest` and other `latest` tags are
+> unpinned.
+
 ## SECURITY: Kong Admin API (port 8001) was public — contain, then rotate Supabase keys — STEP 1 DONE 2026-10-07, STEP 2 DECLINED
 
 > **Status 2026-10-07:** Step 1 applied and verified (`8001` bound to `127.0.0.1`; from the
@@ -1340,6 +1367,17 @@ capture the feature screens, and inspect every PNG. Prepare posts and a coverage
 manifest. Channel setup and publication are separate from local preparation.
 
 #### Screenshot blockers found during continuation
+
+**Capture/data resolution approved 2026-10-07:** user requested resolving the
+remaining issues and rerunning/reviewing the pack. Focused browser probes verify
+one car, a connected profile, twelve trips and 76 samples through local REST.
+History eventually shows the intended 34 km / 67% → 56% trip. Normal dashboard →
+History → Trips navigation passed without the hard-load hydration mismatch.
+Recommended scope: drive real in-app links/tabs, wait for fixture-specific data
+and settled charts, and reject loading/preview screenshots. Alternatives are
+long fixed sleeps (flaky) or app SSR/query changes (broader, not needed yet).
+Demo fixtures remain app-owned fictional data in local Postgres; capture browser
+preferences remain disposable localStorage. No production targets or publishing.
 
 **Approved selector change, 2026-10-07:** provider Select now receives the existing
 memoized options directly; tariff options are memoized and shared by Select and
