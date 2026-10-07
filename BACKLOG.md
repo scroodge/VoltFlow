@@ -25,12 +25,14 @@ sending a test notification to an unrelated user.
 > exposing Grafana on `0.0.0.0:3000` over plain HTTP (bind to 127.0.0.1 / TLS proxy).
 >
 > **Root-cause lead (2026-10-07):** host, DB, cron, role limits and schema reloads are ruled
-> out (see `docs/OPS_LOCAL.md`). `pgrst_db_pool_available` (25–26) exceeded
-> `pgrst_db_pool_max` (10) from at least 16:00 UTC, ~6 h before the first timeouts —
-> pool-accounting drift in PostgREST 14.12. Next, if wanted: (1) read `available − max`
-> over 10+ days to see the lead time; (2) alert on `available > max` as an early warning
-> that would have fired ~6 h earlier; (3) compare 14.12 with newer PostgREST releases for a
-> pool fix; (4) consider a scheduled `supabase-rest` restart (e.g. weekly) until fixed.
+> out (see `docs/OPS_LOCAL.md`). **Root cause still unknown.** `pgrst_db_pool_available`
+> exceeded `pgrst_db_pool_max` by 13–16 for 10+ days before the outage with no failures, so it
+> is a metrics artifact (likely PostgREST #4622), not an early warning — an alert on it was
+> considered and rejected (permanent noise). Next, if wanted: (1) read PostgREST issues
+> #4622 and #4614 and decide whether to upgrade from 14.12 (newest reported is 16.4,
+> 2026-09-24; a 14→16 jump needs a staging test and rollback); (2) consider a scheduled
+> `supabase-rest` restart (e.g. weekly) until the cause is known; (3) a thin alert on 5xx
+> rate from Kong for `/rest/v1/` as a second, independent signal.
 
 ### Problem
 
@@ -1289,6 +1291,19 @@ arrays (same values and labels) and verify the real detail page in the browser.
 Alternative: omit charge-detail screenshots, leaving feature coverage incomplete;
 or patch the shared Select wrapper, which has a broader regression surface.
 Recommend the screen-local fix. No data ownership/storage changes.
+
+**Latest verification, 2026-10-07:** Webpack rendered the detail in an earlier
+attempt, but the full rerun reproduced the `SelectRoot` update loop, plus a
+history hydration mismatch. Separate build directories were verified for the
+normal and demo servers; shared-cache collision is not supported by that check.
+A focused public FAQ browser check passed without page errors. Memoizing detail
+options remains a hypothesis to verify, not a proven root cause or completed fix.
+The latest capture manifest is incomplete (three screens before the detail
+failure). Earlier PNGs remain provisional and are not publication-approved.
+Local fixtures, capture/schema/gallery helpers and Russian drafts are prepared;
+the launch pack remains unfinished pending an approved app-level fix and a clean
+20-screen capture with visual review. No production database changes or Telegram
+publication were performed.
 
 ### Research findings and boundary
 

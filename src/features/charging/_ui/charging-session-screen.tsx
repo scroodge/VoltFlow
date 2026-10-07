@@ -153,6 +153,16 @@ export function ChargingSessionScreen({
     ];
   }, [userProviderRows, t]);
 
+  // Base UI tracks the items collection; keep its identity stable between
+  // unrelated live/status renders rather than rebuilding it inside Select.
+  const tariffTypeOptions = useMemo(
+    () => (["home", "commercial_ac", "fast_dc"] as const).map((value) => ({
+      value,
+      label: t(tariffTypeKey(value)),
+    })),
+    [t],
+  );
+
   function parseProviderSelectValue(value: string | null | undefined): {
     providerType: ChargingProviderType;
     userProviderId: string | null;
@@ -806,10 +816,7 @@ export function ChargingSessionScreen({
                 );
               }}
               modal={false}
-              items={allProviderOptions.map((item) => ({
-                value: item.value,
-                label: item.label,
-              }))}
+              items={allProviderOptions}
             >
               <SelectTrigger
                 id="session-provider-type"
@@ -841,12 +848,7 @@ export function ChargingSessionScreen({
                 );
               }}
               modal={false}
-              items={(["home", "commercial_ac", "fast_dc"] as const).map(
-                (value) => ({
-                  value,
-                  label: t(tariffTypeKey(value)),
-                }),
-              )}
+              items={tariffTypeOptions}
             >
               <SelectTrigger
                 id="session-tariff-type"
@@ -855,10 +857,10 @@ export function ChargingSessionScreen({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="z-[200]">
-                {(["home", "commercial_ac", "fast_dc"] as const).map(
-                  (value) => (
+                {tariffTypeOptions.map(
+                  ({ value, label }) => (
                     <SelectItem key={value} value={value}>
-                      {t(tariffTypeKey(value))}
+                      {label}
                     </SelectItem>
                   ),
                 )}

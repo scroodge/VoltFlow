@@ -11,6 +11,12 @@ is [manifest.json](screenshots/current/manifest.json). Only files listed in that
 manifest belong to the current capture; older PNGs elsewhere are previous attempts.
 `complete: true` means the automated capture passed. Visual approval is separate.
 
+Current status (2026-10-07): **not ready for publication**. The latest full run
+stopped after three screens when charge detail hit a `SelectRoot` update loop;
+history also reported a hydration mismatch. A focused FAQ check passed. Earlier
+screenshots remain provisional. See the Telegram demo entry in `BACKLOG.md` for
+the proposed narrow app fix; it has not been implemented.
+
 ## Feature coverage
 
 | Area | Screenshot |
@@ -74,7 +80,9 @@ historical compatibility adjustments remain local to that copy.
 
 The app uses `.next-telegram-demo` and Webpack development mode. Multi-page
 Turbopack captures repeatedly hit missing lazy chunks and a Select render loop;
-Webpack rendered the detail without changing app components. Project env-file keys
+Webpack rendered the detail once without changing app components, but a later
+run reproduced the Select error, so changing bundlers is not a confirmed fix.
+Project env-file keys
 are blanked before the local endpoints and dummy loopback-only OpenAI settings are
 installed, preventing unset demo variables from inheriting project secrets.
 

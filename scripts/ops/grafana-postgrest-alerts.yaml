@@ -9,7 +9,7 @@
       "rules": [
         {
           "uid": "sb-pgrst-timeouts",
-          "title": "Supabase — PostgREST pool timeouts (PGRST003)",
+          "title": "Supabase \u2014 PostgREST pool timeouts (PGRST003)",
           "condition": "C",
           "for": "2m",
           "noDataState": "NoData",
@@ -92,7 +92,7 @@
         },
         {
           "uid": "sb-pgrst-down",
-          "title": "Supabase — PostgREST metrics endpoint down",
+          "title": "Supabase \u2014 PostgREST metrics endpoint down",
           "condition": "C",
           "for": "2m",
           "noDataState": "Alerting",
@@ -102,7 +102,7 @@
             "service": "supabase"
           },
           "annotations": {
-            "summary": "Prometheus cannot scrape PostgREST (up{job=postgrest} < 1) or the series vanished — container is down or stopped."
+            "summary": "Prometheus cannot scrape PostgREST (up{job=postgrest} < 1) or the series vanished \u2014 container is down or stopped."
           },
           "notification_settings": {
             "receiver": "Telegram"
