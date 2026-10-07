@@ -74,7 +74,7 @@ import { gearIsPark, readGear } from "@/lib/voltflowmate/gear";
 import { isTelemetryCharging } from "@/features/charging/domain";
 import {
   computeHeroDriveMetrics,
-  dedupeTripsBySource,
+  cleanTrips,
   findLastFinishedChargeSession,
   formatHeroDistanceKm,
   formatKmPerPercent,
@@ -798,7 +798,7 @@ function Hero({
   const t = translate as Translator;
   const telemetry = snapshot.telemetry;
   const coreMetrics = heroCoreMetrics(snapshot, t, locale);
-  const dedupedTrips = useMemo(() => dedupeTripsBySource(allTrips), [allTrips]);
+  const dedupedTrips = useMemo(() => cleanTrips(allTrips), [allTrips]);
   const explanations = useMemo(() => {
     const liveDistanceKm = snapshot.telemetry.current_trip_distance_km;
     const anchorStoppedAt =

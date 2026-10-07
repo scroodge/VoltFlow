@@ -141,3 +141,35 @@ test("isJunkTrip keeps zero-sample gap-closed trips with real trip-meter distanc
     false,
   );
 });
+
+import { sanitizeTripDistances } from "./trip-distance-plausibility.ts";
+
+test("isJunkTrip keeps a real drive whose odometer-scale distance was nulled (stage 1b)", () => {
+  const phantom = {
+    ...baseTrip,
+    started_at: "2026-08-01T18:28:49.000Z",
+    ended_at: "2026-08-01T18:34:42.000Z",
+    last_device_time: "2026-08-01T18:34:42.000Z",
+    sample_count: 278,
+    track_point_count: 120,
+    distance_km: 44122.9,
+    max_speed_kmh: 59,
+    avg_speed_kmh: 26,
+  };
+  const [sanitized] = sanitizeTripDistances([phantom]);
+
+  assert.equal(sanitized.distance_km, null);
+  // null distance is "unknown", not "stationary": the drive still shows on its speed evidence
+  assert.equal(isJunkTrip(sanitized), false);
+});
+
+test("isJunkTrip still drops a nulled-distance trip with no movement evidence at all", () => {
+  const parked = {
+    ...baseTrip,
+    sample_count: 0,
+    distance_km: null,
+    max_speed_kmh: 0,
+    avg_speed_kmh: 0,
+  };
+  assert.equal(isJunkTrip(parked), true);
+});

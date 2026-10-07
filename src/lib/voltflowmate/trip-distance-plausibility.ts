@@ -44,3 +44,34 @@ export function isPlausibleTripDistance(trip: TripDistanceCandidate): boolean {
   if (!Number.isFinite(durationS) || durationS <= 0) return true;
   return (distance * 3600) / durationS <= MAX_PLAUSIBLE_TRIP_SPEED_KMH;
 }
+
+type SanitizableTrip = {
+  distance_km: number | null | undefined;
+  started_at: string;
+  ended_at?: string | null;
+  last_device_time?: string | null;
+};
+
+/**
+ * Read-side safety net (BACKLOG.md stage 1b): returns each trip unchanged, except that an
+ * implausible `distance_km` becomes `null` on a copy. The drive stays in the list with its
+ * time and route, but no sum, consumption or range figure can use the bogus distance. Never
+ * mutates the input; stored rows are untouched. An open trip is judged against
+ * `last_device_time`, since it has no `ended_at` yet.
+ *
+ * Do NOT feed this to `gradeRangePredictionCycles`: it already skips a whole cycle that
+ * contains an implausible trip, and a nulled distance would make it silently under-count.
+ */
+export function sanitizeTripDistances<T extends SanitizableTrip>(
+  trips: T[],
+): T[] {
+  return trips.map((trip) =>
+    isPlausibleTripDistance({
+      distance_km: trip.distance_km,
+      started_at: trip.started_at,
+      ended_at: trip.ended_at ?? trip.last_device_time ?? null,
+    })
+      ? trip
+      : { ...trip, distance_km: null },
+  );
+}

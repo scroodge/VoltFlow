@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { devFetch, isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { usePageVisible } from "@/hooks/use-page-visible";
 import { attachTripEnergy } from "@/lib/voltflowmate/attach-trip-energy";
-import { dedupeTripsBySource } from "@/lib/voltflowmate/hero-drive-metrics";
+import { cleanTrips } from "@/lib/voltflowmate/hero-drive-metrics";
 import { createClient } from "@/lib/supabase/client";
 import { queryKeys } from "@/lib/query-keys";
 import type { VoltflowMateTripRow } from "@/types/database";
@@ -55,7 +55,7 @@ async function fetchVoltflowMateTrips(
     supabase,
     userId: user.id,
     // One drive, one row: hide the `byd_energydata` twin of a telemetry trip here so every list agrees.
-    trips: dedupeTripsBySource((data ?? []) as VoltflowMateTripRow[]),
+    trips: cleanTrips((data ?? []) as VoltflowMateTripRow[]),
     vehicleId: vehicleId ?? undefined,
   });
 }
@@ -91,7 +91,7 @@ async function fetchLatestVoltflowMateTrips(
   const { data, error } = await query;
   if (error) throw error;
 
-  const trips = dedupeTripsBySource((data ?? []) as VoltflowMateTripRow[]);
+  const trips = cleanTrips((data ?? []) as VoltflowMateTripRow[]);
   if (lite) return trips.slice(0, limit);
 
   return attachTripEnergy({

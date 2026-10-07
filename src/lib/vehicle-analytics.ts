@@ -3,7 +3,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { isMissingDatabaseFunction } from "@/lib/database-function-compatibility";
 
 import { enrichTripsWithEnergy } from "@/lib/voltflowmate/attach-trip-energy";
-import { dedupeTripsBySource } from "@/lib/voltflowmate/hero-drive-metrics";
+import {
+  cleanTrips,
+  dedupeTripsBySource,
+} from "@/lib/voltflowmate/hero-drive-metrics";
 import {
   calculatePhantomDrainDays,
   type PhantomDrainDay,
@@ -123,7 +126,7 @@ export async function fetchMonthlyStats({
           .in("status", ["completed", "stopped"]),
   ]);
 
-  let tripRows = dedupeTripsBySource((trips ?? []) as VoltflowMateTripRow[]);
+  let tripRows = cleanTrips((trips ?? []) as VoltflowMateTripRow[]);
   const sessionRows = (sessions ?? []) as ChargingSessionRow[];
 
   if (tripRows.length > 0) {
@@ -287,6 +290,8 @@ export async function fetchRangePredictionReport({
     if (page.length < PAGE) break;
   }
 
+  // Dedupe only, NOT cleanTrips: the grader needs the raw distance so it can skip a whole
+  // cycle that contains an odometer-scale trip; a nulled distance would silently under-count.
   const trips = dedupeTripsBySource(tripRows).map((trip) => ({
     started_at: trip.started_at,
     distance_km: trip.distance_km,

@@ -11,30 +11,48 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-10-07
 
-- **Telemetry-offline Telegram notices now reach the linked vehicle owner.** Migration
-  `20261007110000_owner_telemetry_offline_notices.sql` keeps both cadence signals as
-  app-owned Postgres audit history but delivers only a newly-opened `low_24h_count` to
-  that owner's existing `profiles.telegram_id`. The plain-language message gives the
-  last contact, sample count, affected live features, and on-device checks; it contains
-  no email or account ID. `moving_gap` is now diagnostic-only, and owners without a
-  Telegram link produce no delivery attempt or retry. The former admin digest has been
-  unscheduled, so unlinked and diagnostic alarms cannot surface through a second path.
-  No user-facing data model was added: the Telegram link remains user-owned Postgres
-  account data; audits/notification state remain app-owned Postgres operational data.
-  Verified: focused tests 21/21, `npx tsc --noEmit` clean, migration applied to prod;
-  live cron retains only the ten-minute detector, deployed predicate requires a linked
-  owner and `low_24h_count`, and anon/authenticated still lack detector execute. Four
-  pre-existing open low-count audits belonged to unlinked owners and remain silent.
+- **Telemetry-offline owner notices (database phase deployed; app deployment pending).**
+  Migration `20261007110000_owner_telemetry_offline_notices.sql` keeps both cadence
+  signals as app-owned Postgres audit history but queues only a newly-opened
+  `low_24h_count` for an owner with `profiles.telegram_id`; `moving_gap` is
+  diagnostic-only. The former admin digest is unscheduled, so unlinked and diagnostic
+  alarms cannot surface through a second path. The matching route and a plain-language,
+  no-account-identity owner message are built locally, but were not deployed to Vercel:
+  this shared worktree contains unrelated uncommitted work and no project link is
+  configured, so deploying it would be unsafe. Until that app deployment, the database
+  correctly enqueues only linked-owner low-count alarms, but the production route still
+  has its old admin-recipient behavior. Four pre-existing open low-count audits belonged
+  to unlinked owners and remain silent. Verified: focused tests 21/21, `npx tsc --noEmit`
+  clean; live cron retains only the ten-minute detector, the deployed predicate requires
+  a linked owner and `low_24h_count`, and anon/authenticated still lack detector execute.
 
 - **PostgREST outage watchdog (self-hosted Supabase).** `supabase-rest` wedged with
   `PGRST003 Timed out acquiring connection from connection pool` while Postgres was
   healthy (34/100 connections); container was `unhealthy` after 3 months and nothing
   alerted. Fixed by restart; added `scripts/ops/rest-watchdog.sh` (cron on the VPS:
   real-query probe, Telegram alert, rate-limited auto-restart). Install and caveats in
-  `docs/OPS_LOCAL.md` → PostgREST watchdog. Not built: Grafana rules, a compose restart
-  policy, an external uptime probe (still in BACKLOG). Root cause of the wedge unknown.
+  `docs/OPS_LOCAL.md` → PostgREST watchdog. Also added Grafana rules
+  `sb-pgrst-timeouts` and `sb-pgrst-down` (`scripts/ops/grafana-postgrest-alerts.yaml`,
+  provisioned and visible in Grafana). The older `sb-pgrst-pool` rule could not have caught
+  this failure: pool_available stayed at 25 while timeouts climbed. Not built: an external
+  uptime probe (still in BACKLOG). A compose `restart` policy was dropped: it does not
+  act on a running-but-unhealthy container. Root cause of the wedge unknown.
 
 ## 2026-10-07
+
+### Trip-distance plausibility guard, stage 1b (read-side, every trip consumer)
+New `sanitizeTripDistances` (nulls an implausible `distance_km` on a copy; the drive stays listed;
+open trips are judged by `last_device_time`) and `cleanTrips` = `dedupeTripsBySource` + sanitize in
+`hero-drive-metrics.ts`. `cleanTrips` now backs both trip hooks, the vehicle live view, hero
+metrics, history day summary, telemetry buckets, range-prediction capture, the Telegram live widget
+and the period analytics; the sanitizer is applied directly in `route-insights.ts` and the trips
+API list responses. The range-trust grader's feed stays dedupe-only (it skips the whole cycle),
+the export stays raw. +9 tests (sanitizer, `cleanTrips`, hero-metrics distance since charge,
+`trip-filter` keeps a nulled-distance drive); the hooks' source-scan test now counts `cleanTrips`.
+Confirmed on prod: the open phantom (27,606 km) reads `null`, a 286 km trip is unchanged; the server
+filter discarded the previous day's phantom at close, and a new one appears on each drive, so the
+open-trip window is real. Not done: stage 2 (server write-time guard), stage 3 (historical
+repair/delete), Mate app fix (scroodge/VoltFlow#43).
 
 ### Trip-distance plausibility guard, stage 1 (range-trust grader)
 New pure `isPlausibleTripDistance` (`src/lib/voltflowmate/trip-distance-plausibility.ts`, +6 tests):

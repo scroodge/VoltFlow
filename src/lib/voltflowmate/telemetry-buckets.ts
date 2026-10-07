@@ -1,4 +1,4 @@
-import { dedupeTripsBySource } from "@/lib/voltflowmate/hero-drive-metrics";
+import { cleanTrips } from "@/lib/voltflowmate/hero-drive-metrics";
 import { weightedAvgConsumptionKwh100 } from "@/lib/voltflowmate/trip-metrics";
 import type { TelemetryHistoryPoint } from "@/lib/voltflowmate/telemetry-history";
 import {
@@ -205,7 +205,7 @@ export function buildAnalyticsSummary({
   trips: VoltflowMateTripRow[];
   chargedKwh?: number | null;
 }): AnalyticsSummary {
-  const dedupedTrips = dedupeTripsBySource(trips);
+  const dedupedTrips = cleanTrips(trips);
   let socMin = Infinity;
   let socMax = -Infinity;
 

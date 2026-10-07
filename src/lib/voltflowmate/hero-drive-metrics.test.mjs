@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  cleanTrips,
   computeHeroDriveMetrics,
   dedupeTripsBySource,
   findLastFinishedChargeSession,
@@ -314,6 +315,81 @@ test("every trip list fetcher dedupes twins in the shared query hook", async () 
   const { readFileSync } = await import("node:fs");
   const source = readFileSync(new URL("../../hooks/use-voltflowmate-trips-query.ts", import.meta.url), "utf8");
   const rawReads = source.match(/\.from\("bydmate_trips"\)\s*\.select\("\*"\)/g) ?? [];
-  const dedupes = source.match(/dedupeTripsBySource\(\(?data/g) ?? [];
+  // cleanTrips = dedupeTripsBySource + implausible-distance guard (BACKLOG.md stage 1b)
+  const dedupes = source.match(/cleanTrips\(\(?data/g) ?? [];
   assert.equal(dedupes.length, rawReads.length);
+});
+
+const phantomTrip = {
+  ...baseTrip,
+  id: "phantom",
+  source: "telemetry",
+  client_trip: true,
+  started_at: "2026-07-06T18:28:49.000Z",
+  ended_at: "2026-07-06T18:34:42.000Z",
+  last_device_time: "2026-07-06T18:34:42.000Z",
+  distance_km: 44122.9,
+  soc_start: -1,
+};
+
+test("cleanTrips dedupes twins and nulls an odometer-scale distance but keeps the drive", () => {
+  const telemetryTrip = {
+    ...baseTrip,
+    id: "tel-1",
+    source: "telemetry",
+    started_at: "2026-07-06T04:25:45.000Z",
+    ended_at: "2026-07-06T04:40:17.000Z",
+    distance_km: 5.1,
+  };
+  const energydataTwin = {
+    ...baseTrip,
+    id: "byd-1",
+    source: "byd_energydata",
+    started_at: "2026-07-06T04:23:24.000Z",
+    ended_at: "2026-07-06T04:40:34.000Z",
+    distance_km: 5,
+  };
+
+  const cleaned = cleanTrips([telemetryTrip, energydataTwin, phantomTrip]);
+
+  assert.deepEqual(
+    cleaned.map((trip) => [trip.id, trip.distance_km]),
+    [
+      ["tel-1", 5.1],
+      ["phantom", null],
+    ],
+  );
+  // stored row object is untouched
+  assert.equal(phantomTrip.distance_km, 44122.9);
+});
+
+test("computeHeroDriveMetrics ignores an odometer-scale trip in distance since last charge", () => {
+  const sessions = [
+    {
+      id: "s1",
+      car_id: "car-a",
+      status: "stopped",
+      stopped_at: "2026-07-03T11:54:40.000Z",
+      started_at: "2026-07-03T07:44:57.000Z",
+      created_at: "2026-07-03T07:44:57.000Z",
+    },
+  ];
+  const realTrip = {
+    ...baseTrip,
+    id: "tel-1",
+    source: "telemetry",
+    started_at: "2026-07-06T04:25:45.000Z",
+    ended_at: "2026-07-06T04:40:17.000Z",
+    distance_km: 5.1,
+  };
+
+  const metrics = computeHeroDriveMetrics({
+    sessions,
+    carId: "car-a",
+    trips: [realTrip, phantomTrip],
+    snapshot: { telemetry: {} },
+    batteryCapacityKwh: 45.1,
+  });
+
+  assert.equal(metrics.distanceSinceChargeKm, 5.1);
 });

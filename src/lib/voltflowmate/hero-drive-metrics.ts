@@ -1,4 +1,9 @@
-import type { VoltflowMateLiveSnapshotRow, VoltflowMateTripRow, ChargingSessionRow } from "@/types/database";
+import type {
+  VoltflowMateLiveSnapshotRow,
+  VoltflowMateTripRow,
+  ChargingSessionRow,
+} from "@/types/database";
+import { sanitizeTripDistances } from "./trip-distance-plausibility.ts";
 
 // Cloud summaries and daemon telemetry disagree on trip boundaries by up to a
 // few minutes (energydata rows start earlier and can end much later).
@@ -11,7 +16,9 @@ function finiteNumber(value: unknown): number | null {
 function tripIntervalMs(trip: VoltflowMateTripRow): [number, number] | null {
   const start = Date.parse(trip.started_at);
   if (!Number.isFinite(start)) return null;
-  const end = Date.parse(trip.ended_at ?? trip.last_device_time ?? trip.started_at);
+  const end = Date.parse(
+    trip.ended_at ?? trip.last_device_time ?? trip.started_at,
+  );
   return [start, Number.isFinite(end) ? Math.max(start, end) : start];
 }
 
@@ -23,7 +30,9 @@ function tripIntervalMs(trip: VoltflowMateTripRow): [number, number] | null {
  * generation — DiLink 3 (gen1_2024) cars produce them too — so this keys purely
  * on the presence of energydata rows in the list, never on `model_generation`.
  */
-export function dedupeTripsBySource(trips: VoltflowMateTripRow[]): VoltflowMateTripRow[] {
+export function dedupeTripsBySource(
+  trips: VoltflowMateTripRow[],
+): VoltflowMateTripRow[] {
   const telemetryIntervals = trips
     .filter((trip) => trip.source !== "byd_energydata")
     .map(tripIntervalMs)
@@ -40,6 +49,19 @@ export function dedupeTripsBySource(trips: VoltflowMateTripRow[]): VoltflowMateT
         interval[1] >= start - TRIP_TWIN_TOLERANCE_MS,
     );
   });
+}
+
+/**
+ * The shared "make this trip list trustworthy" step: one row per drive
+ * ({@link dedupeTripsBySource}), then an implausible (odometer-scale) `distance_km`
+ * nulled so no total, consumption or range figure uses it (BACKLOG.md stage 1b).
+ * Use this for anything that displays or sums trips. The range-trust grader is the one
+ * exception: it needs the raw distance so it can skip the whole cycle.
+ */
+export function cleanTrips(
+  trips: VoltflowMateTripRow[],
+): VoltflowMateTripRow[] {
+  return sanitizeTripDistances(dedupeTripsBySource(trips));
 }
 
 function sessionAnchorMs(session: ChargingSessionRow): number {
@@ -62,7 +84,11 @@ export function findLastFinishedChargeSession(
   );
   if (finished.length === 0) return null;
 
-  return [...finished].sort((left, right) => sessionAnchorMs(right) - sessionAnchorMs(left))[0] ?? null;
+  return (
+    [...finished].sort(
+      (left, right) => sessionAnchorMs(right) - sessionAnchorMs(left),
+    )[0] ?? null
+  );
 }
 
 export function tripDistanceKm(
@@ -97,7 +123,10 @@ export function sumDistanceSinceCharge(
     const startedMs = Date.parse(trip.started_at);
     if (!Number.isFinite(startedMs) || startedMs < anchorMs) continue;
 
-    const distance = tripDistanceKm(trip, !trip.ended_at ? liveTripDistanceKm : null);
+    const distance = tripDistanceKm(
+      trip,
+      !trip.ended_at ? liveTripDistanceKm : null,
+    );
     if (distance == null || distance < 0) continue;
 
     sum += distance;
@@ -133,7 +162,9 @@ function tripSocDelta(
   if (socStart == null) return null;
 
   if (!trip.ended_at) {
-    const currentSoc = isCurrent ? finiteNumber(liveSoc) ?? finiteNumber(trip.soc_end) : finiteNumber(trip.soc_end);
+    const currentSoc = isCurrent
+      ? (finiteNumber(liveSoc) ?? finiteNumber(trip.soc_end))
+      : finiteNumber(trip.soc_end);
     return currentSoc != null ? socStart - currentSoc : null;
   }
 
@@ -141,23 +172,43 @@ function tripSocDelta(
   return socEnd != null ? socStart - socEnd : null;
 }
 
-export function resolveKmPerPercentSoc(input: ResolveKmPerPercentSocInput): number | null {
-  const { trips, liveSoc, liveDistanceKm, batteryCapacityKwh, consumptionKwh100 } = input;
+export function resolveKmPerPercentSoc(
+  input: ResolveKmPerPercentSocInput,
+): number | null {
+  const {
+    trips,
+    liveSoc,
+    liveDistanceKm,
+    batteryCapacityKwh,
+    consumptionKwh100,
+  } = input;
   const latestTrip = trips[0] ?? null;
-  if (!latestTrip) return resolveKmPerPercentFromConsumption(batteryCapacityKwh, consumptionKwh100);
+  if (!latestTrip)
+    return resolveKmPerPercentFromConsumption(
+      batteryCapacityKwh,
+      consumptionKwh100,
+    );
 
   let totalDistance = 0;
   let totalSocDelta = 0;
 
-  for (let i = 0; i < trips.length && totalDistance < MATH_RANGE_WINDOW_KM; i += 1) {
+  for (
+    let i = 0;
+    i < trips.length && totalDistance < MATH_RANGE_WINDOW_KM;
+    i += 1
+  ) {
     const trip = trips[i];
     const isCurrent = i === 0;
-    const distance = tripDistanceKm(trip, isCurrent && !trip.ended_at ? liveDistanceKm : null);
+    const distance = tripDistanceKm(
+      trip,
+      isCurrent && !trip.ended_at ? liveDistanceKm : null,
+    );
     const socDelta = tripSocDelta(trip, isCurrent, liveSoc);
 
     // Skip trips with missing or non-driving-adjacent data rather than aborting the
     // walk, so a handful of junk entries don't starve the window of real distance.
-    if (distance == null || distance < 0 || socDelta == null || socDelta <= 0) continue;
+    if (distance == null || distance < 0 || socDelta == null || socDelta <= 0)
+      continue;
 
     totalDistance += distance;
     totalSocDelta += socDelta;
@@ -192,7 +243,10 @@ export function selectTripsWithinDistanceWindow(
   for (let i = 0; i < trips.length && total < windowKm; i += 1) {
     const trip = trips[i];
     const isCurrent = i === 0;
-    const distance = tripDistanceKm(trip, isCurrent && !trip.ended_at ? liveDistanceKm : null);
+    const distance = tripDistanceKm(
+      trip,
+      isCurrent && !trip.ended_at ? liveDistanceKm : null,
+    );
     selected.push(trip);
     if (distance != null && distance > 0) total += distance;
   }
@@ -206,10 +260,18 @@ function resolveKmPerPercentFromConsumption(
 ): number | null {
   const capacity = finiteNumber(batteryCapacityKwh);
   const consumption = finiteNumber(consumptionKwh100);
-  if (capacity == null || capacity <= 0 || consumption == null || consumption <= 0) return null;
+  if (
+    capacity == null ||
+    capacity <= 0 ||
+    consumption == null ||
+    consumption <= 0
+  )
+    return null;
 
   const kmPerPercent = capacity / consumption;
-  return Number.isFinite(kmPerPercent) && kmPerPercent > 0 ? kmPerPercent : null;
+  return Number.isFinite(kmPerPercent) && kmPerPercent > 0
+    ? kmPerPercent
+    : null;
 }
 
 export function computeHeroDriveMetrics({
@@ -231,12 +293,17 @@ export function computeHeroDriveMetrics({
   rangeEstimateTrips: VoltflowMateTripRow[];
 } {
   const lastCharge = findLastFinishedChargeSession(sessions, carId);
-  const anchorStoppedAt = lastCharge?.stopped_at ?? lastCharge?.started_at ?? null;
+  const anchorStoppedAt =
+    lastCharge?.stopped_at ?? lastCharge?.started_at ?? null;
   const liveDistanceKm = snapshot.telemetry.current_trip_distance_km;
-  const dedupedTrips = dedupeTripsBySource(trips);
+  const dedupedTrips = cleanTrips(trips);
 
   return {
-    distanceSinceChargeKm: sumDistanceSinceCharge(dedupedTrips, anchorStoppedAt, liveDistanceKm),
+    distanceSinceChargeKm: sumDistanceSinceCharge(
+      dedupedTrips,
+      anchorStoppedAt,
+      liveDistanceKm,
+    ),
     kmPerPercentSoc: resolveKmPerPercentSoc({
       trips: dedupedTrips,
       liveSoc: snapshot.telemetry.soc,
@@ -244,7 +311,10 @@ export function computeHeroDriveMetrics({
       batteryCapacityKwh,
       consumptionKwh100: snapshot.telemetry.current_trip_consumption_kwh_100km,
     }),
-    rangeEstimateTrips: selectTripsWithinDistanceWindow(dedupedTrips, liveDistanceKm),
+    rangeEstimateTrips: selectTripsWithinDistanceWindow(
+      dedupedTrips,
+      liveDistanceKm,
+    ),
   };
 }
 

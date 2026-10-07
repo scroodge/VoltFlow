@@ -1,11 +1,28 @@
 # Backlog — proposed plans awaiting go-ahead
 
+## Telemetry-offline owner notice — Vercel deployment pending
+
+The database phase is applied: only linked owners' `low_24h_count` alarms can enqueue,
+and the admin digest is unscheduled. The matching Next.js route and user-facing message
+are built and focused tests pass, but they are not on Vercel. This shared worktree has
+unrelated uncommitted changes and no local Vercel project link, so deploying it would
+publish other work too. Until a clean, explicitly scoped application deployment is made,
+the existing production route still targets admins if a linked owner triggers an alarm.
+
+**Required release step:** deploy the owner-notice route from a clean checkout containing
+only this change, then verify a real linked-owner low-count alarm's recipient without
+sending a test notification to an unrelated user.
+
+---
+
 ## Self-hosted Supabase outage alarm (PostgREST wedge) — PARTLY BUILT 2026-10-07
 
-> **Built:** the host cron watchdog (alert + auto-restart), logged in CHANGELOG.md.
-> **Still proposed:** Grafana rules (option 1a–c), compose restart policy, external
-> uptime service (option 3), and finding the root cause of the wedge. Needs the step-1
-> discovery output (Grafana/compose layout) before anything more is built.
+> **Built:** the host cron watchdog (alert + auto-restart) and Grafana rules
+> `sb-pgrst-timeouts` / `sb-pgrst-down`, logged in CHANGELOG.md.
+> **Dropped:** compose restart policy (does not act on an unhealthy-but-running container).
+> **Still proposed:** external uptime service (option 3, catches a dead VPS); retire or
+> retarget the useless `sb-pgrst-pool` rule; find the root cause of the wedge; stop
+> exposing Grafana on `0.0.0.0:3000` over plain HTTP (bind to 127.0.0.1 / TLS proxy).
 
 ### Problem
 
@@ -99,7 +116,26 @@ Options 1 + 2, with 3 as a later add-on.
   falls back to 80 km/h and matches legitimate highway averages (e.g. 90.6 km / 4025 s = 81 km/h).
   Use implied speed > 250 km/h (or review each row) for any cleanup.
 
-### Stage 1b plan: central read-side guard — PROPOSED 2026-10-07
+### Stage 1b plan: central read-side guard — BUILT 2026-10-07
+
+> **Built as planned** (tests 612/615 with the same 3 pre-existing failures, `tsc` clean, lint
+> 0 errors; `npm run build` deliberately skipped because it shares `.next` with the running dev
+> server). `sanitizeTripDistances` + `cleanTrips` added; `cleanTrips` replaces `dedupeTripsBySource`
+> in the two trip hooks, `vehicle-live-view`, `hero-drive-metrics`, `history-day-summary`,
+> `telemetry-buckets`, `range-prediction-capture`, `telegram/live-widget` and the period analytics in
+> `vehicle-analytics.ts`; `sanitizeTripDistances` is applied directly in `route-insights.ts` (2 spots)
+> and both list responses of `api/vehicle/trips/route.ts`. **Deliberately unchanged:** the grader's
+> feed in `vehicle-analytics.ts` (dedupe only, so a bad cycle is skipped, not under-counted),
+> `api/vehicle/export/route.ts` (raw user data), `telemetry-history.ts` (reads timestamps only).
+> `trip-filter` keeps a real drive whose distance was nulled (test added).
+> **Real-data finding:** the open phantom trip from 10-06 (`ee4a6e67`) was discarded by the
+> server filter when it closed, and a *new* one (27,606 km, open) appeared the next morning, so
+> this recurs on every drive of that account while the trip is open — the exact window this
+> stage covers. Replayed on that live row: `distance_km` → `null`; a healthy 286 km trip is
+> unchanged. Not traced end to end: how `analytics-day-view` / `vehicle-telemetry-visualizations`
+> receive trips (they use the hooks/APIs above).
+>
+> The original plan follows.
 
 **Research (grep of `src`, 2026-10-07).** There are 19 `from("bydmate_trips")` sites in ~12 files, so
 there is no single DB-read choke point. But `dedupeTripsBySource` (`hero-drive-metrics.ts`,

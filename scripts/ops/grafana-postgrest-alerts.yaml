@@ -1,0 +1,178 @@
+{
+  "apiVersion": 1,
+  "groups": [
+    {
+      "orgId": 1,
+      "name": "Supabase PostgREST",
+      "folder": "Supabase",
+      "interval": "1m",
+      "rules": [
+        {
+          "uid": "sb-pgrst-timeouts",
+          "title": "Supabase — PostgREST pool timeouts (PGRST003)",
+          "condition": "C",
+          "for": "2m",
+          "noDataState": "NoData",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "critical",
+            "service": "supabase"
+          },
+          "annotations": {
+            "summary": "PostgREST is timing out acquiring DB connections (more than 5 in 5m). 2026-10-07 incident: ~33 per 5m for 7h while pool_available stayed at 25.",
+            "runbook": "docker logs --since 30m supabase-rest, then docker restart supabase-rest. rest-watchdog.sh on the VPS should already be restarting it."
+          },
+          "notification_settings": {
+            "receiver": "Telegram"
+          },
+          "data": [
+            {
+              "refId": "A",
+              "queryType": "",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "PBFA97CFB590B2093",
+              "model": {
+                "editorMode": "code",
+                "expr": "sum(increase(pgrst_db_pool_timeouts_total{job=\"postgrest\"}[5m]))",
+                "instant": true,
+                "intervalMs": 1000,
+                "legendFormat": "__auto",
+                "maxDataPoints": 43200,
+                "range": false,
+                "refId": "A"
+              }
+            },
+            {
+              "refId": "C",
+              "queryType": "expression",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "params": [
+                        5
+                      ],
+                      "type": "gt"
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "params": [],
+                      "type": "last"
+                    },
+                    "type": "query"
+                  }
+                ],
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "expression": "A",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "C",
+                "type": "threshold"
+              }
+            }
+          ]
+        },
+        {
+          "uid": "sb-pgrst-down",
+          "title": "Supabase — PostgREST metrics endpoint down",
+          "condition": "C",
+          "for": "2m",
+          "noDataState": "Alerting",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "critical",
+            "service": "supabase"
+          },
+          "annotations": {
+            "summary": "Prometheus cannot scrape PostgREST (up{job=postgrest} < 1) or the series vanished — container is down or stopped."
+          },
+          "notification_settings": {
+            "receiver": "Telegram"
+          },
+          "data": [
+            {
+              "refId": "A",
+              "queryType": "",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "PBFA97CFB590B2093",
+              "model": {
+                "editorMode": "code",
+                "expr": "up{job=\"postgrest\"}",
+                "instant": true,
+                "intervalMs": 1000,
+                "legendFormat": "__auto",
+                "maxDataPoints": 43200,
+                "range": false,
+                "refId": "A"
+              }
+            },
+            {
+              "refId": "C",
+              "queryType": "expression",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "params": [
+                        1
+                      ],
+                      "type": "lt"
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "params": [],
+                      "type": "last"
+                    },
+                    "type": "query"
+                  }
+                ],
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "expression": "A",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "C",
+                "type": "threshold"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

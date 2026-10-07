@@ -29,7 +29,7 @@ import {
 } from "@/lib/telegram/live-widget-message";
 import { estimateVehicleRangeKm } from "@/lib/voltflowmate/range-estimate";
 import {
-  dedupeTripsBySource,
+  cleanTrips,
   selectTripsWithinDistanceWindow,
 } from "@/lib/voltflowmate/hero-drive-metrics";
 import type { VoltflowMateTripRow } from "@/types/database";
@@ -429,7 +429,7 @@ export async function updateTelegramLiveWidgets({
 
     const capacityKwh = carInfo?.battery_capacity_kwh;
     const recentTrips = selectTripsWithinDistanceWindow(
-      dedupeTripsBySource(recentTripsByVehicle.get(vehicleId) ?? []),
+      cleanTrips(recentTripsByVehicle.get(vehicleId) ?? []),
       lastSample.telemetry.current_trip_distance_km,
     );
     const estimatedRangeKm =

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { dedupeTripsBySource } from "./hero-drive-metrics.ts";
+import { cleanTrips } from "./hero-drive-metrics.ts";
 import { estimateRangeFromSoc } from "./range-estimate.ts";
 import type { VoltflowMateTripRow } from "@/types/database";
 
@@ -79,7 +79,7 @@ export async function captureSessionEndVoltflowEstimate(
     if (car?.vehicle_alias) tripsQuery = tripsQuery.eq("vehicle_id", car.vehicle_alias);
 
     const { data: tripRows } = await tripsQuery;
-    const recentTrips = dedupeTripsBySource(
+    const recentTrips = cleanTrips(
       (tripRows ?? []) as VoltflowMateTripRow[],
     ).slice(0, 1);
 
