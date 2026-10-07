@@ -11,6 +11,19 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-10-07
 
+- **Isolated Telegram demo pack completed locally.** Approved launch-pack work
+  moved from BACKLOG: OrbStack fixtures and `.next-telegram-demo` capture now
+  produce 20 screens / 62 phone PNGs, visually reviewed with observations.
+  Rebuilt fictional vehicle hourly/SOH read models with existing functions;
+  added authenticated RLS data audit, settled in-app navigation, separate public
+  context, SDK auth cookies and labelled local map interception. Capture at
+  13:05:41 UTC passed with zero browser/local HTTP errors; parked baseline audit
+  passed after capture (12 trips / 482 km, four charges, three service records /
+  175 BYN). See `docs/marketing/telegram-launch/REVIEW.md` and gallery. Existing
+  history provider label and hard-load ETA observations remain; integrations and
+  publication are not approved/proven. No production changes, build, lint or
+  application test suite in this screenshot workflow.
+
 - **Closed two public admin ports on the VPS.** Grafana (`3000`) and Kong's Admin API
   (`8001`, unauthenticated; served the `anon`/`service_role` key-auth credentials for at
   least 79 days) are now bound to `127.0.0.1` in `/opt/monitoring/docker-compose.yml` and

@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { chromium } from "playwright";
+import { createServerClient } from "@supabase/ssr";
 import { DEMO_EMAIL, DEMO_PASSWORD, DEMO_CAR_ID, charges } from "./fixtures/telegram-demo.mjs";
 
 const root = resolve(import.meta.dirname, "..");
@@ -17,11 +18,12 @@ const dataEvidence = JSON.parse(execFileSync(process.execPath, [resolve(root, "s
   cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
 }));
 const browser = await chromium.launch({ channel: "chrome", headless: true });
-const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2,
-  locale: "ru-BY", timezoneId: "Europe/Minsk", colorScheme: "dark" });
+const contextOptions = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2,
+  locale: "ru-BY", timezoneId: "Europe/Minsk", colorScheme: "dark" };
+const context = await browser.newContext(contextOptions);
 const report = { capturedAt: new Date().toISOString(), viewport: "390×844 DPR 2", dataEvidence, screens: [],
   externalRequests: [], failedLocal: [], browserErrors: [], browserWarnings: [], mockedLocal: ["/api/bydmate/latest-release"], complete: false };
-await context.route("**/*", async (route) => {
+const routeHandler = async (route) => {
   const url = new URL(route.request().url());
   if (["127.0.0.1", "localhost"].includes(url.hostname)) {
     if (!["3037", "55321"].includes(url.port)) {
@@ -44,7 +46,8 @@ await context.route("**/*", async (route) => {
       '<!doctype html><html lang="ru"><meta charset="utf-8"><style>body{margin:0;display:grid;place-content:center;height:100vh;background:#17212b;color:#afc8bb;text-align:center;font:13px system-ui;padding:0 12px;box-sizing:border-box}</style><body>Карта отключена в демо<br>GPS и внешние тайлы не используются</body></html>' });
   }
   return route.abort();
-});
+};
+await context.route("**/*", routeHandler);
 let page = await context.newPage();
 page.setDefaultTimeout(45000);
 function bindPage(currentPage) {
@@ -64,15 +67,22 @@ currentPage.on("response", (response) => {
 }
 bindPage(page);
 async function visit(path, text) {
+  await page.addStyleTag({ content: "nextjs-portal { display:none!important; pointer-events:none!important; }" });
   const target = new URL(path, origin);
-  const exactLink = page.locator(`a[href="${path}"]`).first();
-  const baseLink = page.locator(`a[href="${target.pathname}"]`).first();
+  const exactLink = page.locator(`a[href="${path}"]:visible`).last();
+  const baseLink = page.locator(`a[href="${target.pathname}"]:visible`).last();
+  const waitForLinkHydration = async (href) => page.waitForFunction((value) =>
+    [...document.querySelectorAll("a")].some((link) => link.getAttribute("href") === value &&
+      link.getBoundingClientRect().width > 0 && Object.keys(link).some((key) =>
+        key.startsWith("__reactProps$") && typeof link[key].onClick === "function")), href);
   if (await exactLink.count()) {
+    await waitForLinkHydration(path);
     await exactLink.click();
-    await page.waitForURL((url) => url.pathname === target.pathname);
+    await page.waitForURL((url) => url.pathname === target.pathname, { waitUntil: "domcontentloaded" });
   } else if (await baseLink.count()) {
+    await waitForLinkHydration(target.pathname);
     await baseLink.click();
-    await page.waitForURL((url) => url.pathname === target.pathname);
+    await page.waitForURL((url) => url.pathname === target.pathname, { waitUntil: "domcontentloaded" });
   } else if (new URL(page.url()).pathname !== target.pathname) {
     await page.goto(target.href, { waitUntil: "domcontentloaded", timeout: 90000 });
   }
@@ -101,6 +111,7 @@ async function settleVisible() {
 }
 async function capture(id, feature) {
   await settleVisible();
+  await page.addStyleTag({ content: "nextjs-portal { display:none!important; pointer-events:none!important; }" });
   await page.evaluate(() => document.fonts.ready); await page.waitForTimeout(600);
   // Add the screenshot label after hydration, so it cannot alter React's SSR tree.
   await page.evaluate(() => {
@@ -116,12 +127,13 @@ async function capture(id, feature) {
   if (/Application error|Internal Server Error|Что-то пошло не так/.test(body)) throw new Error(`Error page: ${id}`);
   if (body.length < 250) throw new Error(`Unready or empty page: ${id}`);
   const filename = `${id}.png`;
-  await page.screenshot({ path: resolve(output, filename), animations: "disabled", fullPage: true });
+  await page.screenshot({ path: resolve(output, filename), animations: "disabled" });
   const panels = [];
   const scroller = await page.evaluateHandle(() => [...document.querySelectorAll("*")]
     .filter((el) => el.clientHeight > 400 && el.scrollHeight > el.clientHeight + 100 &&
       /auto|scroll/.test(getComputedStyle(el).overflowY))
-    .sort((a, b) => b.clientWidth - a.clientWidth)[0] ?? null);
+    .sort((a, b) => b.clientWidth - a.clientWidth)[0] ??
+    (document.scrollingElement.scrollHeight > document.scrollingElement.clientHeight + 100 ? document.scrollingElement : null));
   if (await scroller.evaluate((el) => Boolean(el))) {
     const dimensions = await scroller.evaluate((el) => ({ height: el.clientHeight, total: el.scrollHeight }));
     for (let offset = dimensions.height - 120, panel = 2; offset < dimensions.total; offset += dimensions.height - 120, panel++) {
@@ -140,24 +152,31 @@ async function capture(id, feature) {
   console.log(`Captured ${id}: ${feature}`);
 }
 try {
-  await page.goto(`${origin}/login`, { waitUntil: "domcontentloaded", timeout: 90000 });
-  // The SSR form can submit a native GET before React attaches its handler.
-  await page.waitForFunction(() => {
-    const form = document.querySelector("form");
-    return form && Object.keys(form).some((key) => key.startsWith("__reactProps$"));
-  }, undefined, { timeout: 45000 });
-  await page.locator('input[name="email"]').fill(DEMO_EMAIL);
-  await page.locator('input[name="password"]').fill(DEMO_PASSWORD);
-  const [signIn] = await Promise.all([
-    page.waitForResponse((response) => new URL(response.url()).pathname === "/auth/v1/token", { timeout: 45000 }),
-    page.getByRole("button", { name: "Продолжить", exact: true }).click(),
-  ]);
-  if (signIn.status() !== 200) throw new Error(`Local sign-in failed: ${signIn.status()}`);
-  report.localSignInStatus = signIn.status();
-  // Auth is verified independently of the development router's transition.
-  // visit() opens a fresh page with the same context/cookies after they settle.
-  await page.waitForTimeout(1000);
-  const authenticatedCookies = await context.cookies();
+  const status = JSON.parse(execFileSync("supabase", ["status", "--output", "json"], {
+    cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
+  }));
+  if (status.API_URL !== "http://127.0.0.1:55321") throw new Error("Expected local demo Auth");
+  const cookieJar = new Map();
+  let signInStatus = null;
+  const authClient = createServerClient(status.API_URL, status.ANON_KEY, {
+    cookies: { getAll: () => [...cookieJar.values()],
+      setAll: (cookies) => cookies.forEach((cookie) => cookieJar.set(cookie.name, cookie)) },
+    global: { fetch: async (input, init) => {
+      const url = new URL(typeof input === "string" ? input : input.url ?? input);
+      if (url.origin !== status.API_URL) throw new Error("Auth request escaped local demo");
+      const response = await fetch(input, init);
+      if (url.pathname === "/auth/v1/token") signInStatus = response.status;
+      return response;
+    } },
+  });
+  const { error } = await authClient.auth.signInWithPassword({ email: DEMO_EMAIL, password: DEMO_PASSWORD });
+  if (error || signInStatus !== 200) throw new Error(`Local sign-in failed: ${error?.message ?? signInStatus}`);
+  await context.addCookies([...cookieJar.values()].filter((cookie) => cookie.value).map((cookie) => ({
+    name: cookie.name, value: cookie.value, domain: "127.0.0.1", path: "/", sameSite: "Lax",
+  })));
+  await page.waitForTimeout(2000);
+  report.localSignInStatus = signInStatus;
+  report.authMethod = "local password API and SSR cookie adapter; ordinary authenticated RLS";
   console.log("Local sign-in verified: 200");
   await visit("/dashboard", "Последняя зарядка");
   await page.locator("#park-estimate-provider").click();
@@ -186,8 +205,9 @@ try {
   // Knowledge is public. Capture its anonymous experience, independently of
   // authenticated car-generation auto-detection; restore local auth below.
   const authenticatedPage = page;
-  await context.clearCookies();
-  page = await context.newPage(); page.setDefaultTimeout(45000); bindPage(page);
+  const publicContext = await browser.newContext(contextOptions);
+  await publicContext.route("**/*", routeHandler);
+  page = await publicContext.newPage(); page.setDefaultTimeout(45000); bindPage(page);
   await visit("/knowledge?gen=gen1_2024", "Как читать стоимость зарядки"); await capture("12-knowledge", "База знаний");
   await visit("/knowledge/article/demo-charge-cost", "От процента к энергии"); await capture("13-article", "Статья базы знаний");
   // Exercise the public chrome's navigation rather than depending on initial
@@ -208,8 +228,7 @@ try {
   await page.getByRole("button", { name: "Сервис", exact: true }).click();
   await page.getByText("Демо-сервис BYD", { exact: false }).first().waitFor();
   await capture("18-service-catalog", "Каталог сервисов");
-  await context.addCookies(authenticatedCookies);
-  const publicPage = page; page = authenticatedPage; await publicPage.close();
+  page = authenticatedPage; await publicContext.close();
   execFileSync(process.execPath, [resolve(root, "scripts/telegram-demo-seed.mjs"), "--charging"], {
     cwd: root, stdio: "ignore",
   });

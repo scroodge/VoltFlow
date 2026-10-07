@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { mapAdminUsersAttention } from "@/lib/admin-users-attention";
 import { mapAdminUsersStats } from "@/lib/admin-users-stats";
-import { isPremiumFromUntil, resolveEffectivePremium } from "@/lib/premium-entitlement";
+import {
+  isPremiumFromUntil,
+  resolveEffectivePremium,
+} from "@/lib/premium-entitlement";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/supabase/knowledge";
 
@@ -32,10 +35,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   }
 
-  const overviewPromise = loadAdminOverview();
-
   const params = request.nextUrl.searchParams;
   const page = Math.max(1, Number.parseInt(params.get("page") ?? "1", 10) || 1);
+  // Stats and the attention queue do not depend on the page; the client keeps them from page 1,
+  // so infinite scroll must not recompute them on every further page.
+  const overviewPromise =
+    page === 1 ? loadAdminOverview() : Promise.resolve(null);
   const pageSize = clampPageSize(params.get("pageSize"));
   const search = (params.get("search") ?? "").trim().toLowerCase();
   const telemetry = params.get("telemetry") ?? "";
@@ -47,67 +52,50 @@ export async function GET(request: NextRequest) {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  const allAdminIds = await loadAllAdminIds();
-
-  let telemetryUserIds: string[] | undefined;
-  if (telemetry === "7d" || telemetry === "30d") {
-    const { data, error } = await getSupabaseAdmin().rpc("admin_users_activity_filter_ids", {
-      p_filter: telemetry,
-    });
-    if (error) return NextResponse.json({ error: "Activity filter failed" }, { status: 500 });
-    telemetryUserIds = ((data ?? []) as { user_id: string }[]).map((row) => row.user_id);
-    if (telemetryUserIds.length === 0) {
-      return NextResponse.json({
-        ok: true,
-        page,
-        pageSize,
-        total: 0,
-        ...(await overviewPromise),
-        users: [],
-      });
-    }
-  }
-
-  let lastSeenUserIds: string[] | undefined;
-  const negateLastSeen = false;
-  if (lastSeen !== "any") {
-    const filter =
-      lastSeen === "7d"
+  const lastSeenFilter =
+    lastSeen === "any"
+      ? null
+      : lastSeen === "7d"
         ? "7d_seen"
-        : lastSeen === "30d"
-          ? "30d_seen"
-          : lastSeen === "24h" || lastSeen === "never"
-            ? lastSeen
-            : "30d_seen";
-    const { data, error } = await getSupabaseAdmin().rpc("admin_users_activity_filter_ids", {
-      p_filter: filter,
-    });
-    if (error) return NextResponse.json({ error: "Last-seen filter failed" }, { status: 500 });
-    lastSeenUserIds = ((data ?? []) as { user_id: string }[]).map((row) => row.user_id);
+        : lastSeen === "24h" || lastSeen === "never"
+          ? lastSeen
+          : "30d_seen";
+
+  // Independent lookups: run them together instead of one round trip after another.
+  const [allAdminIds, telemetryResult, lastSeenResult] = await Promise.all([
+    loadAllAdminIds(),
+    telemetry === "7d" || telemetry === "30d"
+      ? loadActivityFilterIds(telemetry)
+      : Promise.resolve(null),
+    lastSeenFilter
+      ? loadActivityFilterIds(lastSeenFilter)
+      : Promise.resolve(null),
+  ]);
+  if (telemetryResult?.error) {
+    return NextResponse.json(
+      { error: "Activity filter failed" },
+      { status: 500 },
+    );
   }
+  if (lastSeenResult?.error) {
+    return NextResponse.json(
+      { error: "Last-seen filter failed" },
+      { status: 500 },
+    );
+  }
+  const telemetryUserIds = telemetryResult?.ids;
+  const lastSeenUserIds = lastSeenResult?.ids;
 
   let filterUserIds: string[] | undefined;
-  let negateFilter = false;
   if (telemetryUserIds && lastSeenUserIds) {
     const intersection = new Set(telemetryUserIds);
     filterUserIds = lastSeenUserIds.filter((id) => intersection.has(id));
-    negateFilter = negateLastSeen;
-    if (!negateFilter && filterUserIds.length === 0) {
-      return NextResponse.json({
-        ok: true,
-        page,
-        pageSize,
-        total: 0,
-        ...(await overviewPromise),
-        users: [],
-      });
-    }
   } else {
     filterUserIds = telemetryUserIds ?? lastSeenUserIds;
-    negateFilter = negateLastSeen;
   }
 
-  if (filterUserIds && filterUserIds.length === 0 && !negateFilter) {
+  // An active filter that matches nobody means an empty page, no profiles query needed.
+  if (filterUserIds && filterUserIds.length === 0) {
     return NextResponse.json({
       ok: true,
       page,
@@ -118,37 +106,16 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const primary = await runProfilesQuery({
-    includePremiumUntil: true,
+  const { data, error, count } = await runProfilesQuery({
     from,
     to,
     search,
     filterUserIds,
-    negateFilter,
     premiumFilter,
     allAdminIds,
     registeredSince,
     registeredBefore,
   });
-  const fallback =
-    primary.error &&
-    primary.error.code === "42703" &&
-    primary.error.message.includes("premium_until")
-      ? await runProfilesQuery({
-          includePremiumUntil: false,
-          from,
-          to,
-          search,
-          filterUserIds,
-          negateFilter,
-          premiumFilter,
-          allAdminIds,
-          registeredSince,
-          registeredBefore,
-        })
-      : null;
-  const result = fallback ?? primary;
-  const { data, error, count } = result;
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -210,13 +177,25 @@ function looksLikeUuid(value: string) {
   );
 }
 
+async function loadActivityFilterIds(filter: string) {
+  const { data, error } = await getSupabaseAdmin().rpc(
+    "admin_users_activity_filter_ids",
+    {
+      p_filter: filter,
+    },
+  );
+  if (error) return { error, ids: undefined };
+  return {
+    error: null,
+    ids: ((data ?? []) as { user_id: string }[]).map((row) => row.user_id),
+  };
+}
+
 async function runProfilesQuery(params: {
-  includePremiumUntil: boolean;
   from: number;
   to: number;
   search: string;
   filterUserIds?: string[];
-  negateFilter?: boolean;
   premiumFilter: string;
   allAdminIds: Set<string>;
   registeredSince: string;
@@ -224,12 +203,7 @@ async function runProfilesQuery(params: {
 }) {
   let query = getSupabaseAdmin()
     .from("profiles")
-    .select(
-      params.includePremiumUntil
-        ? "id,email,is_premium,premium_until,created_at"
-        : "id,email,is_premium,created_at",
-      { count: "exact" },
-    )
+    .select("id,email,is_premium,premium_until,created_at", { count: "exact" })
     .order("created_at", { ascending: false })
     .range(params.from, params.to);
 
@@ -242,12 +216,7 @@ async function runProfilesQuery(params: {
   }
 
   if (params.filterUserIds && params.filterUserIds.length > 0) {
-    if (params.negateFilter) {
-      const ids = params.filterUserIds.map((id) => `"${id}"`).join(",");
-      query = query.filter("id", "not.in", `(${ids})`);
-    } else {
-      query = query.in("id", params.filterUserIds);
-    }
+    query = query.in("id", params.filterUserIds);
   }
 
   if (params.premiumFilter === "yes") {
@@ -284,8 +253,12 @@ async function runProfilesQuery(params: {
 }
 
 async function loadAllAdminIds() {
-  const { data } = await getSupabaseAdmin().from("admin_users").select("user_id");
-  return new Set<string>((data ?? []).map((r) => String(r.user_id)).filter(Boolean));
+  const { data } = await getSupabaseAdmin()
+    .from("admin_users")
+    .select("user_id");
+  return new Set<string>(
+    (data ?? []).map((r) => String(r.user_id)).filter(Boolean),
+  );
 }
 
 async function loadAdminSet(userIds: string[]) {
@@ -307,15 +280,24 @@ async function loadUserMetrics(userIds: string[]) {
   const map = new Map<string, AdminUserMetrics>();
   if (userIds.length === 0) return map;
 
-  const { data, error } = await getSupabaseAdmin().rpc("admin_users_user_metrics", {
-    p_user_ids: userIds,
-  });
+  // Counts completed UTC days into the rollup that admin_users_user_metrics reads. A no-op
+  // once caught up; a failure only leaves older days uncounted, so it must not fail the page.
+  await getSupabaseAdmin().rpc("admin_users_refresh_activity_daily");
+
+  const { data, error } = await getSupabaseAdmin().rpc(
+    "admin_users_user_metrics",
+    {
+      p_user_ids: userIds,
+    },
+  );
   if (error) throw new Error(`Could not load user metrics: ${error.message}`);
 
   for (const row of (data ?? []) as Array<Record<string, unknown>>) {
     const userId = String(row.user_id);
     map.set(userId, {
-      latest_mate_version: row.latest_mate_version ? String(row.latest_mate_version) : null,
+      latest_mate_version: row.latest_mate_version
+        ? String(row.latest_mate_version)
+        : null,
       last_seen_at: row.last_seen_at ? String(row.last_seen_at) : null,
       activity: {
         telemetry_7d: Number(row.telemetry_7d) || 0,
@@ -342,7 +324,9 @@ function emptyActivity(): ActivityCounts {
 }
 
 async function loadAdminStats() {
-  const { data, error } = await getSupabaseAdmin().rpc("admin_users_dashboard_stats");
+  const { data, error } = await getSupabaseAdmin().rpc(
+    "admin_users_dashboard_stats",
+  );
   if (error) {
     throw new Error(`Could not load admin dashboard stats: ${error.message}`);
   }
@@ -350,12 +334,17 @@ async function loadAdminStats() {
 }
 
 async function loadAdminOverview() {
-  const [stats, attention] = await Promise.all([loadAdminStats(), loadAdminAttention()]);
+  const [stats, attention] = await Promise.all([
+    loadAdminStats(),
+    loadAdminAttention(),
+  ]);
   return { stats, attention };
 }
 
 async function loadAdminAttention() {
-  const { data, error } = await getSupabaseAdmin().rpc("admin_users_attention_queue");
+  const { data, error } = await getSupabaseAdmin().rpc(
+    "admin_users_attention_queue",
+  );
   if (error) {
     throw new Error(`Could not load admin attention queue: ${error.message}`);
   }

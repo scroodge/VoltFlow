@@ -33,33 +33,37 @@ set search_path = public
 as $$
 declare
   v_today date := (now() at time zone 'UTC')::date;
-  v_day date;
-  v_filled integer := 0;
+  v_missing date[];
+  v_filled integer;
 begin
   if not pg_try_advisory_xact_lock(hashtext('admin_users_refresh_activity_daily')) then
     return 0;
   end if;
 
-  for v_day in
-    select d::date
-    from generate_series(v_today - 30, v_today - 1, interval '1 day') d
-    where not exists (
-      select 1 from public.admin_user_activity_days_done done where done.day = d::date
-    )
-    order by d
-  loop
+  select coalesce(array_agg(d::date order by d), '{}')
+  into v_missing
+  from generate_series(v_today - 30, v_today - 1, interval '1 day') d
+  where not exists (
+    select 1 from public.admin_user_activity_days_done done where done.day = d::date
+  );
+
+  v_filled := coalesce(array_length(v_missing, 1), 0);
+  if v_filled > 0 then
+    -- One pass over the missing range. A per-day loop made the planner Seq Scan the 5 GB table
+    -- once per day (30 x ~18 s); the table is large enough that a single scan is the cheap path.
     insert into public.admin_user_activity_daily (user_id, day, telemetry_count)
-    select s.user_id, v_day, count(*)::integer
+    select s.user_id, (s.device_time at time zone 'UTC')::date, count(*)::integer
     from public.bydmate_telemetry_samples s
-    where s.device_time >= (v_day::timestamp at time zone 'UTC')
-      and s.device_time < ((v_day + 1)::timestamp at time zone 'UTC')
-    group by s.user_id
+    where s.device_time >= (v_missing[1]::timestamp at time zone 'UTC')
+      and s.device_time < (v_today::timestamp at time zone 'UTC')
+      and (s.device_time at time zone 'UTC')::date = any(v_missing)
+    group by s.user_id, (s.device_time at time zone 'UTC')::date
     on conflict (user_id, day) do update set telemetry_count = excluded.telemetry_count;
 
-    insert into public.admin_user_activity_days_done (day) values (v_day)
+    insert into public.admin_user_activity_days_done (day)
+    select unnest(v_missing)
     on conflict (day) do nothing;
-    v_filled := v_filled + 1;
-  end loop;
+  end if;
 
   delete from public.admin_user_activity_daily where day < v_today - 30;
   delete from public.admin_user_activity_days_done where day < v_today - 30;
@@ -116,11 +120,13 @@ as $$
     group by d.user_id
   ),
   live_today as (
+    -- The cutoff is an inline expression, not a join to `params`: a value coming from a CTE is
+    -- unknown at plan time, the range looks unselective and the planner Seq Scans the 5 GB table
+    -- (18 s) instead of using bydmate_telemetry_samples_user_time_idx (0.1 s).
     select s.user_id, count(*) as c
     from public.bydmate_telemetry_samples s
-    cross join params
     where s.user_id = any(coalesce(p_user_ids, '{}'::uuid[]))
-      and s.device_time >= (params.today::timestamp at time zone 'UTC')
+      and s.device_time >= (((now() at time zone 'UTC')::date)::timestamp at time zone 'UTC')
     group by s.user_id
   ),
   trips as (

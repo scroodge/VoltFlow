@@ -223,6 +223,8 @@ for (const sample of [...samples].sort((a, b) => a.device_time.localeCompare(b.d
     p_device_time: sample.device_time, p_telemetry: sample.telemetry,
   }), "aggregate demo sample");
 }
+assert(await supabase.from("bydmate_soh_daily_rollups").delete()
+  .eq("user_id", userId).eq("vehicle_id", DEMO_VEHICLE_ID), "clear demo SOH aggregates");
 for (const day of new Set(samples.filter((s) => s.telemetry.soh_percent != null)
   .map((s) => s.device_time.slice(0, 10)))) {
   assert(await supabase.rpc("bydmate_materialize_soh_day", {

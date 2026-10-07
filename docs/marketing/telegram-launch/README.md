@@ -11,17 +11,12 @@ is [manifest.json](screenshots/current/manifest.json). Only files listed in that
 manifest belong to the current capture; older PNGs elsewhere are previous attempts.
 `complete: true` means the automated capture passed. Visual approval is separate.
 
-Current status (2026-10-07): **not ready for publication**. The approved
-selector identity and stable-empty-query fixes are implemented. Charge detail
-passed three normal loads and three loads with telemetry queries delayed eight
-seconds, including both dropdowns, without recorded browser/HTTP errors. Earlier
-screenshots remain provisional until a clean full capture and visual review.
-The latest full attempt stopped after ten screens when the stronger check
-rejected an unready car-settings page. Earlier contact-sheet review found
-analytics loading placeholders and explorer-preview trip data, so those images
-must not be used as evidence of populated fictional history. Full capture also
-encountered development manifest/hydration errors; these are separate from the
-verified charge-detail fallback fix.
+Current status (2026-10-07): **capture complete and visually reviewed with observations**.
+The run at 13:05:41 UTC contains 20 screens and 62 PNGs, with zero recorded
+browser errors or local HTTP errors. Fictional data was independently verified
+before capture and after restoring the parked baseline. All 62 images were reviewed.
+See [REVIEW.md](REVIEW.md) for evidence, remaining product observations and
+publication boundaries. No channel or posts have been published.
 
 ## Feature coverage
 
@@ -38,10 +33,9 @@ verified charge-detail fallback fix.
 | Accessories, spare parts and service catalog | `16-accessories` through `18-service-catalog` |
 | Simulated active charging | `19-live-charging`, `20-charging-vehicle` |
 
-Long authenticated screens have additional `-panel-NN.png` images showing their
-internal scroll area. PNGs are captured at 390×844 CSS pixels, DPR 2, dark theme,
-Russian locale and Europe/Minsk timezone. Public pages can have taller full-page
-images. Each image carries a demo-data label; it is applied by the capture harness.
+Long authenticated and public screens have additional `-panel-NN.png` images.
+All 62 PNGs are 780×1688 pixels (390×844 CSS pixels, DPR 2), dark theme,
+Russian locale and Europe/Minsk timezone. Each carries a harness-applied demo label.
 
 ## Fictional data
 
@@ -75,6 +69,7 @@ In a second terminal:
 
 ```sh
 node scripts/telegram-demo-capture.mjs
+node scripts/telegram-demo-verify-data.mjs
 node scripts/telegram-demo-gallery.mjs
 # Focused charge-detail regression check (existing local fixtures):
 node scripts/telegram-demo-verify-detail.mjs
@@ -87,10 +82,13 @@ containing other accounts. It does not reset volumes or connect to production.
 The stack script prepares a temporary migration copy for a new stack; its two
 historical compatibility adjustments remain local to that copy.
 
-The app uses `.next-telegram-demo` and Webpack development mode. Multi-page
-Turbopack captures repeatedly hit missing lazy chunks and a Select render loop;
-Webpack rendered the detail once without changing app components, but a later
-run reproduced the Select error, so changing bundlers is not a confirmed fix.
+The app uses `.next-telegram-demo` and Webpack development mode. The approved
+stable Select options and pending-query fallback fixes resolved the detail loop.
+Capture follows hydrated in-app navigation and waits for fixture data and visible
+loading states; it does not establish that every hard-load hydration issue is fixed.
+Seeding rebuilds hourly telemetry and daily SOH read models only for the fictional
+vehicle, using existing database functions. This resolves empty monthly charts
+without inventing additional measurements or modifying production.
 Project env-file keys
 are blanked before the local endpoints and dummy loopback-only OpenAI settings are
 installed, preventing unset demo variables from inheriting project secrets.
@@ -99,9 +97,13 @@ installed, preventing unset demo variables from inheriting project secrets.
 
 The harness checks local HTTP failures and browser errors. Browser requests outside
 the two permitted loopback ports are blocked. Vercel analytics scripts are replaced
-with empty local responses; release discovery is replaced with an empty result so
+with empty local responses; the map iframe is replaced with a labelled local
+GPS-disabled placeholder. Any other external browser attempt fails the capture.
+Release discovery is replaced with an empty result so
 the server does not contact GitHub for that feature. Expected report-only CSP
 warnings are retained separately in `browserWarnings`; they are not hidden errors.
+Authentication uses the fictional user's ordinary local password sign-in and SDK
+SSR cookies, with the anon key and normal RLS. Login UI itself is not exercised.
 
 Screenshots prove these UI states against local fixtures. They do not prove real
 Mate telemetry delivery, auto-start/stop detection, remote commands, Telegram
