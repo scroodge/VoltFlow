@@ -1755,6 +1755,9 @@ export const dictionaries = {
       openMap: "Open map",
       openVoltFlow: "Open VoltFlow",
       hideWidget: "Hide widget",
+      mateVersion: "📱 VoltFlow Mate {version}",
+      mateUpdateAvailable:
+        "⚠️ VoltFlow Mate {installed} → {latest} — <b>update available</b>",
     },
     auxBatteryAlerts: {
       open: "Open VoltFlow",
@@ -3451,6 +3454,9 @@ export const dictionaries = {
       openMap: "Адкрыць карту",
       openVoltFlow: "Адкрыць VoltFlow",
       hideWidget: "Схаваць віджэт",
+      mateVersion: "📱 VoltFlow Mate {version}",
+      mateUpdateAvailable:
+        "⚠️ VoltFlow Mate {installed} → {latest} — <b>даступна абнаўленне</b>",
     },
     auxBatteryAlerts: {
       open: "Адкрыць VoltFlow",
@@ -5150,6 +5156,9 @@ export const dictionaries = {
       openMap: "Открыть карту",
       openVoltFlow: "Открыть VoltFlow",
       hideWidget: "Скрыть виджет",
+      mateVersion: "📱 VoltFlow Mate {version}",
+      mateUpdateAvailable:
+        "⚠️ VoltFlow Mate {installed} → {latest} — <b>доступно обновление</b>",
     },
     auxBatteryAlerts: {
       open: "Открыть VoltFlow",

@@ -1,5 +1,6 @@
 import { translate, type Locale } from "../i18n.ts";
 import { formatSocPercent } from "../format-soc-percent.ts";
+import { isMateUpdateAvailable } from "../mate-version.ts";
 
 // Driving and charging both move SOC materially; parked/offline cars can safely retain
 // an overnight estimate, but it still expires after a day to bound phantom-drain error.
@@ -29,6 +30,10 @@ export type TelegramLiveWidgetMessage = {
   speedKmh: number | null;
   lat: number | null;
   lon: number | null;
+  /** VoltFlow Mate build reported by the car (`mate_version`); null hides the footer. */
+  mateVersion?: string | null;
+  /** Latest published Mate release; null means unknown — never "up to date". */
+  latestMateVersion?: string | null;
 };
 
 function socBar(soc: number): string {
@@ -161,5 +166,32 @@ export function composeTelegramLiveWidget(
     );
   }
 
+  const mateFooter = mateVersionFooter(data);
+  if (mateFooter) lines.push(mateFooter);
+
   return lines.join("\n");
+}
+
+/**
+ * Last widget line: the installed Mate APK build, or an update warning when a newer
+ * release is published. No installed version → no line, so there is never a false nag.
+ */
+export function mateVersionFooter(
+  data: Pick<
+    TelegramLiveWidgetMessage,
+    "locale" | "mateVersion" | "latestMateVersion"
+  >,
+): string | null {
+  const installed = data.mateVersion?.trim();
+  if (!installed) return null;
+  const latest = data.latestMateVersion?.trim() ?? null;
+  if (isMateUpdateAvailable(installed, latest)) {
+    return translate(data.locale, "telegramLiveWidget.mateUpdateAvailable", {
+      installed: escapeHtml(installed),
+      latest: escapeHtml(latest ?? ""),
+    }) as string;
+  }
+  return translate(data.locale, "telegramLiveWidget.mateVersion", {
+    version: escapeHtml(installed),
+  }) as string;
 }

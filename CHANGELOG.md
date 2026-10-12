@@ -11,6 +11,13 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-10-12
 
+- **Telegram live widget shows the VoltFlow Mate APK version.** The last widget line is
+  the build the car reports (`mate_version`), or `⚠️ installed → latest — update available`
+  when a newer release exists. "Latest" is GitHub-first via the new shared
+  `src/lib/mate-latest-release.ts` (also used by `/api/bydmate/latest-release`), with
+  `mate_app_releases` only as a fallback — that table was stale (top row 0.4.8 while cars ran
+  0.6.1). No version → no line; unknown latest → no warning. Tests in
+  `live-widget-message.test.mjs`. See `docs/VEHICLE_STATE_NOTIFICATIONS.md`.
 - **Fixed: doubled trips on client-trip vehicles (`way` + 9 others).** An untagged
   daemon / fast-mode history sample reached ingest before the app's client-tagged batch,
   opened a server-owned trip, and left a 1-sample, 0 km `client_trip=false` stub next to

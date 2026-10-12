@@ -112,6 +112,14 @@ permissions.
   detect it.
 - A failed edit whose error is "message to edit not found" / "message isn't
   accessible" falls through to send-a-new-message and re-tracks the row.
+- **Mate version footer:** the last line shows the APK build the car reports
+  (`mate_version` on the sample): `📱 VoltFlow Mate 0.6.1`, or
+  `⚠️ VoltFlow Mate 0.5.0 → 0.6.1 — update available` when a newer release is
+  published. "Latest" comes from GitHub releases (`resolveLatestMateVersion` in
+  `src/lib/mate-latest-release.ts`, 5-min fetch cache), falling back to
+  `mate_app_releases` — that table lags real releases, so it is never the primary
+  source. No reported version → no line; unknown latest → version only, no warning.
+  A newly published release appears only on the widget's next telemetry-driven edit.
 
 ### Using the widget (user-facing)
 

@@ -27,6 +27,7 @@ import {
   telegramLiveWidgetReplyMarkup,
   type TelegramLiveVehicleState,
 } from "@/lib/telegram/live-widget-message";
+import { resolveLatestMateVersion } from "@/lib/mate-latest-release";
 import { estimateVehicleRangeKm } from "@/lib/voltflowmate/range-estimate";
 import {
   cleanTrips,
@@ -369,6 +370,9 @@ export async function updateTelegramLiveWidgets({
     userId,
     Array.from(cars.values(), (car) => car.id).filter(Boolean),
   );
+  // One release lookup per ingest, only once some widget is due for an edit. GitHub is
+  // fetch-cached for 5 min, so this is not a per-sample network call.
+  const latestMateVersionPromise = resolveLatestMateVersion(supabase);
   const recentTripsByVehicle = new Map(
     await Promise.all(
       eligibleVehicleIds.map(
@@ -380,6 +384,7 @@ export async function updateTelegramLiveWidgets({
       ),
     ),
   );
+  const latestMateVersion = await latestMateVersionPromise;
   let updated = 0;
 
   for (const vehicleId of eligibleVehicleIds) {
@@ -459,6 +464,8 @@ export async function updateTelegramLiveWidgets({
       speedKmh,
       lat,
       lon,
+      mateVersion: lastSample.mate_version ?? null,
+      latestMateVersion,
     });
 
     const existing = existingByVehicle.get(vehicleId) ?? null;
