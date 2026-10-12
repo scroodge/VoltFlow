@@ -38,17 +38,13 @@ export async function POST(
   if (adminError) {
     return NextResponse.json({ error: adminError.message }, { status: 500 });
   }
-  if (adminRow?.user_id) {
-    return NextResponse.json(
-      { error: "admins are permanent premium" },
-      { status: 400 },
-    );
-  }
-
   let body: PremiumUpdateBody;
   try {
     body = (await request.json()) as PremiumUpdateBody;
   } catch {
+    body = {};
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
     body = {};
   }
 
@@ -74,23 +70,76 @@ export async function POST(
     updatePayload.is_premium = body.isPremium;
   }
 
-  if (Object.keys(updatePayload).length === 0) {
-    return NextResponse.json({ error: "No premium fields provided." }, { status: 400 });
-  }
-
   const payment = body.payment;
   if (payment !== undefined) {
     if (
+      !payment ||
+      typeof payment !== "object" ||
       typeof payment.amount !== "number" ||
       !Number.isFinite(payment.amount) ||
-      payment.amount < 0 ||
+      payment.amount <= 0 ||
       typeof payment.currency !== "string" ||
       payment.currency.trim().length === 0 ||
       typeof payment.method !== "string" ||
-      payment.method.trim().length === 0
+      payment.method.trim().length === 0 ||
+      (payment.note != null && typeof payment.note !== "string")
     ) {
-      return NextResponse.json({ error: "Invalid payment details." }, { status: 400 });
+      return NextResponse.json({ error: "Invalid donation details." }, { status: 400 });
     }
+    if ("premiumUntil" in body || "isPremium" in body) {
+      return NextResponse.json(
+        { error: "A donation cannot be recorded together with an access change." },
+        { status: 400 },
+      );
+    }
+
+    const { data: profile, error: profileError } = await getSupabaseAdmin()
+      .from("profiles")
+      .select("id")
+      .eq("id", userId)
+      .maybeSingle();
+    if (profileError) {
+      return NextResponse.json({ error: profileError.message }, { status: 500 });
+    }
+    if (!profile) {
+      return NextResponse.json({ error: "User not found." }, { status: 404 });
+    }
+
+    // Keep the historical table name for compatibility; new records are donation
+    // statistics and have no access period attached.
+    const { error: paymentError } = await getSupabaseAdmin().from("premium_payments").insert({
+      user_id: userId,
+      amount: payment.amount,
+      currency: payment.currency.trim(),
+      method: payment.method.trim(),
+      note: payment.note?.trim() || null,
+      recorded_by_admin_id: guard.user.id,
+      applied_until: null,
+    });
+    if (paymentError) {
+      return NextResponse.json({ error: paymentError.message }, { status: 500 });
+    }
+    await writeAdminAuditLog({
+      actorAdminId: guard.user.id,
+      targetUserId: userId,
+      action: "donation_recorded",
+      details: {
+        amount: payment.amount,
+        currency: payment.currency.trim(),
+        method: payment.method.trim(),
+      },
+    });
+    return NextResponse.json({ ok: true, donationRecorded: true });
+  }
+
+  if (Object.keys(updatePayload).length === 0) {
+    return NextResponse.json({ error: "No access fields provided." }, { status: 400 });
+  }
+  if (adminRow?.user_id) {
+    return NextResponse.json(
+      { error: "admins are permanent premium" },
+      { status: 400 },
+    );
   }
 
   const { data: before } = await getSupabaseAdmin()
@@ -120,24 +169,8 @@ export async function POST(
     details: {
       before: { is_premium: before?.is_premium ?? null, premium_until: before?.premium_until ?? null },
       after: { is_premium: data.is_premium, premium_until: data.premium_until },
-      payment: payment ?? null,
     },
   });
-
-  if (payment !== undefined) {
-    const { error: paymentError } = await getSupabaseAdmin().from("premium_payments").insert({
-      user_id: userId,
-      amount: payment.amount,
-      currency: payment.currency.trim(),
-      method: payment.method.trim(),
-      note: payment.note?.trim() || null,
-      recorded_by_admin_id: guard.user.id,
-      applied_until: data.premium_until,
-    });
-    if (paymentError) {
-      console.error("Premium payment record failed:", paymentError.message);
-    }
-  }
 
   return NextResponse.json({ ok: true, user: data });
 }

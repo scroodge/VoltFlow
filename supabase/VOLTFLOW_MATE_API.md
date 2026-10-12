@@ -304,7 +304,8 @@ stamp, kept as a column so a client can refuse to restore a layout written by a 
 than the one installed.
 
 Both methods require a premium or admin entitlement, re-checked on every call rather than
-trusted from the client's own six-hour cache. Errors follow the usual vocabulary:
+trusted from the client's own six-hour cache. Voluntary donations do not grant or change
+this entitlement. Errors follow the usual vocabulary:
 `missing_api_key` (401), `invalid_api_key` (401), `not_entitled` (403), `invalid_payload`
 and `invalid_layout_version` (400), and `payload_too_large` (413) above 256 KB.
 
