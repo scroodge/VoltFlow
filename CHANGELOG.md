@@ -11,6 +11,16 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-10-12
 
+- **Fixed: doubled trips on client-trip vehicles (`way` + 9 others).** An untagged
+  daemon / fast-mode history sample reached ingest before the app's client-tagged batch,
+  opened a server-owned trip, and left a 1-sample, 0 km `client_trip=false` stub next to
+  the real drive (Rules A/B kept it: max speed 10–53 km/h). Migration `20261012120000`
+  (applied to prod) stops `bydmate_ingest_telemetry` (9-arg) opening a legacy trip when the
+  user+vehicle has a client trip started within 7 days; `dedupeTripsBySource` hides any
+  stub overlapping a client trip (test in `hero-drive-metrics.test.mjs`). Cleanup
+  migration `20261012121000` deletes the existing 165 stubs (dry run: max 2 samples, 0 km,
+  2 track points). `byd_energydata` twins were already hidden by `cleanTrips`. See
+  `docs/TRIPS.md` → Lifecycle.
 - **Fixed: BYDMate webhook telemetry nulling the shared live-snapshot's gear/gun-state
   columns (GitHub #44, "Повторы поездок").** The webhook route's RPC call passed a
   `p_diplus: null` key, which made PostgREST resolve `bydmate_ingest_telemetry` to the

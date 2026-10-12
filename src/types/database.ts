@@ -387,6 +387,7 @@ export type VoltflowMateTripRow = {
   power_sample_count?: number;
   source?: "telemetry" | "byd_energydata";
   fuel_kwh?: number | null;
+  client_trip?: boolean | null;
 };
 
 export type VoltflowMateTripTrackPointRow = {

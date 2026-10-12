@@ -22,32 +22,65 @@ function tripIntervalMs(trip: VoltflowMateTripRow): [number, number] | null {
   return [start, Number.isFinite(end) ? Math.max(start, end) : start];
 }
 
+function overlapsAny(
+  interval: [number, number],
+  others: [number, number][],
+): boolean {
+  return others.some(
+    ([start, end]) =>
+      interval[0] <= end + TRIP_TWIN_TOLERANCE_MS &&
+      interval[1] >= start - TRIP_TWIN_TOLERANCE_MS,
+  );
+}
+
+function intervalsOf(trips: VoltflowMateTripRow[]): [number, number][] {
+  return trips
+    .map(tripIntervalMs)
+    .filter((interval): interval is [number, number] => interval != null);
+}
+
 /**
- * `byd_energydata` cloud trip summaries duplicate the trips the Mate telemetry
- * daemon already records. Drop an energydata row when a telemetry trip overlaps
- * it in time; keep it when no telemetry twin exists (e.g. the daemon was offline
- * for that trip). Whether a car syncs energydata tracks firmware, not model
- * generation — DiLink 3 (gen1_2024) cars produce them too — so this keys purely
- * on the presence of energydata rows in the list, never on `model_generation`.
+ * A 1–2 sample, distance-less server-owned trip: what an untagged sample opens when it
+ * reaches ingest before the app's client-tagged batch for the same drive (docs/TRIPS.md).
+ */
+function isLegacyTripStub(trip: VoltflowMateTripRow): boolean {
+  return (
+    trip.source !== "byd_energydata" &&
+    trip.client_trip !== true &&
+    trip.sample_count <= 2 &&
+    (finiteNumber(trip.distance_km) ?? 0) <= 0.1
+  );
+}
+
+/**
+ * One row per drive. `byd_energydata` cloud trip summaries duplicate the trips the
+ * Mate telemetry daemon already records. Drop an energydata row when a telemetry trip
+ * overlaps it in time; keep it when no telemetry twin exists (e.g. the daemon was
+ * offline for that trip). Whether a car syncs energydata tracks firmware, not model
+ * generation — DiLink 3 (gen1_2024) cars produce them too — so this keys purely on the
+ * presence of energydata rows in the list, never on `model_generation`.
+ *
+ * Also drops a legacy stub ({@link isLegacyTripStub}) that overlaps a client trip:
+ * the server stops creating them in migration `20261012120000`, this hides any left.
  */
 export function dedupeTripsBySource(
   trips: VoltflowMateTripRow[],
 ): VoltflowMateTripRow[] {
-  const telemetryIntervals = trips
-    .filter((trip) => trip.source !== "byd_energydata")
-    .map(tripIntervalMs)
-    .filter((interval): interval is [number, number] => interval != null);
+  const telemetryIntervals = intervalsOf(
+    trips.filter((trip) => trip.source !== "byd_energydata"),
+  );
   if (telemetryIntervals.length === 0) return trips;
+  const clientIntervals = intervalsOf(
+    trips.filter((trip) => trip.client_trip === true),
+  );
 
   return trips.filter((trip) => {
-    if (trip.source !== "byd_energydata") return true;
     const interval = tripIntervalMs(trip);
     if (!interval) return true;
-    return !telemetryIntervals.some(
-      ([start, end]) =>
-        interval[0] <= end + TRIP_TWIN_TOLERANCE_MS &&
-        interval[1] >= start - TRIP_TWIN_TOLERANCE_MS,
-    );
+    if (trip.source === "byd_energydata") {
+      return !overlapsAny(interval, telemetryIntervals);
+    }
+    return !(isLegacyTripStub(trip) && overlapsAny(interval, clientIntervals));
   });
 }
 

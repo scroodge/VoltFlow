@@ -230,6 +230,49 @@ test("dedupeTripsBySource drops energydata twins, keeps orphans", () => {
   assert.equal(dedupeTripsBySource(telemetryOnly).length, 2);
 });
 
+test("dedupeTripsBySource hides a legacy 1-sample stub inside a client trip (way, 2026-10-12)", () => {
+  const clientTrip = {
+    ...baseTrip,
+    id: "client",
+    source: "telemetry",
+    client_trip: true,
+    started_at: "2026-10-12T06:41:47.000Z",
+    ended_at: "2026-10-12T06:52:03.000Z",
+    sample_count: 526,
+    distance_km: 13.9,
+  };
+  const stub = {
+    ...baseTrip,
+    id: "stub",
+    source: "telemetry",
+    client_trip: false,
+    started_at: "2026-10-12T06:41:57.000Z",
+    ended_at: "2026-10-12T06:41:57.000Z",
+    last_device_time: "2026-10-12T06:41:57.000Z",
+    sample_count: 1,
+    distance_km: 0,
+    max_speed_kmh: 13,
+  };
+  assert.deepEqual(
+    dedupeTripsBySource([clientTrip, stub]).map((trip) => trip.id),
+    ["client"],
+  );
+
+  // A car without client trips keeps its server-owned trips, short ones included.
+  const legacyOnly = [
+    { ...stub, id: "legacy-short" },
+    { ...stub, id: "legacy-long", sample_count: 300, distance_km: 8 },
+  ];
+  assert.equal(dedupeTripsBySource(legacyOnly).length, 2);
+
+  // A server-owned trip that carries distance is never treated as a stub.
+  const realLegacy = { ...stub, id: "legacy-real", sample_count: 2, distance_km: 1.2 };
+  assert.deepEqual(
+    dedupeTripsBySource([clientTrip, realLegacy]).map((trip) => trip.id),
+    ["client", "legacy-real"],
+  );
+});
+
 test("computeHeroDriveMetrics does not double-count energydata twins", () => {
   const sessions = [
     {

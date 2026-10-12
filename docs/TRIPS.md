@@ -12,7 +12,14 @@ Each telemetry sample drives a server state machine over the user's single open 
 samples, which are not tagged `client_trip`:
 
 - **Open** — a sample with *drive evidence* (`v_is_drive_sample`: `speed_kmh > 5` **or**
-  `gear ∈ {D, R, N}`) with no open trip creates a new `bydmate_trips` row.
+  `gear ∈ {D, R, N}`) with no open trip creates a new `bydmate_trips` row — **unless the
+  same user+vehicle has a `client_trip` started within the last 7 days** (migration
+  `20261012120000`). On such a vehicle the untagged daemon / fast-mode history sample
+  (~3 s delivery) used to beat the app's client-tagged batch (~15–25 s) for the same drive,
+  open a server-owned trip, and leave a 1-sample, 0 km stub beside the real trip that
+  Rules A/B kept (max speed 10–53 km/h). Every legacy trip on a client-trip vehicle in prod
+  was such a stub, so the guard loses nothing; cars without client trips keep this path.
+  `dedupeTripsBySource` also hides any remaining stub that overlaps a client trip.
 - **Extend** — a drive sample within the 5-minute trip gap updates `last_device_time`,
   `sample_count`, `soc_end`, `max_speed_kmh`, `avg_speed_kmh`, and `distance_km`.
 - **Close** — the trip closes when a sample shows charging, gear **P** (with the
