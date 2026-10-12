@@ -10,6 +10,7 @@ import { BatteryRing } from "./BatteryRing";
 import { ChargingDeltaCard } from "./charging-delta-card";
 import { EnergyCorrectionCard } from "./energy-correction-card";
 import { ChargingStatsGrid, type ChargingStat } from "./ChargingStatsGrid";
+import { sessionStartOdometerKm } from "../_domain/session-start-odometer";
 import {
   CurrencyAmount,
   currencyTextWithIcon,
@@ -63,6 +64,7 @@ import {
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useSessionQuery } from "@/hooks/use-session-query";
 import { useVoltflowMateLiveQuery } from "@/hooks/use-voltflowmate-live-query";
+import { useVoltflowMateChargingSessionSamplesQuery } from "@/hooks/use-voltflowmate-charging-session-samples-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
 import {
@@ -143,6 +145,17 @@ export function ChargingSessionScreen({
             ?.vehicle_alias ?? null)
         : null,
     [carsResult?.cars, session],
+  );
+  // Same query key as `ChargingDeltaCard`, so React Query serves both from one request.
+  const { data: sessionSamples, isLoading: sessionSamplesLoading } =
+    useVoltflowMateChargingSessionSamplesQuery(
+      session?.id ?? "",
+      sessionVehicleId ?? undefined,
+      session?.status,
+    );
+  const startOdometerKm = useMemo(
+    () => sessionStartOdometerKm(sessionSamples ?? []),
+    [sessionSamples],
   );
 
   // "custom" (manual price, no picked provider) is the only non-stored option —
@@ -653,6 +666,19 @@ export function ChargingSessionScreen({
         : `${displayAcPowerKw.toFixed(displayAcPowerDecimals)} kW`,
       accent: "blue",
     },
+    ...(historyMode
+      ? [
+          {
+            label: t("charging.startOdometer") as string,
+            value:
+              startOdometerKm != null
+                ? `${startOdometerKm.toLocaleString(localeCode, { maximumFractionDigits: 0 })} km`
+                : sessionSamplesLoading
+                  ? "…"
+                  : "—",
+          },
+        ]
+      : []),
   ];
 
   if (!historyMode && charging && estimatedFinishMs != null) {

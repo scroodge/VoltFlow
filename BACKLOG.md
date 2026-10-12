@@ -1,3 +1,25 @@
+## Charging session history: "Odometer at start" tile — BUILT 2026-10-12 (option A); awaiting commit + deploy
+
+Owner asked for a new tile in a session's history view (next to "Avg power") showing the
+odometer reading when the charge started.
+
+**Data:** `charging_sessions` has no odometer column. Telemetry samples carry
+`telemetry.odometer_km` (~92% of samples over the last 3 days; history kept since 2026-05-18).
+`ChargingDeltaCard` on the same screen already loads the session's samples via
+`useVoltflowMateChargingSessionSamplesQuery`, and each point includes `telemetry`.
+**Ownership:** app-owned derived telemetry, read-only; no new storage.
+
+### Options
+
+- **A (recommended):** derive on read. In `charging-session-screen.tsx`, history mode only,
+  reuse the same samples query (React Query dedupes) and take the first finite
+  `telemetry.odometer_km`; add tile "Одометр на старте" / "Odometer at start" (`12 345 km`,
+  `—` while loading/missing). Pure helper + `.test.mjs`. No migration. Odometer does not
+  change while parked, so the first in-session sample is the start value.
+- B: add `charging_sessions.start_odometer_km`, written by auto-start (streak's first sample),
+  manual start (live snapshot) and a backfill. Durable even if telemetry is pruned, but touches
+  the ingest path, both start paths and needs a migration — overkill for a display field.
+
 # Backlog — proposed plans awaiting go-ahead
 
 ## Telegram live widget: state change bypasses the 30 s edit throttle — BUILT 2026-10-12, migration applied to prod; code awaiting commit + deploy
