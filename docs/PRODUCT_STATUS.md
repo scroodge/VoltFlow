@@ -53,6 +53,8 @@
   registrations and removals (Minsk time), and all-time recorded trips.
 - An attention queue highlights stale telemetry, inactive or outdated Mate clients, and
   premium access nearing expiry.
+- Administrators can record voluntarily reported donations for statistics; donation
+  records do not change account access or telemetry retention.
 
 ## Status boundary
 

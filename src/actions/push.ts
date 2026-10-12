@@ -25,7 +25,7 @@ export async function savePushSubscription(input: PushSubscriptionPayload) {
     !input?.keys?.p256dh ||
     !input?.keys?.auth
   ) {
-    return { ok: false as const, error: "Invalid push subscription" };
+    return { ok: false as const, error: "Invalid push registration" };
   }
 
   const { error } = await supabase.from("push_subscriptions").upsert(

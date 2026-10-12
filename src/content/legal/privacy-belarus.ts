@@ -1,7 +1,7 @@
 import type { Locale } from "@/lib/i18n";
 import type { LegalDocument, LegalOperatorDetails } from "@/content/legal/types";
 
-const UPDATED = "2026-07-20";
+const UPDATED = "2026-09-29";
 
 const en = (op: LegalOperatorDetails): LegalDocument => ({
   title: "Privacy Policy (Belarus)",
@@ -22,6 +22,7 @@ const en = (op: LegalOperatorDetails): LegalDocument => ({
         "Vehicle and charging data: car profiles, session history, tariffs, cost estimates.",
         "Telemetry from VoltFlow Mate: battery metrics, trip routes, speeds, diagnostics; geolocation when permission is granted on the car tablet.",
         "Technical data: authentication tokens, push endpoints, language and currency preferences.",
+        "For an account-linked donation you report: your account email and ID, plus the amount, currency, transfer method, and optional note recorded by an administrator.",
       ],
     },
     {
@@ -32,6 +33,7 @@ const en = (op: LegalOperatorDetails): LegalDocument => ({
         "Applying home-charger geofence tariffs you configure.",
         "Ensuring information security and preventing unauthorized access.",
         "Optional notifications about charging events.",
+        "Statistics of voluntarily reported donations without changing account access.",
       ],
     },
     {
@@ -50,8 +52,8 @@ const en = (op: LegalOperatorDetails): LegalDocument => ({
     {
       title: "Retention",
       paragraphs: [
-        "Data is retained for the life of your account and as needed for history, analytics, and legal compliance. Raw telemetry retention policy is tiered: Free plan keeps 30 days of raw telemetry/tracks; Premium retains them indefinitely while the account remains active.",
-        "For the Free plan, after retention expires, raw records are deleted during scheduled cleanup and cannot be restored.",
+        "Data is retained for the life of your account and as needed for history, analytics, and legal compliance. Standard access keeps 30 days of raw telemetry/tracks; Premium access retains them while the account remains active. Donations do not affect retention.",
+        "With standard access, after retention expires, raw records are deleted during scheduled cleanup and cannot be restored.",
         "Inactive accounts: if you do not log in or send telemetry for 30 days, we will send a warning email. If no activity occurs within 60 days, your account and all associated data will be permanently deleted. Premium users are exempt while their Premium status is active.",
         "You may request erasure subject to limits of applicable law and technical feasibility.",
       ],
@@ -106,6 +108,7 @@ const be = (op: LegalOperatorDetails): LegalDocument => ({
         "Даныя аб аўто і зарадцы: профілі, гісторыя сесій, тарыфы, кошты.",
         "Тэлеметрыя VoltFlow Mate: паказчыкі батарэі, маршруты, хуткасць, дыягностыка; геалакацыя пры дазволе на планшэце.",
         "Тэхнічныя даныя: токены аўтарызацыі, push-каналы, мова і валюта.",
+        "Для паведамленага вамі ахвяравання: пошта і ID акаўнта, а таксама сума, валюта, спосаб пераказу і неабавязковая нататка, занесеныя адміністратарам.",
       ],
     },
     {
@@ -116,6 +119,7 @@ const be = (op: LegalOperatorDetails): LegalDocument => ({
         "Прымяненне домашняга тарыфу ў геазоне.",
         "Забеспячэнне бяспекі інфармацыі.",
         "Апавяшчэнні пра зарадку (па жаданні).",
+        "Статыстыка добраахвотна паведамленых ахвяраванняў без змены доступу да акаўнта.",
       ],
     },
     {
@@ -134,8 +138,8 @@ const be = (op: LegalOperatorDetails): LegalDocument => ({
     {
       title: "Тэрміны захоўвання",
       paragraphs: [
-        "Даныя захоўваюцца на працягу існавання акаўнта і столькі, колькі патрэбна для гісторыі, аналітыкі і выканання закона. Палітыка сырых даных ступенчатая: free-план — 30 дзён сырай тэлеметрыі/трэкаў; Premium захоўвае іх бестэрмінова, пакуль акаўнт актыўны.",
-        "Для free-плана пасля заканчэння тэрміну захоўвання сырыя запісы выдаляюцца падчас планавых ачыстак і не могуць быць адноўлены.",
+        "Даныя захоўваюцца на працягу існавання акаўнта і столькі, колькі патрэбна для гісторыі, аналітыкі і выканання закона. Са стандартным доступам сырая тэлеметрыя і трэкі захоўваюцца 30 дзён; з Premium-доступам — пакуль акаўнт актыўны. Ахвяраванні не ўплываюць на тэрмін захоўвання.",
+        "Са стандартным доступам пасля заканчэння тэрміну захоўвання сырыя запісы выдаляюцца падчас планавых ачыстак і не могуць быць адноўлены.",
         "Неактыўныя акаўнты: калі вы не ўваходзіце ў сістэму або не дасылаеце тэлеметрыю на працягу 30 дзён, мы дашлем папярэджанне на email. Калі актыўнасць не аднавіцца на працягу 60 дзён, ваш акаўнт і ўсе звязаныя даныя будуць выдалены назаўжды. Прэміум-карыстальнікі вызваляюцца, пакуль іх прэміум-статус актыўны.",
         "Вы можаце запытаць выдаленне ў межах закону і тэхнічных магчымасцей.",
       ],
@@ -188,6 +192,7 @@ const ru = (op: LegalOperatorDetails): LegalDocument => ({
         "Данные об авто и зарядке: профили, история сессий, тарифы, стоимость.",
         "Телеметрия VoltFlow Mate: показатели батареи, маршруты, скорость, диагностика; геолокация при разрешении на планшете.",
         "Технические данные: токены авторизации, push-каналы, язык и валюта.",
+        "Для доната, о котором вы сообщили: почта и ID аккаунта, а также сумма, валюта, способ перевода и необязательное примечание, внесённые администратором.",
       ],
     },
     {
@@ -198,6 +203,7 @@ const ru = (op: LegalOperatorDetails): LegalDocument => ({
         "Применение домашнего тарифа в геозоне.",
         "Обеспечение информационной безопасности.",
         "Уведомления о зарядке (по желанию).",
+        "Статистика добровольно сообщённых донатов без изменения доступа к аккаунту.",
       ],
     },
     {
@@ -216,8 +222,8 @@ const ru = (op: LegalOperatorDetails): LegalDocument => ({
     {
       title: "Сроки хранения",
       paragraphs: [
-        "Данные хранятся в течение существования аккаунта и столько, сколько нужно для истории, аналитики и исполнения закона. Политика по сырым данным ступенчатая: free-план — 30 дней сырой телеметрии/треков; Premium хранит их бессрочно, пока аккаунт активен.",
-        "Для free-плана после истечения срока хранения сырые записи удаляются в плановых очистках и восстановлению не подлежат.",
+        "Данные хранятся в течение существования аккаунта и столько, сколько нужно для истории, аналитики и исполнения закона. Со стандартным доступом сырая телеметрия и треки хранятся 30 дней; с Premium-доступом — пока аккаунт активен. Донаты не влияют на срок хранения.",
+        "Со стандартным доступом после истечения срока хранения сырые записи удаляются в плановых очистках и восстановлению не подлежат.",
         "Неактивные аккаунты: если вы не входите в систему или не отправляете телеметрию в течение 30 дней, мы отправим предупреждение по email. Если активность не возобновится в течение 60 дней, ваш аккаунт и все связанные данные будут безвозвратно удалены. Премиум-пользователи освобождаются, пока их премиум-статус активен.",
         "Вы можете запросить удаление в пределах закона и технических возможностей.",
       ],

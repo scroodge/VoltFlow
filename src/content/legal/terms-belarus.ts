@@ -1,7 +1,7 @@
 import type { Locale } from "@/lib/i18n";
 import type { LegalDocument, LegalOperatorDetails } from "@/content/legal/types";
 
-const UPDATED = "2026-07-06";
+const UPDATED = "2026-09-29";
 
 const en = (op: LegalOperatorDetails): LegalDocument => ({
   title: "Terms of Service (Belarus)",
@@ -52,6 +52,12 @@ const en = (op: LegalOperatorDetails): LegalDocument => ({
       title: "Liability",
       paragraphs: [
         "The Service is provided without warranty beyond what is mandatory under Belarus law. Operator liability for damages is limited to the extent permitted by applicable legislation.",
+      ],
+    },
+    {
+      title: "Voluntary donations",
+      paragraphs: [
+        "You may voluntarily support VoltFlow with a donation. A donation is optional and does not grant, extend, or change access to features or data retention. Premium access is administered separately.",
       ],
     },
     {
@@ -128,6 +134,12 @@ const be = (op: LegalOperatorDetails): LegalDocument => ({
       ],
     },
     {
+      title: "Добраахвотныя ахвяраванні",
+      paragraphs: [
+        "Вы можаце добраахвотна падтрымаць VoltFlow ахвяраваннем. Ахвяраванне неабавязковае і не дае, не падаўжае і не змяняе доступ да функцый або тэрмін захоўвання даных. Premium-доступ кіруецца асобна.",
+      ],
+    },
+    {
       title: "Прыпыненне",
       paragraphs: [
         "Вы можаце спыніць выкарыстанне і запытаць выдаленне акаўнта. Аператар можа абмежаваць доступ пры парушэннях або з меркаванняў бяспекі з апавяшчэннем, калі гэта магчыма.",
@@ -198,6 +210,12 @@ const ru = (op: LegalOperatorDetails): LegalDocument => ({
       title: "Ответственность",
       paragraphs: [
         "Сервис предоставляется без гарантий за пределами императивных норм закона РБ. Ответственность Оператора ограничена в пределах, допускаемых законодательством.",
+      ],
+    },
+    {
+      title: "Добровольные донаты",
+      paragraphs: [
+        "Вы можете добровольно поддержать VoltFlow донатом. Донат необязателен и не предоставляет, не продлевает и не меняет доступ к функциям или срок хранения данных. Premium-доступ регулируется отдельно.",
       ],
     },
     {

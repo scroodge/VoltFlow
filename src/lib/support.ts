@@ -1,6 +1,5 @@
-// Donation / premium support configuration. Level-1 flow: users pay via one of
-// the channels below, then send a receipt (screenshot/PDF) to the Telegram bot
-// or email; an admin then grants premium in /admin/users.
+// Voluntary support channels. Donors send a receipt with account details for
+// attribution/statistics; a donation never changes app access.
 
 export type SupportCard = {
   /** Card number, shown verbatim and copyable. */
@@ -31,5 +30,5 @@ export const SUPPORT_TELEGRAM_BOT_URL = "https://t.me/Voltflowscr_bot";
 /** Direct deep link to the VoltFlow Telegram Mini App (onboarding entry). */
 export const TELEGRAM_MINIAPP_URL = "https://t.me/Voltflowscr_bot/voltflow";
 
-/** Receipts can also go here by email; same inbox as premium upgrade requests. */
+/** Donation receipts can also go here by email. */
 export const SUPPORT_EMAIL = "washjurine@gmail.com";

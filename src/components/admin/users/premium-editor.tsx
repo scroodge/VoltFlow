@@ -97,45 +97,44 @@ export function PremiumEditor({
       await postAdminAction(
         `/api/admin/users/${user.id}/premium`,
         { method: "POST", body: payload },
-        "Could not update premium",
+        "Could not save change",
       );
-      toast.success(
-        payload.payment
-          ? "Premium updated · payment registered"
-          : "Premium updated",
-      );
+      toast.success(payload.payment ? "Donation recorded" : "Access updated");
       if (payload.payment) {
         setPaymentAmount("");
         setPaymentNote("");
         reloadPayments();
       }
-      onUpdated();
+      if (!payload.payment) onUpdated();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Could not update premium",
+        error instanceof Error ? error.message : "Could not save change",
       );
     } finally {
       setBusy(false);
     }
   };
 
-  const saveWithOptionalPayment = () => {
+  const recordDonation = () => {
     const amountNum = Number(paymentAmount);
-    const payment =
-      paymentAmount.trim().length > 0 &&
-      Number.isFinite(amountNum) &&
-      amountNum >= 0
-        ? {
-            amount: amountNum,
-            currency: paymentCurrency.trim() || "BYN",
-            method: paymentMethod,
-            note: paymentNote.trim() || undefined,
-          }
-        : undefined;
+    if (!paymentAmount.trim() || !Number.isFinite(amountNum) || amountNum <= 0) {
+      toast.error("Enter a positive donation amount");
+      return;
+    }
+    void submit({
+      payment: {
+        amount: amountNum,
+        currency: paymentCurrency.trim() || "BYN",
+        method: paymentMethod,
+        note: paymentNote.trim() || undefined,
+      },
+    });
+  };
+
+  const saveAccess = () => {
     void submit({
       isPremium: flagPremium,
       premiumUntil: premiumUntil ? new Date(premiumUntil).toISOString() : null,
-      payment,
     });
   };
 
@@ -180,16 +179,37 @@ export function PremiumEditor({
           Manual flag
         </label>
       </div>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="xs"
+          className="rounded-full"
+          onClick={saveAccess}
+          disabled={busy}
+        >
+          Save access
+        </Button>
+        <Button
+          type="button"
+          size="xs"
+          variant="outline"
+          className="rounded-full"
+          onClick={() => void submit({ premiumUntil: null })}
+          disabled={busy}
+        >
+          Clear term
+        </Button>
+      </div>
 
       <div className="space-y-2 border-t border-white/10 pt-3">
         <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-          Payment history
+          Recorded transfers (including legacy payments)
         </p>
         {payments === null ? (
           <p className="text-xs text-muted-foreground">Loading...</p>
         ) : payments.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            No payments recorded yet.
+            No transfers recorded yet.
           </p>
         ) : (
           <ul className="space-y-1.5">
@@ -215,7 +235,7 @@ export function PremiumEditor({
 
       <div className="space-y-2 border-t border-white/10 pt-3">
         <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-          Register payment (optional)
+          Record donation for statistics (no access change)
         </p>
         <div className="flex flex-wrap items-end gap-2">
           <div className="w-24">
@@ -225,7 +245,7 @@ export function PremiumEditor({
             <Input
               id={`${id}-amount`}
               type="number"
-              min="0"
+              min="0.01"
               step="0.01"
               value={paymentAmount}
               onChange={(e) => setPaymentAmount(e.target.value)}
@@ -269,27 +289,15 @@ export function PremiumEditor({
           className="h-8 rounded-lg text-xs"
           disabled={busy}
         />
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          size="xs"
-          className="rounded-full"
-          onClick={saveWithOptionalPayment}
-          disabled={busy}
-        >
-          Save
-        </Button>
         <Button
           type="button"
           size="xs"
           variant="outline"
           className="rounded-full"
-          onClick={() => void submit({ premiumUntil: null })}
+          onClick={recordDonation}
           disabled={busy}
         >
-          Clear term
+          Record donation
         </Button>
       </div>
     </div>
