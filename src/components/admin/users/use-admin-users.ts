@@ -81,8 +81,11 @@ export function useAdminUsers() {
           page === 1 ? payload.users : [...prev, ...payload.users],
         );
         setHasMore(page * payload.pageSize < payload.total);
-        setStats(payload.stats ?? EMPTY_ADMIN_USERS_STATS);
-        setAttention(payload.attention ?? []);
+        // Only page 1 carries the overview; later pages must not reset it.
+        if (page === 1) {
+          setStats(payload.stats ?? EMPTY_ADMIN_USERS_STATS);
+          setAttention(payload.attention ?? []);
+        }
         setLoading(false);
       })
       .catch((error: unknown) => {

@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+/.next-telegram-demo/
 /out/
 
 # production
@@ -90,3 +91,5 @@ SKILLS.md
 /research/
 
 
+# Local-only ops helpers (not committed)
+/local-scripts/

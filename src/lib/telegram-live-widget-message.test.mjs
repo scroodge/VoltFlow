@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   composeTelegramLiveWidget,
   freshRangeEstimateKm,
+  telegramLiveWidgetReplyMarkup,
   TELEGRAM_LIVE_RANGE_ACTIVE_MAX_AGE_MS,
   TELEGRAM_LIVE_RANGE_PARKED_MAX_AGE_MS,
 } from "./telegram/live-widget-message.ts";
@@ -46,6 +47,20 @@ test("live widget omits an unavailable range from the header", () => {
 
   assert.equal(lines[0], "🔋 100% · ⚡");
   assert.equal(lines[4], "🚗 Пробег 46632 км");
+});
+
+test("live widget shows SOC with one decimal like the PWA dashboard", () => {
+  const lines = message({ soc: 71.4 }).split("\n");
+
+  assert.equal(lines[0], "🔋 71.4% · ⚡ · ≈ 287 km");
+  assert.equal(lines[2], "<code>█████████░░░</code> <b>71.4%</b>");
+});
+
+test("live widget renders a rounded-full SOC as plain 100, not 100.0", () => {
+  const lines = message({ soc: 99.96 }).split("\n");
+
+  assert.equal(lines[0], "🔋 100% · ⚡ · ≈ 287 km");
+  assert.match(lines[2], /<b>100%<\/b>/);
 });
 
 test("live widget omits a stale driving range from the header", () => {
@@ -97,6 +112,17 @@ test("live widget keeps an overnight range when the last vehicle state is offlin
   );
 
   assert.equal(range, 287);
+});
+
+test("widget keyboard pairs the open-app button with a hide callback row", () => {
+  const ru = telegramLiveWidgetReplyMarkup("ru", "https://voltflow.life/vehicle");
+  assert.deepEqual(ru.inline_keyboard, [
+    [{ text: "Открыть VoltFlow", web_app: { url: "https://voltflow.life/vehicle" } }],
+    [{ text: "Скрыть виджет", callback_data: "lw:hide" }],
+  ]);
+
+  const en = telegramLiveWidgetReplyMarkup("en", "https://voltflow.life/vehicle");
+  assert.equal(en.inline_keyboard[1][0].text, "Hide widget");
 });
 
 test("live widget localizes message copy in English and Belarusian", () => {

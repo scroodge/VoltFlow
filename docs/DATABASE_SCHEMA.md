@@ -85,6 +85,7 @@ Mirror of `auth.users`. Created automatically on signup via trigger.
 | `premium_until` | timestamptz | Time-limited premium expiry (`20260617133000`) |
 | `last_active_at` | timestamptz | Last telemetry or login (`20260706120000`) |
 | `inactivity_warning_sent_at` | timestamptz | Set when the 30-day inactivity warning email is sent; account is eligible for deletion once `last_active_at` is >60 days old **and** this is set |
+| `analytics_card_order` | jsonb | User-owned Analytics-tab card order (string ids); NULL = default order (`20261006210000`) |
 | `created_at` | timestamptz | |
 
 Effective premium = `is_admin OR is_premium OR premium_until > now()`, computed by
@@ -137,9 +138,15 @@ One row per charge event, live-updated during charging.
 | `tariff_selected_at` | timestamptz | When the user last manually picked a tariff/provider on this session; delays auto-saving a GPS tariff location until the pick "sticks" (`20260706020000`) |
 | `energy_overridden` | boolean | True when energy/cost were set from a non-SOC source |
 | `energy_corrected_at` | timestamptz | When a provider-billed energy/cost correction was applied |
+| `manual_entry` | boolean | True only for a receipt-based, user-entered missed charge |
+| `session_origin` | text | `legacy / manual_receipt / telemetry_recovered`; provenance for history display |
+| `recovery_key` | text | Nullable idempotency key (`startedAt:stoppedAt` of the recovered window) for telemetry recovery, owner-confirmed or automatic after a late delivery; unique per user/car when present |
 | `end_max_cell_delta_v` | numeric | Maximum cell-voltage delta measured near the session's peak charging SOC (single sample, noise-sensitive) |
 | `end_delta_soc` | numeric | SOC at which `end_max_cell_delta_v` was measured |
 | `end_median_cell_delta_v` | numeric | Median cell-voltage delta over the same top-of-charge window (`20260914120000`) — noise-robust companion to `end_max_cell_delta_v`, the value Battery Consistency trends against. Null until a session closes under this definition; no backfill for older sessions |
+| `end_range_est_km` | numeric | Car-reported range (km) on the last charging sample of the session (`20261006180000`) — a historical prediction artifact for range-accuracy grading; never feeds the live user-visible estimate (`range-estimate.test.mjs` ban intact) |
+| `end_range_soc` | numeric | SOC at which `end_range_est_km` was reported; the km-per-% anchor shared by both predictions |
+| `end_voltflow_est_km` | numeric | Voltflow model estimate (km) at the same anchor SOC, captured at close by `src/lib/voltflowmate/range-prediction-capture.ts` (the estimator lives in TS and is not re-implemented in SQL) |
 | `started_at` | timestamptz | |
 | `stopped_at` | timestamptz | |
 | `created_at` | timestamptz | |

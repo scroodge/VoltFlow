@@ -44,6 +44,33 @@ odometer, speed, and an optional map link. Instead of posting a new message
 per update, the widget is created once and then edited in place via
 Telegram's `editMessageText`, so the chat doesn't fill up with spam.
 
+## Telemetry-offline Telegram notice
+
+This is separate from the editable live widget. A ten-minute database detector opens a
+`low_24h_count` audit when a recently-contacted vehicle has fewer than 500 accepted
+telemetry samples in 24 hours. If—and only if—the owner already linked Telegram
+(`profiles.telegram_id`), the cron delivery route sends one ordinary message saying that
+telemetry is no longer arriving. It includes the last contact and sample count, explains
+that live status, remote commands, and automatic charging updates may be unavailable,
+and directs the owner to check VoltFlow Mate, network access, and Android background
+permissions.
+
+- An owner without a Telegram link is ignored: no message is queued and no retry is
+  created.
+- A failed Telegram send is retried; successful delivery is recorded on the operational
+  cadence-audit row. Recovery (at least 500 samples/24h) closes the row, so a later
+  outage may notify again.
+- `moving_gap` alarms remain diagnostic-only. They are not equivalent to a sender being
+  offline and are never delivered to the owner.
+- The notice uses the existing user-owned Telegram link in Postgres. Its audit/delivery
+  state is app-owned Postgres operational data; it does not add an opt-in or local
+  preference, and it never includes account email or ID in the Telegram text.
+
+> **Release status (2026-10-07):** the production database selector is live, but the
+> matching Next.js route requires a scoped Vercel deployment before owner delivery is
+> live end-to-end. The old deployed route must not be treated as this owner-notice
+> behavior.
+
 - **Detection/render/send:** `src/lib/telegram/live-widget.ts` —
   `updateTelegramLiveWidgets()`
 - **Transport:** `sendTelegramMessage` / `editTelegramMessageText` in
@@ -67,7 +94,36 @@ Telegram's `editMessageText`, so the chat doesn't fill up with spam.
   place. If the vehicle just came back from `offline` (car was silent
   >10 min), a **new** message is sent instead of editing the old one, so
   the "car went offline" gap stays visible in the chat.
-- The inline keyboard button always deep-links to `/vehicle`.
+- The inline keyboard is built by `telegramLiveWidgetReplyMarkup`
+  (`live-widget-message.ts`): a web-app button deep-linking to `/vehicle`
+  plus a "Скрыть виджет" callback button (`lw:hide`).
+- **Hide (callback `lw:hide`, handled by `scripts/telegram-miniapp-server.py`
+  on the VPS — that Python server owns the live Telegram webhook
+  (`bot.voltflow.life/voltflow`); `src/app/api/telegram/webhook/route.ts`
+  keeps the same handlers as the Vercel mirror but is not the live path):**
+  deletes the widget message for everyone and sets the row `status='hidden'`;
+  ingest then skips that vehicle entirely until it is shown again.
+- **Show (`/start` → "Показать виджет", callback `lw:show`):** deletes the
+  user's tracked rows (and the bot's copy of each active message first) so
+  the next ingest recreates fresh widgets. This is also the recovery path
+  when the user cleared the chat history **on their side only**: the bot's
+  copy survives, `editMessageText` keeps *succeeding* on a message the user
+  can no longer see, and Telegram gives no signal — nothing automatic can
+  detect it.
+- A failed edit whose error is "message to edit not found" / "message isn't
+  accessible" falls through to send-a-new-message and re-tracks the row.
+
+### Using the widget (user-facing)
+
+1. Open the chat with the bot (@Voltflowscr_bot) and press `/start`.
+2. Tap **"Показать виджет"** — you get an alert and, once the car sends its
+   next telemetry (≤60 s with Mate connected), a fresh widget message appears
+   with state/SOC/charge info and an "Открыть VoltFlow" button.
+3. Tap **"Скрыть виджет"** on the widget to remove it and stop updates; the
+   car's telemetry keeps ingesting, only the Telegram message goes away.
+4. To bring it back, repeat steps 1-2. Also use this if you cleared the chat
+   history — the old widget becomes invisible to you but the bot keeps
+   editing its own copy, so only Show can recover it.
 
 ## State table
 
@@ -75,7 +131,7 @@ Telegram's `editMessageText`, so the chat doesn't fill up with spam.
 telegram_live_messages (
   user_id, vehicle_id (PK),
   chat_id, message_id,
-  status,       -- 'active' (only status currently written)
+  status,       -- 'active' | 'hidden' (hide button)
   updated_at
 )
 ```
@@ -84,8 +140,22 @@ telegram_live_messages (
 
 - The Edge Function ingest path (`supabase/functions/bydmate-telemetry/`)
   does **not** update the live widget — only the Next.js route handler does.
-- Widget copy (labels, emoji, map link format) is Russian-only; there is no
-  i18n pass on this surface yet.
+- Widget body and button labels are localized (`telegramLiveWidget.*` in
+  `src/lib/i18n.ts`); the webhook's callback answers and `/start` reply are
+  Russian-only strings.
+- Callback buttons only reach the bot if the webhook is registered with
+  `callback_query` in `allowed_updates` — after deploying the handler, re-run
+  `npm run telegram:configure -- --webhook`.
+- `TELEGRAM_WEBHOOK_SECRET` must be set on **both** sides and equal: it is
+  passed to `setWebhook` by the configure script (from the local `.env`) and
+  enforced by the Python server (`/opt/voltflow-telegram/.env` on the VPS).
+  A re-registration *without* it silently drops the secret Telegram attaches;
+  a server without it accepts forged webhook POSTs.
+- Ops: the Python webhook service deploys from this repo file — `scp` +
+  `systemctl restart voltflow-telegram` (helper: git-ignored
+  `local-scripts/bot-vps.sh`, modes `inspect` / `telegram-info` /
+  `telegram-deploy`). The Vercel Next.js deploy is separate and does not
+  update the bot server.
 
 ## 12V auxiliary-battery health alerts
 
@@ -115,6 +185,9 @@ and schema does not activate a production job automatically.
 | File | Role |
 |---|---|
 | `src/lib/telegram/live-widget.ts` | State detection, HTML rendering, send/edit + throttle |
+| `src/lib/telegram/live-widget-message.ts` | Widget copy + reply-keyboard builder (hide button) |
+| `scripts/telegram-miniapp-server.py` | **Live Telegram webhook** (VPS): `/start` reply, `lw:hide`/`lw:show` callbacks, group events |
+| `src/app/api/telegram/webhook/route.ts` | Vercel mirror of the same webhook handlers (not the live path) |
 | `src/lib/push/live-status-notifications.ts` | Live-status phase, throttle, and payloads |
 | `src/lib/push/web-push.ts` | Delivery with non-Apple endpoint filtering |
 | `src/lib/telegram/bot-send.ts` | `sendTelegramMessage`, `editTelegramMessageText` |

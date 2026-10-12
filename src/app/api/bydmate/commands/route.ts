@@ -1,5 +1,6 @@
 import { resolveVoltflowMateApiKeyProfile } from "@/lib/voltflowmate/api-auth";
 import { liveFastSecondsFor } from "@/lib/voltflowmate/live-fast";
+import { offlineBufferGrantField } from "@/lib/voltflowmate/offline-buffer";
 import { createServiceClient } from "@/lib/supabase/service";
 import { fetchVehicleBatteryCapacityKwh } from "@/lib/voltflowmate/vehicle-battery-capacity";
 import { resolveVehicleKey } from "@/lib/voltflowmate/vehicle-identity";
@@ -95,9 +96,15 @@ export async function GET(request: Request) {
     const liveFastSeconds = liveFastSecondsFor(profile, vehicleId);
     // Car-profile capacity for the APK's on-car AI Range (see vehicle-battery-capacity.ts).
     // One indexed read per poll; omitted when the car cannot be resolved. Older APKs ignore it.
-    const batteryCapacityKwh = await fetchVehicleBatteryCapacityKwh(supabase, profile.id, vehicleId)
-      .catch(() => null);
-    const capacityField = batteryCapacityKwh != null ? { battery_capacity_kwh: batteryCapacityKwh } : {};
+    const batteryCapacityKwh = await fetchVehicleBatteryCapacityKwh(
+      supabase,
+      profile.id,
+      vehicleId,
+    ).catch(() => null);
+    const capacityField =
+      batteryCapacityKwh != null
+        ? { battery_capacity_kwh: batteryCapacityKwh }
+        : {};
     if (REMOTE_COMMANDS_DISABLED) {
       return Response.json({
         ok: true,
@@ -105,6 +112,7 @@ export async function GET(request: Request) {
         commands_enabled: !REMOTE_COMMANDS_DISABLED,
         live_fast_seconds: liveFastSeconds,
         poll_after_seconds: POLL_AFTER_SECONDS,
+        ...offlineBufferGrantField(),
         ...capacityField,
       });
     }
@@ -149,6 +157,7 @@ export async function GET(request: Request) {
         commands_enabled: !REMOTE_COMMANDS_DISABLED,
         live_fast_seconds: liveFastSeconds,
         poll_after_seconds: POLL_AFTER_SECONDS,
+        ...offlineBufferGrantField(),
         ...capacityField,
       });
     }
@@ -183,6 +192,7 @@ export async function GET(request: Request) {
       commands_enabled: !REMOTE_COMMANDS_DISABLED,
       live_fast_seconds: liveFastSeconds,
       poll_after_seconds: ACTIVE_POLL_AFTER_SECONDS,
+      ...offlineBufferGrantField(),
       ...capacityField,
     });
   } catch {

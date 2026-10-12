@@ -14,6 +14,7 @@ export function useVehicleRangeEstimate({
   baseSnapshot,
   scopedVehicleId,
   batteryCapacityKwh,
+  reserveSocPercent,
   recentTripsOverride,
   enabled = true,
   fallbackSoc,
@@ -21,6 +22,7 @@ export function useVehicleRangeEstimate({
   baseSnapshot: VoltflowMateLiveSnapshotRow | null;
   scopedVehicleId: string | null;
   batteryCapacityKwh?: number | null;
+  reserveSocPercent?: number | null;
   recentTripsOverride?: VoltflowMateTripRow[] | null;
   enabled?: boolean;
   fallbackSoc?: number | null;
@@ -36,12 +38,16 @@ export function useVehicleRangeEstimate({
 
   return useMemo(() => {
     if (baseSnapshot) {
-      return estimateVehicleRangeKm(baseSnapshot, recentTrips, { batteryCapacityKwh });
+      return estimateVehicleRangeKm(baseSnapshot, recentTrips, {
+        batteryCapacityKwh,
+        reserveSocPercent,
+      });
     }
     return estimateRangeFromSoc({
       soc: fallbackSoc,
       batteryCapacityKwh,
       recentTrips,
+      reserveSocPercent,
     });
-  }, [baseSnapshot, recentTrips, fallbackSoc, batteryCapacityKwh]);
+  }, [baseSnapshot, recentTrips, fallbackSoc, batteryCapacityKwh, reserveSocPercent]);
 }

@@ -1,5 +1,1510 @@
 # Backlog — proposed plans awaiting go-ahead
 
+## Telemetry-offline owner notice — Vercel deployment pending
+
+The database phase is applied: only linked owners' `low_24h_count` alarms can enqueue,
+and the admin digest is unscheduled. The matching Next.js route and user-facing message
+are built and focused tests pass, but they are not on Vercel. This shared worktree has
+unrelated uncommitted changes and no local Vercel project link, so deploying it would
+publish other work too. Until a clean, explicitly scoped application deployment is made,
+the existing production route still targets admins if a linked owner triggers an alarm.
+
+**Required release step:** deploy the owner-notice route from a clean checkout containing
+only this change, then verify a real linked-owner low-count alarm's recipient without
+sending a test notification to an unrelated user.
+
+---
+
+## Admin `/admin/users` is slow (58–80 s) — IN PROGRESS 2026-10-07 (owner: "add to plan and start")
+
+### Problem (read-only prod measurements, 2026-10-07)
+
+`admin_users_user_metrics(20 ids)` takes **58–80 s**: it `count(*)`s `bydmate_telemetry_samples`
+(3.5 M rows, 5 GB; 1.8 M in the last 30 d) for 7 d / 30 d. The planner picks a Seq Scan reading
+~384 k buffers every call (`shared_buffers` = 128 MB, so nothing stays cached); the telemetry
+CTE alone is ~18 s. Other RPCs are cheap (`dashboard_stats` 0.4 s, `activity_filter_ids` 0.16 s,
+`attention_queue` 13 ms, trips CTE 78 ms). The API route also re-runs stats + attention on every
+infinite-scroll page, runs `loadAllAdminIds` / filters / profiles serially, and keeps a dead
+`premium_until` fallback and a constant-false `negateLastSeen`.
+
+### Options
+
+- **A. Daily rollup of telemetry counts (chosen).** `admin_user_activity_daily(user_id, day,
+  telemetry_count)` + `admin_user_activity_days_done(day)` marker. A lazy
+  `admin_users_refresh_activity_daily()` fills only missing *completed* UTC days (one ~60 k-row
+  range scan per day, advisory-locked); `admin_users_user_metrics` sums the rollup and counts
+  *today* live. Cost: seconds → milliseconds. Trade-off: 7 d / 30 d become calendar-day windows
+  (today + 6 / 29 previous UTC days) instead of rolling; no ingest hot-path change.
+- **B. Show telemetry counts only in the expanded card.** Smaller change, but keeps the
+  expensive query per click. Not chosen.
+- **C. Trim the endpoint (chosen, alongside A).** `stats` / `attention` only on `page = 1`
+  (client keeps them across later pages); run `loadAllAdminIds` + filter RPCs in parallel; drop the
+  dead `premium_until` fallback and `negateLastSeen`.
+
+### Data ownership
+
+App-owned operational counters, derived from telemetry, in **Postgres**, service-role only
+(same pattern as `admin_user_lifecycle_daily`). No user-owned preference data.
+
+### Verification
+
+`EXPLAIN ANALYZE` of the new metrics RPC on prod (target < 1 s), `has_function_privilege('anon', …)`
+on every new function, `npm run lint`, focused tests, `npm run build`.
+
+---
+
+## SECURITY: VPS hardening after the 2026-10-07 audit — IN PROGRESS (owner approved "close all ports and apply good security")
+
+Audit (host `vmi3078244`, read-only, 2026-10-07): **30,657 failed SSH logins in 24 h**,
+`PasswordAuthentication yes`, `PermitRootLogin yes`, `X11Forwarding yes`, fail2ban inactive;
+`ufw` inactive and `DOCKER-USER` empty; public unauthenticated Loki `3100`, Prometheus
+`9090`, node_exporter `9100`, cAdvisor `8088`, blackbox `9115`, plus Kong `8000`/`8443`
+(nginx proxies `supabase.*` to `127.0.0.1:8000`, so only localhost needs them; nothing in the
+repo uses them directly); `reboot-required` pending; 4,646 zombie processes (3,819 under a
+`python` parent, 794 `node`, 29 `edge-runtime`). Prometheus scrapes by container name, so
+binding monitoring ports to `127.0.0.1` is safe; its 3 `vmi3318627...` targets are the
+separate Nextcloud host. Must stay public: `22`, `80`, `443`, pooler `5432`/`6543` (Vercel has
+no fixed IP), the VPN UDP ports (another tenant). Steps, each confirmed and verified
+separately: A fail2ban + SSH key-only (keep one session open; test a second login first);
+B bind monitoring ports to `127.0.0.1`; C bind Kong `8000`/`8443` to `127.0.0.1`; D find the
+zombie parents; E planned reboot in a quiet window. Not doing: key rotation (declined), changes
+to the VPN or other tenants' services.
+
+> **Status 2026-10-07:** A, B, C **done and verified from outside** (see CHANGELOG). **D open,
+> low priority:** zombies are under `f1-news-bot-f1-news-main-1` (3,819, separate project),
+> `supabase-meta` (794) and `supabase-edge-functions` (29) — long-running processes not reaping
+> exited children, likely healthchecks; fix is `init: true` per service. Cost is a process-table
+> slot each (~50/day), not an emergency. **E open:** a kernel update awaits a reboot, which
+> restarts every service on the shared host — pick a quiet window; first list containers without
+> a restart policy. Also open: add a second SSH key / keep the Contabo VNC console as the only
+> fallback (single key in `authorized_keys`); `grafana/grafana:latest` and other `latest` tags are
+> unpinned.
+
+## SECURITY: Kong Admin API (port 8001) was public — contain, then rotate Supabase keys — STEP 1 DONE 2026-10-07, STEP 2 DECLINED
+
+> **Status 2026-10-07:** Step 1 applied and verified (`8001` bound to `127.0.0.1`; from the
+> internet `:8001` no longer answers, REST/auth still return 401 as expected). **Step 2 (key
+> rotation) was declined by the owner: "do not change keys".** Residual risk, accepted: the
+> `anon` and `service_role` keys were readable by anyone for ≥79 days and have not been
+> changed, so a copy taken earlier still works. Revisit if there is any sign of misuse
+> (unexpected rows, new users, traffic from unknown IPs). Compose backup:
+> `/opt/supabase/docker-compose.yml.bak.*`.
+
+### Problem
+
+`/opt/supabase/docker-compose.yml` publishes Kong's Admin API (`- 8001:8001/tcp`, with
+`KONG_ADMIN_LISTEN: 0.0.0.0:8001`) on every interface with no authentication. Verified
+2026-10-07 from the internet: `GET :8001/` → 200 (`Server: kong/3.9.1`,
+`X-Kong-Admin-Latency`). On the host, `GET /key-auths` returned **4 credentials**, i.e. the
+`anon` and `service_role` API keys (and possibly others) were readable by anyone. The compose
+file was last modified 2026-07-20 with the mapping already present, so exposure is **at least
+79 days**. `service_role` bypasses RLS: full read/write of all user data. The Kong admin
+access log is not in `docker logs` (our own probes did not appear), so past access **cannot be
+ruled out**.
+
+### Step 1 — contain (immediate, small, reversible)
+
+Change `- 8001:8001/tcp` → `- 127.0.0.1:8001:8001/tcp` and recreate only Kong
+(`docker compose up -d kong`, ~5 s API blip). Prometheus's `kong` job must scrape over the
+Docker network (`supabase-kong:8001`), not the public address — verify before applying.
+
+### Step 2 — rotate (needs explicit go-ahead)
+
+1. **Rotate `JWT_SECRET`, `ANON_KEY`, `SERVICE_ROLE_KEY` and the Studio dashboard password
+   (recommended).** Only a new `JWT_SECRET` invalidates already-leaked signed keys. Update
+   `/opt/supabase/.env`, recreate GoTrue/PostgREST/Realtime/Storage/Kong/Studio, then every
+   client: Vercel env (`NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`),
+   `.env.local`, `/etc/voltflow-watchdog.env` (anon key), the Telegram Mini App server, any
+   edge-function env, and a PWA rebuild/redeploy (anon key is baked into the bundle).
+   Cost: a coordinated cutover with brief API errors; clients holding old access tokens
+   must refresh. Grep the repo and hosts for every key use before starting.
+2. **Do not rotate; add monitoring.** Rejected: cannot prove no access, and the impact of a
+   leaked `service_role` is total.
+
+### Data ownership
+
+Operational secrets, app-owned: `/opt/supabase/.env` on the VPS and the Vercel project env.
+No user-facing data model; nothing in Postgres or localStorage.
+
+### Recommendation
+
+Step 1 now; Step 2 option 1 after a dependency inventory, in a quiet window.
+
+## Self-hosted Supabase outage alarm (PostgREST wedge) — PARTLY BUILT 2026-10-07
+
+> **Built:** the host cron watchdog (alert + auto-restart) and Grafana rules
+> `sb-pgrst-timeouts` / `sb-pgrst-down`, logged in CHANGELOG.md.
+> **Dropped:** compose restart policy (does not act on an unhealthy-but-running container).
+> **Still proposed:** external uptime service (option 3, catches a dead VPS); retire or
+> retarget the useless `sb-pgrst-pool` rule; find the root cause of the wedge; stop
+> exposing Grafana on `0.0.0.0:3000` over plain HTTP (bind to 127.0.0.1 / TLS proxy).
+>
+> **Port exposure (found 2026-10-07, `/opt/monitoring/docker-compose.yml`, `ufw` inactive):**
+> `grafana` publishes `3000:3000` and `loki` publishes `3100:3100` on all interfaces; Loki
+> has no authentication. Plan: (a) Grafana → `127.0.0.1:3000:3000`, reach it via
+> `ssh -N -L 3300:localhost:3000 contabo` — **approved 2026-10-07**; (b) Loki → same
+> `127.0.0.1` bind **only after** confirming promtail reaches it over the Docker network
+> (check `promtail` client URL) — awaiting confirmation; (c) list every other published
+> port on the host (`docker ps --format '{{.Names}} {{.Ports}}'`) and review each. Note
+> `grafana/grafana:latest` is unpinned.
+>
+> **Root-cause lead (2026-10-07):** host, DB, cron, role limits and schema reloads are ruled
+> out (see `docs/OPS_LOCAL.md`). **Root cause still unknown.** `pgrst_db_pool_available`
+> exceeded `pgrst_db_pool_max` by 13–16 for 10+ days before the outage with no failures, so it
+> is a metrics artifact (likely PostgREST #4622), not an early warning — an alert on it was
+> considered and rejected (permanent noise). Next, if wanted: (1) read PostgREST issues
+> #4622 and #4614 and decide whether to upgrade from 14.12 (newest reported is 16.4,
+> 2026-09-24; a 14→16 jump needs a staging test and rollback); (2) consider a scheduled
+> `supabase-rest` restart (e.g. weekly) until the cause is known; (3) a thin alert on 5xx
+> rate from Kong for `/rest/v1/` as a second, independent signal.
+
+### Problem
+
+2026-10-07: every `/rest/v1/*` call returned `PGRST003 Timed out acquiring connection
+from connection pool` while Postgres was healthy (34/100 connections). `supabase-rest`
+had been up 3 months and was `unhealthy`; its logs looped on "Failed to load the schema
+cache". `docker restart supabase-rest` fixed it at once. Nothing alerted: the existing
+Grafana rules cover only GoTrue 5xx (`sb-auth-5xx*`, see `docs/OPS_LOCAL.md` →
+Monitoring). Start of outage is **not proven**: telemetry ingest fell to 31 rows at
+2026-10-06 21:00 UTC and resumed 2026-10-07 05:00 UTC after the restart, but the car is
+also silent overnight on 10-05, so the data cannot separate "outage" from "car off".
+Root cause of the wedge is unknown.
+
+### Options
+
+1. **Extend the existing Grafana/Prometheus alerts (recommended).** Add rules for
+   (a) `supabase-rest` container health != healthy for 2 min, (b) PostgREST 5xx rate,
+   (c) an external HTTP probe of `https://supabase.voltflow.life/rest/v1/` expecting 401
+   (a 5xx or timeout fires). Route to the existing Telegram admin contact point. Reuses
+   what is already running; no new service.
+2. **Self-heal: autoheal sidecar / restart-on-unhealthy.** Restarts a wedged
+   `supabase-rest` automatically. Shortens the outage from hours to ~1 min but can
+   mask the cause and loop; ship only *with* option 1, alert on every restart.
+3. **External uptime service (UptimeRobot etc.).** Catches a whole-VPS outage that
+   in-box Grafana cannot. Cheap complement, not a replacement.
+4. **App-side check** (a cron route pinging PostgREST). Rejected: runs on Vercel,
+   spends invocations, and dies with the same dependency.
+
+### Data ownership
+
+No user-facing data model: operational config only, app-owned, lives on the VPS
+(Grafana/compose) and, for option 3, a third-party account. No Postgres or
+localStorage storage.
+
+### Caveats
+
+The VPS is shared (Contabo is multi-tenant); a restart policy or probe change touches
+the shared host, so it needs your confirmation per step. Agent SSH to the host is
+currently denied by the permission classifier, so host changes would be yours to run
+unless you grant it.
+
+### Recommendation
+
+Options 1 + 2, with 3 as a later add-on.
+
+## Odometer-scale trip distances (`bydmate_trips.distance_km`) — STAGE 1 (grader) BUILT 2026-10-07; stages 2–3 and other consumers PROPOSED
+
+> **Status 2026-10-07:** `isPlausibleTripDistance` (`trip-distance-plausibility.ts`, cap 1,500 km or
+> 250 km/h) is built and used by `gradeRangePredictionCycles`, which now skips any cycle containing
+> an implausible trip; `vehicle-analytics.ts` passes `ended_at ?? last_device_time` so open trips
+> are checked too. Replayed on the user's real cycles: 1 of 66 dropped (the 44,269 km one), max
+> ratio 188 → 1.03, median 0.597 → 0.593 (factor moves ≤ 0.01). **Not yet covered** — these still
+> read `distance_km` unguarded and need the same check at a central trip-loading point (to be
+> planned, not blind-patched): `range-estimate.ts` (AI Range consumption), `hero-drive-metrics.ts`,
+> `day-insights.ts`, `history-day-summary.ts`, `analytics-day-view.tsx`, `history-view.tsx`,
+> `dashboard-view.tsx`, `dashboard-deferred-summaries.tsx`, `trip-energy.ts`, `route-insights.ts`,
+> `api/vehicle/export/route.ts`. The open phantom trip (27,583 km) may currently affect any of
+> these for its owner until it closes.
+
+### Research findings (read-only prod checks, 2026-10-07)
+
+- **Symptom:** trips whose `distance_km` is the car's odometer, not a per-trip delta. Example
+  `a62052e8` (2026-08-01): reported 44,122.9 km, odometer that day ≈ 44,126, true trip 2.4 km
+  (odometer delta = trip-meter delta in the raw samples). Signature: `soc_start = -1`,
+  `trip_meter_baseline_km = 0`, `client_trip = true`.
+- **Root cause (server side, already documented in migration `20260917120000`):**
+  `bydmate_apply_client_trip` writes `distance_km` straight from the Mate APK's cumulative trip
+  block (`coalesce(p_block->>'distance_km', distance_km)`) with no baseline recomputation. Until
+  2026-09-17 it also never ran `bydmate_discard_trip_if_junk`. The APK sends odometer-scale values
+  when its local trip state was never initialised (the `soc_start = -1` sentinel suggests no first
+  sample was captured). That client bug is **outside this repo** and is not fixed by anything here.
+- **Prevalence (implied speed > 250 km/h, an unambiguous cut):**
+
+  | | closed, before 09-17 fix | closed, after fix | open now |
+  |---|---|---|---|
+  | `client_trip` | 13 rows, 7 users, 196,325 km total (2026-08-01 … 09-16) | **0** | 1 (`ee4a6e67`, 27,583 km, started 10-06 15:10) |
+  | legacy/telemetry | 8 rows, 221 km total (2026-03-29 … 08-26) | 0 | 0 |
+
+  The 09-17 guard works for closed trips. Two gaps remain: (1) the 21 historical rows persist
+  (the filter only fires on new closes); (2) a trip that is **open** is not filtered until it
+  closes, so its phantom distance is visible to every consumer in the meantime.
+- **Recoverable?** Where raw samples exist, `odometer` delta equals the trip-meter delta
+  (a62052e8 → 2.4 km, ca8ba735 → 6.2, 368c70ec → 6.3, ee4a6e67 → 8.6). Four trips of one account
+  (`sed`, 08-21 … 09-02, ~25,000 km each) have **no** samples in their `device_time` window, so
+  they cannot be repaired this way. Several small legacy rows (3–32 km) also have no samples.
+- **Consumers hurt:** every sum over `distance_km` (the day/period "Пробег" totals; the
+  range-trust grader, where one cycle read 44,269 km and a ratio of 188, absorbed only because the
+  factor is a median). Real trips top out at 286 km among ≈ 17,700 healthy rows, so a plausibility
+  cut separates cleanly.
+- **Do not bulk-delete with the deployed Rule C.** When `max_speed_kmh` is null its threshold
+  falls back to 80 km/h and matches legitimate highway averages (e.g. 90.6 km / 4025 s = 81 km/h).
+  Use implied speed > 250 km/h (or review each row) for any cleanup.
+
+### Stage 1b plan: central read-side guard — BUILT 2026-10-07
+
+> **Built as planned** (tests 612/615 with the same 3 pre-existing failures, `tsc` clean, lint
+> 0 errors; `npm run build` deliberately skipped because it shares `.next` with the running dev
+> server). `sanitizeTripDistances` + `cleanTrips` added; `cleanTrips` replaces `dedupeTripsBySource`
+> in the two trip hooks, `vehicle-live-view`, `hero-drive-metrics`, `history-day-summary`,
+> `telemetry-buckets`, `range-prediction-capture`, `telegram/live-widget` and the period analytics in
+> `vehicle-analytics.ts`; `sanitizeTripDistances` is applied directly in `route-insights.ts` (2 spots)
+> and both list responses of `api/vehicle/trips/route.ts`. **Deliberately unchanged:** the grader's
+> feed in `vehicle-analytics.ts` (dedupe only, so a bad cycle is skipped, not under-counted),
+> `api/vehicle/export/route.ts` (raw user data), `telemetry-history.ts` (reads timestamps only).
+> `trip-filter` keeps a real drive whose distance was nulled (test added).
+> **Real-data finding:** the open phantom trip from 10-06 (`ee4a6e67`) was discarded by the
+> server filter when it closed, and a *new* one (27,606 km, open) appeared the next morning, so
+> this recurs on every drive of that account while the trip is open — the exact window this
+> stage covers. Replayed on that live row: `distance_km` → `null`; a healthy 286 km trip is
+> unchanged. Not traced end to end: how `analytics-day-view` / `vehicle-telemetry-visualizations`
+> receive trips (they use the hooks/APIs above).
+>
+> The original plan follows.
+
+**Research (grep of `src`, 2026-10-07).** There are 19 `from("bydmate_trips")` sites in ~12 files, so
+there is no single DB-read choke point. But `dedupeTripsBySource` (`hero-drive-metrics.ts`,
+"one drive, one row") is already the shared cleanup step and is called by: both trip hooks in
+`use-voltflowmate-trips-query.ts` (which feed `vehicle-live-view`, `dashboard-view`,
+`history-view`, `use-vehicle-range-estimate` → `range-estimate.ts`), `hero-drive-metrics`,
+`history-day-summary`, `vehicle-analytics`, `telemetry-buckets`, `range-prediction-capture`,
+`telegram/live-widget`. **Not** behind it: `route-insights.ts` (2 queries),
+`telemetry-history.ts`, `api/vehicle/trips/route.ts` (3), `api/vehicle/export/route.ts`, a dev page.
+`day-insights.ts` and `trip-energy.ts` were not opened; verify how they receive trips while building.
+
+**Proposal.**
+1. Add pure `sanitizeTripDistances(trips)` to `trip-distance-plausibility.ts`: returns each trip
+   unchanged unless `isPlausibleTripDistance` fails (using `ended_at ?? last_device_time`), in which
+   case the copy has `distance_km: null`. **Null, not drop:** the drive still appears with its
+   time/route, but no sum, consumption or range figure can use the bogus distance. Never mutates the
+   input; rows in Postgres are untouched.
+2. Add one exported wrapper (working name `cleanTrips` = `dedupeTripsBySource` then
+   `sanitizeTripDistances`) and switch the ~10 `dedupeTripsBySource` call sites to it. Preferred over
+   hiding the sanitising inside the function named "dedupe" (surprising coupling), at the price of ~10
+   mechanical one-line edits.
+3. Apply `sanitizeTripDistances` directly in the sites that bypass dedupe and drive a visible total or
+   estimate: `route-insights.ts`, `telemetry-history.ts`, and the list responses of
+   `api/vehicle/trips/route.ts`. Leave `api/vehicle/export/route.ts` raw (it is the user's own data
+   export), and the dev page alone.
+4. Tests: sanitizer (nulls only the implausible, keeps 90.6 km / 4025 s and 286 km, does not mutate,
+   handles open trips via `last_device_time`), the wrapper (dedupe + sanitize together), and one
+   consumer test proving the phantom does not change `range-estimate` consumption and the day
+   distance sum.
+
+**Why this is not enough alone:** it hides the symptom at read time only. Stage 2 (server write-time
+guard) is what stops new bad values being stored, and stage 3 cleans the 21 old rows; this stage is
+the safety net that makes both non-urgent and covers the open trip meanwhile.
+
+**Risks / open points.**
+- A null `distance_km` must not make `trip-filter.ts` treat a real drive as a stationary junk trip
+  (it falls back to speed/track evidence); confirm with a test.
+- Consumers that assume `distance_km` is non-null for lists (formatting) need a "—" fallback;
+  check each while building.
+- Cap constants stay in one place (`MAX_PLAUSIBLE_TRIP_KM` 1,500, `MAX_PLAUSIBLE_TRIP_SPEED_KMH` 250).
+
+**Data ownership:** no new data model; derived at read time from existing app-owned rows in
+Postgres, scoped per user by RLS. Nothing stored client-side, nothing sent to a third party.
+
+**Verification:** `npm run test`, `npm run lint`, `npm run build`; replay on the user's real
+trips: the open 27,583 km trip must show a null distance and not move today's total or AI Range.
+
+### Rule C on the client path (`bydmate_discard_trip_if_junk`) — BUILT AND APPLIED 2026-10-07 (option A)
+
+> **Applied:** `20261007160000_bydmate_discard_junk_rule_c_skip_client_trips.sql` — Rule C now requires
+> `not coalesce(v_trip.client_trip, false)`; Rules A/B, the legacy path, signature, `SECURITY DEFINER`,
+> `search_path` and grants are unchanged (live check: `anon`/`authenticated` denied). Rehearsed in a
+> rolled-back transaction first: client 8.6 km/122 s, 14.3 km/84 s and 6.6 km/32 s trips **kept**; the
+> legacy June case (4.5 km/16 s/max 38) **still deleted**; Rule A blip and Rule B maneuver on the client
+> path **still deleted**; a healthy client trip kept; end to end, the closing block that used to delete the
+> 8.6 and 14.3 km trips now leaves them intact (8.6 / 14.3 km). **Not yet seen on a real drive** (none has
+> closed since). Trips already lost since 2026-09-17 (~2–3) cannot be recovered.
+>
+> The original plan follows.
+
+**Evidence.** In the rolled-back rehearsal of the cap-only guard, a closing block for a real trip
+(8.6 km, recorded duration 122 s, energy agrees) was **deleted** by `bydmate_discard_trip_if_junk`
+(`row_kept = 0`), and a second (14.3 km / 84 s) likewise. Rule C reads distance ÷ recorded duration
+> max(max_speed × 1.5, 80 km/h) as an impossible, inherited-meter phantom. That reasoning fits the
+legacy telemetry path (distance from the car's trip meter, June 2026 "4.5 km / 16 s" case) but not client
+trips, whose distance comes from odometer baselines and whose **duration is sometimes truncated**. Rule C
+has been wired into the client path since `20260917120000`: of ~1,184 client trips since then, ~0.23 %
+(≈ 2–3) were probably real trips deleted this way; unrecoverable (audit and track rows cascade).
+
+**Options.**
+1. **A (recommended): skip Rule C for `client_trip` rows.** `bydmate_discard_trip_if_junk` keeps Rules A and
+   B for everyone; Rule C only when `client_trip` is not true. Odometer phantoms on the client path are
+   already stopped by the 1,500 km cap in `bydmate_apply_client_trip`.
+2. B: keep Rule C for client trips but require the row's own energy to disagree with its distance
+   (net energy ÷ consumption). More precise, more code, and the energy fields can themselves be missing.
+3. C: raise the Rule C threshold. Does not fix a truncated duration (122 s for 8.6 km still reads as 254 km/h).
+4. D: leave as is and accept ~0.23 % real-trip loss.
+
+**Proposal (A).** One idempotent migration replacing `bydmate_discard_trip_if_junk(uuid)` with the live
+body (read it with `pg_get_functiondef` first; it also runs on the legacy telemetry Close path, which must
+be unchanged) plus `and not coalesce(v_trip.client_trip, false)` on Rule C; same `SECURITY DEFINER`,
+`search_path`, and grants (`postgres`, `service_role` only). Update `docs/TRIPS.md` (Rule C table and the
+"Known problem" note). Tests are SQL: rehearse in a rolled-back transaction that (i) an 8.6 km / 122 s client
+trip and a 14.3 km / 84 s one are **kept**, (ii) a legacy (non-client) 4.5 km / 16 s / max 38 trip is still
+**deleted**, (iii) Rules A and B still delete a parking blip on both paths, (iv) privileges unchanged.
+
+**Risks.** A genuinely junk client trip that Rule C used to drop would now survive. Counter-evidence: every
+client trip flagged by the speed test alone over 2,650 trips was real, and Rules A/B still remove parking
+blips. The function runs on every trip close, so a mistake affects all users; rollback is re-applying the
+current body (save it first).
+
+**Data ownership:** no new data model; changes only which existing app-owned trip rows are kept.
+
+**Open question.** Apply option A, or prefer the more conservative B?
+
+---
+
+### Stage 3 plan: historical cleanup — BUILT AND APPLIED 2026-10-07 (revised scope, 7 updates, no deletes)
+
+> **Applied:** `20261007150000_bydmate_trip_distance_plausible_cap_only.sql` (SQL guard is now the 1,500 km
+> cap only; same signature) and `20261007151000_bydmate_trips_repair_odometer_scale_distance.sql`
+> (explicit ids, each also requires `distance_km > 1500`, so it can never touch a healthy row). Result on
+> prod: `a62052e8` → 2.40 km and `ca8ba735` → 6.20 km (odometer delta; GPS agreed within 3–7 %); five real
+> drives `3c5adf11 b9135a90 05796b26 a0fa14a1 368c70ec` → `distance_km = NULL` (kept, user decision); **no
+> row above 1,500 km remains**; the 6 speed-only client rows and the 8 energydata rows are untouched
+> (distances right). Backup of the 7 rows' previous values:
+> `~/voltflow-backups/stage3-bydmate_trips-before-20261007.csv` (outside the repo, mode 600; restore
+> `distance_km` from it to roll back). Rehearsed first in a rolled-back transaction (second run `UPDATE 0`
+> twice = idempotent; apply-function cases for repair with samples, `NULL` without, open phantom, later
+> phantom not overwriting, healthy passthrough, privileges). TypeScript guard made cap-only to match
+> (`trip-distance-plausibility.ts`, grader, tests; `tsc` clean, suite 613/616 with the same 3 unrelated
+> failures). **Not fixed here:** Rule C still deletes truncated-duration real client trips at close (plan
+> above).
+>
+> The corrected plan and the superseded one follow.
+
+### Stage 3 plan (corrected, then superseded): historical cleanup of the 21 stored rows — PAUSED, PLAN CORRECTED 2026-10-07
+
+> **Correction (2026-10-07, found while building; nothing was written to prod for stage 3).**
+> The table below classified six `client_trip` rows (groups B/C and `7ccbba5d`) as junk or as
+> repairable. An energy cross-check (net energy ÷ stored consumption) shows their **distances are
+> real**: 8.6 km stored vs 8.6 km from energy (`7ccbba5d`), 7.4 vs 7.1, 3.3 vs 3.0, 8.4 vs 8.2,
+> 6.6 vs 6.4, 14.3 vs 13.4 — within ~10 %. Only their recorded **durations** (15–122 s) are wrong, so
+> the "impossible speed" test flagged real trips. By contrast the **7 rows above 1,500 km** are true
+> odometer phantoms (energy implies 2–13 km). Counts on 2,650 closed client trips (08-01…09-17): 7 flagged
+> by the 1,500 km cap (all genuine), **6 flagged by the speed rule alone (all false positives)**.
+> Consequences, none yet corrected:
+> - **Stage 2 (applied) shares the flaw:** for a closing block with a truncated duration and a correct
+>   distance it would call the distance implausible and replace it by an odometer delta over the *truncated*
+>   window (e.g. 8.6 km → 0.8 km, as `from_samples` returns for `7ccbba5d`) or `NULL`. No client trip has
+>   closed since the apply (07:45 UTC), so nothing has been damaged yet. At ~0.23 % of client trips this is
+>   ~1 in 430.
+> - **The server junk filter (Rule C) on the client path, live since 2026-09-17**, deletes the same real
+>   trips at close. At that rate ~2–3 of the 1,184 client trips since 09-17 were probably deleted
+>   (unrecoverable: the audit rows cascade away with them).
+> - **Stage 1b/1 TS check** nulls the distance of those 6 rows and the 8 `byd_energydata` rows in every reader.
+> - Fleet check: 18 vehicles, lowest odometer 5,156 km, so the **1,500 km cap alone catches every
+>   odometer-scale phantom today** (any car under 1,500 km would need an extra test).
+>
+> **Revised proposal (needs the user's go-ahead; user decisions so far: group D keep with `NULL`; the
+> "group C delete" decision was based on the wrong classification and is withdrawn):**
+> 1. **Drop the speed rule from the distance guard**, keep only the 1,500 km cap: TS
+>    (`trip-distance-plausibility.ts` + tests + the grader) and SQL (`bydmate_trip_distance_plausible`,
+>    new migration; `bydmate_apply_client_trip` itself is unchanged). This also resolves the energydata
+>    read-side issue.
+> 2. **Stage 3 shrinks to 7 row updates, no deletes:** repair `a62052e8` → 2.4 km and `ca8ba735` → 6.2 km
+>    (odometer delta, GPS agrees within 3–7 %); set `distance_km = NULL` for the five odometer-scale
+>    real drives (`3c5adf11 b9135a90 05796b26 a0fa14a1 368c70ec`). The six speed-only client rows and the
+>    eight energydata rows are **left untouched** (their distances are right).
+> 3. **Rule C on the client path** (`bydmate_discard_trip_if_junk`) needs its own decision: it deletes real
+>    trips with truncated durations. Options: skip Rule C for `client_trip` rows, or require agreement with the
+>    row's own energy. Not in scope until you choose.
+> 4. Backup before any write, idempotent migration with an explicit id list, rollback from the backup.
+>
+> The original (superseded) plan follows.
+
+**Research (read-only prod checks, 2026-10-07, after stage 2 was applied).** 21 closed rows fail
+`bydmate_trip_distance_plausible` (0 open; none since 09-17; stage 2 stops new ones). They are **not**
+one kind of problem, and a blanket "delete the unrepairable" would destroy real data:
+
+| Group | Rows | What they are | Evidence |
+|---|---|---|---|
+| **E** `byd_energydata` | 8 (`fefc0455 43d96913 3b030689 1e6c5976 8463d67a ef237a77 e5df435c ce79eed0`) | The car's own trip summaries. Distances 4–96 km look like real trips; the **duration** is wrong (34–199 s). Their `avg_speed_kmh` is just distance ÷ duration, so "impossible speed" is a timestamp artefact. 8 of 12,373 energydata rows; the junk filter never ran on them (aggregate-only, no samples/GPS). | No samples within ±20 min of any, so the distances can be neither confirmed nor refuted. `ef237a77` (95.9 km in 47 s, 5 neighbouring trips) deserves a human look. |
+| **A** repairable from samples | 3 (`a62052e8 ca8ba735 7ccbba5d`) | `client_trip`, odometer-scale or inflated distance | Odometer delta 2.4 / 6.2 / 0.8 km; GPS path 2.23 / 6.00 / 0.44 (within 3–7 % on the two longer trips, poor on the short one) |
+| **B** zero-distance hop | 1 (`434bb113`) | 15 s, 0.0 km by both odometer and GPS | junk (Rules A/B class) |
+| **C** short hops, inflated | 4 (`fbf011c4 c9f33eb4 9c8cb9fa c99a935e`) | 16–84 s `client_trip`s with 3–14 km stored; estimated real 0.1–0.8 km | The old "inherited trip meter" class that Rule C would have deleted at close |
+| **D** real drives, no trustworthy distance | 5 (`3c5adf11 b9135a90 05796b26 a0fa14a1`, `368c70ec`) | 5–20 min drives (avg 30–39 km/h; estimated 3–10 km each), `client_trip`, **no samples and no GPS** for four of them; `368c70ec` has samples only for its last ~7 of 15 min (both odometer and GPS say 6.2 km, a floor) | Not repairable; estimate from avg speed × duration is ±10 % at best and poor on short trips |
+
+Dependents: `bydmate_trip_track_points`, `bydmate_trip_insight_inputs`,
+`bydmate_trip_finalization_audits` all reference `bydmate_trips` with **ON DELETE CASCADE**, so a delete
+also removes route/GPS/insight data (group D: `368c70ec` has 66 track points; the four `sed` trips have none).
+
+**Proposal.**
+1. **Read-only preview** (no writes): one query printing every row with its proposed action, for you to
+   review row by row before anything is written.
+2. **Backup first:** `\copy` the 21 rows **and** their child rows (track points, insight inputs, audits) to a
+   local file **outside the repo** (it contains user ids), so every change is reversible.
+3. **One idempotent migration** (`psql -f`, repo is the only history on self-hosted) with an **explicit id
+   list** and a `where not bydmate_trip_distance_plausible(...) and source <> 'byd_energydata'` guard, so it
+   can never touch a healthy row and a re-run is a no-op:
+   - **A:** `update … set distance_km = bydmate_trip_distance_from_samples(...)` (the deployed stage-2
+     primitive; result must be non-null or the row is skipped).
+   - **B and C:** delete through `bydmate_discard_trip_if_junk` semantics (explicit `delete … where id = any(…)`).
+   - **D:** per your earlier decision, **delete**. See the open question below: this is the one group where
+     I would change my recommendation.
+   - **E:** not touched.
+4. **Code follow-up (small, TS):** `isPlausibleTripDistance` / `sanitizeTripDistances` currently null the
+   distance of those 8 energydata rows in every read path (stage 1b side effect: ~221 km of probably-real
+   trips now show no distance). For `source === 'byd_energydata'` skip the **speed** check (their timestamps
+   are unreliable) and keep only the 1,500 km cap; add tests. The SQL helper is unaffected (client trips only).
+5. **After:** 0 implausible closed rows except group E; re-run `scripts/analyze-range-trust-cycles.sql` (cycle
+   count and factor should not move materially); spot-check a day total on an affected account.
+6. **Rollback:** re-insert the deleted rows + children from the backup, and restore the repaired rows'
+   previous `distance_km` from it.
+
+**Risks.**
+- **Other users' data:** the rows belong to 7 accounts (all within the app owner's database); effect on
+  each owner is limited to a few trips disappearing from or being corrected in their lists.
+- **Deleting real drives** (group D) removes their energy/route data permanently except from the backup.
+- **Repair is not exact:** odometer delta is exact when coverage is good; the three repairs are within ~0.2 km.
+- **Idempotency vs. concurrency:** none of the 21 rows is open or being updated (all closed, none after 09-16).
+
+**Data ownership:** no new data model; one-time repair/removal of existing app-owned `bydmate_trips` rows in
+Postgres. Nothing stored client-side; nothing sent to a third party; backup stays local.
+
+**Open questions for you.**
+1. **Group D (5 real drives): delete or keep with `NULL` distance?** You said *delete* for unrepairable rows. New
+   facts: these are real 5–20 min drives (about 40 km in total), not junk, and since stage 2 the same situation
+   for **new** trips is kept with `NULL`. Deleting makes old and new inconsistent and loses their energy data;
+   keeping with `NULL` costs nothing (readers already treat `NULL` as unknown). I recommend **NULL**; delete only
+   if you prefer a clean table.
+2. **Group C (4 short hops):** delete (my recommendation, they are junk-class) or `NULL`?
+3. **Group E:** leave untouched and fix the read side (my recommendation), or also review `ef237a77` manually?
+
+### Stage 2 plan: server write-time guard — BUILT AND APPLIED TO PROD 2026-10-07
+
+> **Applied** as `supabase/migrations/20261007130000_bydmate_client_trip_distance_guard.sql`
+> (`psql -f` via the pooler; live definitions and privileges verified: `anon`/`authenticated` have no
+> execute, `service_role` does). Decisions taken on the user's behalf because they did not answer:
+> real drives with no usable odometer delta are **kept with `NULL` distance**; `soc_start = -1`
+> left out of scope. Validated first in a rolled-back transaction: 13/13 plausibility cases match the
+> TS tests; repair gives 2.4 km and 6.2 km on two traced trips; `NULL` (not a guess) for the four
+> ~25,000 km trips with no samples and for a trip whose samples start 8 min after it began; on 200
+> healthy trips 198 get a repair and 194 are within max(0.5 km, 5%) (worst 2.5 km, the 2-minute edge
+> tolerance at highway speed); open phantom → `NULL`, later plausible value stored, later phantom
+> does not overwrite it; closing + no samples keeps the row with `NULL`; plausible values pass through
+> unchanged. **Not yet seen live:** no real drive has run since the apply (the account's new trip was
+> idle, distance 0.0); confirm on the next drive that an open trip never shows the odometer.
+> `docs/TRIPS.md` updated (new "Client `distance_km` guard" section); `MIGRATIONS_AUDIT.md` is not kept
+> per migration and was left alone. Still open: stage 3 (21 historical rows), Mate app (#43).
+>
+> The original plan follows.
+
+**New evidence (read-only, today's live phantom `68dfb9ff`, 2026-10-07).**
+- `distance_km` = **27,608.0 = the car's current odometer (27,608)**, updating live, while
+  `current_trip_distance_km` (the trip meter) reads **11.6 km** — the true trip distance. So the
+  stored value is `odometer − 0`, not odometer plus anything.
+- First samples of the trip again have no `odometer_km` and no `soc` (odometer appears at 06:58:11);
+  stored `soc_start = -1`, `trip_meter_baseline_km = 0`, `client_trip = true`. Same vehicle/account
+  as the four ~25,000 km trips of 08-21 … 09-02.
+- **Correction to issue #43 / earlier hypothesis:** the Mate client code I read
+  (`TripRollupAccumulator.kt`) sends **no** `distance_km` when its first odometer is null
+  (`distanceKmOf` returns null), and the telemetry sanitizer does not null `odometer_km = 0`. So that
+  client path alone does not explain an odometer-scale value. The producer is **still unidentified**
+  (another app build or path; `bydmate_devices.app_version`/`version_code` are empty for this
+  account, so the build is unknown). Stage 2 is designed to not depend on finding it.
+- The server's own legacy path does not mix the odometer into trip distance (no public function
+  references both), and for `client_trip` rows it leaves `distance_km` to the client block
+  (`distance_km = coalesce(block, existing)`), so once a bad block lands it stays.
+- The trip's own raw samples hold the truth: odometer delta == trip-meter delta (2.4, 6.2, 6.3,
+  8.6 km on the four traced trips).
+
+**Proposal (one new idempotent migration, `psql -f`, never edit an applied one).**
+1. `bydmate_trip_distance_plausible(distance, started_at, ended_at)` — SQL twin of
+   `isPlausibleTripDistance` (> 1,500 km or implied > 250 km/h, speed check only above 1 km, unknown
+   duration → km cap only). `IMMUTABLE`. Constants duplicated from the TS helper, so both carry a
+   comment pointing at each other; SQL cannot be covered by the node tests (parity risk — see below).
+2. `bydmate_trip_distance_from_samples(user, vehicle, from, to)` — odometer max − min over the
+   trip's own samples (`device_time` window, ≥ 2 odometer samples, delta ≥ 0, result must itself be
+   plausible), else `null`. **Also the repair primitive for stage 3**, so repair and guard share one
+   definition of "true distance".
+3. Replace `bydmate_apply_client_trip` (full body, based on the live definition and migration
+   `20260917120000`): when the block's `distance_km` is implausible,
+   - **open trip** (no `ended_at` in the block): do not store it; keep the previous distance only if
+     that is plausible, else `null`. The phantom is never published, even for seconds.
+   - **closing block** (`ended_at` present): recompute with `bydmate_trip_distance_from_samples`,
+     else `null`; then run the existing `bydmate_discard_trip_if_junk` as today.
+   Real drives are therefore **kept with a correct (or unknown) distance instead of deleted by
+   Rule C**; parking blips are still dropped by Rules A/B.
+4. Grants: new functions `revoke execute … from public, anon, authenticated`, explicit grant only to
+   the role(s) `bydmate_apply_client_trip` is already granted to; verify with
+   `has_function_privilege('anon', …)`. `SECURITY DEFINER` + `set search_path = public` like the
+   existing function.
+
+**Not in this stage:** fixing `soc_start = -1` (server sentinel; Stage 1b readers already tolerate
+it), the 21 historical rows (stage 3), and the Mate app (issue #43, to be corrected with the
+new facts).
+
+**Risks.**
+- **Samples may lag the closing block** (bulk delivery), so the odometer delta could undercount;
+  mitigation: only trust it if it is plausible and ≥ the block's own track-based evidence is not
+  available, otherwise `null`. A wrong-small distance is worse than null, so a minimum sample count
+  is required; wrong cases must fail to `null`, never to a guess.
+- **SQL/TS parity:** the 1,500 km / 250 km/h constants live in two places. Mitigation: an
+  assertion query in the verification plan and a comment in both files.
+- **Hot path:** `bydmate_apply_client_trip` runs on every block. Added cost is one immutable
+  function call; the samples query runs only on an implausible closing block.
+- **Replacing a `SECURITY DEFINER` function** that ingests every client trip: a mistake breaks trip
+  ingest for all users. Rollback = re-apply the `20260917120000` definition; applied on prod only
+  after a read-only replay of the four known trips.
+
+**Data ownership:** no new data model. Server-side repair of existing app-owned
+`bydmate_trips` rows in Postgres, from the same owner's own samples. Nothing is sent to a third
+party; nothing is stored client-side.
+
+**Verification plan.**
+- Before applying: call the new `…_from_samples` read-only for the 8 traced bad trips and expect
+  2.4 / 6.2 / 6.3 / 8.6 km where samples exist, `null` where they do not (the four ~25,000 km trips).
+- Plausibility parity: `select` the SQL function over a table of cases mirroring
+  `trip-distance-plausibility.test.mjs` (44,123 km/6 min → false; 90.6 km/4025 s → true; 286 km/3 h
+  → true; 1,500 / 1,501 km).
+- After applying: privilege check; wait for the next drive of the affected account and confirm the
+  open trip shows `null`/plausible distance (not the odometer) and the closed row keeps a real distance.
+- `npm run test`, `lint` unchanged (no TS change); `docs/TRIPS.md` and `supabase/MIGRATIONS_AUDIT.md`
+  updated in the same change.
+
+**Open questions.**
+- Trip kept with `null` distance when the odometer delta is unavailable (my recommendation), or
+  discarded as before? (You chose delete for the *historical unrepairable rows*; for new trips I'd
+  keep the drive, since it is real.)
+- Should the migration also null `soc_start < 0` while replacing the function (tiny hygiene), or
+  stay strictly scoped to distance?
+
+### Options considered
+
+1. **A: app-side plausibility guard only (pure code).** A shared `isPlausibleTripDistance`
+   (implied speed ≤ 250 km/h, distance ≤ a generous cap) used by `gradeRangePredictionCycles` and the
+   distance-summing analytics, with tests. No prod writes; protects every consumer regardless of
+   what is stored, including open trips. Does not fix stored data or the source.
+2. **B: server write-time guard (migration).** In `bydmate_apply_client_trip`, when the block's
+   distance implies > 250 km/h, ignore it and recompute from the trip's own samples (odometer
+   delta), else keep the previous value; applies to open **and** closed trips, so the open phantom
+   stops being published. Needs a new idempotent migration (never edit an applied one) and
+   `revoke execute … from public, anon, authenticated` plus explicit grants.
+3. **C: one-time historical repair.** For the 21 closed rows: repair from samples where they exist
+   (≈ 5 rows), and for the rest either null/zero the distance (keep the trip) or delete via the
+   junk function. Destructive on prod for several users; needs a row-by-row preview and your
+   approval, and `docs/TRIPS.md` "One-time historical cleanup" as the procedure.
+4. **D: fix the Mate APK** so it never sends odometer-scale distance. Separate repo; file the
+   issue with the signature above. Cannot be built here.
+5. **E: do nothing.** New closed trips are already guarded; the median absorbs the one bad cycle.
+   Cheapest, but the open phantom, the 21 stored rows and the "Пробег" totals stay wrong.
+
+### Recommendation
+
+Stage 1 = **A** (code only, safe, protects the range-trust factor immediately). Stage 2 = **B**
+(closes the open-trip gap at the source). Stage 3 = **C** only after a reviewed preview and your
+explicit go-ahead. **D** filed in parallel with the APK repo. Each stage can ship alone.
+
+### Data ownership
+
+- No new data model. The rows are existing app-owned telemetry-derived records in **Postgres**
+  (`bydmate_trips`), scoped per user by RLS; nothing here is a user preference or GPS/tariff data.
+- Repair reads only the owner's own samples; nothing is sent to a third party.
+
+### Decisions (user, 2026-10-07)
+
+- **Unrecoverable historical rows → delete** (no samples to repair from, so a kept row would carry
+  no trustworthy distance). Repairable rows are repaired from the odometer delta instead. Both
+  still go through a reviewed row-by-row preview before anything is written (stage 3).
+- **Guard cap confirmed:** implied speed > 250 km/h **or** > 1,500 km per trip.
+- **Mate APK issue:** authorised. `scroodge/BYDMate-own` (fork of `AndyShaman/BYDMate`) has
+  Issues **disabled**, and I did not file against the upstream project, so the issue was filed in
+  this repo's tracker as **scroodge/VoltFlow#43**, with an anonymised signature and code pointers
+  (`TripRollupAccumulator.kt`: baseline set only from the first payload, never in `fold()`). The
+  exact point where the odometer-scale value is produced is **not yet verified** (client vs the
+  server's own path); #43 asks for the trip block JSON and `versionCode` of the next bad trip.
+
+### Verification plan
+
+- A: unit tests with the real signatures (44,122 km / 6 min; 81 km/h legitimate; null max speed);
+  confirm the grader reproduces 0.60 and drops the 188× cycle; `npm run test`, `lint`, `build`.
+- B: apply to prod with `psql -f`; check `has_function_privilege('anon', …)` is false; replay the
+  `a62052e8` block against a copy and expect 2.4 km; confirm the open `ee4a6e67` no longer shows
+  27,583 km.
+- C: preview list reviewed by you; row counts before/after; re-run
+  `scripts/analyze-range-trust-cycles.sql` (should show no cycle > ~12 km per SOC point).
+
+---
+
+## Sharper trust factor: condition the car-promise correction on temperature and speed (phase 5) — A DONE 2026-10-06, B–D DEFERRED
+
+### Research findings (read-only prod checks, 2026-10-06)
+
+- The trust factor (`computeRangeTrustFactor`) is one recency-weighted median of
+  `actualKmAt100 / predictedKmAt100` over a 90-day window. It uses **no** conditions.
+  Independently recomputed from raw rows: 0.602 (telemetry-source trips, 66 cycles) vs the app's
+  0.60 (65 cycles). Middle half of cycles spans 0.51–0.71, so a share of the spread may be
+  explainable.
+- Already stored, per sample (`bydmate_telemetry_samples`, ~1M rows since 2026-05-18):
+  `outside_temp_c` 99%, `battery_temp_c` 99%, `speed_kmh`, `power_kw`, SOC. `cabin_temp_c` is 0%
+  (the car never reports it). Per trip: `bydmate_trip_insight_inputs.outside_temp_avg` /
+  `battery_temp_avg`, `bydmate_trips` avg/max speed, regen and traction energy. Hourly rollups:
+  `bydmate_telemetry_hourly` (outside temp 81%). A/C is a flag only (live snapshot, 63%).
+- **Not collected:** wind, precipitation, humidity, sun, elevation/slope (track points have lat/lon
+  but no altitude), A/C power draw, payload. No weather API exists in the code.
+- Existing use of conditions: `environmentConsumptionFactor` in `range-estimate.ts` uses
+  hand-set temperature bands for the AI Range; the trust factor does not.
+- **Data limit:** the user's last 90 days span 9–37 °C (mean 19 °C), i.e. summer only. A cold-weather
+  effect cannot be learned from own data until winter. ~66 cycles also thin out quickly when sliced
+  into bands (2–3 bands is the realistic ceiling).
+- Raw samples can be pruned (`bydmate_prune_telemetry_samples`); hourly rollups and trip inputs are
+  the durable layer.
+
+### Result of option A (2026-10-06, user's 66 graded cycles, 90 d, `scripts/analyze-range-trust-cycles.sql`)
+
+- Baseline reproduced: median ratio **0.597** (app: 0.60).
+- **Temperature and speed explain nothing in this data.** Rank correlation with the ratio:
+  temp 0.06, avg speed −0.03. Band medians are flat: temp <18 °C / 18–22 / ≥22 → 0.60 / 0.59 /
+  0.59 (n = 30 / 21 / 15); speed <35 / 35–45 / ≥45 km/h → 0.59 / 0.55 / 0.62 (n = 5 / 11 / 50).
+  **Option B (banded factor) is not supported by summer data (11–31 °C).** Winter is untested; re-run
+  the saved script in Dec–Feb before deciding.
+- Weak signals only: distance 0.30, parked days 0.22, SOC drop 0.18. Short cycles are noisy
+  (<10 km: median 0.33, n = 4). The factor is **robust to weighting**: unweighted 0.597,
+  weighted by SOC drop 0.610, cycles with ≥20 pp drop only 0.589.
+- Early check on trip-level temperature was misleading: `bydmate_trip_insight_inputs` covers only
+  175 of 969 recent trips (18%), which left 22 cycles with a biased 0.50 median. Hourly rollups
+  (`bydmate_telemetry_hourly`, driving hours only) cover all 66 cycles and are the right
+  temperature source for any future work.
+- **Data-quality finding (separate issue):** 1 of the 66 cycles shows 44,269 km driven in 1.9 days
+  (ratio 188). Cause: 7 `bydmate_trips` rows across 5 users with `distance_km` > 10,000 (≈ the
+  odometer), `soc_start = -1` and `trip_meter_baseline_km = 0` — the per-trip delta was never
+  applied. The median absorbs it, but any mean/sum over `distance_km` (and the grader's
+  distance-weighted views) is wrong for those cycles. Proposed (not built): a plausibility cap in
+  `gradeRangePredictionCycles` (e.g. drop cycles whose km per SOC point is implausible) and a
+  separate fix/backfill for those trips, to be planned on its own.
+
+### Options considered
+
+1. **A (done): read-only analysis, no code.** For the user's ~66 graded cycles, join
+   average outside temp, average speed (trip table), SOC drop and parked days, then check how much
+   of the 0.51–0.71 spread each explains. Output a short findings note; decides whether 2 or 3 is
+   worth building.
+2. **B: banded factor.** Compute the median per outside-temperature band (e.g. <10, 10–25, >25 °C),
+   falling back to the global factor when a band has fewer than ~10 cycles. Smallest change to
+   `computeRangeTrustFactor`; needs cycles tagged with their average temperature.
+3. **C: small regression** `ratio ~ a + b·temp + c·avg_speed`, clamped like today. More
+   expressive, but 66 samples make it fragile and harder to explain in the "i" sheet.
+4. **D: external weather (Open-Meteo or similar).** Adds wind, rain, humidity. Sends trip
+   time/location to a third party, so it needs an explicit privacy decision. Not recommended until
+   A–C show the on-car temperature is not enough.
+
+### Proposed scope (A, then B only if A supports it)
+
+- A: one-off SQL/script analysis under `scripts/`, results summarised here; no migration, no app
+  change.
+- B (conditional): extend `RangePredictionCycle` with `avgOutsideTempC` and `avgSpeedKmh` (computed
+  where cycles are graded, from `bydmate_trip_insight_inputs` / `bydmate_trips`); add a banded
+  option to `computeRangeTrustFactor` with a documented fallback; unit tests; the explainer sheet
+  shows which band the factor came from.
+- Persist the per-cycle features when a cycle is graded (or snapshot them on the session row) so
+  long-term analysis does not depend on raw samples that may be pruned. Any new column needs the
+  `revoke execute … from public, anon, authenticated` pattern for functions and an
+  `IF NOT EXISTS` migration.
+- `range_est_km` ban: unchanged. This reads historical cycles only and stays out of
+  `range-estimate.ts`.
+
+### Data ownership
+
+- Cycle features and the learned factor: **app-owned**, derived server-side from the user's own
+  telemetry; **Postgres** (they must survive raw-sample pruning).
+- Display preference (the on/off switch): unchanged, user-owned, client-side `localStorage`.
+- Any external weather data (option D): app-owned if ever added, and only after a privacy decision.
+
+### Open questions
+
+- Is the analysis (A) enough to start, or should B be built straight away?
+- Is sending trip location/time to an external weather service acceptable at all (D)?
+- Wait for winter data before enabling a cold-weather band, or ship B with the global fallback now?
+
+### Verification plan
+
+- A: reproduce the 0.602 baseline first, then report variance explained per feature.
+- B: tests for banding, the thin-band fallback and the clamp; `npm run test`, `npm run lint`,
+  `npm run build`; compare banded vs global factor on the prod cycles.
+
+---
+
+## Car-promise correction: dashboard line + on/off switch + charging-state gap (phase 4c) — BUILT 2026-10-06
+
+### Research findings
+
+- The corrected car promise (`correctCarPromise`, phase 4b) renders only in the `/vehicle` hero grid
+  (`vehicle-live-view.tsx`, the `carPromise` metric). `/dashboard` never mounts `VehicleLiveView`
+  and nothing there reads the trust factor.
+- **Gap in 4b:** while charging, the hero grid is skipped (`{!isCharging ? …}`) and the metrics move
+  to `RestMetricsCard`, which builds its own list (AI Range, Math Range, …) with **no** Car Promise
+  entry. So the chip is invisible for the whole charge.
+- The dashboard's AI Range has an "i" button → `MetricExplainerSheet`, rows built by
+  `explainAiRange` in `metric-explain.ts`. The trust factor is not part of it.
+- The AI Range is computed from battery / SOC / consumption. The trust factor corrects the car's own
+  `range_est_km` promise — a different quantity.
+
+### Options considered
+
+1. **A (recommended): extra corrected-promise line, switchable.** Dashboard range card and its
+   explainer sheet gain a line "Car says 228 → corrected 137 km (×0.60, 65 cycles)". A switch inside
+   the explainer sheet shows/hides that line (and the `/vehicle` chip, one shared setting).
+2. **B (rejected): switch changes the main AI Range number.** Multiplying a battery/SOC model by a
+   factor learned for `range_est_km` is a category error, and drags `range_est_km` toward the model
+   the ban protects.
+
+### Proposed scope (option A)
+
+- New pure helper for the preference (key, default OFF, safe read/write with try/catch) + test.
+- `useRangeTrustQuery` wired into the dashboard range card; corrected line shown only when
+  `trust` is non-null and the car's `range_est_km` is plausible (reuse `correctCarPromise`).
+- Switch row inside `MetricExplainerSheet` for the range metrics; hidden when `trust` is null (never
+  an off switch for something that cannot show).
+- `/vehicle` chip honours the same setting.
+- Add the Car Promise item to `RestMetricsCard` so it is visible while charging.
+- i18n strings en/be/ru (switch label, hint, dashboard line).
+- `range_est_km` ban: display-only, same exemption as 4b; extend the exemption list in
+  `range-estimate.test.mjs` for any newly importing file.
+
+### Data ownership
+
+- **Trust factor:** app-owned, computed server-side from graded cycles (unchanged).
+- **Switch:** user-owned preference, lives in **client-side `localStorage`** (per-user preference
+  default; no migration, no RLS change). Trade-off: does not follow the user across devices; a
+  `profiles` column can replace it later if sync is wanted.
+
+### Open questions
+
+- Default: decided OFF (opt-in) by the user on 2026-10-06.
+- One shared switch for dashboard + `/vehicle` (recommended) or separate?
+
+### Verification plan
+
+- Unit tests for the preference helper and the show/hide gating; `npm run test`, `npm run lint`,
+  `npm run build`.
+- Manual: toggle on `/dashboard`, confirm the `/vehicle` chip follows; confirm chip while charging.
+
+---
+
+## Corrected car promise on the live vehicle page (phase 4b) — BUILT 2026-10-06
+
+> **Status 2026-10-06: BUILT.** `correctCarPromise()` helper (+3 tests, 12 total in the suite);
+> `?type=range-trust` slim API branch; `useRangeTrustQuery` hook (1 h staleTime); a
+> "Car Promise" hero chip on the vehicle live page showing `range_est_km × trust`
+> (en/be/ru), rendered only when both a plausible promise and a learned factor exist.
+> Implemented as a chip next to AI/Math Range rather than a text line — same intent, fits
+> the hero grid. Prod check: factor 0.60 from 65 cycles; live promise 227.9 km would show
+> ≈137 km. Ban status: `vehicle-live-view.tsx` is an approved *display-only* consumer;
+> the exemption is recorded in `range-estimate.test.mjs`; the 4 banned modules stay banned.
+> Visual confirmation in the automated browser was blocked by a dev-server chunk glitch
+> (see CHANGELOG note); the user's own browser session already loads the hook successfully.
+
+> Chosen by the user 2026-10-06 from the "how to use the ledger data" options. This is the
+> deliberate ban-exemption decision foreshadowed in the phase-4a entry below.
+
+### Research findings
+
+- The car's live promise is already on the vehicle page's data path: `telemetry.range_est_km`
+  exists in the live snapshot (`src/types/database.ts:203`, `useVoltflowMateLiveQuery` →
+  `/api/vehicle/live`). It is simply never displayed.
+- The learned correction already exists and is served: `trust` on the `?type=range-prediction`
+  report (`range-trust-factor.ts`, recency-weighted, ≥3 cycles else null).
+- The `range_est_km` ban (`range-estimate.test.mjs`) forbids the car's number inside the
+  estimator dependency graph and in 4 named modules (`range-estimate.ts`,
+  `telegram/live-widget.ts`, `telegram/live-widget-message.ts`,
+  `push/live-status-notifications.ts`). `vehicle-live-view.tsx` is not one of them — a display
+  line can multiply the snapshot promise by the trust factor outside the graph, never writing
+  the result back into any estimator input.
+
+### Proposed scope
+
+1. Pure helper `correctCarPromise(rangeEstKm, trust)` in `range-trust-factor.ts`: returns the
+   corrected km or null (no promise / no trust); trivially testable, +2–3 cases.
+2. Lightweight `?type=range-trust` branch on the analytics route returning only the trust
+   summary (reuses `fetchRangePredictionReport` server-side; the client queries it with a long
+   staleTime — the factor moves on a days-scale, minute-scale freshness is pointless).
+3. Vehicle live page: one extra line under the existing range-estimate chips —
+   "car promises {X} km · Voltflow-corrected ≈{Y} km" (en/be/ru), rendered only when both the
+   snapshot promise and a trust factor exist. Clearly labelled as a promise correction, never
+   merged into the AI/Math range numbers.
+4. Explicit exemption recorded: comment block in `range-estimate.test.mjs` + docs
+   (CHARGING_SESSIONS.md §trust factor) stating the live-view line is an approved display
+   consumer; the 4 banned modules stay banned, Telegram/push keep showing only app estimates.
+   Dashboard gets the same line only if the user asks later.
+
+### Data ownership
+
+Same as phase 4a: computed on demand from Postgres app data; nothing persisted, no migration.
+Client fetches the factor via the API; no localStorage.
+
+## Range trust factor: turn graded cycle errors into a forward correction — BUILT 2026-10-06
+
+> **Status 2026-10-06: Phase 4a BUILT** — `range-trust-factor.ts` (+9 tests), `trust` field on
+> the `?type=range-prediction` report (trailing 90 d even for narrow display windows), trust
+> line on the Analytics card (en/be/ru). Prod sample: recency-weighted factor 0.60 from 64
+> cycles (14-day half-life); the car's promise regime changed in late September (earlier
+> extrapolations ≈405–460 km/100% vs recent ≈230–290, ratios 0.73–1.03), so the factor now
+> converges toward current behavior within weeks. Verifying
+> surfaced a silent Supabase 1000-row cap on the widened queries — now paginated. Phase 4b
+> (live surfaces) was approved and built the same day — see the entry above.
+
+> Builds on the Range prediction ledger below (Phase 2+3 live-graded variant). Prod data shows
+> the car's end-of-charge promise is systematically optimistic (−14 % to −53 % per cycle), so the
+> grading output is valuable as a *learned correction*, not just history.
+
+### Research findings
+
+- The graded report already contains everything needed: each cycle carries `promiseKm`,
+  `predictedKmAt100` and `actualKmAt100` (`src/lib/voltflowmate/range-prediction-grading.ts`),
+  and `fetchRangePredictionReport` (`src/lib/vehicle-analytics.ts`) computes it server-side.
+- The car's live promise `telemetry.range_est_km` exists in live snapshots but is **never
+  displayed** — the `range_est_km` ban (see ledger entry + `range-estimate.test.mjs`) forbids it
+  in the estimator graph and in `range-estimate.ts`, `telegram/live-widget.ts`,
+  `telegram/live-widget-message.ts`, `push/live-status-notifications.ts`. The ban exists
+  precisely because this number is unreliable — the ledger just quantified how unreliable.
+- The app's own range estimates (`estimateVehicleRangeKm` / "km per 1%" chips) are
+  measurement-based and do not use the car promise; the correction must not be silently folded
+  into them.
+
+### Proposed scope
+
+**Phase 4a — factor + analytics surface (this plan):**
+1. Pure module `src/lib/voltflowmate/range-trust-factor.ts`: from graded cycles in a trailing
+   ~90-day window, compute `factor = median(actualKmAt100 / predictedKmAt100)`; require ≥3
+   cycles, clamp to [0.5, 1.15], return `null` (no correction) below the minimum. Median so one
+   dirty cycle can't swing it; grading already drops dirty cycles. Node `--experimental-strip-types`
+   tests with synthetic cycle sets (optimistic, pessimistic, mixed, short-window, clamping).
+2. `fetchRangePredictionReport` attaches the factor summary (`{ factor, cycles, windowDays }`)
+   to `RangePredictionReport`; API `?type=range-prediction` response gains it for free.
+3. "Range forecast accuracy" card shows a trust line when the factor exists: e.g. "Trust factor
+   0.81 from 12 cycles — a 280 km promise means ≈227 km" (i18n en/be/ru). No new tables, no
+   estimator changes; the corrected number stays clearly labelled as a *promise correction*.
+
+**Phase 4b — decision point, NOT in this plan:** surfacing the corrected promise on live
+surfaces (vehicle page / dashboard / Telegram). That deliberately displays a value derived from
+`range_est_km` in user-visible code and needs an explicit ban-exemption amendment + doc update
+first. Do not build without separate approval.
+
+### Rejected alternatives
+
+- Feed the factor as a prior into `range-estimate.ts`: violates the ban graph and mixes two
+  independent estimate sources; deferred until there is evidence the measurement-based estimate
+  is itself miscalibrated.
+- Persist per-cycle factors in a table: the on-demand grading is cheap and reproducible from
+  retained trips/session rows; revisit only if the persisted-ledger need from the entry below appears.
+
+### Data ownership
+
+Computed on demand from Postgres app-owned data (`charging_sessions` promise columns +
+`bydmate_trips`); nothing in localStorage; no migration required.
+
+**Should I build this?**
+
+## Range prediction ledger: grade the car's km estimate against the next discharge cycle — PROPOSED 2026-10-06
+
+> **Status 2026-10-06: Phase 1 BUILT + applied to prod** (migration live; backfill captured
+> 458 promises back to 2026-07-12; TS capture pending app deploy).
+> **Phase 2+3 BUILT as live-graded variant, not deployed:** instead of the
+> `range_prediction_observations` table, cycles are graded on demand
+> (`src/lib/voltflowmate/range-prediction-grading.ts` + `?type=range-prediction` +
+> "Range forecast accuracy" card in the Analytics tab). Actuals come from persisted
+> `bydmate_trips` distance sums, so no raw-telemetry rescan and the rejected-on-cost
+> "compute on the fly" concern doesn't apply. A persisted ledger can still be added later
+> if history beyond sample/trip retention must survive.
+> Prod data already shows the car's promise running systematically optimistic
+> (−17 % to −46 % error on September cycles).
+
+### Research findings
+
+- A "cycle" = charge session N ends → charge session N+1 starts. Each cycle is a natural
+  experiment: the car promised a range at end of charge; driving either kept or broke it.
+- The car's promise already arrives in telemetry: `telemetry.range_est_km`
+  (`src/types/database.ts:196`, sanitized 0–1000 in `src/lib/voltflowmate/telemetry-sanitizer.ts:61`,
+  rounded in `bydmate_ingest_telemetry` per `20260617130000`). It is **never persisted to a
+  column and never displayed** — only the raw jsonb samples keep it.
+- The APK-range ban is scoped (verified in `src/lib/voltflowmate/range-estimate.test.mjs`):
+  it forbids `range_est_km` inside the *estimator dependency graph* and four hard-coded
+  user-visible modules (`range-estimate.ts`, `telegram/live-widget.ts`,
+  `telegram/live-widget-message.ts`, `push/live-status-notifications.ts`). A new grading module
+  that reads it for a *historical accuracy report* is outside that list — but the docs and the
+  test file should state the exemption explicitly so future edits don't "helpfully" wire the
+  car's number into the live estimate.
+- Session-close hook exists: every close path (auto, manual stop/complete, reconcile, recovery)
+  already calls `captureSessionEndDelta` (`src/lib/voltflowmate/charge-end-delta.ts`, SQL
+  `bydmate_capture_session_end_delta` per `20260717130000`), which derives peak SOC from
+  in-window `bydmate_telemetry_samples` and updates the session row. The end-of-charge range
+  snapshot should ride the same call — one hook, all close paths covered.
+- Actuals are available: `telemetry.odometer_km` (used by `src/lib/voltflowmate/trip-distance.ts`)
+  for distance, session `start_percent` for SOC, and per-cycle context (outside temp, speed,
+  AC state) inside `bydmate_telemetry_samples.telemetry`.
+- Architectural template: `src/lib/charging-efficiency-learning.ts` +
+  `charging_efficiency_observations` (`20260720120000`) — measured-vs-expected stored as
+  Postgres observations, graded at a later event, surfaced as suggestions.
+- Analytics UI conventions: card stack in `src/components/vehicle/vehicle-analytics-panels.tsx`,
+  data via `/api/vehicle/analytics?type=…` branch (`src/app/api/vehicle/analytics/route.ts`),
+  hand-rolled SVG charts, TanStack Query hooks, `resolveAnalyticsPanelState`, i18n en/be/ru in
+  `src/lib/i18n.ts`. New `charging_sessions` columns must be added to the SELECT lists in
+  `src/hooks/use-sessions-query.ts` and `src/components/dashboard/dashboard-bootstrap.ts`.
+
+### Options considered
+
+1. **Observation ledger, graded at next session close (recommended).** Snapshot the promise at
+   charge end onto the session row; when the *next* session closes, pair the cycles, measure
+   reality (odometer delta ÷ SOC consumed since last charge), and write one
+   `range_prediction_observations` row with error % + condition deltas ("what went wrong").
+   Auditable history, cheap analytics reads, matches the efficiency-observations precedent,
+   and the learned bias can later feed a corrected AI Range without touching the banned graph.
+   Downside: two migrations + a grading job on a hot close path (must be defensive/skippable).
+2. Compute on the fly in the analytics API from raw telemetry, no new tables. No schema
+   surface, but every panel load re-scans two sessions' worth of jsonb samples, results aren't
+   auditable, and attribution logic can't be backtested against stored history. Rejected for
+   cost + the repo's own observation pattern.
+3. Client-side (localStorage) ledger. Violates the data-ownership default for telemetry-derived
+   data (Postgres, app-owned); rejected.
+
+### Proposed scope (option 1)
+
+Phase 1 — capture the promise (ships first, starts accumulating data):
+- Migration: `ALTER TABLE charging_sessions ADD COLUMN IF NOT EXISTS end_range_est_km numeric,
+  end_range_soc numeric, end_voltflow_est_km numeric` (Voltflow's own `estimateVehicleRangeKm`
+  output at the same instant, so both models get graded).
+- Extend the `bydmate_capture_session_end_delta` SQL (or a sibling function called from the same
+  wrapper) to pick `range_est_km` + SOC from the last fresh in-window sample, plus compute
+  `end_voltflow_est_km` server-side at close time.
+- TS mirror `src/types/database.ts` + both session SELECT lists.
+
+Phase 2 — grade reality at next close:
+- New `src/lib/voltflowmate/range-prediction-grading.ts` (pure core + `.test.mjs`): find the
+  previous completed session for the same vehicle; actual km per % SOC =
+  `odometer_delta / (prev.end_soc − cur.start_percent)`; compare with the promise
+  (`end_range_est_km / end_soc` km-per-% extrapolated to 0%); skip rules for dirty cycles
+  (no prev session, stale telemetry, odometer regression, distance < ~2 km, manual sessions
+  without telemetry).
+- Migration: `range_prediction_observations` (vehicle-scoped, RLS like other bydmate tables;
+  predicted/actual km-per-%, error_pct, condition snapshot: avg temp, avg speed, AC-minutes,
+  phantom-drain km lost while parked, `grade_status`). Call grading from the same close paths
+  after capture; fire-and-forget-safe like `captureSessionEndDelta`.
+- New public `bydmate_*` function: `IF NOT EXISTS` idempotent, explicit revoke/grant per AGENTS.md.
+
+Phase 3 — surface it:
+- `/api/vehicle/analytics?type=range-prediction` returning per-cycle predicted-vs-actual +
+  aggregate bias by temperature band.
+- "Range prediction accuracy" card in the Analytics tab (`vehicle-analytics-panels.tsx`):
+  stat cards (`AnalyticsStat`) + per-cycle bar-pair chart (hand-rolled SVG,
+  `useAnalyticsBarCharts` pattern), worst-factor list from the stored condition deltas.
+  Keep it as a card in the existing `?tab=analytics` — no new HistoryTab until there's
+  enough data to warrant a full tab.
+- i18n en/be/ru; docs: `docs/DATABASE_SCHEMA.md`, a section in `docs/CHARGING_SESSIONS.md`
+  (capture hook), and a note in `docs/TRIPS.md` if odometer rules are reused. Update
+  `range-estimate.test.mjs` with a comment/test pinning the *grading* module's exemption so
+  the ban and the new read site are both explicit.
+
+### Data ownership note
+
+All inputs are telemetry-derived and multi-device: **Postgres, app-owned** observations
+(same decision as `charging_efficiency_observations`), RLS by `user_id`/vehicle, nothing in
+localStorage. The car's raw number is stored only as a historical prediction artifact being
+graded — it never enters the live user-visible estimate (ban preserved).
+
+## Telegram live widget: show SOC with one decimal, matching the PWA dashboard — PROPOSED 2026-10-06
+
+### Research findings
+
+- The dashboard renders SOC through the shared `formatSocPercent` (`src/lib/format-soc-percent.ts`):
+  one decimal (0.1 % = Di+ resolution), plain "100" when full. The Telegram widget instead rounds
+  to an integer in `clampSoc` (`src/lib/telegram/live-widget.ts`) and prints `🔋 ${soc}%` plus
+  `<b>${soc}%</b>` (`live-widget-message.ts`). Observed live: dashboard `71.4 %`, widget `72%`.
+- The rounded value also feeds the ETA math in the widget (`resolveTelegramChargingMetrics`), so
+  start-SOC gain can be off by ~0.5 % vs the PWA (minor, but the same raw float fixes both).
+- A residual gap is inherent: the widget is throttled to one edit / 30 s and rides batch delivery,
+  so its decimal can be a few seconds behind the dashboard. Decimals make that visible, not worse.
+
+### Options considered
+
+1. **Use `formatSocPercent` at render, keep the raw float through the pipeline (recommended).**
+   One formatter everywhere, inherits the "100" and NaN rules, ETA gets the unrounded SOC.
+2. Round to 1 decimal inside `clampSoc` only. Duplicates the formatter and misses the 100 % rule.
+3. Leave the widget integer (bar chart is "coarse by design"). Keeps the parity complaint.
+
+### Proposed scope (option 1)
+
+- `live-widget.ts`: `clampSoc` clamps to 0-100 without `Math.round`.
+- `live-widget-message.ts`: summary and bar lines use `formatSocPercent`; `socBar` fill unchanged.
+- Tests: update `src/lib/telegram-live-widget-message.test.mjs` expectations to one decimal +
+  the 100 % case; run `npm run test`.
+
+## Charging card: make the charge-power tile the full-width top tile — BUILT 2026-10-01, not deployed
+
+### Research findings (from the user's screenshot of `/vehicle`, 390 px wide)
+
+- The "Charging" card (`ChargingModeCard`, `vehicle-live-view.tsx` ~L1212) renders `visibleItems`
+  as a `grid-cols-2` of `HeroMetric` tiles; a tile whose value is missing is dropped
+  (`isMissingMetricValue`). On the screenshot: Remaining, From charger, To battery, Cost at 100 %,
+  **Charge power**, Battery temp, Outside temp — cabin temp is hidden, so there are 7 tiles and
+  "Outside temp" sits alone on the last row.
+- **The tile I changed reads badly.** The longer label "CHARGE POWER (TO BATTERY)" wraps to two
+  lines, and `AC · 5.60 kW · 17.6 A` wraps with a lone `A` on the second line. Both come from my
+  2026-10-01 change (longer label + the amperage), in a half-width tile.
+- **It is the wrong place for the most important number.** Charge power is the only live,
+  continuously changing value in the card; Remaining, kWh and cost are estimates derived from SOC,
+  and the temperatures change slowly. It sits in row 3, beside a temperature.
+- `HeroMetric` has no width prop (`icon`, `label`, `value`, `supportingText`, `hint`,
+  `valueCentered`, `explanation`, `onExplain`), so a wide tile needs one small addition.
+
+### Options considered
+
+1. **Full width at the top of the Charging card (recommended).** The SOC and the `CHARGING` chip
+   are already in the hero card above, so power reads straight after "it is charging". Fixes both
+   wraps (one line has room), and the grid left with 6 tiles is an even 3 × 2 while cabin temp is
+   hidden.
+2. **Full width at the bottom.** Fixes the wraps but leaves the key number last and the lone
+   "Outside temp" above it. Not recommended.
+3. **Above the hero card (top of the page).** Strongest emphasis, but it splits the charging
+   information across two cards and moves the SOC hero down. More layout change than needed.
+4. **Keep the position, shorten the label and put the amperage on its own line.** Smallest change,
+   still a half-width tile in row 3.
+
+### Proposed scope (option 1)
+
+- `HeroMetric`: optional `wide` prop → `col-span-2`.
+- `ChargingModeCard`: take the `chargePower` item out of the grid and render it first with
+  `wide`; value as a large `5.60 kW` with `17.6 A · AC` as a smaller second part. Not measured:
+  unchanged `~ 5.6 kW`, label "Charge power". No change to the numbers, the labels' translation
+  keys or the other tiles.
+- **Odd tile count is part of this change, not a follow-up** (the user's point: cabin temp is
+  hidden today but appears when the car reports it). After the power tile is taken out, the
+  remaining tiles are 6 without cabin temp (even, 3 × 2) and **7 with it** — one would sit alone.
+  Rule: if the remaining count is odd, the **last tile spans both columns** (`wide`). It is a
+  general rule, so it also covers any other missing tile (e.g. no cost → 5 left), not only cabin
+  temp. With cabin temp the last tile is "Outside temp", full width, which reads fine.
+  If the charge-power tile itself is missing, nothing is taken out and the same rule applies to
+  all the tiles.
+
+### Data ownership and location
+
+No data. Layout only, no new storage.
+
+### Verification plan
+
+`tsc`, ESLint on the file, and a look at `/vehicle` at ~390 px and ~768 px, with a measured
+reading and a non-measured one, and each tile count that matters: 6 remaining (cabin temp absent),
+7 (cabin temp present), and an odd count caused by another missing tile.
+
+### Status (2026-10-01)
+
+Approved by the user ("строй"), including the odd-count rule.
+
+- **Built** (`vehicle-live-view.tsx` only): `HeroMetric` got an optional `wide` prop (`col-span-2`,
+  default off, so its other uses are unchanged). `ChargingModeCard` renders the charge-power tile
+  first and full width; measured → a large `5.60 kW` with `AC · 17.6 A` beside it, otherwise the
+  unchanged `AC · ~ 5.6 kW`. The other tiles follow in the two-column grid, and when their count
+  is odd the last one spans both columns — the rule is general (cabin temp appears, or any other
+  tile is missing), not tied to cabin temp.
+- **Verified:** `tsc` clean; ESLint 0 errors and the same 30 warnings as `HEAD`.
+- **Not verified:** nothing was rendered by me (the page needs a login), so the three cases that
+  matter — 6 remaining tiles, 7 with cabin temp, an odd count from another missing tile — and
+  the 390 px / 768 px widths have not been looked at. Reload `/vehicle` on the dev server while
+  the car is charging to see the measured case.
+
+## Show measured charging power precisely — 2 decimals, no "≈", battery-side — BUILT 2026-10-01, not deployed
+
+### Research findings
+
+- **Where it is shown:** `vehicle-live-view.tsx:944` renders `AC · ~ 5.6 kW` with `fmt(…, 1)` and
+  an unconditional `~`; the Telegram widget (`live-widget-message.ts:91`) uses `toFixed(1)`.
+  Dashboard, session screen and widget take the number from `resolveChargingEtaPowerKw`
+  (`charging-math.ts`): fresh live power, else a session average (the integer-kW workaround),
+  else the configured fallback.
+- **How precise the measured value is:** current moves in 0.1 A steps and voltage in 1 V
+  steps, so at ≈ 316 V / 18 A the error is about ±0.02–0.03 kW. Two decimals (`5.65`) carry real
+  information; a third would be noise. Live values on `way`: 5.565, 5.629, 5.66, 5.692.
+- **Is "~" still right?** Not for a fresh measured V × I. It stays right for a session
+  average, the configured fallback, and the integer reading from di+ 1.x cars. The UI can tell
+  the cases apart: live snapshot fresh **and** `telemetry.charge_current_a` present (field added
+  2026-10-01).
+- **Basis mismatch (suspected double-counted efficiency in the ETA):** the measured power is
+  **battery-side**. `percentPerHour = chargerPowerKw / batteryCapacityKwh × 100` expects
+  battery-side power, yet `vehicle-live-view.tsx:922` multiplies the live value by
+  `efficiencyPercent / 100` as if it were grid-side. With a battery-side value the ETA is
+  ≈ 2 % (AC) / ≈ 10 % (DC) too long. `dashboard-view.tsx` and `charging-session-screen.tsx:457`
+  also touch efficiency and have **not been read yet**. The resolver mixes bases (live =
+  battery-side; session average and fallback = grid-side). This predates the change (di+'s
+  integer engine power was battery-side too), so it is not a regression.
+- `charge_current_a` is stored but shown nowhere.
+
+### Options considered
+
+1. **Format only:** two decimals, drop `~` when measured. Smallest change; leaves the
+   efficiency question open.
+2. **Format + provenance (recommended).** Same, and `resolveChargingEtaPowerKw` also reports
+   whether the value is measured and which side it is on, so each caller multiplies by
+   efficiency only for grid-side values. The row says the power goes into the battery when
+   measured, and shows the amperage (`−17.9 A`).
+3. **Also show a grid-side estimate** (`÷ efficiency`) next to it. More clutter; defer.
+
+### Proposed scope (option 2)
+
+- `charging-math.ts`: return `{ powerKw, basis, measured }` from a new function; keep the old
+  one as a thin wrapper so existing callers do not change until migrated. Unit tests: fractional
+  live wins, the integer-bucket workaround is unchanged, stale live falls back, measured flag.
+- `vehicle-live-view.tsx`: measured → `AC · 5.65 kW` (2 decimals, no `~`); otherwise keep
+  `AC · ~ 5.6 kW` (1 decimal — two decimals on an estimate would imply false precision;
+  confirm). Apply efficiency to the ETA only for grid-side values. Optional amperage line.
+- Telegram widget and the other callers: same formatting rule and the same efficiency rule,
+  after reading `dashboard-view.tsx` and `charging-session-screen.tsx`.
+- New label text goes through the existing translations (check every locale file).
+
+### Data ownership and location
+
+No new data. It only reads telemetry already stored in Postgres (`telemetry` jsonb, the user's
+vehicle data). Nothing is added to localStorage or the database.
+
+### Verification plan
+
+Resolver unit tests; `npm run lint`, `npm run build`; render the measured and non-measured cases
+from the dev telemetry fixtures; confirm on `way` during a real charge that the row shows
+two decimals without `~` and that the ETA agrees with SOC progress.
+
+### Status (2026-10-01)
+
+Approved by the user, who also chose: **keep one decimal and the `~` for inexact values**.
+
+- **Built:** `measuredChargePowerKw` / `measuredChargeCurrentA` / `snapshotMeasuredChargePowerKw`
+  in `charging-live.ts` (a negative `charge_current_a` next to a positive `charge_power_kw`
+  marks the value as measured; stale snapshots do not count) with 5 tests. Vehicle live view:
+  measured → `AC · 5.65 kW · 17.9 A`, no `~`, label "Charge power (to battery)" (en/be/ru key
+  `vehicle.telemetry.chargePowerToBattery`); otherwise unchanged `AC · ~ 5.6 kW`. Telegram
+  widget: two decimals when measured. Session screen: two decimals only when the shown value
+  *is* the measured reading.
+- **Dashboard tile — built later the same day.** It was not a separate component: both
+  tile variants in `dashboard-view.tsx` printed `~ {fmt(chargingTileKw, 1)} kW` inline. Now a
+  single `chargingTileLabel` gives `5.65 kW` (two decimals, no `~`) when the tile value *is* the
+  measured reading, and `~ 5.6 kW` otherwise — the same rule as the session screen. Dashboard
+  lint still has one error that is also at `HEAD` (`setState` in an effect).
+- **Not built:** the resolver returning provenance — moved into the ETA plan below, which is
+  where it is needed. The three UIs (live view, session screen, dashboard tile) each repeat the
+  "measured → 2 decimals, else `~` 1 decimal" rule inline; a shared tested formatter would be a
+  small follow-up if a fourth place appears.
+- **Verified:** `tsc` clean; `charging-live` 24/24 tests; full suite 549/552 — the 3 failures
+  are not from this change: two modules import the `@/features` alias that plain Node cannot
+  resolve (`live-status-notifications.ts`, `telemetry-history.ts`, both untouched) and
+  `charging-math.test.mjs` "keeps battery gain distinct from grid energy" (code and test
+  untouched, so it fails at HEAD). ESLint: 0 new problems; `charging-session-screen.tsx` has
+  one pre-existing error (`setState` in an effect, also at HEAD).
+- **Not verified:** nothing was rendered in a browser, and the Telegram message formatting has
+  no test (its module imports the `@/` alias too).
+
+## ETA applies charger efficiency to a battery-side live power — BUILT 2026-10-01, not deployed
+
+### Research findings (all three call sites now read)
+
+- **What the maths expects.** `percentPerHour = chargerPowerKw / batteryCapacityKwh × 100`
+  (`charging-math.ts`): `chargerPowerKw` in the projection params is power **into the battery**.
+  The configured fallback `session.charger_power_kw` is the charger's nominal, i.e. **grid-side**,
+  power, so callers convert it with `× efficiencyPercent / 100`.
+- **Live view** (`vehicle-live-view.tsx:922`) and **session screen**
+  (`charging-session-screen.tsx:457`) multiply the resolved power by the efficiency. **Dashboard**
+  goes through `activeChargingTimeLeftSeconds`, which divides the remaining battery energy by the
+  efficiency (grid energy) and then by `powerKw`, i.e. it also treats `powerKw` as grid-side.
+  Same assumption, three places.
+- **The resolver mixes bases.** In `resolveChargingEtaPowerKw` the observed session average
+  (`chargedGridEnergyKwh / elapsed`) and the fallback are grid-side; the live reading is not. The
+  measured pack V × I (shipped 2026-10-01) is **battery-side**, so with it the ETA is too long by
+  a factor `1 / efficiency`: ≈ +2 % on AC (98 %) and ≈ +11 % on DC (90 %).
+- **Not a regression, but now visible.** di+'s old integer engine power was subject to the
+  same mix; whether it was battery- or grid-side is unknown (a `-5` for a real 5.65 kW
+  battery-side charge fits either). The measured value makes the size of the error known.
+- **Out of scope here:** the balancing tail near 100 % makes any "time to 100 %" optimistic on
+  AC; that is a different effect.
+
+### Options considered
+
+1. **Convert at the source (recommended).** `resolveChargingEtaPowerKw` takes
+   `efficiencyPercent` and a flag for a measured (battery-side) live value, and returns the
+   **grid-side equivalent** (`battery ÷ efficiency`) for it. All three call sites and the Telegram
+   widget keep their existing "grid-side in, × efficiency" logic and become correct with no change
+   to their own maths. One function plus its callers' arguments; display of the measured number is
+   unaffected (it already uses `measuredChargePowerKw` directly).
+2. **Convert at the consumers.** Make every consumer take battery-side power and convert the
+   fallback and the average instead. More churn across four files for the same result.
+3. **Leave it.** Accept an ETA 2 % (AC) / 11 % (DC) long. Cheapest, but the number is now known
+   to be off, and DC is where people watch the clock.
+
+### Proposed scope (option 1)
+
+- `charging-math.ts`: add optional `liveIsBatterySide` and `efficiencyPercent` to
+  `resolveChargingEtaPowerKw`; when set, the live value is divided by the efficiency before it is
+  compared with the observed average (so the "same integer bucket" workaround keeps comparing
+  like with like). Default behaviour unchanged for callers that do not pass them.
+- Pass `measured` and the session/car efficiency from the live view, dashboard, session screen
+  and `live-widget-charging.ts`; use `snapshotMeasuredChargePowerKw` / `measuredChargePowerKw`.
+- Tests with the real numbers (316 V, −17.9 A ⇒ 5.656 kW into the battery; AC 98 %, DC 90 %):
+  grid-side equivalent, unchanged integer-bucket path, unchanged fallback, DC vs AC.
+
+### Data ownership and location
+
+No new data. Efficiency already exists per tariff (`cars.default_efficiency_percent` AC,
+`cars.fast_dc_efficiency_percent` DC; session `efficiency_percent`) in Postgres.
+
+### Verification plan
+
+Resolver unit tests; `tsc`; and on `way` during a real charge compare the displayed "time left"
+with the actual time to reach a SOC milestone, before and after, on AC and (when available) DC.
+
+### Status (2026-10-01)
+
+Approved by the user ("да"). **Deviation from option 1:** the conversion is not inside
+`resolveChargingEtaPowerKw`. The session screen and the dashboard tile decide "measured?" by
+comparing the resolver's value with the measured reading (to show two decimals); a resolver that
+returned the grid-side equivalent would have broken that comparison and made them show a
+different, estimated number. So the resolver is unchanged and a new pure function,
+`gridSidePowerForEta(resolved, measured, efficiency)` in `charging-math.ts`, converts only at
+the four places that turn power into a time.
+
+- **Built:** `gridSidePowerForEta` — divides the resolved value by the efficiency only when it
+  *is* the measured battery-side reading; leaves a session average, the fallback and an integer
+  di+ reading alone; leaves the value untouched for an unusable efficiency (≤ 0 or > 100 %).
+  Wired into the live view ETA, the session screen projection, the dashboard
+  (`dashboardEtaPowerKw` feeds `activeChargingTimeLeftSeconds` and `timePowerKw`, which
+  `explainActiveChargeTime` also uses) and the Telegram time-to-full
+  (`measuredLivePowerKw` on `resolveTelegramChargingMetrics`). The displayed power is unchanged.
+- **Verified:** 4 new `charging-math` tests (including the real numbers: 5.656 kW into the
+  battery, 22 % left → the old ETA was exactly 1/0.98 ≈ +2.04 % long, the new one equals the
+  truth) and 2 new Telegram tests (AC 98 %, DC 90 %); `tsc` clean; full suite 555/558 — the
+  same three failures as before, none from this work. ESLint: no new problems.
+- **Not verified:** nothing rendered in a browser, and no real charge compared against the
+  displayed time. The DC correction (≈ +11 %) rests on the configured DC efficiency (90 %), which
+  was measured earlier but is not re-measured here. The Telegram no-session branch divides
+  battery energy by `rawChargePowerKw` with no efficiency at all; that was already so and is
+  left alone.
+
+## Recover missed telemetry charges after delayed car setup or delivery — proposed 2026-09-30
+
+### Research findings
+
+An authenticated Mate sender can persist telemetry before its owner creates a `cars` row.
+The atomic charging planner then has no car/capacity/tariff context and skips those samples
+(`charging-auto-session-processor.ts`). It still consumes the pending inputs, and creating a
+car later does not replay them. Retaining that pending queue alone would not solve the
+problem: automatic starts deliberately reject measurements older than three minutes, so an
+offline or delayed batch cannot open a historical live session.
+
+The raw telemetry remains available for its normal retention window and contains enough
+evidence to identify some missed charges: a matching vehicle alias, parked samples, four or
+more consecutive real `charge_power_kw > 0.1` readings, plausible SOC, and a later
+non-charging boundary. The existing receipt-based manual entry cannot recover such a charge
+without the owner knowing billed kWh and cost. It also must not be relabelled as a manual
+receipt: it is vehicle-telemetry-derived data.
+
+### Options considered
+
+1. **Keep manual entry only.** No implementation risk, but an owner without receipts or
+   access to the car cannot restore an otherwise well-evidenced session. Rejected.
+2. **Automatically insert every historical match.** Fixes the empty history without a user
+   step, but can turn a stale or delayed power reading into a billed-looking session and uses
+   today's tariff configuration for a past event. Rejected.
+3. **On-demand, owner-confirmed recovery candidates (recommended).** On the charging-history
+   page, derive bounded candidates from the owner's retained telemetry for the selected car.
+   Show start/end, SOC gain, derived energy, and an explicitly estimated tariff/cost; the owner
+   chooses which one to import. The same scan covers both telemetry received before car setup
+   and later offline batches. It creates no durable candidate rows, so no background job or
+   queue replay is needed. A connected-but-carless account also gets an onboarding warning to
+   add its car before the retention window expires.
+
+### Proposed scope
+
+1. Extract a pure historical-candidate detector. It reuses the strict real-power/parked
+   predicate, requires a closed, non-overlapping window and a matching `cars.vehicle_alias`,
+   rejects samples outside the retention window or ambiguous boundaries, and never changes the
+   live three-minute auto-start rule.
+2. Add an authenticated, RLS-scoped reader/action for the selected car that scans a bounded
+   telemetry window and returns candidates only to that car's owner. Do not persist candidates
+   or expose another user's telemetry.
+3. Add a History-page recovery card and confirmation dialog. The owner sees what will be
+   imported, can decline it, and can adjust/correct the estimated tariff afterward. A card must
+   state that recovery is based on vehicle telemetry, not a provider receipt.
+4. Add `charging_sessions.session_origin` plus an idempotent `recovery_key` through one new migration, defaulting
+   existing rows to their known legacy source and recording `telemetry_recovered` separately
+   from `manual_receipt` and normal auto/manual starts. The imported row is `completed`, uses
+   measured SOC/derived energy, remains eligible for reconciliation, and never produces an
+   efficiency-learning observation until a provider correction is entered.
+5. When the first live snapshot arrives for an account with no cloud car, show a clear,
+   non-blocking setup warning: telemetry is connected, but charging history needs a car profile
+   before its retained data expires. Do not auto-create a car: capacity, model and tariff are
+   owner choices.
+
+### Data ownership and location
+
+Raw telemetry and recovered charging sessions are **user-owned** and live in **Postgres** under
+the existing `auth.uid()` scope. `session_origin` is provenance on that existing user-owned
+session row. Recovery candidates are derived on demand from the owner's retained telemetry and
+are **not stored** in Postgres or `localStorage`; there is no new preference. Please confirm
+these ownership and storage choices before implementation.
+
+### Risks and safeguards
+
+- Recovery is available only while raw telemetry is retained; the UI must say so.
+- Candidate detection must stay stricter than a visual SOC rise and require a clear end to
+  avoid phantom history. It must never use traction `power_kw` or a lone `is_charging` flag.
+- Import is idempotent: a unique source window/origin guard plus the existing overlap check
+  prevents duplicate sessions on retry or reload.
+- A late live batch must continue to be preserved as telemetry; this feature adds an opt-in
+  historical import path, not a relaxation of the live auto-start safety rule.
+
+### Verification plan
+
+- Pure detector tests: car created after telemetry, delayed batch, valid recovery, no-car/no
+  alias, stale power, missing end, overlap, duplicate import, and a different user's denial.
+- Existing strict auto-session tests prove old measurements still cannot create a live session.
+- Migration review verifies default/backfill, `CHECK`/index/privileges, and RLS; apply once to
+  self-hosted production with the documented pooler procedure.
+- Browser QA: a carless-but-connected account sees the setup warning; the affected account sees
+  candidates, declines one, imports one, reloads History, edits the tariff, and cannot import it
+  twice. Confirm the row's origin and values with a read-only production query.
+
+### Should I build this?
+
+## DC check for measured charging power (follow-up) — 2026-10-01
+
+The main work shipped on 2026-10-01 and moved to [CHANGELOG.md](CHANGELOG.md) ("Charge power now
+comes from measured pack voltage × current"). It is verified on **AC** only. No code is planned
+here; this is a verification list, to be closed with a real charge on `way`:
+
+- **DC:** sign and size of `charge_current_a` on a fast charge. Known only from an older di+
+  session record (`−198.5 A`, 332 V, 65.9 kW), never seen live.
+- **Refresh rate:** how often di+ updates `batteryPackCurrent`. On steady AC it barely moves
+  (`−17.8 → −17.9` over minutes), so it cannot be read from the AC data.
+- **CPU at the real rate:** measured only at ~5 Hz (≈ +1.5 pp of one core per 1 Hz); the app
+  reads once per 5 s, so the real cost is expected to be small but is unmeasured.
+- **di+ 1.x cars:** no `/api/historyStatus`, so they keep the integer `charge_power_kw`. No
+  autoservice current FID is known and none is being pursued.
+- **Optional, not built:** show the amperage in the charging-session view.
+
+Data ownership is unchanged: the user's vehicle telemetry, in Postgres (`telemetry` jsonb).
+
+
+
+## Receive AndyShaman/BYDMate's "Webhook — telemetry" JSON, to A/B against Di+/Mate on `way` — proposed 2026-09-29
+
+### Context
+
+User pointed at `https://github.com/AndyShaman/BYDMate` (a separate, independently-maintained
+app — **not** the same code as this project's companion "VoltFlow Mate", `scroodge/BYDMate-own`,
+though this repo has borrowed from it before: `20260708130000_add_autoservice_fid_fields.sql`
+credits its `FidRegistry.kt`, and the 2026-07-02 no-ADB `energydata` investigation below already
+tested it on this same `way` car and hit a dead end for that data source). Its Settings screen
+has a real, shipped (v3.13, 2026-08-24) "Webhook — telemetry" feature, confirmed by reading its
+source (not guessed): `WebhookTelemetryClient.kt`, `IternioTelemetryClient.kt` (shared payload
+builder), `IternioIntervalPolicy.kt`, `DiParsData.kt`, `SettingsRepository.kt`,
+`TrackingService.maybeSendIternioTelemetry()`, `SettingsScreen.kt`, and its CHANGELOG.
+
+**License flag:** that repo is PolyForm Noncommercial 1.0.0, not a permissive OSS license.
+Writing our own independent receiver for an arbitrary JSON shape doesn't require copying their
+code, but do not port any of their source (field lists above were read only to describe the
+wire shape, same as reading a public API's docs) into this repo.
+
+### What their webhook actually sends (this is the compatibility gap, in full)
+
+One flat JSON object per tick, **no envelope, no batching, no vehicle id at all** — POSTed to a
+user-configured URL with an optional `Authorization: Bearer <secret>` header (blank = no auth).
+Cadence is adaptive off gear/speed, not a fixed interval: 1 s driving, 8 s charging, 30 s parked;
+on any send failure it drops the sample and waits a flat 60 s — no queue, no retry.
+
+```json
+{"utc":1758937200,"soc":62,"speed":87,"power":18.4,"voltage":512,"current":35.9,
+ "hvac_setpoint":22,"batt_temp":31,"ext_temp":24,"capacity":72.9,"odometer":15234.6,
+ "cabin_temp":23,"tire_pressure_fl":250,"is_charging":0,"is_parked":0,
+ "car_model":"byd:leopard3:23:72.9"}
+```
+```json
+{"utc":1758950000,"soc":44,"power":-58.2,"voltage":505,"current":-115.2,"batt_temp":28,
+ "ext_temp":19,"capacity":72.9,"odometer":15240.1,"is_charging":1,"is_dcfc":1,
+ "kwh_charged":12.4,"soh":97.5}
+```
+
+Differences vs. this project's existing normalized `telemetry` fields (`speed_kmh`,
+`charge_power_kw`, `is_charging`, `soc`, `gun`, `current_trip_distance_km`):
+
+- **`utc` is epoch seconds**, not the ISO-8601 `device_time` the existing ingest expects.
+- **No vehicle/device identifier anywhere in the payload.** Unlike `X-Vehicle-Id`/`X-API-Key`,
+  identity can only come from the webhook URL path or the bearer secret we mint per car.
+- **`power` is signed net battery power** (positive = discharge, negative = charge/regen), a
+  single field always present (defaults to `0` when the underlying reading is missing). Our
+  `charge_power_kw` is a charging-only magnitude, and our hard-won rule is explicit that **"a
+  null power reading is never treated as zero"** for the 5-minute-zero-power auto-stop check —
+  this source cannot distinguish "0 kW, confirmed" from "no reading," so it cannot safely feed
+  that specific invariant without a defined fallback (recommend: never let this source's `power`
+  drive auto-stop; only display/compare it).
+- **`is_charging` means gun-connected**, derived purely from the connector-state enum — the exact
+  same staleness trap this project's own CLAUDE.md already documents for Di+'s `is_charging`
+  (stays true for hours after the charger actually stops). Compatible in spirit, same caveat.
+- **No raw gun/plug state code** — only the two booleans `is_charging` and `is_dcfc` (AC vs DC),
+  and `is_dcfc` only appears when an optional Leopard-3 autoservice read succeeds mid-charge.
+- **No trip/session concept** — `odometer` is lifetime mileage, not the per-trip delta
+  `current_trip_distance_km` is. Trip inference would have to be rebuilt server-side from
+  consecutive `odometer` diffs, same as this project already does for its other sources.
+- GPS (`lat`/`lon`/`heading`) is opt-in and **off by default** on their side.
+
+### Options considered
+
+1. **Build a dedicated receiving endpoint that maps into the existing pipeline (recommended).**
+   New route (e.g. `POST /api/bydmate/webhook-telemetry/[token]`) that:
+   - resolves vehicle/user identity from a new per-car webhook token (own row, analogous to the
+     existing paired-client key in `bydmate_devices`, not `X-Vehicle-Id`);
+   - converts `utc` (s) → ISO `device_time`, maps `speed`→`speed_kmh`, `soc`→`soc`,
+     `power`→`charge_power_kw` only as `abs(power)` when `power < 0 && is_charging`, else `0` and
+     tagged not-usable-for-stall-detection, `lat/lon/heading`→`location`, temps→existing hourly
+     aggregate fields;
+   - reuses `bydmate_ingest_telemetry` / the existing normalize→sanitize→ingest→auto-session
+     pipeline rather than a second parallel processor, tagged with a distinct `source` (e.g.
+     `"AndyShaman-BYDMate-webhook"`) so every downstream table keeps provenance;
+   - skips trip inference for this source initially (documented limitation, not silently wrong
+     data) since there's no per-trip delta to seed it from.
+   This is real, scoped work: a new auth/token scheme, a new field mapper + its own tests
+   (`.test.mjs`, matching this repo's test conventions), and explicit handling of the
+   ambiguous-zero-power and gun-connected-not-energy-flowing traps above so they don't silently
+   violate the existing charging invariants.
+2. **Skip the production endpoint; capture payloads out-of-band for a one-off manual diff.**
+   Point their webhook at a disposable capture target (e.g. a temporary request-bin) for one
+   drive + one charge on `way`, save the raw JSON, and diff it by hand/script against the
+   `bydmate_telemetry_samples` rows recorded for the same window from the existing Di+/Mate
+   source. Answers "how do the two sources differ" fully — everything in the table above already
+   does most of this from source alone — without touching any production route, auth, or schema.
+   Much faster, zero prod risk, but produces no lasting ingest capability if the answer turns out
+   to be "yes, wire it up for real."
+3. **Both: ship option 1, then use the new endpoint itself (tagged `source`) to run the
+   comparison**, by querying `bydmate_telemetry_samples` for `way` filtered by `source` across
+   the same time window once both senders are live side by side. Gives a repeatable, queryable
+   comparison instead of a one-off capture, at the cost of doing option 1's full scope first.
+
+### Data ownership and location
+
+- The per-car webhook secret/token is a **credential**, app-owned in Postgres, alongside the
+  existing paired-client keys in `bydmate_devices` — never client-side/localStorage.
+- The telemetry values themselves are **user-owned data in Postgres**, the same
+  `bydmate_telemetry_samples` / `bydmate_live_snapshots` tables the existing sources already
+  write to, distinguished only by a new `source` tag — no new user-facing data model.
+
+### Recommendation
+
+Option 2 first to actually answer "how does `way`'s telemetry differ between di+ and this app,"
+since it needs no code and gives a real side-by-side sample within one drive/charge cycle. Build
+option 1 afterward only if the comparison shows the extra source is worth ingesting permanently —
+otherwise it's schema/auth work in service of a question a raw capture already answers, and it
+carries real design decisions (the token scheme, the ambiguous-zero-power fallback, dropping trip
+inference) that deserve to be locked with real sample data in hand, not guessed up front.
+
+### Should I build this?
+
 ## ~~Cadence-collapse alarm: fold chronic repeats into a daily digest~~ — SHIPPED 2026-09-24
 
 See [CHANGELOG.md](CHANGELOG.md) → "2026-09-24" for what shipped, including a

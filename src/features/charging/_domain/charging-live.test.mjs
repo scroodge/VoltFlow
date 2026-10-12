@@ -9,8 +9,11 @@ import {
   deriveLiveChargingState,
   isFrozenLiveChargeReading,
   latestSnapshotSocReading,
+  measuredChargeCurrentA,
+  measuredChargePowerKw,
   resolveDisplayChargePowerKw,
   snapshotKwhCharged,
+  snapshotMeasuredChargePowerKw,
 } from "./charging-live.ts";
 import { clampDerivedToSocCeiling, deriveChargingState } from "./charging-math.ts";
 
@@ -37,6 +40,44 @@ test("display charging power prefers live DC power over the session fallback", (
     defaultChargerPowerKw: 3.5,
   });
   assert.equal(power, 31);
+});
+
+// Car `way`, AC, 2026-10-01: di+ integer power read 5 for a real 316 V × 17.9 A = 5.656 kW.
+// A negative charge_current_a next to a positive kW marks the kW as measured, not approximate.
+test("a negative pack current marks the charge power as measured", () => {
+  const telemetry = { charge_power_kw: 5.656, charge_current_a: -17.9 };
+  assert.equal(measuredChargePowerKw(telemetry), 5.656);
+  assert.equal(measuredChargeCurrentA(telemetry), 17.9);
+});
+
+test("without a pack current the charge power stays approximate", () => {
+  // di+ 1.x / app not updated: integer kW and no current.
+  assert.equal(measuredChargePowerKw({ charge_power_kw: 5 }), null);
+  assert.equal(measuredChargePowerKw({ charge_power_kw: 5, charge_current_a: null }), null);
+  assert.equal(measuredChargeCurrentA({ charge_power_kw: 5 }), null);
+  assert.equal(measuredChargePowerKw(null), null);
+  assert.equal(measuredChargePowerKw(undefined), null);
+});
+
+test("an idle positive current or zero power is never shown as measured charging", () => {
+  // Plugged in at 100 %: +0.3 A and 0 kW.
+  assert.equal(measuredChargePowerKw({ charge_power_kw: 0, charge_current_a: 0.3 }), null);
+  assert.equal(measuredChargePowerKw({ charge_power_kw: 0, charge_current_a: -0.4 }), null);
+  assert.equal(measuredChargePowerKw({ charge_power_kw: 5.6, charge_current_a: 0 }), null);
+  assert.equal(measuredChargeCurrentA({ charge_power_kw: 0, charge_current_a: 0.3 }), null);
+});
+
+test("a measured snapshot reading is dropped once the snapshot is stale", () => {
+  const telemetry = { soc: 78, speed_kmh: 0, charge_power_kw: 5.692, charge_current_a: -17.9 };
+  const fresh = {
+    device_time: new Date(NOW).toISOString(),
+    received_at: new Date(NOW).toISOString(),
+    telemetry,
+  };
+  assert.equal(snapshotMeasuredChargePowerKw(fresh, NOW), 5.692);
+  // Well past LIVE_CHARGING_STALE_MS: the number may be hours old, so it is not "measured now".
+  assert.equal(snapshotMeasuredChargePowerKw(fresh, NOW + 10 * 60_000), null);
+  assert.equal(snapshotMeasuredChargePowerKw(null, NOW), null);
 });
 
 test("deriveLiveChargingState uses SOC estimate even when kwh_charged is present", () => {

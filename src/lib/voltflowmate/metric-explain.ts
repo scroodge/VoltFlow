@@ -48,18 +48,20 @@ const finite = (value: number | null | undefined) =>
 const row = (labelKey: TranslationKey, value: number | null, unit: string, kind: ExplainRowKind, digits = 1, noteKey?: TranslationKey): ExplainRow =>
   ({ labelKey, value, unit, kind, digits, noteKey });
 
-export function explainAiRange({ snapshot, recentTrips, batteryCapacityKwh, estimate }: {
+export function explainAiRange({ snapshot, recentTrips, batteryCapacityKwh, reserveSocPercent, estimate }: {
   snapshot: VoltflowMateLiveSnapshotRow;
   recentTrips: VoltflowMateTripRow[];
   batteryCapacityKwh: number | null;
+  reserveSocPercent?: number | null;
   estimate?: RangeEstimate;
 }): MetricExplanation {
   const soc = finite(snapshot.telemetry.soc);
   const soh = finite(snapshot.telemetry.soh_percent);
   const usableBattery = resolveUsableBatteryKwh(batteryCapacityKwh, soh);
   const consumption = estimateConsumptionKwh100Km(snapshot, recentTrips);
-  const calculated = estimateVehicleRangeKm(snapshot, recentTrips, { batteryCapacityKwh });
+  const calculated = estimateVehicleRangeKm(snapshot, recentTrips, { batteryCapacityKwh, reserveSocPercent });
   const result = estimate?.estimatedRangeKm ?? calculated.estimatedRangeKm;
+  const reserve = Math.max(0, Math.min(100, finite(reserveSocPercent) ?? 0));
   return {
     metricKey: "aiRange", titleKey: "vehicle.explain.metrics.aiRange.title", formulaKey: "vehicle.explain.metrics.aiRange.formula",
     sourceAt: snapshot.received_at,
@@ -68,7 +70,7 @@ export function explainAiRange({ snapshot, recentTrips, batteryCapacityKwh, esti
       row("vehicle.explain.rows.soh", soh, "%", "input"),
       row("vehicle.explain.rows.soc", soc, "%", "input"),
       row("vehicle.explain.rows.usableBattery", usableBattery, "kWh", "derived"),
-      row("vehicle.explain.rows.usableEnergy", usableBattery != null && soc != null ? usableBattery * Math.min(100, Math.max(0, soc)) / 100 : null, "kWh", "derived"),
+      row("vehicle.explain.rows.usableEnergy", usableBattery != null && soc != null ? usableBattery * Math.max(0, Math.min(100, soc) - reserve) / 100 : null, "kWh", "derived"),
       row("vehicle.explain.rows.environmentFactor", environmentConsumptionFactor(snapshot), "×", "derived", 2),
       row("vehicle.explain.rows.consumption", consumption, "kWh/100km", "derived"),
       row("vehicle.explain.rows.result", result, "km", "result", 0),
@@ -92,15 +94,16 @@ function windowTotals(trips: VoltflowMateTripRow[], liveSoc: number | null | und
   return { distance: distance || null, socDelta: hasSoc ? socDelta : null };
 }
 
-export function explainMathRange({ soc, kmPerPercentSoc, trips, batteryCapacityKwh, sourceAt }: {
+export function explainMathRange({ soc, kmPerPercentSoc, trips, batteryCapacityKwh, reserveSocPercent, sourceAt }: {
   soc: number | null | undefined; kmPerPercentSoc: number | null; trips: VoltflowMateTripRow[];
-  batteryCapacityKwh: number | null; sourceAt?: string | null;
+  batteryCapacityKwh: number | null; reserveSocPercent?: number | null; sourceAt?: string | null;
 }): MetricExplanation {
   const validSoc = finite(soc);
   // Calling the canonical SOC estimator documents the fallback basis without replacing
   // the measured km/% result used by the tile.
-  const fallback = estimateRangeFromSoc({ soc, batteryCapacityKwh, recentTrips: trips });
-  const result = validSoc != null && kmPerPercentSoc != null ? validSoc * kmPerPercentSoc : null;
+  const fallback = estimateRangeFromSoc({ soc, batteryCapacityKwh, recentTrips: trips, reserveSocPercent });
+  const reserve = Math.max(0, Math.min(100, finite(reserveSocPercent) ?? 0));
+  const result = validSoc != null && kmPerPercentSoc != null ? Math.max(0, validSoc - reserve) * kmPerPercentSoc : null;
   return { metricKey: "mathRange", titleKey: "vehicle.explain.metrics.mathRange.title", formulaKey: "vehicle.explain.metrics.mathRange.formula", sourceAt,
     rows: [row("vehicle.explain.rows.soc", validSoc, "%", "input"), row("vehicle.explain.rows.kmPerPercent", kmPerPercentSoc, "km/%", "input"), row("vehicle.explain.rows.fallbackConsumption", fallback.consumptionKwh100Km, "kWh/100km", "derived"), row("vehicle.explain.rows.result", result, "km", "result", 0)] };
 }

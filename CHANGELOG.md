@@ -37,6 +37,449 @@ texts; `git diff --check` passed. Build, lint, tests, production database action
 and live donation flow checks were not run. The external Buy Me a Coffee page could not be
 inspected from this environment; its one-time option and any membership settings need an
 owner-side check before publication.
+## 2026-10-07
+
+- **Isolated Telegram demo pack completed locally.** Approved launch-pack work
+  moved from BACKLOG: OrbStack fixtures and `.next-telegram-demo` capture now
+  produce 20 screens / 62 phone PNGs, visually reviewed with observations.
+  Rebuilt fictional vehicle hourly/SOH read models with existing functions;
+  added authenticated RLS data audit, settled in-app navigation, separate public
+  context, SDK auth cookies and labelled local map interception. Capture at
+  13:05:41 UTC passed with zero browser/local HTTP errors; parked baseline audit
+  passed after capture (12 trips / 482 km, four charges, three service records /
+  175 BYN). See `docs/marketing/telegram-launch/REVIEW.md` and gallery. Existing
+  history provider label and hard-load ETA observations remain; integrations and
+  publication are not approved/proven. No production changes, build, lint or
+  application test suite in this screenshot workflow.
+
+- **Closed two public admin ports on the VPS.** Grafana (`3000`) and Kong's Admin API
+  (`8001`, unauthenticated; served the `anon`/`service_role` key-auth credentials for at
+  least 79 days) are now bound to `127.0.0.1` in `/opt/monitoring/docker-compose.yml` and
+  `/opt/supabase/docker-compose.yml`; verified from outside. Keys were **not** rotated (owner
+  decision); see BACKLOG. Same day, after a read-only audit: Kong `8000`/`8443`, Loki
+  `3100`, Prometheus `9090`, node_exporter `9100`, cAdvisor `8088` and blackbox `9115` were
+  also rebound to `127.0.0.1` (nginx reaches Kong at `127.0.0.1:8000`; Prometheus scrapes by
+  container name; blackbox was a hand-started `docker run`, recreated on `monitoring_default`).
+  fail2ban installed (sshd jail, 1-day bans) and `/etc/ssh/sshd_config.d/00-hardening.conf`
+  sets key-only SSH (`PasswordAuthentication no`, `PermitRootLogin prohibit-password`,
+  `MaxAuthTries 3`, no X11) after 30,657 failed logins in 24 h. All verified from outside.
+  Still public by design: 22, 80, 443, pooler 5432/6543, VPN UDP.
+
+- **Charge-detail pending-query render loop (local working-tree fix).**
+  `ChargingSessionScreen` now uses typed, stable empty fallbacks for provider rows
+  and live snapshots. This prevents pending queries from creating fresh Select/
+  live-sync dependencies on each render. The preceding approved selector change
+  reuses provider options and memoizes tariff options. No telemetry values,
+  charging rules, tariff-save behaviour or persistence paths changed. Browser
+  regression helper `scripts/telegram-demo-verify-detail.mjs`: three ordinary
+  loads and three loads with live queries delayed eight seconds passed, opening
+  both selectors each time, with no recorded browser/HTTP errors. The delayed
+  probe intercepted three live queries. Verified against the isolated local
+  demo, not production; no build, lint or application test suite was run.
+  The broader Telegram screenshot pack remains separate and is not yet approved
+  for publication.
+
+- **Telemetry-offline owner notices (database phase deployed; app deployment pending).**
+  Migration `20261007110000_owner_telemetry_offline_notices.sql` keeps both cadence
+  signals as app-owned Postgres audit history but queues only a newly-opened
+  `low_24h_count` for an owner with `profiles.telegram_id`; `moving_gap` is
+  diagnostic-only. The former admin digest is unscheduled, so unlinked and diagnostic
+  alarms cannot surface through a second path. The matching route and a plain-language,
+  no-account-identity owner message are built locally, but were not deployed to Vercel:
+  this shared worktree contains unrelated uncommitted work and no project link is
+  configured, so deploying it would be unsafe. Until that app deployment, the database
+  correctly enqueues only linked-owner low-count alarms, but the production route still
+  has its old admin-recipient behavior. Four pre-existing open low-count audits belonged
+  to unlinked owners and remain silent. Verified: focused tests 21/21, `npx tsc --noEmit`
+  clean; live cron retains only the ten-minute detector, the deployed predicate requires
+  a linked owner and `low_24h_count`, and anon/authenticated still lack detector execute.
+
+- **PostgREST outage watchdog (self-hosted Supabase).** `supabase-rest` wedged with
+  `PGRST003 Timed out acquiring connection from connection pool` while Postgres was
+  healthy (34/100 connections); container was `unhealthy` after 3 months and nothing
+  alerted. Fixed by restart; added `scripts/ops/rest-watchdog.sh` (cron on the VPS:
+  real-query probe, Telegram alert, rate-limited auto-restart). Install and caveats in
+  `docs/OPS_LOCAL.md` → PostgREST watchdog. Also added Grafana rules
+  `sb-pgrst-timeouts` and `sb-pgrst-down` (`scripts/ops/grafana-postgrest-alerts.yaml`,
+  provisioned and visible in Grafana). The older `sb-pgrst-pool` rule could not have caught
+  this failure: pool_available stayed at 25 while timeouts climbed. Not built: an external
+  uptime probe (still in BACKLOG). A compose `restart` policy was dropped: it does not
+  act on a running-but-unhealthy container. Root cause of the wedge unknown.
+
+## 2026-10-07
+
+### Junk filter Rule C skipped for client trips (applied to prod)
+Migration `20261007160000_bydmate_discard_junk_rule_c_skip_client_trips.sql`: `bydmate_discard_trip_if_junk`
+Rule C (implied speed = distance ÷ recorded duration) no longer applies to `client_trip` rows. Some client
+trips carry a truncated duration (15–122 s) with a correct distance, and Rule C deleted those real trips
+at close since 2026-09-17 (≈ 0.23 % of client trips, ~2–3 lost and unrecoverable). Odometer phantoms on the
+client path are rejected by the 1,500 km cap before storage. Rules A/B, the legacy telemetry path, signature
+and privileges are unchanged. Rehearsed in a rolled-back transaction (client 8.6 km/122 s, 14.3 km/84 s and
+6.6 km/32 s trips kept; legacy 4.5 km/16 s/max 38 still deleted; Rule A/B still delete blips on the client
+path; healthy trip kept; end-to-end closing blocks keep the trips intact), then applied and verified live.
+`docs/TRIPS.md` updated. Not yet observed on a real drive.
+
+### Trip-distance guard made cap-only + stage 3 repair of 7 stored rows (applied to prod)
+An energy cross-check showed the implied-speed half of the guard was wrong: 6 `client_trip` rows
+flagged by speed alone (and 8 `byd_energydata` rows) have **correct** distances (net energy ÷ stored
+consumption agrees within ~10 %) and only a truncated recorded duration, while all 7 genuine
+odometer-scale phantoms (> 15,000 km) exceed the 1,500 km cap. Without the fix, stage 2 would have
+replaced such a correct distance with a wrong-small odometer delta (8.6 → 0.8 km). Migrations
+`20261007150000_bydmate_trip_distance_plausible_cap_only.sql` (SQL guard = cap only, same signature) and
+`20261007151000_bydmate_trips_repair_odometer_scale_distance.sql` (explicit ids, `distance_km > 1500`
+guard, idempotent): `a62052e8` → 2.4 km, `ca8ba735` → 6.2 km, five real drives → `NULL` distance, **no
+deletes**; no row above the cap remains; speed-only and energydata rows untouched. TypeScript guard is
+cap-only too (`trip-distance-plausibility.ts`, grader, tests). Rehearsed in a rolled-back transaction
+first; backup of the 7 rows' previous values kept locally outside the repo. Found, **not fixed**: the
+server junk filter's Rule C still deletes truncated-duration real client trips at close (~0.23 % of client
+trips since 2026-09-17); plan in BACKLOG.md ("Rule C on the client path"). `docs/TRIPS.md` documents both.
+
+### Trip-distance plausibility guard, stage 2 (server write-time, applied to prod)
+Migration `20261007130000_bydmate_client_trip_distance_guard.sql`: new
+`bydmate_trip_distance_plausible` (SQL twin of the TS check: > 1,500 km or > 250 km/h) and
+`bydmate_trip_distance_from_samples` (odometer delta over the trip's own samples, `NULL` unless
+samples cover both ends within 2 min), and `bydmate_apply_client_trip` rewritten so an odometer-scale
+`distance_km` is never stored: open trip → previous plausible value or `NULL`; closing block →
+repaired from samples or `NULL`. Real drives are kept instead of deleted by Rule C. Validated in a
+rolled-back transaction first (13/13 parity cases; repairs 2.4 and 6.2 km; `NULL` where samples are
+missing; 194/198 healthy trips within max(0.5 km, 5%), worst 2.5 km; open/closing/passthrough
+behaviours), then applied; privileges checked (`anon`/`authenticated` denied). `docs/TRIPS.md`
+documents the guard. Not yet observed on a real drive; stage 3 (21 historical rows) and the Mate
+app (scroodge/VoltFlow#43) remain.
+
+### Trip-distance plausibility guard, stage 1b (read-side, every trip consumer)
+New `sanitizeTripDistances` (nulls an implausible `distance_km` on a copy; the drive stays listed;
+open trips are judged by `last_device_time`) and `cleanTrips` = `dedupeTripsBySource` + sanitize in
+`hero-drive-metrics.ts`. `cleanTrips` now backs both trip hooks, the vehicle live view, hero
+metrics, history day summary, telemetry buckets, range-prediction capture, the Telegram live widget
+and the period analytics; the sanitizer is applied directly in `route-insights.ts` and the trips
+API list responses. The range-trust grader's feed stays dedupe-only (it skips the whole cycle),
+the export stays raw. +9 tests (sanitizer, `cleanTrips`, hero-metrics distance since charge,
+`trip-filter` keeps a nulled-distance drive); the hooks' source-scan test now counts `cleanTrips`.
+Confirmed on prod: the open phantom (27,606 km) reads `null`, a 286 km trip is unchanged; the server
+filter discarded the previous day's phantom at close, and a new one appears on each drive, so the
+open-trip window is real. Not done: stage 2 (server write-time guard), stage 3 (historical
+repair/delete), Mate app fix (scroodge/VoltFlow#43).
+
+### Trip-distance plausibility guard, stage 1 (range-trust grader)
+New pure `isPlausibleTripDistance` (`src/lib/voltflowmate/trip-distance-plausibility.ts`, +6 tests):
+a trip is implausible above 1,500 km or when its implied speed exceeds 250 km/h (not
+coupled to the junk-filter Rule C, whose 80 km/h fallback matches real highway trips).
+`gradeRangePredictionCycles` skips any cycle containing such a trip (+4 tests), and
+`fetchRangePredictionReport` now passes `ended_at ?? last_device_time` so open trips are checked
+too. On the user's real data: 1 of 66 cycles dropped (a 44,269 km odometer-scale trip), max
+ratio 188 → 1.03, median 0.597 → 0.593. No prod writes. Not done: the other consumers of
+`distance_km` (listed in BACKLOG.md), the server write-time guard (stage 2) and the historical
+repair/delete (stage 3). Related: scroodge/VoltFlow#43 (Mate APK sends odometer-scale distance).
+
+## 2026-10-06
+
+### Trust-factor conditions analysis (phase 5, option A) — no app change
+Read-only check of whether temperature, speed or cycle shape explain the spread of the
+range-trust cycles. Independent SQL recompute reproduced the app's factor (0.597 vs 0.60;
+66 vs 65 cycles; the app dedupes `byd_energydata`/`telemetry` trips, and counting both
+double-counted distance). Temperature (rank corr 0.06) and speed (−0.03) explain nothing in
+the user's 9–31 °C summer data; band medians are flat, and the factor is stable under
+weighting (0.589–0.610). Banded factor (option B) is deferred until winter data; re-run
+`scripts/analyze-range-trust-cycles.sql` then. Found a data-quality issue: 7 `bydmate_trips`
+rows (5 users) with `distance_km` ≈ odometer (> 10,000 km, `soc_start = -1`, baseline 0); one
+sits in a graded cycle (44,269 km) and is only absorbed by the median. Logged in BACKLOG.md;
+not fixed. Trip-level temperature (`bydmate_trip_insight_inputs`) covers only ~18% of trips —
+use hourly rollups for temperature.
+
+### Car-promise switch, dashboard line, and charging-state gap (phase 4c)
+The corrected car promise (phase 4b) now has a per-device on/off switch and shows in two
+more places. A switch row in the dashboard's AI Range explainer sheet shows or hides the
+"Car says X → Corrected Y (×factor, N cycles)" rows, swaps the sheet headline and the
+dashboard range badge between the corrected car promise (ON) and the AI model value (OFF),
+and also controls the `/vehicle` chip. The block sits directly under the sheet header.
+The switch is hidden when there is no trust factor or no plausible `range_est_km`. The
+chip was invisible for the whole charge (the hero grid is skipped while charging and
+`RestMetricsCard` had no entry); it is now in `RestMetricsCard` too. Preference is
+user-owned, client-side `localStorage` (`voltflow.carPromise.enabled`, default OFF (opt-in), no
+migration); trust factor stays app-owned and server-computed. New:
+`car-promise-preference.ts` (+4 tests), `use-car-promise-enabled.ts`; en/be/ru strings.
+The AI model computation is unchanged (only which number is displayed switches);
+`range_est_km` stays out of the estimator graph. Not done: the `/vehicle` sheet has no switch
+(it follows the dashboard's setting).
+
+### Reorderable Analytics cards, order saved per user
+
+- The Analytics tab's ~11 cards (SOH, Battery health, Cell balance, 12 V, Phantom drain, Range
+  forecast, …) are now a keyed `cardSections` record rendered in a user-chosen order; the
+  Telemetry-history range header stays pinned because it drives every card. Conditional cards
+  (Charging trends, Consumption vs temp) simply drop out of the visible list when their range
+  condition is false.
+- "Переставить/Reorder" toggle in the header chip row enters an @dnd-kit edit mode:
+  250 ms long-press activation (normal scrolling unaffected), keyboard-sortable, grip badge on
+  each card. Order saves on drop.
+- Data ownership (user-confirmed): instant `localStorage` copy + `profiles.analytics_card_order`
+  jsonb column as the cross-device sync; the profile value wins when present. New pure lib
+  `src/lib/analytics-card-order.ts` (`normalizeCardOrder` drops unknown/dup ids and appends
+  future cards; 5 tests). Written through the existing `useUpdateProfile` allowlist path.
+- Migration `20261006210000_profile_analytics_card_order.sql` is **created but not yet applied**
+  to the self-hosted prod DB (user chose to apply it themselves); until then the feature runs
+  localStorage-only. Verified in browser: drag reorder, persistence across reload, clean console.
+
+### Range trust factor: learned correction for the car's end-of-charge promise
+
+- The "Range forecast accuracy" card (range prediction ledger, phases 1–3) showed the car's
+  promises running systematically optimistic; a median of graded cycles now turns that into a
+  forward **trust factor** (`median(actual/predicted)` km-per-100%, recency-weighted with a
+  14-day half-life, trailing 90 d, ≥3 cycles, clamped 0.5–1.15): "a 270 km promise usually
+  means ≈159 km."
+- Prod sample (Oct 2026): factor 0.60 from 64 cycles. Caveat visible in the same data: the
+  car changed its promise regime around late September (mid-year promises extrapolated to
+  ≈405–460 km/100%, recent ones to ≈230–290), so the 90-day median lags the current
+  accuracy — the last five cycles run ≈0.73–1.03.
+- Code: `src/lib/voltflowmate/range-trust-factor.ts` + 9 tests; `trust` attached to the
+  `?type=range-prediction` report by `fetchRangePredictionReport` (graded over the trailing
+  window even in day/week views); card shows the line in en/be/ru. No migration — computed
+  from existing session promise columns + trips.
+- Also fixed while verifying: widening the fetch window hit Supabase's silent 1000-row select
+  cap (trips query returned an arbitrary 1000 rows, blanking late-window cycles). Both the
+  trips query and `fetchPeriodChargingSessions` now paginate in 1000-row pages.
+- Constraint honored: the trust factor lives outside the `range-estimate.ts` ban graph;
+  surfacing a corrected promise on live surfaces was made an explicit decision the same day
+  (phase 4b, next entry).
+
+### Car Promise chip: trust-corrected car range on the live page (phase 4b)
+
+- The vehicle live page now shows a "Car Promise" hero chip: the car's own live range display
+  multiplied by the learned trust factor (`227.9 km × 0.60 → ≈137 km` at today's prod sample),
+  en/be/ru. This is the approved, recorded **display-only exemption** from the `range_est_km`
+  ban — the exemption note lives in `range-estimate.test.mjs`, the 4 banned modules
+  (estimator, Telegram widget ×2, push) stay untouched, and the number never flows back into
+  any estimator input.
+- All-or-nothing rendering: `correctCarPromise()` returns `null` unless both a plausible
+  promise (0–1000 km) and a learned factor exist, so the chip hides rather than showing the
+  raw car number under a "corrected" label.
+- Plumbing: `?type=range-trust` slim branch on the analytics API (trust summary only, trailing
+  90 d), `src/hooks/use-range-trust-query.ts` with 1 h staleTime (the factor moves on a days
+  scale), wired into `VehicleLiveContent` → `Hero`. +3 tests (12 in the trust suite); full
+  `tsc --noEmit` clean; range-trust endpoint verified live (factor 0.60 from 65 cycles).
+- Verification note: the automated browser session could not finish loading `/vehicle` (the
+  dev server 404'd its `src/components/vehicle` client-chunk group; a production
+  `npm run build` compiles the same tree fine — a Turbopack dev-mode/memory-pressure glitch,
+  not a code defect). The user's own browser session loads the page and the new
+  `GET /api/vehicle/analytics?type=range-trust` call fires correctly.
+
+### Phantom drain panel now follows the selected analytics range
+
+- Bug: the "Phantom drain" chart ignored the day/week/month selector — its query sent no
+  range and the API defaulted to `days=14`, so any selection still showed the last two
+  weeks of bars.
+- Fix: `type=phantom` accepts optional `from`/`to` (the `bydmate_phantom_drain_daily` RPC
+  already took precise `p_from`/`p_to`, so no migration). `fetchPhantomDrain` uses the
+  explicit window when valid and keeps the rolling-`days` default otherwise; the panel
+  passes `telemetryWindow.from/to` and keys the query on `historyRange` + `anchorDate`.
+  Empty-state copy in all three locales no longer promises "last two weeks".
+
+### Server grants the car's offline buffer — telemetry no longer dropped while offline
+
+- Bug: user `765oliva567@gmail.com` lost both charging sessions of the 2026-10-03/04
+  weekend (32→53%, 53→100%). The car had no internet for ~29 h; the server received nothing
+  between 2026-10-03 08:37 UTC and 2026-10-04 13:27 UTC, and the reconnect delivered only
+  the last ~6 h (~1160 rows).
+- Cause: the Mate client (v0.5.5+, `OfflineBufferPolicy`) has a large local Room buffer with
+  state-aware compaction, but keeps a legacy **1000-row** guard (silent delete of the oldest
+  rows) *until a server response supplies `offline_buffer_cap_bytes`* (BYDMate
+  `docs/HOW_IT_WORKS.md` §4.3). The server never sent that field, so the rollout gate stayed
+  closed for every car.
+- Fix: `src/lib/voltflowmate/offline-buffer.ts` grants 4 GiB (the client's own ceiling; the
+  client still clamps to device storage and persists the grant, so an offline car keeps the
+  last value). Carried on both channels, like `live_fast_seconds`: the telemetry ingest
+  success response and the command poll. On prod remote commands are off, so the poll is the
+  static `public/bydmate-commands-disabled.json` (rewrite in `next.config.ts`; the route
+  handler never runs, and the CDN answers 200 even without credentials) — the grant is baked
+  into that file too. Found on the first prod check: the route edit alone was inert there.
+  Test: `offline-buffer.test.mjs` (also asserts the static file matches the constant).
+- Effect starts at each car's first successful contact after deploy. Data already evicted
+  on the car before then is not recoverable; the two lost sessions were not reconstructable
+  from telemetry.
+
+### Per-car range reserve: estimates count down to a user-set SOC, not 0%
+
+- Feature: each car can now carry a **range reserve** (0–40%, 5% steps, default 0).
+  Estimated range is the energy between the current SOC and that floor, so a driver who
+  never wants to approach empty sees "how far I can actually go" instead of the
+  drain-to-0% figure. Approved in-session 2026-10-06 (per-car ownership, Postgres-stored).
+- Data: `cars.range_reserve_soc_percent numeric not null default 0` with an in-list CHECK
+  for the 5% steps — migration `20261006120000_cars_range_reserve_soc.sql`.
+  **Not yet applied to prod** (self-hosted psql procedure); must be applied before deploy,
+  since `live-widget.ts` now selects the column.
+- Math: `estimateVehicleRangeKm` / `estimateRangeFromSoc` take `reserveSocPercent` and use
+  `max(0, soc − reserve)` of usable energy; SOC at/below the reserve yields 0 km, never
+  negative. Applied through `useVehicleRangeEstimate` to the dashboard hero, vehicle-live
+  AI Distance **and** Math Distance, the metric-explain panels, and the Telegram live widget.
+- UI: per-car select (0–40%) in Settings → car rows, same direct-write pattern as the 12V
+  chemistry selector; range labels gain a "to {soc}%" / "да {soc}%"/"до {soc}%" suffix when
+  a reserve is set (en/be/ru).
+- Tests: 4 new cases in `range-estimate.test.mjs` (scaling, below-reserve → 0, invalid
+  reserve → old behavior, `estimateRangeFromSoc` parity). Suite: 561 pass / 3 fail — the 3
+  failures are pre-existing on a clean tree (charging-math, live-status, telemetry-history).
+
+### Webhook telemetry no longer creates phantom 0 km trips
+
+- Problem: on `way`, every real drive since 2026-09-29/30 had an extra server-built trip
+  (`source='telemetry'`, `client_trip=false`, `distance_km=0`, whole-second timestamps, integer
+  SOC) next to the real client-owned trip. The third-party webhook route
+  (`/api/bydmate/webhook-telemetry/[token]`, `3c76772`) calls `bydmate_ingest_telemetry`, whose
+  server trip path ran for any sample without `client_trip`; the webhook has no trip-meter delta,
+  so each trip was 0 km. Its charging / gear-P / stray / gap closes could also end an open Mate trip.
+- Fix: migration `20261004150000_bydmate_webhook_skips_trip_ingest.sql` returns early for
+  `p_source = 'bydmate-app-webhook'` after the live snapshot, sample insert and hourly rollup.
+  Applied to prod 2026-10-06; an open twin stopped growing at ~06:41 UTC while webhook samples
+  continued.
+- The migration is based on the function **live on prod**, not on
+  `20260902063209_canonical_charging_state.sql`, which was never applied there
+  (`bydmate_canonical_is_charging` does not exist on prod). Applying it later must be re-based
+  on top of this guard.
+- Cleanup: deleted 45 twin rows (all overlapped a client trip, none were daemon-only); 54
+  client trips since 2026-09-29 untouched. Child tables cascade; raw samples were not deleted.
+- Open: webhook samples still feed the hourly rollup alongside Mate's blocks, so `way`'s hourly
+  energy may be double-counted since 2026-09-29 — not yet checked.
+
+### Telegram live widget recreates itself after the user deletes the message
+
+- Problem: clearing the bot chat history leaves the `telegram_live_messages` row pointing at a
+  deleted `message_id`; every ingest tried `editMessageText` on the ghost message and silently
+  failed, so the widget never came back (`live-widget.ts` `sendOrEditWidget`).
+- Fix: when the edit fails with "message to edit not found" / "message isn't accessible", fall
+  through to the send-new-message path, which upserts the row with the fresh `message_id`.
+  Other edit failures (blocked bot, transient errors) still return false.
+- Verified: `telegram-live-widget-message` + `live-widget-charging` tests, 15/15 pass. Takes
+  effect on deploy; the next accepted telemetry for that user+vehicle then recreates the widget.
+
+### Telegram live widget: inline Hide button + /start Show recovery
+
+- Context: the user cleared the chat history **on their side only**. The bot's copy of the
+  widget message survives, so `editMessageText` keeps *succeeding* on a message the user cannot
+  see (verified on prod: row touched 09:06 UTC, `message_id` 131 unchanged). Telegram gives no
+  signal for this — the edit-failure fallback above cannot catch it; only a user-initiated
+  action can.
+- Built: widget keyboard (new pure builder `telegramLiveWidgetReplyMarkup` in
+  `live-widget-message.ts`, localized en/be/ru) has a second row "Скрыть виджет"
+  (`callback_data: lw:hide`, row looked up by the callback message's own chat_id+message_id —
+  no vehicle id in callback_data). Webhook (`src/app/api/telegram/webhook/route.ts`) now handles
+  `callback_query`: **hide** → `deleteMessage` for everyone + row `status='hidden'`, and ingest
+  skips hidden vehicles (`live-widget.ts` eligibility filter). **show** (`/start` reply gained a
+  "Показать виджет" button → `lw:show`) → deletes the bot's copy of each tracked active message
+  plus all the user's rows, so the next ingest recreates fresh widgets; this is also the
+  recovery path for the cleared-history state above.
+- Transport: `deleteTelegramMessage` / `answerTelegramCallback` added to `bot-send.ts`.
+- `scripts/configure-telegram-bot.mjs`: webhook `allowed_updates` now includes
+  `callback_query` — after deploy, re-run `npm run telegram:configure -- --webhook`.
+- Docs: `docs/VEHICLE_STATE_NOTIFICATIONS.md` updated (hide/show behavior, `hidden` status,
+  corrected the stale "Russian-only widget copy" limit; callback-answer strings remain RU-only).
+- Verified: 16/16 live-widget message + charging tests; `tsc --noEmit` shows no errors in
+  touched files (demo-data/dev-mock `ChargingSessionRow` gaps are pre-existing, concurrent
+  range work).
+- Deployed & verified on prod 2026-10-06: webhook re-registered with
+  `callback_query` + `TELEGRAM_WEBHOOK_SECRET` (both local `.env` and
+  `/opt/voltflow-telegram/.env`), Python server updated on the VPS
+  (`systemd voltflow-telegram.service`); widget recreated via `/start` →
+  "Показать виджет" and confirmed visible in the bot chat.
+- Note: `TELEGRAM_WEBHOOK_SECRET` absent from the server `.env` means the
+  Python server accepts unauthenticated webhook POSTs — keep it set on both
+  sides (documented in `docs/VEHICLE_STATE_NOTIFICATIONS.md` §Limits).
+- Correction found during rollout: the **live** webhook is the Python server
+  (`scripts/telegram-miniapp-server.py`) running at `/opt/voltflow-telegram` on the
+  Contabo VPS, not the Vercel Next.js route (docs/ARCHITECTURE.md already said so).
+  The same `lw:hide` / `lw:show` handlers were ported into it (syntax-checked);
+  `route.ts` remains the Vercel mirror. Deploy via `./local-scripts/bot-vps.sh
+  telegram-info` → `telegram-deploy` (git-ignored local helper).
+
+---
+
+## 2026-10-01
+
+### Charge power now comes from measured pack voltage × current (di+ 2.0)
+
+- Problem: `charge_power_kw` was di+'s **integer** engine-power parameter. On car `way` it read
+  `-5` for a real ≈ 5.65 kW AC charge (≈ 11 % low), and no current was sent at all.
+- Finding (decompile of di+ `2.0.0b8-2/b8-3`, then measured on `way`): `/api/historyStatus`
+  serves a live `batteryPackVoltage` and `batteryPackCurrent` (negative while charging, 0.1 A
+  steps), with no auth header. The keys also exist in 2.0.0b1; di+ 1.x has no such endpoint.
+  Write-up in `BYDMate-own/docs/DIPLUS_DATA.md`.
+- Built, server: `charge_current_a` accepted in telemetry (±1000 A, rounded to 0.1 A). **No
+  migration** — telemetry is a `jsonb` column; the schema's `.strip()` was the only thing that
+  would have dropped the key. APK (`BYDMate-own`): `HistoryStatusClient` (at most one read per
+  5 s, only while a gun is connected, cache dropped after 15 s), wired into both
+  `TrackingService` and `CommandDaemon`, which builds its own payload.
+- Rule worth keeping: power is `max(0, −V × I / 1000)`, **not** `|V × I|`. At idle di+ reads
+  `+0.3 A`, which `abs()` turns into 0.095 kW, right next to the auto-start threshold
+  (`charge_power_kw > 0.1`). With no pack reading (di+ 1.x, stale, invalid) the previous
+  integer value is used unchanged, and a missing value is still never treated as zero.
+- Verified: 22 server tests + `tsc`; 104 APK unit tests in the 4 affected classes (the full
+  APK suite and `assembleDebug` were not run in the session). On `way`, AC, production rows went
+  from `5` to `5.629…5.692` with `charge_current_a −17.7…−17.9`, from both the app and the
+  daemon path; the open charging session was unaffected.
+- Not verified, tracked in BACKLOG: DC charging (sign and size of the current), how often di+
+  refreshes the current, and CPU cost at the real read rate.
+- Operational note: reinstalling the APK leaves a ~2 min gap (the daemon sends 60 s rows until
+  it relaunches the app), and payloads queued by the old build still carry the integer value.
+- Data: the user's vehicle telemetry, in Postgres inside the existing `telemetry` jsonb.
+
+### History → Trips no longer shows every drive twice
+
+- 765oliva567@gmail.com reported each trip duplicated with slightly different times, km and
+  `—→—%`. Each pair was a `telemetry` row (SOC, samples, track) plus its `byd_energydata`
+  twin (the car's own trip log, no SOC); 11 accounts had 1,654 twins in 30 days.
+- The 2026-08-12 stats fix deduped aggregates but left the lists raw. The shared hook
+  `src/hooks/use-voltflowmate-trips-query.ts` now applies `dedupeTripsBySource()` in both
+  fetchers (day list and latest list), so History, Dashboard and Vehicle lists agree. An
+  energydata row still shows when no telemetry trip overlaps it.
+- Prevention: a regression test with the real 2026-09-30 pairs and a guard test that fails if
+  a new raw `bydmate_trips` read in that hook skips the dedupe. No schema or data change.
+
+---
+
+## 2026-09-30
+
+**Late-delivered charges now become history automatically.** Plan and options were in
+BACKLOG.md (moved here now that it shipped, `efa8fa1`). Cause found by read-only prod
+queries: a car that is offline or asleep keeps sampling and flushes the backlog in one burst
+when it reconnects, so every sample is older than the live auto-start window
+(`AUTO_START_WINDOW_MS`, 3 min) and the planner rightly refuses to open a session. 4 of 13
+accounts had ≥99% of their charging samples delivered >3 min late; one account lost all three
+of its September charges this way. The telemetry itself was never lost.
+
+Shipped: after each ingest batch, if any non-`live_only` sample was received >3 min after its
+`device_time`, `recoverLateChargesForBatch` re-scans that vehicle's persisted samples (12 h
+before the earliest late sample → newest sample) with the existing closed-window detector and
+inserts each closed, non-overlapping candidate as `completed` / `telemetry_recovered` through
+the shared `insertRecoveredSession` (also used by the History import; it now also refuses to
+overlap a still-open session). Best-effort — a failure is logged, never fails the request.
+The live planner and the strict start rule are untouched. The detector now ends a session at
+the last charging sample when the next reading comes after a >3 min silence (was: the distant
+next sample, e.g. a 14 h phantom duration). Its imports were made relative `.ts` so its test
+runs under the plain Node runner (it had never run since `bb24b7b`). Fresh batches cost no
+extra query.
+
+Verified end to end on prod 2026-10-01: car `way` charged with no internet, then reconnected;
+the 196 buffered samples arrived with up to 40 min lag and a `telemetry_recovered` session
+(57.1 → 61%, 1.79 kWh) was created 5 s later, one row, no errors in the deployment logs.
+Separately, at the owner's request, the 3 September charges of one affected account were
+inserted once by hand with the same detector's output (one-off SQL, not part of the code).
+
+Follow-up the same day: the first automatic insert on another account was a plug-in blip
+(6 samples, 57 s, SOC 33.2 → 33.3%). The detector now requires ≥5 min and ≥1% SOC gain for
+every candidate (History card and automatic path alike); 3 fragments of 1–3 min disappear from
+one account's candidate list, and all genuine sessions still pass. At the owner's request the
+other affected accounts were also backfilled once with the same detector: 5 sessions each for
+two accounts (10 rows, all ≥18 min and ≥4% SOC); the third account's firmware reports real
+`charge_power_kw` on ~0.3% of samples, so nothing meets the strict rule and nothing was
+inserted. The blip row itself is not yet removed (deletion needs the owner to run it).
+
+Known limits, deliberately not changed: a charge still open when the car reconnects is not
+imported (live path owns it and starts only from fresh samples, so the offline part of that
+charge is lost); only closed windows are recovered. Not done: one-off backfill for the other
+affected accounts (needs explicit go-ahead); why the sender stays silent while the car sleeps
+and whether its on-device buffer survives an app/head-unit restart (sender is not in this repo;
+its storage is not debuggable over ADB).
+
+---
 
 ## 2026-09-24
 

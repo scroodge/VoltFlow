@@ -10,6 +10,9 @@ export type ChargingProviderType =
   | "user_provider"
   | "custom";
 
+export type ChargingSessionOrigin =
+  "legacy" | "manual_receipt" | "telemetry_recovered";
+
 import type { PressureUnit } from "@/lib/pressure-units";
 
 export type Profile = {
@@ -26,6 +29,8 @@ export type Profile = {
   telegram_username?: string | null;
   notify_channel?: "web_push" | "telegram" | "both";
   aux_battery_alerts_enabled?: boolean;
+  /** User-owned Analytics-tab card order (ids per `src/lib/analytics-card-order.ts`); null = default. */
+  analytics_card_order?: string[] | null;
   /** Android live lock-screen status pushes (tag-replaced); iOS endpoints are skipped. */
   live_status_mode?: "off" | "charging" | "charging_parked";
   is_premium: boolean;
@@ -47,6 +52,8 @@ export type Car = {
   /** AC efficiency — home and commercial. Fast DC uses fast_dc_efficiency_percent. */
   default_efficiency_percent: number;
   fast_dc_efficiency_percent: number;
+  /** Range is estimated down to this SOC instead of 0%. 5%-step value, 0 = drain to empty. */
+  range_reserve_soc_percent: number;
   home_charger_lat?: number | null;
   home_charger_lon?: number | null;
   home_charger_radius_m?: number | null;
@@ -78,6 +85,10 @@ export type ChargingSessionRow = {
    *  (see createManualChargingSession). Energy/cost are receipt figures; SOC and charger
    *  power are derived from them, so the row is excluded from efficiency learning. */
   manual_entry: boolean;
+  /** How this completed-history row was created. */
+  session_origin: ChargingSessionOrigin;
+  /** Idempotency key for owner-confirmed telemetry recovery; null for ordinary sessions. */
+  recovery_key: string | null;
   charged_energy_kwh: number;
   estimated_cost: number;
   status: SessionStatus;
@@ -88,6 +99,13 @@ export type ChargingSessionRow = {
   end_delta_soc: number | null;
   /** Median cell delta over the same top-of-charge window; noise-robust companion to end_max_cell_delta_v. */
   end_median_cell_delta_v: number | null;
+  /** Car-reported range (km) at end of charge — a historical prediction artifact,
+   *  never an input to the live estimate. Null on client rows whose SELECT omits it. */
+  end_range_est_km: number | null;
+  /** SOC (%) the car reported `end_range_est_km` at; the km-per-% anchor. */
+  end_range_soc: number | null;
+  /** Voltflow model estimate (km) at the same anchor SOC (range-prediction-capture). */
+  end_voltflow_est_km: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -170,6 +188,7 @@ export type VoltflowMateTelemetry = {
   cabin_temp_c?: number | null;
   outside_temp_c?: number | null;
   battery_voltage_v?: number | null;
+  charge_current_a?: number | null;
   aux_voltage_v?: number | null;
   cell_voltage_min_v?: number | null;
   cell_voltage_max_v?: number | null;
@@ -238,7 +257,8 @@ export type VoltflowMateDiplus = {
   remote_lock_state?: string | number | null;
 };
 
-export type VehicleCommandStatus = "pending" | "sent" | "done" | "failed" | "rejected";
+export type VehicleCommandStatus =
+  "pending" | "sent" | "done" | "failed" | "rejected";
 
 export type VehicleCommandRow = {
   id: string;
@@ -316,7 +336,10 @@ export type MateAppReleaseRow = {
   created_at: string;
 };
 
-export type VoltflowMateTelemetryPointRow = Omit<VoltflowMateLiveSnapshotRow, "updated_at"> & {
+export type VoltflowMateTelemetryPointRow = Omit<
+  VoltflowMateLiveSnapshotRow,
+  "updated_at"
+> & {
   id: string;
 };
 

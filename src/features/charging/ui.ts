@@ -6,3 +6,4 @@ export { ChargingStatsGrid } from "./_ui/ChargingStatsGrid";
 export type { ChargingStat } from "./_ui/ChargingStatsGrid";
 export { EnergyCorrectionCard } from "./_ui/energy-correction-card";
 export { ManualSessionDialog } from "./_ui/manual-session-dialog";
+export { TelemetryRecoveryCard } from "./_ui/telemetry-recovery-card";

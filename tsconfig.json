@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -20,7 +24,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     }
   },
   "include": [
@@ -29,7 +35,13 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    "**/*.mts",
+    ".next-telegram-demo/types/**/*.ts",
+    ".next-telegram-demo/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "supabase/functions", "screenshots"]
+  "exclude": [
+    "node_modules",
+    "supabase/functions",
+    "screenshots"
+  ]
 }

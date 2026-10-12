@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { attachTripEnergy } from "@/lib/voltflowmate/attach-trip-energy";
 import { devVehicleId, resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
+import { sanitizeTripDistances } from "@/lib/voltflowmate/trip-distance-plausibility";
 import type { VoltflowMateTripRow } from "@/types/database";
 
 export async function GET(request: NextRequest) {
@@ -17,7 +18,10 @@ export async function GET(request: NextRequest) {
   if (!vehicleId && access.devMode) {
     vehicleId = devVehicleId(request);
   }
-  const limit = Math.min(Math.max(Number(params.get("limit") ?? 1) || 1, 1), 100);
+  const limit = Math.min(
+    Math.max(Number(params.get("limit") ?? 1) || 1, 1),
+    100,
+  );
   const lite = params.get("lite") === "1";
 
   if (month && /^\d{4}-\d{2}$/.test(month)) {
@@ -41,10 +45,15 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await monthQuery;
     if (error) {
-      return NextResponse.json({ error: "Failed to load trip dates" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Failed to load trip dates" },
+        { status: 500 },
+      );
     }
 
-    const startedAt = ((data ?? []) as { started_at: string }[]).map((row) => row.started_at);
+    const startedAt = ((data ?? []) as { started_at: string }[]).map(
+      (row) => row.started_at,
+    );
 
     return NextResponse.json({ month, startedAt });
   }
@@ -64,10 +73,15 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await latestQuery;
     if (error) {
-      return NextResponse.json({ error: "Failed to load trips" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Failed to load trips" },
+        { status: 500 },
+      );
     }
 
-    const rawTrips = (data ?? []) as VoltflowMateTripRow[];
+    const rawTrips = sanitizeTripDistances(
+      (data ?? []) as VoltflowMateTripRow[],
+    );
     const trips = lite
       ? rawTrips.slice(0, limit)
       : await attachTripEnergy({
@@ -101,13 +115,16 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await query;
   if (error) {
-    return NextResponse.json({ error: "Failed to load trips" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to load trips" },
+      { status: 500 },
+    );
   }
 
   const trips = await attachTripEnergy({
     supabase: access.supabase,
     userId: access.userId,
-    trips: (data ?? []) as VoltflowMateTripRow[],
+    trips: sanitizeTripDistances((data ?? []) as VoltflowMateTripRow[]),
     vehicleId: vehicleId ?? undefined,
   });
 

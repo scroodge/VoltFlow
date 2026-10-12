@@ -225,6 +225,13 @@ class TelegramApiHandler(BaseHTTPRequestHandler):
             return
 
         update = self.read_json(required=False)
+
+        callback = (update or {}).get("callback_query")
+        if callback:
+            handle_callback_query(callback)
+            self.write_json(200, {"ok": True})
+            return
+
         message = (update or {}).get("message") or (update or {}).get("edited_message") or {}
         chat_id = (message.get("chat") or {}).get("id")
         if not chat_id:
@@ -686,11 +693,101 @@ def send_telegram_message(chat_id):
             "chat_id": chat_id,
             "text": "VoltFlow готов. Откройте приложение, чтобы смотреть зарядку, поездки и сервис BYD.",
             "reply_markup": {
-                "inline_keyboard": [[{"text": "Открыть VoltFlow", "web_app": {"url": web_app_url}}]]
+                "inline_keyboard": [
+                    [{"text": "Открыть VoltFlow", "web_app": {"url": web_app_url}}],
+                    [{"text": "Показать виджет", "callback_data": "lw:show"}],
+                ]
             },
             "disable_web_page_preview": True,
         },
     )
+
+
+def handle_callback_query(callback):
+    query_id = callback.get("id") or ""
+    data = (callback.get("data") or "").strip()
+
+    if data == "lw:hide":
+        message = callback.get("message") or {}
+        chat_id = (message.get("chat") or {}).get("id")
+        message_id = message.get("message_id")
+        if chat_id is None or message_id is None:
+            telegram_request("answerCallbackQuery", {"callback_query_id": query_id})
+            return
+        telegram_request("deleteMessage", {"chat_id": chat_id, "message_id": message_id})
+        query = urllib.parse.urlencode(
+            {"chat_id": f"eq.{chat_id}", "message_id": f"eq.{message_id}"}
+        )
+        try:
+            supabase_request(
+                "PATCH",
+                f"/rest/v1/telegram_live_messages?{query}",
+                {"status": "hidden"},
+                key=SERVICE_ROLE_KEY,
+                headers={"prefer": "return=minimal"},
+                expect_empty=True,
+            )
+        except RuntimeError as exc:
+            print(f"telegram widget hide failed: {exc}", file=sys.stderr)
+        telegram_request(
+            "answerCallbackQuery",
+            {
+                "callback_query_id": query_id,
+                "text": "Скрыто. /start — вернуть виджет",
+                "show_alert": True,
+            },
+        )
+        return
+
+    if data == "lw:show":
+        telegram_id = (callback.get("from") or {}).get("id")
+        if telegram_id is None:
+            telegram_request("answerCallbackQuery", {"callback_query_id": query_id})
+            return
+        profile = supabase_select_one(
+            "profiles",
+            {"select": "id", "telegram_id": f"eq.{telegram_id}"},
+        )
+        if not profile:
+            telegram_request(
+                "answerCallbackQuery",
+                {
+                    "callback_query_id": query_id,
+                    "text": "Telegram не привязан к аккаунту VoltFlow",
+                    "show_alert": True,
+                },
+            )
+            return
+        user_id = profile["id"]
+        rows = supabase_request(
+            "GET",
+            f"/rest/v1/telegram_live_messages?{urllib.parse.urlencode({'user_id': f'eq.{user_id}', 'select': 'chat_id,message_id,status'})}",
+            key=SERVICE_ROLE_KEY,
+        ) or []
+        # Delete the bot's copies first: after a client-side history clear the
+        # user can no longer remove them, and a surviving row would make the
+        # next ingest edit an invisible message instead of recreating it.
+        for row in rows:
+            if row.get("status") == "active":
+                telegram_request(
+                    "deleteMessage",
+                    {"chat_id": row["chat_id"], "message_id": row["message_id"]},
+                )
+        supabase_request(
+            "DELETE",
+            f"/rest/v1/telegram_live_messages?{urllib.parse.urlencode({'user_id': f'eq.{user_id}'})}",
+            key=SERVICE_ROLE_KEY,
+            headers={"prefer": "return=minimal"},
+            expect_empty=True,
+        )
+        telegram_request(
+            "answerCallbackQuery",
+            {
+                "callback_query_id": query_id,
+                "text": "Виджет появится с ближайшей телеметрией",
+                "show_alert": True,
+            },
+        )
 
 
 def telegram_request(method, payload):

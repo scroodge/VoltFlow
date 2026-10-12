@@ -1,4 +1,5 @@
 import { translate, type Locale } from "../i18n.ts";
+import { formatSocPercent } from "../format-soc-percent.ts";
 
 // Driving and charging both move SOC materially; parked/offline cars can safely retain
 // an overnight estimate, but it still expires after a day to bound phantom-drain error.
@@ -6,7 +7,8 @@ export const TELEGRAM_LIVE_RANGE_ACTIVE_MAX_AGE_MS = 10 * 60 * 1000;
 export const TELEGRAM_LIVE_RANGE_PARKED_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const SOC_BAR_LENGTH = 12;
 
-export type TelegramLiveVehicleState = "charging" | "parked" | "driving" | "offline";
+export type TelegramLiveVehicleState =
+  "charging" | "parked" | "driving" | "offline";
 
 export type TelegramLiveWidgetMessage = {
   carName: string;
@@ -18,6 +20,8 @@ export type TelegramLiveWidgetMessage = {
   rangeSampleTime: string;
   nowMs: number;
   chargePowerKw: number | null;
+  /** True when `chargePowerKw` is a measured pack V × I reading (±0.03 kW): shown with 2 decimals. */
+  chargePowerMeasured?: boolean;
   timeToFull: string | null;
   odometer: number | null;
   speedKmh: number | null;
@@ -28,6 +32,30 @@ export type TelegramLiveWidgetMessage = {
 function socBar(soc: number): string {
   const filled = Math.round((soc / 100) * SOC_BAR_LENGTH);
   return "█".repeat(filled) + "░".repeat(SOC_BAR_LENGTH - filled);
+}
+
+/**
+ * Widget keyboard: open-app button + hide button. The hide callback carries no
+ * vehicle id — the widget row is looked up by the callback message's own
+ * (chat_id, message_id), which stays inside Telegram's 64-byte callback_data cap.
+ */
+export function telegramLiveWidgetReplyMarkup(locale: Locale, webAppUrl: string) {
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: translate(locale, "telegramLiveWidget.openVoltFlow") as string,
+          web_app: { url: webAppUrl },
+        },
+      ],
+      [
+        {
+          text: translate(locale, "telegramLiveWidget.hideWidget") as string,
+          callback_data: "lw:hide",
+        },
+      ],
+    ],
+  };
 }
 
 function escapeHtml(value: string): string {
@@ -67,9 +95,12 @@ function stateLabel(locale: Locale, state: TelegramLiveVehicleState): string {
   return translate(locale, `telegramLiveWidget.state.${state}`) as string;
 }
 
-export function composeTelegramLiveWidget(data: TelegramLiveWidgetMessage): string {
+export function composeTelegramLiveWidget(
+  data: TelegramLiveWidgetMessage,
+): string {
   const lines: string[] = [];
-  const battery = data.soc != null ? `🔋 ${data.soc}%` : "🔋 —";
+  const battery =
+    data.soc != null ? `🔋 ${formatSocPercent(data.soc)}%` : "🔋 —";
   const rangeKm = freshRangeEstimateKm(
     data.estimatedRangeKm,
     data.rangeSampleTime,
@@ -77,32 +108,49 @@ export function composeTelegramLiveWidget(data: TelegramLiveWidgetMessage): stri
     data.state,
   );
   const summary = [battery, stateMark(data.state)];
-  if (rangeKm != null) summary.push(`≈ ${rangeKm.toLocaleString(data.locale)} km`);
+  if (rangeKm != null)
+    summary.push(`≈ ${rangeKm.toLocaleString(data.locale)} km`);
   lines.push(summary.join(" · "));
 
-  lines.push(`<b>${data.emoji} ${escapeHtml(data.carName)}</b> · ${stateLabel(data.locale, data.state)}`);
+  lines.push(
+    `<b>${data.emoji} ${escapeHtml(data.carName)}</b> · ${stateLabel(data.locale, data.state)}`,
+  );
 
   if (data.soc != null) {
-    lines.push(`<code>${socBar(data.soc)}</code> <b>${data.soc}%</b>`);
+    lines.push(
+      `<code>${socBar(data.soc)}</code> <b>${formatSocPercent(data.soc)}%</b>`,
+    );
   }
 
   const chargeParts: string[] = [];
   if (data.chargePowerKw != null && data.chargePowerKw > 0) {
-    chargeParts.push(`⚡ ${data.chargePowerKw.toFixed(1)} kW`);
+    chargeParts.push(
+      `⚡ ${data.chargePowerKw.toFixed(data.chargePowerMeasured ? 2 : 1)} kW`,
+    );
   }
   if (data.timeToFull) chargeParts.push(`⏱ ${data.timeToFull}`);
   if (chargeParts.length > 0) lines.push(chargeParts.join(" · "));
 
   const statusParts: string[] = [];
   if (data.odometer != null) {
-    statusParts.push(translate(data.locale, "telegramLiveWidget.mileage", { value: data.odometer }) as string);
+    statusParts.push(
+      translate(data.locale, "telegramLiveWidget.mileage", {
+        value: data.odometer,
+      }) as string,
+    );
   }
-  if (data.speedKmh != null && data.speedKmh > 0) statusParts.push(`${data.speedKmh} km/h`);
+  if (data.speedKmh != null && data.speedKmh > 0)
+    statusParts.push(`${data.speedKmh} km/h`);
   if (statusParts.length > 0) lines.push(`🚗 ${statusParts.join(" · ")}`);
 
   if (data.lat != null && data.lon != null) {
-    const mapLabel = translate(data.locale, "telegramLiveWidget.openMap") as string;
-    lines.push(`📍 <a href="https://www.google.com/maps?q=${data.lat},${data.lon}">${mapLabel}</a>`);
+    const mapLabel = translate(
+      data.locale,
+      "telegramLiveWidget.openMap",
+    ) as string;
+    lines.push(
+      `📍 <a href="https://www.google.com/maps?q=${data.lat},${data.lon}">${mapLabel}</a>`,
+    );
   }
 
   return lines.join("\n");

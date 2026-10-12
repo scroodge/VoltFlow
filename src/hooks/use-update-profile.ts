@@ -20,6 +20,7 @@ export type ProfilePatch = Partial<
     | "notify_channel"
     | "live_status_mode"
     | "aux_battery_alerts_enabled"
+    | "analytics_card_order"
   >
 >;
 

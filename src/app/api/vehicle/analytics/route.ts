@@ -11,6 +11,7 @@ import {
   fetchMonthlyStats,
   fetchPeriodChargingSessions,
   fetchPhantomDrain,
+  fetchRangePredictionReport,
 } from "@/lib/vehicle-analytics";
 import { mapChargingSession } from "@/lib/db-map";
 import { devVehicleId, resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
@@ -51,6 +52,8 @@ export async function GET(request: NextRequest) {
         userId: access.userId,
         vehicleId,
         days: Number.isFinite(days) ? days : 14,
+        from: params.get("from"),
+        to: params.get("to"),
       });
       return NextResponse.json({ rows });
     }
@@ -147,6 +150,37 @@ export async function GET(request: NextRequest) {
           ? { estimatedNoChargeDayPricePerKwh: overview.estimatedNoChargeDayPricePerKwh }
           : {}),
       });
+    }
+
+    if (type === "range-prediction") {
+      const from = params.get("from");
+      const to = params.get("to");
+      if (!from || !to) {
+        return NextResponse.json({ error: "Missing from/to" }, { status: 400 });
+      }
+      const report = await fetchRangePredictionReport({
+        supabase: access.supabase,
+        userId: access.userId,
+        vehicleId,
+        from,
+        to,
+      });
+      return NextResponse.json(report);
+    }
+
+    // Slim endpoint for live surfaces: only the learned trust factor over a trailing
+    // 90-day window, no cycle list (phase 4b, BACKLOG.md).
+    if (type === "range-trust") {
+      const to = new Date().toISOString();
+      const from = new Date(Date.now() - 90 * 86_400_000).toISOString();
+      const report = await fetchRangePredictionReport({
+        supabase: access.supabase,
+        userId: access.userId,
+        vehicleId,
+        from,
+        to,
+      });
+      return NextResponse.json({ trust: report.trust });
     }
 
     if (type === "baseline") {

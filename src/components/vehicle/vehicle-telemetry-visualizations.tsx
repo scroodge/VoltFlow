@@ -1624,6 +1624,9 @@ function DeltaBySocPlot({
   const minTime = Math.min(...points.map((point) => point.time));
   const maxTime = Math.max(...points.map((point) => point.time));
   const deltaPad = Math.max((visibleMaxDelta - visibleMinDelta) * 0.14, 0.005);
+  // SOC axis spans at least 5 points so a top-band charge (99-100) draws on a 95-100 scale.
+  const socAxisMax = maxSoc;
+  const socAxisMin = Math.min(minSoc, socAxisMax - 5);
   const yMin = Math.max(0, visibleMinDelta - deltaPad);
   const yMax = visibleMaxDelta + deltaPad;
   const effectiveLineGapMs = deltaBySocTripLineGapMs(points, lineGapMs);
@@ -1637,8 +1640,8 @@ function DeltaBySocPlot({
     return 110 - ((delta - yMin) / (yMax - yMin)) * 92;
   };
   const socY = (soc: number) => {
-    if (maxSoc === minSoc) return 72;
-    return 110 - ((soc - minSoc) / (maxSoc - minSoc)) * 92;
+    if (socAxisMax === socAxisMin) return 72;
+    return 110 - ((soc - socAxisMin) / (socAxisMax - socAxisMin)) * 92;
   };
   const linePaths = buildBrokenLinePaths(
     points,
@@ -1706,10 +1709,10 @@ function DeltaBySocPlot({
           {fmt(yMin, 3)} V
         </text>
         <text x="296" y="14" textAnchor="end" className="fill-primary text-[10px]">
-          {fmt(maxSoc, 0)}% SOC
+          {fmt(socAxisMax, 0)}% SOC
         </text>
         <text x="296" y="106" textAnchor="end" className="fill-primary text-[10px]">
-          {fmt(minSoc, 0)}% SOC
+          {fmt(socAxisMin, 0)}% SOC
         </text>
         <g clipPath={`url(#${clipId})`}>
           {socPaths.map((d, pathIndex) => (

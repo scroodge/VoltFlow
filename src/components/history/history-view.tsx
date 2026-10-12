@@ -20,7 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDuration } from "@/features/charging/domain";
-import { ManualSessionDialog } from "@/features/charging/ui";
+import { ManualSessionDialog, TelemetryRecoveryCard } from "@/features/charging/ui";
 import { deleteManualChargingSession } from "@/features/charging/manual-actions";
 import { queryKeys } from "@/lib/query-keys";
 import { useAppPath } from "@/lib/dev/dev-path";
@@ -240,6 +240,23 @@ function ManualBadge({ compact }: { compact?: boolean }) {
       ].join(" ")}
     >
       {tx("charging.manualEntry.badge")}
+    </span>
+  );
+}
+
+function RecoveredBadge({ compact }: { compact?: boolean }) {
+  const { t } = useTranslation();
+  const tx = t as HistoryTranslator;
+  return (
+    <span
+      className={[
+        "shrink-0 rounded-full border border-primary/30 bg-primary/10 font-semibold uppercase text-primary",
+        compact
+          ? "px-2 py-0.5 text-[9px] tracking-[0.14em]"
+          : "px-2.5 py-0.5 text-[10px] tracking-[0.18em]",
+      ].join(" ")}
+    >
+      {tx("charging.recovery.badge")}
     </span>
   );
 }
@@ -534,6 +551,7 @@ function SessionCardHeader({
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
         {session.manual_entry ? <ManualBadge compact /> : null}
+        {session.session_origin === "telemetry_recovered" ? <RecoveredBadge compact /> : null}
         <StatusBadge status={session.status} compact />
       </div>
     </div>
@@ -611,6 +629,7 @@ function SessionAccordionItem({
           </p>
         </div>
         {session.manual_entry ? <ManualBadge compact /> : null}
+        {session.session_origin === "telemetry_recovered" ? <RecoveredBadge compact /> : null}
         <StatusBadge status={session.status} compact />
         <span className="font-heading text-sm font-bold tabular-nums">
           {session.manual_entry
@@ -739,6 +758,8 @@ function ChargingTab({
           currency={currency}
         />
       ) : null}
+
+      {manualCar ? <TelemetryRecoveryCard car={manualCar} /> : null}
 
       {filteredSessions.length === 0 ? (
         <p className="rounded-2xl border border-border bg-white/[0.02] p-4 text-center text-sm text-muted-foreground">
@@ -1248,6 +1269,12 @@ export function HistoryView() {
 
       <TabToggle active={tab} onChange={handleTabChange} />
 
+      {hasNoCars && vehicleConnection?.connected ? (
+        <p className="rounded-2xl border border-amber-300/30 bg-amber-400/5 p-3 text-center text-xs text-muted-foreground">
+          {tx("charging.recovery.setupWarning")}
+        </p>
+      ) : null}
+
       {tab === "analytics" ? (
         liveLoading && !vehicleId ? (
           <div className="flex flex-col gap-3">
@@ -1277,10 +1304,6 @@ export function HistoryView() {
           </div>
         ) : sessions.length === 0 && hasNoCars ? (
           <DemoChargingPreview tx={tx} needsPairing={needsPairing} />
-        ) : sessions.length === 0 ? (
-          <p className="rounded-2xl border border-border bg-white/[0.02] p-6 text-center text-sm text-muted-foreground">
-            {tx("history.charging.empty")}
-          </p>
         ) : (
           <ChargingTab sessions={sessions} vehicleId={vehicleId} />
         )

@@ -206,6 +206,92 @@ car, since a duplicate would double-count in the day summary and every monthly t
 Manual rows carry `manual_entry = true`, which drives the "Manual" badge and scopes
 `deleteManualChargingSession` — auto-detected sessions can never be deleted through it.
 
+## Recovery from retained telemetry
+
+When telemetry arrived before the owner created a cloud car profile, or after the normal
+three-minute live-start window, it is retained but cannot create a live session. The History
+page may offer a **recovery candidate** for a matching car only when retained telemetry has a
+closed, parked run of at least four real `charge_power_kw > 0.1` measurements with plausible,
+rising SOC, followed by an explicit non-charging sample. If the next sample arrives after more
+than the three-minute gap (car asleep/offline), the session ends at the **last charging
+sample**, never at that distant reading. A candidate must also last **at least 5 minutes**
+and gain **at least 1% SOC**: a plug-in blip (seen on prod: 57 s, +0.1%) is not history, which
+matters most for the automatic path below because nobody confirms it. Candidates found on demand are not stored until the
+owner confirms an import.
+
+**Automatic recovery of late deliveries.** A car that is offline or asleep keeps sampling and
+flushes the backlog when it reconnects, so the charge is persisted in telemetry but every
+sample is older than the live start window. After each ingest batch
+(`recoverLateChargesForBatch`, called from `POST /api/bydmate/telemetry` after the live
+planner), if any non-`live_only` sample was received more than three minutes after its
+`device_time`, the closed-window detector re-scans that vehicle's persisted samples from 12 h
+before the earliest late sample to the newest sample in the batch, and inserts every closed,
+non-overlapping candidate through the same guarded insert as the History import
+(`insertRecoveredSession`). A charge still open at the end of the range is never imported; the
+live path owns it. The step is best-effort — a failure is logged and never fails the request or
+makes the device re-send a stored batch — and the History card stays as the manual fallback for
+older data or accounts that had no car at the time. Deleting a recovered session does not
+re-create it: only a batch's own range is scanned, and ingest de-duplicates samples.
+
+An imported row has `session_origin = 'telemetry_recovered'`, measured SOC and derived
+SOC-based grid energy. Its tariff cost is an estimate using the current tariff and may be
+corrected later. It is not a receipt/manual entry (`manual_entry = false`) and remains eligible
+for normal reconciliation. `recovery_key` makes the import idempotent, while the usual overlap
+guard prevents a duplicate with an existing session. The feature does not relax the live
+three-minute auto-start rule.
+
+## End-of-charge range promise capture
+
+The same close hook also freezes the *range predictions* made at the top of a charge, so the
+next discharge cycle can be graded against them ("how true was the forecast, what went wrong"
+— phase 2). Raw samples are pruned (30 d free / 365 d premium), so the promise must be
+captured at close or it is lost (migration `20261006180000`):
+
+| Column | Written by | Meaning |
+| --- | --- | --- |
+| `end_range_est_km` | `bydmate_capture_session_end_delta()` (SQL) | The car's own `telemetry.range_est_km` on the last in-window charging sample that also carries SOC. |
+| `end_range_soc` | same RPC | The SOC that prediction belonged to — the km-per-% anchor. |
+| `end_voltflow_est_km` | `captureSessionEndVoltflowEstimate()` (TS, after the RPC) | Voltflow's `estimateRangeFromSoc()` at the same anchor SOC, read like the live display does (latest deduped drive, per-car capacity and reserve). |
+
+All three are **historical prediction artifacts**. The car's `range_est_km` must never enter
+the live user-visible estimate: the dependency-graph ban in
+`src/lib/voltflowmate/range-estimate.test.mjs` stays in force, and these columns are only
+ever read forward, at grading time. The single approved display consumer is the "Car Promise"
+chip on the vehicle live page (phase 4b below) — it shows the promise multiplied by the trust
+factor and never writes anything back into an estimator input. A capture failure never blocks
+session close; sessions closed before the migration keep nulls (a bounded backfill fills rows
+whose samples are still inside retention).
+
+### Range trust factor (phase 4a)
+
+`src/lib/voltflowmate/range-trust-factor.ts` turns graded cycles into a forward correction:
+`factor = recency-weighted median(actualKmAt100 / predictedKmAt100)` over cycles ending in a
+trailing 90-day window, where each cycle's weight halves every 14 days (so a change in how the
+car forms its promise washes out in weeks, not a quarter), requiring ≥3 samples, clamped to
+[0.5, 1.15], and `null` below that. It is served as
+`trust` inside the `?type=range-prediction` report (computed over the trailing window even
+when the display window is narrower) and shown as a "Trust factor … a promise usually means
+≈X km" line on the Range forecast accuracy card. It never feeds `range-estimate.ts` — the ban
+above still applies.
+
+### Corrected car promise on the live page (phase 4b)
+
+Approved 2026-10-06 as the deliberate ban-exemption decision. `correctCarPromise(rangeEstKm,
+trust)` (in `range-trust-factor.ts`) scales the car's *current* live promise and the vehicle
+live page shows it as a "Car Promise" hero chip, fetched through the slim
+`?type=range-trust` API branch via `useRangeTrustQuery` (1 h staleTime — the factor moves on
+a days scale). Rules of the exemption:
+
+- **Display-only.** The corrected number is rendered as-is and never enters
+  `range-estimate.ts`, the Telegram widget, or push notifications — the 4 banned modules stay
+  banned; the exemption lives in `vehicle-live-view.tsx` only, recorded in
+  `range-estimate.test.mjs`.
+- **All-or-nothing.** `correctCarPromise` returns `null` unless both a plausible promise
+  (0–1000 km) and a learned factor exist; the chip is hidden rather than showing the raw car
+  number under a "corrected" label.
+- **Clearly labelled.** It is a separate chip ("Car Promise"), never merged into the
+  AI/Math Range values.
+
 ## Battery Consistency diagnostics
 
 `bydmate_capture_session_end_delta()` runs at every session-close path (manual stop, atomic

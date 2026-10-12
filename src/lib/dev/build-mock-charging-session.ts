@@ -31,6 +31,8 @@ export function buildMockChargingSession(nowMs = Date.now()): ChargingSessionRow
     energy_overridden: false,
     energy_corrected_at: null,
     manual_entry: false,
+    session_origin: "legacy",
+    recovery_key: null,
     charged_energy_kwh: 0,
     estimated_cost: 0,
     status: "charging",
@@ -40,6 +42,9 @@ export function buildMockChargingSession(nowMs = Date.now()): ChargingSessionRow
     end_max_cell_delta_v: null,
     end_delta_soc: null,
     end_median_cell_delta_v: null,
+    end_range_est_km: null,
+    end_range_soc: null,
+    end_voltflow_est_km: null,
     created_at: createdAt,
     updated_at: createdAt,
   };

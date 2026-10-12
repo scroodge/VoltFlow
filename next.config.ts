@@ -27,6 +27,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Keep the local Telegram demo independent of an existing development server.
+  distDir: process.env.VOLTFLOW_TELEGRAM_DEMO_LOCAL === "1" ? ".next-telegram-demo" : ".next",
   experimental: {
     serverActions: {
       // Knowledge Base admin forms carry multipart image uploads. This is the

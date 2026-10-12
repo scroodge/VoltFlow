@@ -32,15 +32,20 @@ export function EnergyCorrectionCard({
   const currency = useAppPreferences((s) => s.currency);
   const currencySymbol = currencySymbols[currency];
   const [kwhDraft, setKwhDraft] = useState(
-    session.charged_energy_kwh > 0 ? String(session.charged_energy_kwh) : "",
+    session.charged_energy_kwh > 0
+      ? String(session.charged_energy_kwh.toFixed(2))
+      : "",
   );
   const [costDraft, setCostDraft] = useState(
-    session.estimated_cost > 0 ? String(session.estimated_cost) : "",
+    session.estimated_cost > 0 ? String(session.estimated_cost.toFixed(2)) : "",
   );
   const [saving, setSaving] = useState(false);
-  const [lastMeasuredEfficiency, setLastMeasuredEfficiency] = useState<number | null>(null);
+  const [lastMeasuredEfficiency, setLastMeasuredEfficiency] = useState<
+    number | null
+  >(null);
 
-  if (session.status !== "completed" && session.status !== "stopped") return null;
+  if (session.status !== "completed" && session.status !== "stopped")
+    return null;
 
   const billedKwh = Number.parseFloat(kwhDraft.replace(",", "."));
   const totalCost = Number.parseFloat(costDraft.replace(",", "."));
@@ -50,12 +55,21 @@ export function EnergyCorrectionCard({
       : null;
 
   const handleSave = async () => {
-    if (!Number.isFinite(billedKwh) || billedKwh <= 0 || !Number.isFinite(totalCost) || totalCost < 0) {
+    if (
+      !Number.isFinite(billedKwh) ||
+      billedKwh <= 0 ||
+      !Number.isFinite(totalCost) ||
+      totalCost < 0
+    ) {
       toast.error(t("charging.correction.invalidInput") as string);
       return;
     }
     setSaving(true);
-    const res = await correctChargingSessionEnergy({ sessionId, billedKwh, totalCost });
+    const res = await correctChargingSessionEnergy({
+      sessionId,
+      billedKwh,
+      totalCost,
+    });
     setSaving(false);
     if (!res.ok) {
       toast.error(res.error);
@@ -86,7 +100,9 @@ export function EnergyCorrectionCard({
       ) : null}
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="correction-kwh">{t("charging.correction.billedKwh") as string}</Label>
+          <Label htmlFor="correction-kwh">
+            {t("charging.correction.billedKwh") as string}
+          </Label>
           <Input
             id="correction-kwh"
             inputMode="decimal"
@@ -98,7 +114,9 @@ export function EnergyCorrectionCard({
         <div className="space-y-2">
           <Label htmlFor="correction-cost">
             {currencyTextWithIcon(
-              t("charging.correction.totalPaid", { currency: currencySymbol }) as string,
+              t("charging.correction.totalPaid", {
+                currency: currencySymbol,
+              }) as string,
               currency,
             )}
           </Label>
@@ -137,7 +155,9 @@ export function EnergyCorrectionCard({
         disabled={saving}
         onClick={() => void handleSave()}
       >
-        {saving ? (t("common.saving") as string) : (t("charging.correction.save") as string)}
+        {saving
+          ? (t("common.saving") as string)
+          : (t("charging.correction.save") as string)}
       </Button>
     </section>
   );

@@ -9,9 +9,10 @@ const installSql = await readMigration("20260908130000_telemetry_cadence_collaps
 // Superseded by the cooldown/digest migration's detector redefinition, but still the
 // source for the consecutive-pair rule assertions below (unchanged by that migration).
 const detectorSql = await readMigration("20260911100000_telemetry_cadence_consecutive_moving_gap.sql");
-// The current detector definition (adds the 24h per-tuple delivery cooldown) plus the
-// new daily digest function and schedule.
+// Historical admin cooldown/digest migration.
 const digestSql = await readMigration("20260924100000_telemetry_cadence_alarm_digest.sql");
+// Current owner-notice detector definition.
+const ownerNoticeSql = await readMigration("20261007110000_owner_telemetry_offline_notices.sql");
 
 test("judges consecutive samples, both moving, more than 8 s apart", () => {
   // Each moving sample is paired with the sample immediately before it, of any speed ...
@@ -63,7 +64,7 @@ test("keeps one open audit per vehicle and signal", () => {
   );
 });
 
-test("suppresses immediate delivery for a tuple already notified in the last 24h", () => {
+test("the historical admin digest used a per-tuple cooldown", () => {
   assert.match(
     digestSql,
     /not exists \(\s*select 1\s*from public\.bydmate_telemetry_cadence_alarm_audits earlier[\s\S]*earlier\.notified_at >= v_now - interval '24 hours'/,
@@ -73,13 +74,26 @@ test("suppresses immediate delivery for a tuple already notified in the last 24h
   assert.match(digestSql, /sample_count_24h < 500/);
 });
 
-test("digests everything still undelivered past a grace period, once a day", () => {
-  assert.match(digestSql, /bydmate_dispatch_telemetry_cadence_digest/);
-  assert.match(digestSql, /notified_at is null\s+and audit\.detected_at <= v_now - interval '15 minutes'/);
-  assert.match(digestSql, /\/api\/cron\/telemetry-cadence-digest/);
-  assert.match(digestSql, /'telemetry-cadence-alarm-digest'/);
-  assert.match(digestSql, /'0 8 \* \* \*'/);
-  assert.doesNotMatch(digestSql, /api\.telegram\.org/);
+test("notifies only linked owners about low 24-hour telemetry counts", () => {
+  assert.match(ownerNoticeSql, /audit\.signal = 'low_24h_count'/);
+  assert.match(
+    ownerNoticeSql,
+    /from public\.profiles owner\s+where owner\.id = audit\.user_id\s+and owner\.telegram_id is not null/,
+  );
+  assert.match(ownerNoticeSql, /\/api\/cron\/telemetry-cadence-alarm/);
+  assert.doesNotMatch(ownerNoticeSql, /api\.telegram\.org/);
+});
+
+test("keeps moving-gap alarms and unlinked owners out of Telegram delivery", () => {
+  const deliveryLoop = ownerNoticeSql.match(/if exists \(select 1 from pg_extension where extname = 'pg_net'\)[\s\S]*?return jsonb_build_object/)?.[0] ?? "";
+  assert.doesNotMatch(deliveryLoop, /audit\.signal = 'moving_gap'/);
+  assert.match(deliveryLoop, /audit\.signal = 'low_24h_count'/);
+  assert.match(deliveryLoop, /owner\.telegram_id is not null/);
+});
+
+test("unschedules the retired admin digest", () => {
+  assert.match(ownerNoticeSql, /cron\.unschedule\(jobid\)[\s\S]*'telemetry-cadence-alarm-digest'/);
+  assert.doesNotMatch(ownerNoticeSql, /cron\.schedule/);
 });
 
 test("keeps the digest dispatcher off the public API roles", () => {
@@ -102,5 +116,16 @@ test("also revokes the digest dispatcher from anon/authenticated (Supabase's exp
   assert.match(
     revokeSql,
     /revoke execute on function public\.bydmate_dispatch_telemetry_cadence_digest\(\) from anon, authenticated;/,
+  );
+});
+
+test("keeps the owner-notice detector off the public API roles", () => {
+  assert.match(
+    ownerNoticeSql,
+    /revoke execute on function public\.bydmate_detect_telemetry_cadence_collapses\(\) from public, anon, authenticated;/,
+  );
+  assert.match(
+    ownerNoticeSql,
+    /grant execute on function public\.bydmate_detect_telemetry_cadence_collapses\(\) to service_role;/,
   );
 });

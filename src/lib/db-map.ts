@@ -53,6 +53,7 @@ export function mapCar(raw: Record<string, unknown>): Car {
       raw.fast_dc_efficiency_percent,
       DEFAULT_FAST_DC_EFFICIENCY_PERCENT,
     ),
+    range_reserve_soc_percent: num(raw.range_reserve_soc_percent, 0),
     home_charger_lat: raw.home_charger_lat != null ? num(raw.home_charger_lat) : null,
     home_charger_lon: raw.home_charger_lon != null ? num(raw.home_charger_lon) : null,
     home_charger_radius_m: raw.home_charger_radius_m != null ? num(raw.home_charger_radius_m, 150) : null,
@@ -84,6 +85,9 @@ export function mapProfile(raw: Record<string, unknown>): Profile {
     notify_channel: enumValue(raw.notify_channel, ["web_push", "telegram", "both"] as const, "web_push"),
     live_status_mode: enumValue(raw.live_status_mode, ["off", "charging", "charging_parked"] as const, "charging"),
     aux_battery_alerts_enabled: raw.aux_battery_alerts_enabled !== false,
+    analytics_card_order: Array.isArray(raw.analytics_card_order)
+      ? raw.analytics_card_order.filter((item): item is string => typeof item === "string")
+      : null,
     is_premium: raw.is_premium === true,
     created_at: String(raw.created_at ?? ""),
   };
@@ -119,6 +123,12 @@ export function mapChargingSession(
     energy_overridden: raw.energy_overridden === true,
     energy_corrected_at: raw.energy_corrected_at ? String(raw.energy_corrected_at) : null,
     manual_entry: raw.manual_entry === true,
+    session_origin: enumValue(
+      raw.session_origin,
+      ["legacy", "manual_receipt", "telemetry_recovered"] as const,
+      raw.manual_entry === true ? "manual_receipt" : "legacy",
+    ) as ChargingSessionRow["session_origin"],
+    recovery_key: raw.recovery_key ? String(raw.recovery_key) : null,
     charged_energy_kwh: num(raw.charged_energy_kwh),
     estimated_cost: num(raw.estimated_cost),
     status: raw.status as ChargingSessionRow["status"],
@@ -127,6 +137,9 @@ export function mapChargingSession(
     end_max_cell_delta_v: nullableNum(raw.end_max_cell_delta_v),
     end_delta_soc: nullableNum(raw.end_delta_soc),
     end_median_cell_delta_v: nullableNum(raw.end_median_cell_delta_v),
+    end_range_est_km: nullableNum(raw.end_range_est_km),
+    end_range_soc: nullableNum(raw.end_range_soc),
+    end_voltflow_est_km: nullableNum(raw.end_voltflow_est_km),
     created_at: String(raw.created_at ?? ""),
     updated_at: String(raw.updated_at ?? ""),
   };

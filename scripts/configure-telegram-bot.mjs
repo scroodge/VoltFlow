@@ -43,7 +43,7 @@ await callTelegram("setMyCommands", {
 if (configureWebhook) {
   const body = {
     url: webhookUrl,
-      allowed_updates: ["message", "edited_message"],
+      allowed_updates: ["message", "edited_message", "callback_query"],
     drop_pending_updates: false,
   };
   if (webhookSecret) body.secret_token = webhookSecret;

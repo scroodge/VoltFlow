@@ -175,6 +175,7 @@ export async function createManualChargingSession(
       stopped_at: parsed.data.stoppedAt,
       energy_overridden: true,
       manual_entry: true,
+      session_origin: "manual_receipt",
     })
     .select("id")
     .single();

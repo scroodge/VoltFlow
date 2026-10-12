@@ -334,6 +334,7 @@ export const dictionaries = {
     },
     dashboard: {
       eyebrow: "EV dashboard",
+      rangeReserveSuffix: "to {soc}%",
       title: "VoltFlow",
       subtitle: "Online control of your EV charging sessions",
       addEvTitle: "Add your EV",
@@ -654,6 +655,19 @@ export const dictionaries = {
           future: "The session cannot be in the future",
         },
       },
+      recovery: {
+        title: "Recover charging from vehicle data",
+        hint: "We found closed charging periods in your retained vehicle telemetry. Review each one before adding it to history.",
+        confirmTitle: "Add recovered charging session?",
+        confirmHint:
+          "Energy and battery levels come from vehicle telemetry. Cost is an estimate using your current tariff and can be corrected later.",
+        import: "Add to history",
+        cancel: "Cancel",
+        imported: "Charging session added from vehicle telemetry",
+        badge: "Recovered",
+        setupWarning:
+          "Vehicle telemetry is connected, but add your car profile before its retained history expires.",
+      },
     },
     cars: {
       title: "New vehicle profile",
@@ -771,6 +785,9 @@ export const dictionaries = {
         mathRange: "Math Range",
         mathRangeHint:
           "Distance left at your measured efficiency over the last ~50 km",
+        carPromise: "Car Promise",
+        carPromiseHint:
+          "The car's own range display, corrected by your trust factor {factor} learned from {count} graded discharge cycles",
         sinceLastCharge: "Since last charge",
         kmPerPercent: "km per 1%",
       },
@@ -779,6 +796,12 @@ export const dictionaries = {
         formula: "Formula",
         updatedAgo: "Updated {value}",
         unavailable: "Unavailable",
+        carPromise: {
+          title: "Corrected car promise",
+          hint: "Show the car's own range scaled by how accurate it has been for you",
+          raw: "Car says",
+          factor: "Corrected (×{factor}, {count} cycles)",
+        },
         metrics: {
           aiRange: {
             title: "AI Range",
@@ -832,6 +855,7 @@ export const dictionaries = {
       telemetry: {
         charging: "Charging",
         chargePower: "Charge power",
+        chargePowerToBattery: "Charge power (to battery)",
         chargeType: "Charge type",
         batteryTemp: "Battery temp",
         cabinTemp: "Cabin temp",
@@ -1007,6 +1031,10 @@ export const dictionaries = {
             "Not enough trips today to compare regen and consumption.",
         },
         telemetryChartsTitle: "Telemetry charts",
+        reorderMode: "Reorder",
+        reorderDone: "Done",
+        reorderHint:
+          "Press and hold a card, then drag it to a new place. The order is saved automatically.",
         teaserTitle: "Analytics & trends",
         teaserSubtitle:
           "Weekly bars, phantom drain, route insights, and exports live in History.",
@@ -1148,8 +1176,25 @@ export const dictionaries = {
         chargingSessionsInBar: "sessions",
         phantomTitle: "Phantom drain",
         phantomSubtitle: "SOC lost while parked (4+ idle hours).",
-        phantomEmpty: "No parked drain days detected in the last two weeks.",
+        phantomEmpty: "No parked drain days detected in the selected period.",
         phantomLoadError: "Could not load phantom drain. Please try again.",
+        rangePredictionTitle: "Range forecast accuracy",
+        rangePredictionSubtitle:
+          "The car's range promise at the end of each charge vs. what the next discharge cycle actually delivered (km extrapolated to a full charge).",
+        rangePredictionEmpty:
+          "No gradeable cycles yet — promises are captured from the first charge after range snapshots were enabled.",
+        rangePredictionLoadError:
+          "Could not load range forecasts. Please try again.",
+        rangePredictionCyclesStat: "Cycles graded",
+        rangePredictionMeanError: "Avg error",
+        rangePredictionPromised: "Promised / 100%",
+        rangePredictionActual: "Actual / 100%",
+        rangePredictionActualShort: "reality",
+        rangePredictionMore: "+{count} more cycles in this period",
+        rangePredictionTrust:
+          "Trust factor {factor} from {count} cycles — a {promise} km promise usually means ≈{corrected} km.",
+        rangePredictionTrustRecent:
+          "Trust factor {factor} learned from {count} recent cycles outside this period.",
         costPerKmTitle: "Cost per km",
         costPerKm: "Cost / km",
         cost: "Charging cost",
@@ -1372,6 +1417,12 @@ export const dictionaries = {
           lifepo4: "LiFePO4 · 13.3–13.4 V",
           other: "Other / not sure",
         },
+      },
+      rangeReserve: {
+        label: "Range reserve level",
+        help: "Estimated range is calculated down to this charge level, not to 0%. Step: 5%.",
+        saved: "Range reserve saved",
+        saveError: "Could not save range reserve",
       },
       tariffMapTitle: "Tariff location map",
       openInOsm: "Open in OpenStreetMap",
@@ -1698,6 +1749,7 @@ export const dictionaries = {
       timeMinutes: "~{minutes}m",
       openMap: "Open map",
       openVoltFlow: "Open VoltFlow",
+      hideWidget: "Hide widget",
     },
     auxBatteryAlerts: {
       open: "Open VoltFlow",
@@ -1974,6 +2026,7 @@ export const dictionaries = {
     },
     dashboard: {
       eyebrow: "EV-панэль",
+      rangeReserveSuffix: "да {soc}%",
       title: "VoltFlow",
       subtitle: "Вялікія кнопкі, жывая матэматыка, сінхранізацыя з Supabase.",
       addEvTitle: "Дадайце свой EV",
@@ -2294,6 +2347,19 @@ export const dictionaries = {
           future: "Сесія не можа быць у будучыні",
         },
       },
+      recovery: {
+        title: "Аднавіць зарадку з даных аўто",
+        hint: "Мы знайшлі завершаныя зарадкі ў захаванай тэлеметрыі аўто. Праверце кожную перад даданнем у гісторыю.",
+        confirmTitle: "Дадаць адноўленую сесію зарадкі?",
+        confirmHint:
+          "Энергія і зарад батарэі атрыманы з тэлеметрыі аўто. Кошт ацэнены па бягучым тарыфе і яго можна скарэктаваць пазней.",
+        import: "Дадаць у гісторыю",
+        cancel: "Скасаваць",
+        imported: "Сесія зарадкі дададзена з тэлеметрыі аўто",
+        badge: "Адноўлена",
+        setupWarning:
+          "Тэлеметрыя аўто падключана, але дадайце профіль аўто, пакуль захаваная гісторыя не скончылася.",
+      },
     },
     cars: {
       title: "Новы профіль аўто",
@@ -2409,6 +2475,9 @@ export const dictionaries = {
         mathRange: "Мат. запас ходу",
         mathRangeHint:
           "Адлегласць пры вымеранай эфектыўнасці за апошнія ~50 км",
+        carPromise: "Прогназ аўто",
+        carPromiseHint:
+          "Запас ходу па ўласным паказанні аўто, скалікаваны на каэфіцыент даверу {factor} з {count} ацэненых цыклаў разраду",
         sinceLastCharge: "Пасля зарадцы",
         kmPerPercent: "км за 1%",
       },
@@ -2417,6 +2486,12 @@ export const dictionaries = {
         formula: "Формула",
         updatedAgo: "Абноўлена {value}",
         unavailable: "Няма даных",
+        carPromise: {
+          title: "Скарэктаваны прагноз аўто",
+          hint: "Паказваць уласны запас ходу аўто з папраўкай на яго дакладнасць у вашым выпадку",
+          raw: "Аўто паказвае",
+          factor: "Скарэктавана (×{factor}, {count} цыклаў)",
+        },
         metrics: {
           aiRange: {
             title: "AI запас ходу",
@@ -2470,6 +2545,7 @@ export const dictionaries = {
       telemetry: {
         charging: "Зарадка",
         chargePower: "Магутнасць зарадкі",
+        chargePowerToBattery: "Магутнасць зарадкі (у батарэю)",
         chargeType: "Тып зарадкі",
         batteryTemp: "Тэмп. батарэі",
         cabinTemp: "Тэмп. салона",
@@ -2644,6 +2720,10 @@ export const dictionaries = {
             "Замала паездак, каб параўнаць рэкуперацыю і расход.",
         },
         telemetryChartsTitle: "Графікі тэлеметрыі",
+        reorderMode: "Перапарадкаваць",
+        reorderDone: "Гатова",
+        reorderHint:
+          "Затрымайце пальцеў на картцы і перацягніце яе. Парадак захоўваецца аўтаматычна.",
         teaserTitle: "Аналітыка і тренды",
         teaserSubtitle:
           "Тыднёвыя слупкі, фантомны расход, маршруты і экспарт — у Гісторыі.",
@@ -2784,9 +2864,26 @@ export const dictionaries = {
         phantomTitle: "Фантомны расход",
         phantomSubtitle: "Страта SOC на стаянцы (4+ гадзіны idle).",
         phantomEmpty:
-          "За апошнія два тыдні не знойдзена дзён з расходам на стаянцы.",
+          "За абраны перыяд не знойдзена дзён з расходам на стаянцы.",
         phantomLoadError:
           "Не ўдалося загрузіць фантомны расход. Паспрабуйце яшчэ раз.",
+        rangePredictionTitle: "Дакладнасць прагнозу запасу ходу",
+        rangePredictionSubtitle:
+          "Абяцанне запасу ходу аўто ў канцы кожнай зарадкі супраць таго, што даў наступны цыкл разраду (км з экстрапаляцыяй на поўны зарад).",
+        rangePredictionEmpty:
+          "Пакуль няма цыклаў для ацэнкі — абяцанні запісваюцца з першай зарадкі пасля ўключэння знимкаў запасу ходу.",
+        rangePredictionLoadError:
+          "Не ўдалося загрузіць прагнозы запасу ходу. Паспрабуйце яшчэ раз.",
+        rangePredictionCyclesStat: "Ацэнена цыклаў",
+        rangePredictionMeanError: "Сярэд. памылка",
+        rangePredictionPromised: "Абецавана / 100%",
+        rangePredictionActual: "Рэальна / 100%",
+        rangePredictionActualShort: "рэальна",
+        rangePredictionMore: "+{count} цыклаў больш за перыяд",
+        rangePredictionTrust:
+          "Каэфіцыент даверу {factor} па {count} цыклах — абячанне {promise} km звычайна азначае ≈{corrected} km.",
+        rangePredictionTrustRecent:
+          "Каэфіцыент даверу {factor} па {count} нядаўніх цыклах па-за гэтым перыядам.",
         costPerKmTitle: "Кошт за км",
         costPerKm: "Кошт / км",
         cost: "Кошт зарадкі",
@@ -3008,6 +3105,12 @@ export const dictionaries = {
           lifepo4: "LiFePO4 · 13,3–13,4 В",
           other: "Іншы / не ўпэўнены",
         },
+      },
+      rangeReserve: {
+        label: "Ніжняя мяжа ацэнкі запасу ходу",
+        help: "Запас ходу разлічваецца да гэтага ўзроўню зараду, а не да 0%. Крок — 5%.",
+        saved: "Ніжнюю мяжу захавана",
+        saveError: "Не ўдалося захаваць ніжнюю мяжу",
       },
       tariffMapTitle: "Карта размяшчэння тарыфу",
       openInOsm: "Адкрыць у OpenStreetMap",
@@ -3337,6 +3440,7 @@ export const dictionaries = {
       timeMinutes: "~{minutes}хв",
       openMap: "Адкрыць карту",
       openVoltFlow: "Адкрыць VoltFlow",
+      hideWidget: "Схаваць віджэт",
     },
     auxBatteryAlerts: {
       open: "Адкрыць VoltFlow",
@@ -3612,6 +3716,7 @@ export const dictionaries = {
     },
     dashboard: {
       eyebrow: "EV-панель",
+      rangeReserveSuffix: "до {soc}%",
       title: "VoltFlow",
       subtitle: "Большие кнопки, живые расчеты, синхронизация с Supabase.",
       addEvTitle: "Добавьте свой EV",
@@ -3934,6 +4039,19 @@ export const dictionaries = {
           future: "Сессия не может быть в будущем",
         },
       },
+      recovery: {
+        title: "Восстановить зарядку из данных авто",
+        hint: "В сохранённой телеметрии авто найдены завершённые зарядки. Проверьте каждую перед добавлением в историю.",
+        confirmTitle: "Добавить восстановленную сессию зарядки?",
+        confirmHint:
+          "Энергия и уровень батареи взяты из телеметрии авто. Стоимость оценена по текущему тарифу, её можно исправить позже.",
+        import: "Добавить в историю",
+        cancel: "Отмена",
+        imported: "Сессия зарядки добавлена из телеметрии авто",
+        badge: "Восстановлено",
+        setupWarning:
+          "Телеметрия авто подключена, но добавьте профиль автомобиля, пока сохранённая история не истекла.",
+      },
     },
     cars: {
       title: "Новый профиль авто",
@@ -4050,6 +4168,9 @@ export const dictionaries = {
         mathRange: "Мат. запас хода",
         mathRangeHint:
           "Расстояние при измеренной эффективности за последние ~50 км",
+        carPromise: "Прогноз авто",
+        carPromiseHint:
+          "Запас хода по собственному показанию авто, скорректированный на коэффициент доверия {factor} из {count} оценённых циклов разряда",
         sinceLastCharge: "Пройдено после зарядки",
         kmPerPercent: "км за 1%",
       },
@@ -4058,6 +4179,12 @@ export const dictionaries = {
         formula: "Формула",
         updatedAgo: "Обновлено {value}",
         unavailable: "Нет данных",
+        carPromise: {
+          title: "Скорректированный прогноз авто",
+          hint: "Показывать собственный запас хода авто с поправкой на его точность в вашем случае",
+          raw: "Авто показывает",
+          factor: "Скорректировано (×{factor}, {count} циклов)",
+        },
         metrics: {
           aiRange: {
             title: "AI запас хода",
@@ -4111,6 +4238,7 @@ export const dictionaries = {
       telemetry: {
         charging: "Зарядка",
         chargePower: "Мощность зарядки",
+        chargePowerToBattery: "Мощность зарядки (в батарею)",
         chargeType: "Тип зарядки",
         batteryTemp: "Темп. батареи",
         cabinTemp: "Темп. салона",
@@ -4286,6 +4414,10 @@ export const dictionaries = {
             "Мало поездок, чтобы сравнить рекуперацию и расход.",
         },
         telemetryChartsTitle: "Графики телеметрии",
+        reorderMode: "Переставить",
+        reorderDone: "Готово",
+        reorderHint:
+          "Удерживайте палец на карточке и перетащите её. Порядок сохраняется автоматически.",
         teaserTitle: "Аналитика и тренды",
         teaserSubtitle:
           "Недельные столбцы, фантомный разряд, маршруты и экспорт — в Истории.",
@@ -4425,9 +4557,26 @@ export const dictionaries = {
         phantomTitle: "Фантомный разряд",
         phantomSubtitle: "Потеря SOC на стоянке (4+ часа idle).",
         phantomEmpty:
-          "За последние две недели дней с разрядом на стоянке не найдено.",
+          "За выбранный период дней с разрядом на стоянке не найдено.",
         phantomLoadError:
           "Не удалось загрузить фантомный разряд. Попробуйте ещё раз.",
+        rangePredictionTitle: "Точность прогноза запаса хода",
+        rangePredictionSubtitle:
+          "Обещание запаса хода авто в конце каждой зарядки против того, что показал следующий цикл разряда (км с экстраполяцией на полный заряд).",
+        rangePredictionEmpty:
+          "Пока нет циклов для оценки — обещания записываются с первой зарядки после включения снимков запаса хода.",
+        rangePredictionLoadError:
+          "Не удалось загрузить прогнозы запаса хода. Попробуйте ещё раз.",
+        rangePredictionCyclesStat: "Циклов оценено",
+        rangePredictionMeanError: "Ср. ошибка",
+        rangePredictionPromised: "Обещано / 100%",
+        rangePredictionActual: "Факт / 100%",
+        rangePredictionActualShort: "факт",
+        rangePredictionMore: "ещё +{count} циклов за период",
+        rangePredictionTrust:
+          "Коэффициент доверия {factor} по {count} циклам — обещание {promise} km обычно означает ≈{corrected} km.",
+        rangePredictionTrustRecent:
+          "Коэффициент доверия {factor} по {count} недавним циклам вне этого периода.",
         costPerKmTitle: "Стоимость за км",
         costPerKm: "Стоимость / км",
         cost: "Стоимость зарядки",
@@ -4648,6 +4797,12 @@ export const dictionaries = {
           lifepo4: "LiFePO4 · 13,3–13,4 В",
           other: "Другой / не уверен",
         },
+      },
+      rangeReserve: {
+        label: "Нижняя граница запаса хода",
+        help: "Запас хода рассчитывается до этого уровня заряда, а не до 0%. Шаг — 5%.",
+        saved: "Нижняя граница сохранена",
+        saveError: "Не удалось сохранить нижнюю границу",
       },
       tariffMapTitle: "Карта расположения тарифа",
       openInOsm: "Открыть в OpenStreetMap",
@@ -4979,6 +5134,7 @@ export const dictionaries = {
       timeMinutes: "~{minutes}м",
       openMap: "Открыть карту",
       openVoltFlow: "Открыть VoltFlow",
+      hideWidget: "Скрыть виджет",
     },
     auxBatteryAlerts: {
       open: "Открыть VoltFlow",

@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { isMissingDatabaseFunction } from "@/lib/database-function-compatibility";
 
 import { enrichTripsWithEnergy } from "@/lib/voltflowmate/attach-trip-energy";
+import { sanitizeTripDistances } from "@/lib/voltflowmate/trip-distance-plausibility";
 import {
   haversineMeters,
   trackPathDistanceKm,
@@ -46,7 +47,12 @@ export type RouteInsight = {
   medianConsumptionKwh100: number | null;
   minConsumptionKwh100: number | null;
   maxConsumptionKwh100: number | null;
-  tempBuckets: { tempC: number; label: string; avgConsumptionKwh100: number; count: number }[];
+  tempBuckets: {
+    tempC: number;
+    label: string;
+    avgConsumptionKwh100: number;
+    count: number;
+  }[];
   predictedConsumptionKwh100: { low: number; high: number } | null;
   currentOutsideTempC: number | null;
 };
@@ -83,7 +89,12 @@ function roundGrid(value: number) {
   return Math.round(value / GEO_PRECISION) * GEO_PRECISION;
 }
 
-function routeKey(startLat: number, startLon: number, endLat: number, endLon: number) {
+function routeKey(
+  startLat: number,
+  startLon: number,
+  endLat: number,
+  endLon: number,
+) {
   return [
     roundGrid(startLat),
     roundGrid(startLon),
@@ -92,13 +103,19 @@ function routeKey(startLat: number, startLon: number, endLat: number, endLon: nu
   ].join(":");
 }
 
-function routeLabel(startLat: number, startLon: number, endLat: number, endLon: number) {
+function routeLabel(
+  startLat: number,
+  startLon: number,
+  endLat: number,
+  endLon: number,
+) {
   return `${startLat.toFixed(2)},${startLon.toFixed(2)} → ${endLat.toFixed(2)},${endLon.toFixed(2)}`;
 }
 
 export function formatRouteIdLabel(routeId: string) {
   const parts = routeId.split(":").map((part) => Number(part));
-  if (parts.length !== 4 || parts.some((part) => !Number.isFinite(part))) return routeId;
+  if (parts.length !== 4 || parts.some((part) => !Number.isFinite(part)))
+    return routeId;
   return routeLabel(parts[0], parts[1], parts[2], parts[3]);
 }
 
@@ -115,7 +132,14 @@ function downsampleTrackPoints<T>(points: T[], maxPoints: number): T[] {
 }
 
 function toRouteTrackPoints(
-  track: { lat: number; lon: number; device_time?: string | null; power_kw?: number | null; speed_kmh?: number | null; soc?: number | null }[],
+  track: {
+    lat: number;
+    lon: number;
+    device_time?: string | null;
+    power_kw?: number | null;
+    speed_kmh?: number | null;
+    soc?: number | null;
+  }[],
   fallbackTime: string,
 ): RouteInsightTrackPoint[] {
   return track.map((point) => ({
@@ -135,7 +159,9 @@ export function isRouteTrackDisplayable(
   minSpanMeters = 75,
   options?: { odometerDistanceKm?: number | null },
 ) {
-  const valid = points.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lon));
+  const valid = points.filter(
+    (p) => Number.isFinite(p.lat) && Number.isFinite(p.lon),
+  );
   if (valid.length < minPoints) return false;
 
   let minLat = valid[0].lat;
@@ -160,7 +186,9 @@ export function isRouteTrackDisplayable(
   const lonSpanM = haversineMeters(minLat, minLon, minLat, maxLon);
 
   const geometricOk =
-    pathMeters >= minSpanMeters || latSpanM >= minSpanMeters || lonSpanM >= minSpanMeters;
+    pathMeters >= minSpanMeters ||
+    latSpanM >= minSpanMeters ||
+    lonSpanM >= minSpanMeters;
   if (geometricOk) return true;
 
   const odometerKm = options?.odometerDistanceKm;
@@ -228,7 +256,8 @@ export async function saveRoutePreference({
 
   if (readError) throw readError;
 
-  let nextName = typeof existing?.name === "string" ? existing.name.trim() || null : null;
+  let nextName =
+    typeof existing?.name === "string" ? existing.name.trim() || null : null;
   let nextPark = Boolean(existing?.is_park);
 
   if (name !== undefined) {
@@ -272,7 +301,8 @@ export async function saveRoutePreference({
 
   if (error) throw error;
 
-  const savedName = typeof data?.name === "string" ? data.name.trim() || null : null;
+  const savedName =
+    typeof data?.name === "string" ? data.name.trim() || null : null;
   return { name: savedName, isPark: Boolean(data?.is_park) };
 }
 
@@ -297,7 +327,9 @@ function median(values: number[]) {
   if (values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid];
 }
 
 function predictFromTemp(
@@ -340,7 +372,10 @@ async function tripOutsideTempAvg(
   let batteryCount = 0;
 
   for (const row of data) {
-    const telemetry = row.telemetry as { outside_temp_c?: number; battery_temp_c?: number };
+    const telemetry = row.telemetry as {
+      outside_temp_c?: number;
+      battery_temp_c?: number;
+    };
     const outside = telemetry.outside_temp_c;
     const battery = telemetry.battery_temp_c;
     if (typeof outside === "number" && Number.isFinite(outside)) {
@@ -381,7 +416,8 @@ async function fetchRouteInsightInputs({
 
   // Keep the deployment-order compatibility path, but expose operational failures
   // instead of silently replacing them with slower per-trip reads.
-  if (error && isMissingDatabaseFunction(error, "bydmate_route_insight_inputs")) return null;
+  if (error && isMissingDatabaseFunction(error, "bydmate_route_insight_inputs"))
+    return null;
   if (error) throw error;
 
   const inputs = new Map<string, RouteInsightInput>();
@@ -405,14 +441,20 @@ async function fetchRouteInsightInputs({
       ) {
         return [];
       }
-      return [{
-        lat: candidate.lat,
-        lon: candidate.lon,
-        device_time: candidate.device_time,
-        power_kw: typeof candidate.power_kw === "number" ? candidate.power_kw : null,
-        speed_kmh: typeof candidate.speed_kmh === "number" ? candidate.speed_kmh : null,
-        soc: typeof candidate.soc === "number" ? candidate.soc : null,
-      }];
+      return [
+        {
+          lat: candidate.lat,
+          lon: candidate.lon,
+          device_time: candidate.device_time,
+          power_kw:
+            typeof candidate.power_kw === "number" ? candidate.power_kw : null,
+          speed_kmh:
+            typeof candidate.speed_kmh === "number"
+              ? candidate.speed_kmh
+              : null,
+          soc: typeof candidate.soc === "number" ? candidate.soc : null,
+        },
+      ];
     });
 
     inputs.set(row.trip_id, {
@@ -449,21 +491,34 @@ export async function fetchRouteInsights({
 
   if (tripsError) throw tripsError;
 
-  const routePreferences = await fetchRoutePreferences(supabase, userId, vehicleId);
+  const routePreferences = await fetchRoutePreferences(
+    supabase,
+    userId,
+    vehicleId,
+  );
   const parkRouteIds = new Set(
     [...routePreferences.entries()]
       .filter(([, pref]) => pref.isPark)
       .map(([routeId]) => routeId),
   );
 
-  const tripRows = (trips ?? []) as VoltflowMateTripRow[];
+  const tripRows = sanitizeTripDistances(
+    (trips ?? []) as VoltflowMateTripRow[],
+  );
   const routeInputs = await fetchRouteInsightInputs({
     supabase,
     userId,
     vehicleId,
     tripIds: tripRows.map((trip) => trip.id),
   });
-  const clusters = new Map<string, { label: string; trips: RouteTripRef[]; trackPoints: RouteInsightTrackPoint[] }>();
+  const clusters = new Map<
+    string,
+    {
+      label: string;
+      trips: RouteTripRef[];
+      trackPoints: RouteInsightTrackPoint[];
+    }
+  >();
 
   for (const trip of tripRows) {
     const routeInput = routeInputs?.get(trip.id);
@@ -515,7 +570,9 @@ export async function fetchRouteInsights({
     const cluster = clusters.get(key) ?? { label, trips: [], trackPoints: [] };
     cluster.trips.push(ref);
     if (
-      isRouteTrackDisplayable(mappedTrack, 2, 75, { odometerDistanceKm: trip.distance_km }) &&
+      isRouteTrackDisplayable(mappedTrack, 2, 75, {
+        odometerDistanceKm: trip.distance_km,
+      }) &&
       mappedTrack.length > cluster.trackPoints.length
     ) {
       cluster.trackPoints = mappedTrack;
@@ -532,7 +589,8 @@ export async function fetchRouteInsights({
 
     const tempMap = new Map<number, { sum: number; count: number }>();
     for (const trip of cluster.trips) {
-      if (trip.outsideTempAvg == null || trip.avgConsumptionKwh100 == null) continue;
+      if (trip.outsideTempAvg == null || trip.avgConsumptionKwh100 == null)
+        continue;
       const bin = Math.round(trip.outsideTempAvg / 5) * 5;
       const row = tempMap.get(bin) ?? { sum: 0, count: 0 };
       row.sum += trip.avgConsumptionKwh100;
@@ -569,10 +627,18 @@ export async function fetchRouteInsights({
         ? cluster.trackPoints
         : [],
       medianConsumptionKwh100: med,
-      minConsumptionKwh100: consumptions.length ? Math.min(...consumptions) : null,
-      maxConsumptionKwh100: consumptions.length ? Math.max(...consumptions) : null,
+      minConsumptionKwh100: consumptions.length
+        ? Math.min(...consumptions)
+        : null,
+      maxConsumptionKwh100: consumptions.length
+        ? Math.max(...consumptions)
+        : null,
       tempBuckets,
-      predictedConsumptionKwh100: predictFromTemp(tempBuckets, currentOutsideTempC, med),
+      predictedConsumptionKwh100: predictFromTemp(
+        tempBuckets,
+        currentOutsideTempC,
+        med,
+      ),
       currentOutsideTempC,
     });
   }
@@ -615,7 +681,9 @@ export async function fetchPeriodTrips({
     .eq("vehicle_id", vehicleId);
 
   if (overlapWindow) {
-    query = query.lte("started_at", to).or(`ended_at.is.null,ended_at.gte.${from}`);
+    query = query
+      .lte("started_at", to)
+      .or(`ended_at.is.null,ended_at.gte.${from}`);
   } else {
     query = query.gte("started_at", from).lte("started_at", to);
   }
@@ -623,7 +691,7 @@ export async function fetchPeriodTrips({
   const { data, error } = await query.order("started_at", { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as VoltflowMateTripRow[];
+  return sanitizeTripDistances((data ?? []) as VoltflowMateTripRow[]);
 }
 
 export async function fetchPeriodTripsEnriched({

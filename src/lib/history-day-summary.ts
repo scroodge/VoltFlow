@@ -1,4 +1,4 @@
-import { dedupeTripsBySource } from "./voltflowmate/hero-drive-metrics.ts";
+import { cleanTrips } from "./voltflowmate/hero-drive-metrics.ts";
 import { resolveLocalCalendarDayWindow } from "./voltflowmate/telemetry-ranges.ts";
 import { tripTractionEnergyKwh } from "./voltflowmate/trip-metrics.ts";
 import type { VoltflowMateTripRow, ChargingSessionRow } from "@/types/database";
@@ -95,7 +95,7 @@ function aggregateHistorySummary(
   periodSessions: ChargingSessionRow[],
   periodTrips: VoltflowMateTripRow[],
 ): HistoryDaySummary {
-  const dedupedTrips = dedupeTripsBySource(periodTrips);
+  const dedupedTrips = cleanTrips(periodTrips);
   const finishedSessions = periodSessions.filter(
     (s) => s.status === "completed" || s.status === "stopped",
   );
