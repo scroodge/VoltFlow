@@ -677,6 +677,7 @@ export function PhantomDrainBarChart({
     title: tx("vehicle.analytics.phantomTitle"),
     unit: "%",
     valueDigits: 1,
+    yAxisMin: 0,
     labels: rows.map((r) => r.date.slice(5)),
     series: [{ label: tx("vehicle.analytics.phantomDrain"), color: "#fbbf24", values: rows.map((r) => r.drainPercent) }],
   };

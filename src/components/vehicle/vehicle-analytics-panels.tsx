@@ -1059,24 +1059,31 @@ export function VehicleAnalyticsPanels({
           {phantomNightQuery.isLoading ? (
             <Skeleton className="mt-2 h-20 rounded-2xl" />
           ) : phantomNightQuery.data?.night ? (
-            <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <AnalyticsStat
-                label={t("vehicle.analytics.phantomNightWindow") as string}
-                value={`${formatNightTime(phantomNightQuery.data.night.startedAt)} – ${formatNightTime(phantomNightQuery.data.night.endedAt)}`}
-              />
-              <AnalyticsStat
-                label={t("vehicle.analytics.phantomNightSoc") as string}
-                value={`${phantomNightQuery.data.night.socStart}% → ${phantomNightQuery.data.night.socEnd}%`}
-              />
-              <AnalyticsStat
-                label={t("vehicle.analytics.phantomDrain") as string}
-                value={`${phantomNightQuery.data.night.drainPercent.toFixed(1)}%`}
-              />
-              <AnalyticsStat
-                label={t("vehicle.analytics.phantomNightIdle") as string}
-                value={`${phantomNightQuery.data.night.idleHours.toFixed(1)} h`}
-              />
-            </div>
+            <dl className="mt-2 divide-y divide-border rounded-2xl border border-border bg-white/[0.02] text-sm">
+              {[
+                [
+                  t("vehicle.analytics.phantomNightWindow") as string,
+                  `${formatNightTime(phantomNightQuery.data.night.startedAt)} – ${formatNightTime(phantomNightQuery.data.night.endedAt)}`,
+                ],
+                [
+                  t("vehicle.analytics.phantomNightSoc") as string,
+                  `${phantomNightQuery.data.night.socStart}% → ${phantomNightQuery.data.night.socEnd}%`,
+                ],
+                [
+                  t("vehicle.analytics.phantomDrain") as string,
+                  `${phantomNightQuery.data.night.drainPercent.toFixed(1)}%`,
+                ],
+                [
+                  t("vehicle.analytics.phantomNightIdle") as string,
+                  `${phantomNightQuery.data.night.idleHours.toFixed(1)} h`,
+                ],
+              ].map(([label, value]) => (
+                <div key={label} className="flex items-baseline justify-between gap-4 px-3 py-2">
+                  <dt className="text-muted-foreground">{label}</dt>
+                  <dd className="text-right font-semibold tabular-nums">{value}</dd>
+                </div>
+              ))}
+            </dl>
           ) : (
             <p className="mt-2 text-sm text-muted-foreground">{t("vehicle.analytics.phantomNightEmpty")}</p>
           )}
@@ -1434,8 +1441,8 @@ function SohTrendChart({
 
 function formatNightTime(iso: string) {
   return new Date(iso).toLocaleString(undefined, {
-    day: "2-digit",
-    month: "2-digit",
+    day: "numeric",
+    month: "short",
     hour: "2-digit",
     minute: "2-digit",
   });
