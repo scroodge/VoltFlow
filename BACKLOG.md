@@ -1505,6 +1505,13 @@ inference) that deserve to be locked with real sample data in hand, not guessed 
 
 ### Should I build this?
 
+**Update 2026-10-12:** option 1 shipped (`3c767720`), then the server-side trip-skip guard
+(migration `20261004150000`, GitHub #44 — "duplicate trips" turned out to be the shared
+`bydmate_live_snapshots` row's `diplus_*` columns getting nulled by the webhook's RPC call
+going through the wrong overload, not trip-table duplication; see CHANGELOG.md →
+"2026-10-12"). Running both senders side by side on the same account (per option 3 above)
+now works without one clobbering the other's live gear/gun-state columns.
+
 ## ~~Cadence-collapse alarm: fold chronic repeats into a daily digest~~ — SHIPPED 2026-09-24
 
 See [CHANGELOG.md](CHANGELOG.md) → "2026-09-24" for what shipped, including a

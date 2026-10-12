@@ -9,6 +9,28 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-10-12
+
+- **Fixed: BYDMate webhook telemetry nulling the shared live-snapshot's gear/gun-state
+  columns (GitHub #44, "Повторы поездок").** The webhook route's RPC call passed a
+  `p_diplus: null` key, which made PostgREST resolve `bydmate_ingest_telemetry` to the
+  10-arg diplus-sync overload instead of the 9-arg overload that carries the
+  `source = 'bydmate-app-webhook'` trip-skip guard added in `20261004150000`. That 10-arg
+  overload unconditionally applies its (empty) diplus object to `bydmate_live_snapshots` on
+  every tick, nulling `diplus_gear`/`diplus_charge_gun_state`/`diplus_charging_status`/
+  `diplus_power_kw` out from under whatever the real Mate daemon last wrote — the two
+  sources share one row per `(user_id, vehicle_id)`, and BACKLOG.md's "A/B against Di+/Mate"
+  design runs both under the same account on purpose. Confirmed on prod (`way`) that the
+  trip-skip guard itself was already working — the account actually sending webhook samples
+  had 57k+ ingested samples and zero `bydmate_trips` rows — but the webhook's token turned
+  out to be bound to a different, dormant account than the one `way` drives day to day, so
+  the clobber was invisible on his live dashboard; it reproduces the moment a webhook token
+  is minted for the same account as the Mate daemon, which is the documented use case.
+  Route now calls the 9-arg overload directly (extracted into
+  `buildBydMateWebhookIngestRpcParams()` in `bydmate-webhook-mapper.ts`, which has no
+  `p_diplus` key at all), so the diplus-sync overload — and its clobber — is never reached.
+  Regression test asserts the RPC params never carry `p_diplus`.
+
 ## 2026-10-07
 
 - **Isolated Telegram demo pack completed locally.** Approved launch-pack work

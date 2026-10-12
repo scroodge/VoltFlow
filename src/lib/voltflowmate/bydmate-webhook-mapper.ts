@@ -130,3 +130,51 @@ export function mapBydMateWebhookPayload(
 
   return { deviceTime, telemetry, location };
 }
+
+export type BydMateWebhookIngestRpcParams = {
+  p_user_id: string;
+  p_vehicle_id: string;
+  p_source: "bydmate-app-webhook";
+  p_schema_version: 1;
+  p_device_time: string;
+  p_received_at: string;
+  p_telemetry: Record<string, unknown>;
+  p_location: Record<string, unknown>;
+  p_raw_payload: Record<string, unknown>;
+};
+
+/**
+ * Builds the `bydmate_ingest_telemetry` RPC params for a mapped webhook sample. Deliberately
+ * has no `p_diplus` key: that param only exists on the 10-arg overload, and Postgres picks an
+ * overload by matching the full set of named keys, so including it (even as `null`) would
+ * route the call to the 10-arg diplus-sync overload instead of the 9-arg one that carries the
+ * `source = 'bydmate-app-webhook'` trip-skip guard. See the webhook route's doc comment for
+ * the live-snapshot clobber that overload causes.
+ */
+export function buildBydMateWebhookIngestRpcParams(args: {
+  userId: string;
+  vehicleId: string;
+  mapped: MappedBydMateTelemetry;
+  receivedAt: string;
+}): BydMateWebhookIngestRpcParams {
+  const rawPayload = {
+    schema_version: 1,
+    vehicle_id: args.vehicleId,
+    device_time: args.mapped.deviceTime,
+    source: "bydmate-app-webhook",
+    telemetry: args.mapped.telemetry,
+    location: args.mapped.location,
+  };
+
+  return {
+    p_user_id: args.userId,
+    p_vehicle_id: args.vehicleId,
+    p_source: "bydmate-app-webhook",
+    p_schema_version: 1,
+    p_device_time: args.mapped.deviceTime,
+    p_received_at: args.receivedAt,
+    p_telemetry: args.mapped.telemetry,
+    p_location: args.mapped.location,
+    p_raw_payload: rawPayload,
+  };
+}
