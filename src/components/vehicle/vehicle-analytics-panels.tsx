@@ -69,6 +69,7 @@ import { useAppPreferences } from "@/stores/use-app-preferences";
 import { devFetch, isDevAppRoute, withDevApiParams } from "@/lib/dev/dev-fetch";
 import { formatCurrencyAmount, type Locale, type TranslationKey } from "@/lib/i18n";
 import type { VoltflowMateTripRow, VoltflowMateTripTrackPointRow, ChargingSessionRow } from "@/types/database";
+import type { PhantomDrainNight } from "@/lib/voltflowmate/phantom-drain";
 import { auxLowVoltage, resolveAuxBatteryChemistry } from "@/lib/vehicle/aux-battery-chemistry";
 import {
   DndContext,
@@ -615,6 +616,14 @@ export function VehicleAnalyticsPanels({
     hasError: periodOverviewQuery.status === "error",
     itemCount: periodTrips.length + periodSessions.length,
   });
+  const phantomNightQuery = useQuery({
+    queryKey: ["vehicle-analytics", "phantom-night", vehicleId],
+    queryFn: () =>
+      fetchAnalytics<{ night: PhantomDrainNight | null }>(
+        `/api/vehicle/analytics?type=phantom-night&vehicle_id=${encodeURIComponent(vehicleId)}`,
+      ),
+    enabled: phantomEnabled,
+  });
   const phantomPanelState = resolveAnalyticsPanelState({
     isLoading: !phantomEnabled || phantomQuery.isLoading,
     hasError: phantomQuery.status === "error",
@@ -1043,6 +1052,35 @@ export function VehicleAnalyticsPanels({
       <section ref={phantomSectionRef} className="voltflow-card p-5">
         <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.phantomTitle")}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.phantomSubtitle")}</p>
+        <div className="mt-4">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            {t("vehicle.analytics.phantomNightTitle")}
+          </p>
+          {phantomNightQuery.isLoading ? (
+            <Skeleton className="mt-2 h-20 rounded-2xl" />
+          ) : phantomNightQuery.data?.night ? (
+            <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <AnalyticsStat
+                label={t("vehicle.analytics.phantomNightWindow") as string}
+                value={`${formatNightTime(phantomNightQuery.data.night.startedAt)} – ${formatNightTime(phantomNightQuery.data.night.endedAt)}`}
+              />
+              <AnalyticsStat
+                label={t("vehicle.analytics.phantomNightSoc") as string}
+                value={`${phantomNightQuery.data.night.socStart}% → ${phantomNightQuery.data.night.socEnd}%`}
+              />
+              <AnalyticsStat
+                label={t("vehicle.analytics.phantomDrain") as string}
+                value={`${phantomNightQuery.data.night.drainPercent.toFixed(1)}%`}
+              />
+              <AnalyticsStat
+                label={t("vehicle.analytics.phantomNightIdle") as string}
+                value={`${phantomNightQuery.data.night.idleHours.toFixed(1)} h`}
+              />
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-muted-foreground">{t("vehicle.analytics.phantomNightEmpty")}</p>
+          )}
+        </div>
         {phantomPanelState === "loading" ? (
           <Skeleton className="mt-4 h-52 rounded-2xl" />
         ) : phantomPanelState === "error" ? (
@@ -1392,6 +1430,15 @@ function SohTrendChart({
       <circle cx={xFn(latest.time)} cy={yFn(latest.soh)} r="5" fill="var(--voltflow-cyan)" stroke="#fff" strokeWidth="1.5" />
     </svg>
   );
+}
+
+function formatNightTime(iso: string) {
+  return new Date(iso).toLocaleString(undefined, {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function AnalyticsStat({ label, value, hint }: { label: string; value: string; hint?: string }) {

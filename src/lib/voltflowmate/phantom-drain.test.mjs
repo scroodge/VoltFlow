@@ -1,7 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { calculatePhantomDrainDays } from "./phantom-drain.ts";
+import { calculatePhantomDrainDays, findLastPhantomDrainNight } from "./phantom-drain.ts";
+
+function at(deviceTime, soc, overrides = {}) {
+  return {
+    deviceTime,
+    soc,
+    speedKmh: 0,
+    powerKw: 0,
+    chargePowerKw: 0,
+    isCharging: false,
+    chargeGunState: "1",
+    ...overrides,
+  };
+}
 
 function sample(hour, soc, overrides = {}) {
   return {
@@ -106,5 +119,50 @@ test("treats explicit unplugged gun state as stronger than stale charging state"
       sample(4, 73, { isCharging: true }),
     ]),
     [{ date: "2026-07-14", socStart: 75, socEnd: 73, drainPercent: 2, idleHours: 4 }],
+  );
+});
+
+test("keeps a night that crosses UTC midnight as one night", () => {
+  // Each UTC day holds only 2h and 1h parked, so the daily view finds nothing.
+  const samples = [
+    at("2026-07-14T21:00:00.000Z", 80),
+    at("2026-07-14T22:00:00.000Z", 79),
+    at("2026-07-14T23:00:00.000Z", 79),
+    at("2026-07-15T00:00:00.000Z", 78),
+    at("2026-07-15T01:00:00.000Z", 77),
+  ];
+
+  assert.deepEqual(calculatePhantomDrainDays(samples), []);
+  assert.deepEqual(findLastPhantomDrainNight(samples), {
+    startedAt: "2026-07-14T21:00:00.000Z",
+    endedAt: "2026-07-15T01:00:00.000Z",
+    socStart: 80,
+    socEnd: 77,
+    drainPercent: 3,
+    idleHours: 4,
+  });
+});
+
+test("returns the most recent qualifying night", () => {
+  const samples = [
+    at("2026-07-13T22:00:00.000Z", 70),
+    at("2026-07-14T02:00:00.000Z", 68),
+    at("2026-07-14T23:00:00.000Z", 60),
+    at("2026-07-15T03:00:00.000Z", 58),
+  ];
+
+  const night = findLastPhantomDrainNight(samples);
+  assert.equal(night.startedAt, "2026-07-14T23:00:00.000Z");
+  assert.equal(night.drainPercent, 2);
+});
+
+test("returns null when no parked night qualifies", () => {
+  assert.equal(
+    findLastPhantomDrainNight([
+      at("2026-07-14T00:00:00.000Z", 80),
+      at("2026-07-14T01:00:00.000Z", 79),
+      at("2026-07-14T02:00:00.000Z", 79),
+    ]),
+    null,
   );
 });
