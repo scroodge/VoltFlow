@@ -1,5 +1,63 @@
 # Backlog — proposed plans awaiting go-ahead
 
+## Telegram live widget: state change bypasses the 30 s edit throttle — BUILT 2026-10-12, migration applied to prod; code awaiting commit + deploy
+
+### Problem (read-only prod check, 2026-10-12)
+
+User car `cl` ("Ваня") was parked, but the widget stayed on "D · В движении · 4 km/h" for ~9 h.
+The car did send P. On 2026-10-08 (Minsk time):
+
+| Batch received | Contents | Widget |
+|---|---|---|
+| 07:42:28 | last sample 07:42:26: gear 2 (R), 4 km/h | edited → "D · 4 km/h" (R counts as `driving`) |
+| 07:42:46 | samples from 07:42:43 on: gear 1 (P), 0 km/h | **skipped**, 18 s < `THROTTLE_MS` (30 s) |
+| 16:51:42 | queued parked samples from 07:42:46 on | first delivery in 9 h |
+
+`isWidgetEditDue` (`src/lib/telegram/live-widget.ts`) throttles on `updated_at` alone, with
+no trailing edit. The final batch before a car stops delivering (a parking transition) is
+exactly the one that gets dropped. The 9 h delivery gap on the Mate side is a separate issue
+(option C, not in scope).
+
+### Options
+
+- **A (chosen):** persist the last *rendered* state (`charging | parked | driving | offline`)
+  on `telegram_live_messages` and let a state change bypass the throttle. Same-state edits
+  (SOC, speed, km) stay throttled at 30 s.
+- B: a cron job that flips widgets with no ingest for over 10 min to offline. It shows 💤,
+  not P, so it does not fix this case. Deferred.
+- C: investigate the Mate delivery gap. Separate topic.
+
+### Plan (A)
+
+1. Migration `20261012120000_telegram_live_messages_last_state.sql`:
+   `alter table public.telegram_live_messages add column if not exists last_state text;`
+   (nullable, no backfill; null → treated as "unknown", so the throttle applies as today).
+   It touches no functions or grants, and RLS is unchanged (service_role only).
+2. `live-widget.ts`:
+   - load `last_state` in `loadWidgetRow`.
+   - eligibility: for a row that is throttled, compute `determineState` on that vehicle's
+     latest sample in the batch; it is due if the state differs from `last_state`. This is a
+     pure in-memory check (no extra query); `isWidgetEditDue` gets an extra `nextState` arg.
+   - `touchUpdatedAt` / `upsertWidgetRow` also write `last_state`.
+3. Test: extract the due-decision into a pure function
+   (`isWidgetEditDue(row, nowMs, nextState)`) and cover:
+   throttled + same state → skip; throttled + state change → edit; null `last_state` →
+   throttle as before; hidden → never.
+4. Apply the migration to self-hosted prod via psql *before* deploying code. If the code ran
+   first, selecting the missing column would fail the widget silently (`.catch` in the route).
+
+### Data ownership
+
+App-owned server state (an internal widget bookkeeping field, not a user preference),
+lives in Postgres on the existing service-role-only `telegram_live_messages` table.
+
+### Cost
+
+No new queries on the ingest hot path. It adds at most one extra Telegram edit per state
+transition.
+
+---
+
 ## Telemetry-offline owner notice — Vercel deployment pending
 
 The database phase is applied: only linked owners' `low_24h_count` alarms can enqueue,

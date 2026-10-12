@@ -27,6 +27,7 @@ import {
   telegramLiveWidgetReplyMarkup,
   type TelegramLiveVehicleState,
 } from "@/lib/telegram/live-widget-message";
+import { isTelegramLiveWidgetEditDue } from "@/lib/telegram/live-widget-edit-due";
 import { resolveLatestMateVersion } from "@/lib/mate-latest-release";
 import { estimateVehicleRangeKm } from "@/lib/voltflowmate/range-estimate";
 import {
@@ -34,8 +35,6 @@ import {
   selectTripsWithinDistanceWindow,
 } from "@/lib/voltflowmate/hero-drive-metrics";
 import type { VoltflowMateTripRow } from "@/types/database";
-
-const THROTTLE_MS = 30_000;
 
 function clampSoc(value: unknown): number | null {
   const n = finiteTelemetryNumber(value);
@@ -79,6 +78,7 @@ type LiveWidgetRow = {
   message_id: number;
   status: string;
   updated_at: string;
+  last_state: string | null;
 };
 
 type CarInfo = {
@@ -89,12 +89,6 @@ type CarInfo = {
   range_reserve_soc_percent: number;
 };
 
-function isWidgetEditDue(existing: LiveWidgetRow | null, nowMs: number) {
-  if (!existing || existing.status !== "active") return true;
-  const lastEditMs = Date.parse(existing.updated_at);
-  return !Number.isFinite(lastEditMs) || nowMs - lastEditMs >= THROTTLE_MS;
-}
-
 async function loadWidgetRow(
   supabase: SupabaseClient,
   userId: string,
@@ -102,7 +96,7 @@ async function loadWidgetRow(
 ): Promise<LiveWidgetRow | null> {
   const { data } = await supabase
     .from("telegram_live_messages")
-    .select("user_id,vehicle_id,chat_id,message_id,status,updated_at")
+    .select("user_id,vehicle_id,chat_id,message_id,status,updated_at,last_state")
     .eq("user_id", userId)
     .eq("vehicle_id", vehicleId)
     .maybeSingle();
@@ -116,6 +110,7 @@ async function upsertWidgetRow(
   vehicleId: string,
   chatId: number,
   messageId: number,
+  state: VehicleState,
 ) {
   await supabase.from("telegram_live_messages").upsert(
     {
@@ -125,6 +120,7 @@ async function upsertWidgetRow(
       message_id: messageId,
       status: "active",
       updated_at: new Date().toISOString(),
+      last_state: state,
     },
     { onConflict: "user_id,vehicle_id" },
   );
@@ -134,10 +130,11 @@ async function touchUpdatedAt(
   supabase: SupabaseClient,
   userId: string,
   vehicleId: string,
+  state: VehicleState,
 ) {
   await supabase
     .from("telegram_live_messages")
-    .update({ updated_at: new Date().toISOString() })
+    .update({ updated_at: new Date().toISOString(), last_state: state })
     .eq("user_id", userId)
     .eq("vehicle_id", vehicleId);
 }
@@ -276,6 +273,7 @@ async function sendOrEditWidget(
   html: string,
   webAppUrl: string,
   locale: Locale,
+  state: VehicleState,
 ): Promise<boolean> {
   const replyMarkup = telegramLiveWidgetReplyMarkup(locale, webAppUrl);
 
@@ -290,7 +288,7 @@ async function sendOrEditWidget(
       },
     );
     if (result.ok) {
-      await touchUpdatedAt(supabase, userId, vehicleId);
+      await touchUpdatedAt(supabase, userId, vehicleId, state);
       return true;
     }
     // The tracked message may have been deleted client-side (cleared chat
@@ -310,6 +308,7 @@ async function sendOrEditWidget(
     vehicleId,
     chatId ?? 0,
     result.messageId,
+    state,
   );
   return true;
 }
@@ -356,11 +355,16 @@ export async function updateTelegramLiveWidgets({
       ),
     ),
   );
+  const stateByVehicle = new Map<string, VehicleState>();
+  for (const [vehicleId, sample] of latestSamples) {
+    stateByVehicle.set(vehicleId, determineState(sample, nowMs, receivedAt));
+  }
   const eligibleVehicleIds = vehicleIds.filter((vehicleId) => {
     const row = existingByVehicle.get(vehicleId) ?? null;
     // Hide-button opt-out: a hidden widget is never resurrected by ingest.
     if (row?.status === "hidden") return false;
-    return isWidgetEditDue(row, nowMs);
+    const state = stateByVehicle.get(vehicleId);
+    return state != null && isTelegramLiveWidgetEditDue(row, nowMs, state);
   });
   if (!eligibleVehicleIds.length) return { updated: 0 };
 
@@ -389,11 +393,11 @@ export async function updateTelegramLiveWidgets({
 
   for (const vehicleId of eligibleVehicleIds) {
     const lastSample = latestSamples.get(vehicleId);
-    if (!lastSample) continue;
+    const state = stateByVehicle.get(vehicleId);
+    if (!lastSample || !state) continue;
 
     const carInfo = cars.get(vehicleId);
 
-    const state = determineState(lastSample, nowMs, receivedAt);
     const soc =
       clampSoc(lastSample.telemetry.soc) ?? clampSoc(lastSample.diplus?.soc);
     const odometer =
@@ -483,6 +487,7 @@ export async function updateTelegramLiveWidgets({
       html,
       webAppUrl,
       profileLocale,
+      state,
     );
     if (ok) updated++;
   }
