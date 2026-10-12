@@ -1,5 +1,62 @@
 # Backlog — proposed plans awaiting go-ahead
 
+## Telegram live widget: VoltFlow Mate APK version footer + update warning — PROPOSED 2026-10-12
+
+### Request
+
+Show the installed Mate APK version at the bottom of the Telegram live widget, and when a
+newer release exists (installed is not the latest), always say so in the widget.
+
+### Findings (read-only, 2026-10-12)
+
+- **Installed version** already arrives on every sample: `payloadSchema.mate_version`
+  (`src/lib/voltflowmate/ingest-payload.ts`), so `updateTelegramLiveWidgets` has it in
+  `lastSample` — no extra query. Prod: 3 snapshots have `mate_version` null (older builds or
+  the daemon path) → no footer for those, never a false "update" nag.
+- **Latest version: the `mate_app_releases` table is stale** — its top row is `0.4.8`, while
+  cars already run `0.6.1`. The PWA hides this by asking GitHub first
+  (`/api/bydmate/latest-release` → `scroodge/BYDMate-own/releases/latest`, `revalidate: 300`)
+  and only then falling back to the table. The widget must do the same, or it would never warn.
+- Comparison helper exists: `isMateUpdateAvailable` / `compareMateVersions` in
+  `src/lib/mate-version.ts`.
+- Edits are already throttled (≤1 per 30 s per vehicle), so the release lookup runs at most
+  that often, and Next's fetch cache (`revalidate: 300`) makes it ~one GitHub call per 5 min.
+
+### Data ownership / storage
+
+App-owned, read-only: the installed version is car-reported telemetry, and the latest version
+is the public GitHub release. No new table, column, migration, or user preference.
+
+### Options
+
+- **A. GitHub-first server helper, table fallback (recommended).** Extract the GitHub fetch +
+  parse from the `latest-release` route into `src/lib/mate-latest-release.ts`; the route and
+  the widget both use it. On GitHub failure fall back to the `mate_app_releases` top row; on
+  both failing, show the installed version with no warning. Footer lines:
+  - up to date: `📱 VoltFlow Mate 0.6.1`
+  - outdated: `⚠️ VoltFlow Mate 0.5.0 → 0.6.1 — <b>update available</b>` (ru/en/… via
+    `telegramLiveWidget.mateVersion` / `mateUpdate` i18n keys).
+- **B. Read only `mate_app_releases`.** Simpler, but wrong today (stale table → never warns)
+  until the release script is fixed to keep it current.
+- **C. Fix the publish script to keep the table current, then B.** Lives in the BYDMate-own
+  repo; worth doing separately, but it does not make the widget correct on its own.
+
+### Plan (option A)
+
+1. `src/lib/mate-latest-release.ts`: `fetchLatestMateRelease()` (GitHub, 5-min cache) +
+   `loadLatestMateReleaseFromTable(supabase)`; refactor the route to use it.
+2. `live-widget.ts`: load the latest release once per `updateTelegramLiveWidgets` call (only
+   when some vehicle is eligible for an edit), pass `mateVersion` / `latestMateVersion` to
+   the composer.
+3. `live-widget-message.ts`: append the footer as the last line; pure, unit-tested in a new
+   `live-widget-message.test.mjs` (up to date, outdated, unknown installed, unknown latest).
+4. i18n keys in `src/lib/i18n.ts`; doc line in `docs/VEHICLE_STATE_NOTIFICATIONS.md`.
+
+Note: the warning shows in the widget only on its next edit (on telemetry), so a parked car
+that is offline won't show a newly published release until it sends data again.
+
+---
+
 ## Telemetry-offline owner notice — Vercel deployment pending
 
 The database phase is applied: only linked owners' `low_24h_count` alarms can enqueue,
