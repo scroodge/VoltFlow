@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildBydMateWebhookIngestRpcParams,
   bydMateWebhookSchema,
   mapBydMateWebhookPayload,
 } from "./bydmate-webhook-mapper.ts";
@@ -108,4 +109,34 @@ test("numeric fields accept numeric strings, matching the wire format seen in pr
   assert.ok(mapped);
   assert.equal(mapped.telemetry.soc, 76);
   assert.equal(mapped.telemetry.speed_kmh, 0);
+});
+
+test("ingest RPC params never carry a p_diplus key, so Postgres can't route the call to the 10-arg diplus-sync overload", () => {
+  const mapped = mapBydMateWebhookPayload(
+    parse({ utc: 1790680056, soc: 50, speed: 0 }),
+  );
+  assert.ok(mapped);
+
+  const rpcParams = buildBydMateWebhookIngestRpcParams({
+    userId: "11111111-1111-1111-1111-111111111111",
+    vehicleId: "way",
+    mapped,
+    receivedAt: "2026-10-12T07:00:00.000Z",
+  });
+
+  assert.deepEqual(
+    Object.keys(rpcParams).sort(),
+    [
+      "p_device_time",
+      "p_location",
+      "p_raw_payload",
+      "p_received_at",
+      "p_schema_version",
+      "p_source",
+      "p_telemetry",
+      "p_user_id",
+      "p_vehicle_id",
+    ].sort(),
+  );
+  assert.equal(rpcParams.p_source, "bydmate-app-webhook");
 });

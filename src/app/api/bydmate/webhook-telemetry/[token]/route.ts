@@ -4,6 +4,7 @@ import {
   resolveWebhookToken,
 } from "@/lib/voltflowmate/webhook-token-auth";
 import {
+  buildBydMateWebhookIngestRpcParams,
   bydMateWebhookSchema,
   mapBydMateWebhookPayload,
 } from "@/lib/voltflowmate/bydmate-webhook-mapper";
@@ -33,6 +34,17 @@ const MAX_WEBHOOK_BODY_BYTES = 20_000;
  * `source = 'bydmate-app-webhook'` it returns before any trip logic (migration
  * `20261004150000`); without that guard every drive got a 0 km server-built twin trip and
  * webhook samples could close an open Mate trip. See BACKLOG.md for the full scope decision.
+ *
+ * Calls the 9-arg `bydmate_ingest_telemetry` overload directly (no `p_diplus` key) rather
+ * than the 10-arg diplus-sync overload the canonical Mate ingest uses. This sender never
+ * carries a diplus block, and passing `p_diplus: null` through the 10-arg overload makes it
+ * apply an empty diplus object to `bydmate_live_snapshots` on every tick — nulling out
+ * `diplus_gear`/`diplus_charge_gun_state`/`diplus_charging_status`/`diplus_power_kw` from
+ * whatever the real Mate daemon last wrote, since both sources share one row per
+ * (user_id, vehicle_id) and BACKLOG.md's "A/B against Di+/Mate" use case runs them under the
+ * same account by design. The 9-arg overload's own live-snapshot upsert never touches those
+ * columns, so calling it directly is also what skips the diplus clobber, not just the trip
+ * guard it already carried.
  */
 export async function POST(
   request: Request,
@@ -84,29 +96,16 @@ export async function POST(
   }
 
   const receivedAt = new Date().toISOString();
-  const rawPayload = {
-    schema_version: 1,
-    vehicle_id: target.vehicleId,
-    device_time: mapped.deviceTime,
-    source: "bydmate-app-webhook",
-    telemetry: mapped.telemetry,
-    location: mapped.location,
-  };
+  const rpcParams = buildBydMateWebhookIngestRpcParams({
+    userId: target.userId,
+    vehicleId: target.vehicleId,
+    mapped,
+    receivedAt,
+  });
 
   const { data: ingestResult, error: ingestError } = await supabase.rpc(
     "bydmate_ingest_telemetry",
-    {
-      p_user_id: target.userId,
-      p_vehicle_id: target.vehicleId,
-      p_source: "bydmate-app-webhook",
-      p_schema_version: 1,
-      p_device_time: mapped.deviceTime,
-      p_received_at: receivedAt,
-      p_telemetry: mapped.telemetry,
-      p_diplus: null,
-      p_location: mapped.location,
-      p_raw_payload: rawPayload,
-    },
+    rpcParams,
   );
 
   if (ingestError) {
