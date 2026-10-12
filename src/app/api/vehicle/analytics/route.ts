@@ -10,6 +10,7 @@ import {
   fetchCostPerKm,
   fetchMonthlyStats,
   fetchPeriodChargingSessions,
+  fetchLastPhantomDrainNight,
   fetchPhantomDrain,
   fetchRangePredictionReport,
 } from "@/lib/vehicle-analytics";
@@ -56,6 +57,18 @@ export async function GET(request: NextRequest) {
         to: params.get("to"),
       });
       return NextResponse.json({ rows });
+    }
+
+    if (type === "phantom-night") {
+      if (!vehicleId) {
+        return NextResponse.json({ error: "vehicle_id is required" }, { status: 400 });
+      }
+      const night = await fetchLastPhantomDrainNight({
+        supabase: access.supabase,
+        userId: access.userId,
+        vehicleId,
+      });
+      return NextResponse.json({ night });
     }
 
     if (type === "cost-per-km") {

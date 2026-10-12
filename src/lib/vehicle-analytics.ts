@@ -9,7 +9,9 @@ import {
 } from "@/lib/voltflowmate/hero-drive-metrics";
 import {
   calculatePhantomDrainDays,
+  findLastPhantomDrainNight,
   type PhantomDrainDay,
+  type PhantomDrainNight,
   type PhantomDrainSample,
 } from "@/lib/voltflowmate/phantom-drain";
 import { chargingSessionAnalyticsScope } from "@/features/charging/domain";
@@ -477,6 +479,44 @@ async function fetchPhantomDrainFallback({
   from: Date;
   to: Date;
 }): Promise<PhantomDrainDay[]> {
+  const samples = await fetchPhantomSamples({ supabase, userId, vehicleId, from, to });
+  return calculatePhantomDrainDays(samples);
+}
+
+/**
+ * Most recent parked night (4h+ idle with SOC loss) in the last `hours`. Reads raw
+ * samples directly, so it stays inside the 30-day free raw window and needs no tier gate.
+ */
+export async function fetchLastPhantomDrainNight({
+  supabase,
+  userId,
+  vehicleId,
+  hours = 36,
+}: {
+  supabase: SupabaseClient;
+  userId: string;
+  vehicleId: string;
+  hours?: number;
+}): Promise<PhantomDrainNight | null> {
+  const to = new Date();
+  const from = new Date(to.getTime() - hours * 60 * 60 * 1000);
+  const samples = await fetchPhantomSamples({ supabase, userId, vehicleId, from, to });
+  return findLastPhantomDrainNight(samples);
+}
+
+async function fetchPhantomSamples({
+  supabase,
+  userId,
+  vehicleId,
+  from,
+  to,
+}: {
+  supabase: SupabaseClient;
+  userId: string;
+  vehicleId: string;
+  from: Date;
+  to: Date;
+}): Promise<PhantomDrainSample[]> {
   type Sample = {
     device_time: string;
     telemetry: VoltflowMateTelemetry;
@@ -502,17 +542,15 @@ async function fetchPhantomDrainFallback({
     if (page.length < pageSize) break;
   }
 
-  return calculatePhantomDrainDays(
-    samples.map((sample): PhantomDrainSample => ({
-      deviceTime: sample.device_time,
-      soc: sample.telemetry.soc,
-      speedKmh: sample.telemetry.speed_kmh,
-      powerKw: sample.telemetry.power_kw,
-      chargePowerKw: sample.telemetry.charge_power_kw,
-      isCharging: sample.telemetry.is_charging,
-      chargeGunState: sample.diplus_charge_gun_state,
-    })),
-  );
+  return samples.map((sample): PhantomDrainSample => ({
+    deviceTime: sample.device_time,
+    soc: sample.telemetry.soc,
+    speedKmh: sample.telemetry.speed_kmh,
+    powerKw: sample.telemetry.power_kw,
+    chargePowerKw: sample.telemetry.charge_power_kw,
+    isCharging: sample.telemetry.is_charging,
+    chargeGunState: sample.diplus_charge_gun_state,
+  }));
 }
 
 export async function fetchCostPerKm({
