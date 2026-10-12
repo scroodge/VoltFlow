@@ -1177,6 +1177,11 @@ export const dictionaries = {
         phantomTitle: "Phantom drain",
         phantomSubtitle: "SOC lost while parked (4+ idle hours).",
         phantomEmpty: "No parked drain days detected in the selected period.",
+        phantomNightTitle: "Last night",
+        phantomNightWindow: "Parked",
+        phantomNightSoc: "SOC",
+        phantomNightIdle: "Idle",
+        phantomNightEmpty: "No parked drain of 4+ hours in the last 36 hours.",
         phantomLoadError: "Could not load phantom drain. Please try again.",
         rangePredictionTitle: "Range forecast accuracy",
         rangePredictionSubtitle:
@@ -2865,6 +2870,11 @@ export const dictionaries = {
         phantomSubtitle: "Страта SOC на стаянцы (4+ гадзіны idle).",
         phantomEmpty:
           "За абраны перыяд не знойдзена дзён з расходам на стаянцы.",
+        phantomNightTitle: "Мінулая ноч",
+        phantomNightWindow: "Стаянка",
+        phantomNightSoc: "SOC",
+        phantomNightIdle: "Прастой",
+        phantomNightEmpty: "За апошнія 36 гадзін стаянак 4+ гадзіны з расходам не знойдзена.",
         phantomLoadError:
           "Не ўдалося загрузіць фантомны расход. Паспрабуйце яшчэ раз.",
         rangePredictionTitle: "Дакладнасць прагнозу запасу ходу",
@@ -4558,6 +4568,11 @@ export const dictionaries = {
         phantomSubtitle: "Потеря SOC на стоянке (4+ часа idle).",
         phantomEmpty:
           "За выбранный период дней с разрядом на стоянке не найдено.",
+        phantomNightTitle: "Прошлая ночь",
+        phantomNightWindow: "Стоянка",
+        phantomNightSoc: "SOC",
+        phantomNightIdle: "Простой",
+        phantomNightEmpty: "За последние 36 часов не найдено стоянок 4+ часа с разрядом.",
         phantomLoadError:
           "Не удалось загрузить фантомный разряд. Попробуйте ещё раз.",
         rangePredictionTitle: "Точность прогноза запаса хода",
