@@ -17,6 +17,8 @@ export type TelegramLiveWidgetMessage = {
   locale: Locale;
   soc: number | null;
   estimatedRangeKm: number | null;
+  /** Range-reserve SOC the estimate is computed down to; shown after the km value when > 0. */
+  reserveSocPercent?: number;
   rangeSampleTime: string;
   nowMs: number;
   chargePowerKw: number | null;
@@ -39,7 +41,10 @@ function socBar(soc: number): string {
  * vehicle id — the widget row is looked up by the callback message's own
  * (chat_id, message_id), which stays inside Telegram's 64-byte callback_data cap.
  */
-export function telegramLiveWidgetReplyMarkup(locale: Locale, webAppUrl: string) {
+export function telegramLiveWidgetReplyMarkup(
+  locale: Locale,
+  webAppUrl: string,
+) {
   return {
     inline_keyboard: [
       [
@@ -108,8 +113,11 @@ export function composeTelegramLiveWidget(
     data.state,
   );
   const summary = [battery, stateMark(data.state)];
-  if (rangeKm != null)
-    summary.push(`≈ ${rangeKm.toLocaleString(data.locale)} km`);
+  if (rangeKm != null) {
+    const reserve = data.reserveSocPercent ?? 0;
+    const reserveSuffix = reserve > 0 ? ` (${reserve}%)` : "";
+    summary.push(`≈ ${rangeKm.toLocaleString(data.locale)} km${reserveSuffix}`);
+  }
   lines.push(summary.join(" · "));
 
   lines.push(

@@ -449,6 +449,7 @@ export async function updateTelegramLiveWidgets({
       locale: profileLocale,
       soc,
       estimatedRangeKm,
+      reserveSocPercent: carInfo?.range_reserve_soc_percent ?? 0,
       rangeSampleTime: lastSample.device_time,
       nowMs,
       chargePowerKw,

@@ -31,6 +31,20 @@ function message(overrides = {}) {
   });
 }
 
+test("live widget header shows the range-reserve floor after the km value in every mode", () => {
+  for (const state of ["driving", "parked", "charging"]) {
+    const header = message({ state, reserveSocPercent: 35, soc: 75.9, estimatedRangeKm: 104 })
+      .split("\n")[0];
+    assert.match(header, /≈ 104 km \(35%\)$/, state);
+  }
+});
+
+test("live widget header omits the reserve suffix when the reserve is zero", () => {
+  const header = message({ state: "driving", reserveSocPercent: 0, estimatedRangeKm: 104 })
+    .split("\n")[0];
+  assert.equal(header.endsWith("≈ 104 km"), true);
+});
+
 test("live widget header shows the clean estimate and keeps odometer in detail row", () => {
   const lines = message().split("\n");
 
