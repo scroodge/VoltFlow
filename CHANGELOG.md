@@ -9,6 +9,16 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-10-14
+
+- **"Distance since charge" no longer counts the car's raw trip meter.** Car `cl` showed
+  7.0 km after a charge, but only 0.4 km had been driven: `tripDistanceKm` took
+  `max(distance_km, current_trip_distance_km)` for an open trip, and that car's trip meter
+  does not reset across a charge (6.6 km pre-charge + 0.4). Open trips now use the server's
+  per-trip `distance_km` only. That also fixes km/1% and the AI-distance window, which shared
+  the helper. The live-trip-distance row was removed from the metric explainers. Regression
+  test in `hero-drive-metrics.test.mjs`.
+
 ## 2026-10-12
 
 - **Telegram live widget shows the VoltFlow Mate APK version.** The last widget line is

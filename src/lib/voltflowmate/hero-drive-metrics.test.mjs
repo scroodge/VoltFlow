@@ -63,7 +63,7 @@ test("findLastFinishedChargeSession picks newest finished session for car", () =
   assert.equal(latest?.id, "s2");
 });
 
-test("sumDistanceSinceCharge sums trips after anchor and uses live distance for open trip", () => {
+test("sumDistanceSinceCharge sums trips after anchor, including the open trip's stored distance", () => {
   const trips = [
     {
       ...baseTrip,
@@ -87,20 +87,59 @@ test("sumDistanceSinceCharge sums trips after anchor and uses live distance for 
     },
   ];
 
-  const total = sumDistanceSinceCharge(trips, "2026-06-16T06:00:00.000Z", 5.5);
-  assert.equal(total, 13.5);
+  const total = sumDistanceSinceCharge(trips, "2026-06-16T06:00:00.000Z");
+  assert.equal(total, 11);
 });
 
-test("tripDistanceKm prefers live distance for ongoing trip", () => {
+test("tripDistanceKm uses the server distance for an open trip", () => {
   const ongoing = { ...baseTrip, ended_at: null, distance_km: 4 };
-  assert.equal(tripDistanceKm(ongoing, 6.2), 6.2);
+  assert.equal(tripDistanceKm(ongoing), 4);
+});
+
+// Car `cl`, 2026-10-14: 6.6 km before the charge, 0.4 km after it. The car's trip meter
+// did not reset across the charge and read 7.0 — which the tile used to show.
+test("distance since charge ignores a trip meter that carried over across the charge", () => {
+  const { distanceSinceChargeKm } = computeHeroDriveMetrics({
+    sessions: [
+      {
+        id: "charge",
+        car_id: "car-a",
+        status: "completed",
+        started_at: "2026-10-14T04:44:18.000Z",
+        stopped_at: "2026-10-14T09:29:08.000Z",
+        created_at: "2026-10-14T04:44:18.000Z",
+      },
+    ],
+    carId: "car-a",
+    trips: [
+      {
+        ...baseTrip,
+        id: "after-charge",
+        client_trip: true,
+        started_at: "2026-10-14T09:39:43.000Z",
+        ended_at: null,
+        last_device_time: "2026-10-14T09:41:40.000Z",
+        distance_km: 0.4,
+      },
+      {
+        ...baseTrip,
+        id: "before-charge",
+        client_trip: true,
+        started_at: "2026-10-14T04:20:03.000Z",
+        ended_at: "2026-10-14T04:43:09.000Z",
+        distance_km: 6.6,
+      },
+    ],
+    snapshot: { telemetry: { current_trip_distance_km: 7, soc: 99.7 } },
+    batteryCapacityKwh: 45,
+  });
+  assert.equal(distanceSinceChargeKm, 0.4);
 });
 
 test("resolveKmPerPercentSoc uses SOC delta for closed trip", () => {
   const kmPerPercent = resolveKmPerPercentSoc({
     trips: [baseTrip],
     liveSoc: null,
-    liveDistanceKm: null,
     batteryCapacityKwh: 45,
     consumptionKwh100: null,
   });
@@ -112,7 +151,6 @@ test("resolveKmPerPercentSoc falls back to consumption when SOC delta is too sma
   const kmPerPercent = resolveKmPerPercentSoc({
     trips: [trip],
     liveSoc: null,
-    liveDistanceKm: null,
     batteryCapacityKwh: 45,
     consumptionKwh100: 15,
   });
@@ -130,7 +168,6 @@ test("resolveKmPerPercentSoc sums a window of trips instead of just the latest",
   const kmPerPercent = resolveKmPerPercentSoc({
     trips,
     liveSoc: null,
-    liveDistanceKm: null,
     batteryCapacityKwh: 45,
     consumptionKwh100: null,
   });
@@ -150,7 +187,6 @@ test("resolveKmPerPercentSoc skips a junk latest trip and keeps walking older on
   const kmPerPercent = resolveKmPerPercentSoc({
     trips: [junk, real],
     liveSoc: null,
-    liveDistanceKm: null,
     batteryCapacityKwh: 45,
     consumptionKwh100: null,
   });
@@ -166,7 +202,6 @@ test("resolveKmPerPercentSoc stops once the window reaches ~50 km", () => {
   const kmPerPercent = resolveKmPerPercentSoc({
     trips,
     liveSoc: null,
-    liveDistanceKm: null,
     batteryCapacityKwh: 45,
     consumptionKwh100: null,
   });
@@ -180,7 +215,7 @@ test("selectTripsWithinDistanceWindow stops once the window is covered and inclu
     { ...baseTrip, id: "t2", distance_km: 35 },
     { ...baseTrip, id: "t1", distance_km: 100 },
   ];
-  const selected = selectTripsWithinDistanceWindow(trips, null, 50);
+  const selected = selectTripsWithinDistanceWindow(trips, 50);
   assert.deepEqual(selected.map((trip) => trip.id), ["t3", "junk", "t2"]);
 });
 

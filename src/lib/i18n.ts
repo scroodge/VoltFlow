@@ -838,7 +838,6 @@ export const dictionaries = {
           socDelta: "SOC used",
           kmPerPercent: "Measured km per 1%",
           lastChargeEnded: "Last charge ended",
-          liveTripDistance: "Current trip distance",
           result: "Result",
         },
         notes: {
@@ -2537,7 +2536,6 @@ export const dictionaries = {
           socDelta: "Выкарыстаны SOC",
           kmPerPercent: "Вымераныя км за 1%",
           lastChargeEnded: "Апошняя зарадка завершана",
-          liveTripDistance: "Адлегласць бягучай паездкі",
           result: "Вынік",
         },
         notes: {
@@ -4239,7 +4237,6 @@ export const dictionaries = {
           socDelta: "Использованный SOC",
           kmPerPercent: "Измеренные км за 1%",
           lastChargeEnded: "Последняя зарядка завершена",
-          liveTripDistance: "Расстояние текущей поездки",
           result: "Результат",
         },
         notes: {

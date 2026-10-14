@@ -800,7 +800,6 @@ function Hero({
   const coreMetrics = heroCoreMetrics(snapshot, t, locale);
   const dedupedTrips = useMemo(() => cleanTrips(allTrips), [allTrips]);
   const explanations = useMemo(() => {
-    const liveDistanceKm = snapshot.telemetry.current_trip_distance_km;
     const anchorStoppedAt =
       lastSession?.stopped_at ?? lastSession?.started_at ?? null;
     return {
@@ -822,7 +821,6 @@ function Hero({
       kmPerPercent: explainKmPerPercent({
         trips: dedupedTrips,
         liveSoc: snapshot.telemetry.soc,
-        liveDistanceKm,
         batteryCapacityKwh,
         consumptionKwh100:
           snapshot.telemetry.current_trip_consumption_kwh_100km,
@@ -831,7 +829,6 @@ function Hero({
       sinceCharge: explainDistanceSinceCharge({
         trips: dedupedTrips,
         anchorStoppedAt,
-        liveDistanceKm,
         lastSession,
         sourceAt: snapshot.received_at,
       }),

@@ -78,13 +78,13 @@ export function explainAiRange({ snapshot, recentTrips, batteryCapacityKwh, rese
   };
 }
 
-function windowTotals(trips: VoltflowMateTripRow[], liveSoc: number | null | undefined, liveDistanceKm: number | null | undefined) {
-  const selected = selectTripsWithinDistanceWindow(trips, liveDistanceKm);
+function windowTotals(trips: VoltflowMateTripRow[], liveSoc: number | null | undefined) {
+  const selected = selectTripsWithinDistanceWindow(trips);
   let distance = 0;
   let socDelta = 0;
   let hasSoc = false;
   selected.forEach((trip, index) => {
-    const d = tripDistanceKm(trip, index === 0 && !trip.ended_at ? liveDistanceKm : null);
+    const d = tripDistanceKm(trip);
     const start = finite(trip.soc_start);
     const end = !trip.ended_at && index === 0 ? finite(liveSoc) ?? finite(trip.soc_end) : finite(trip.soc_end);
     if (d != null && d >= 0 && start != null && end != null && start > end) {
@@ -108,24 +108,24 @@ export function explainMathRange({ soc, kmPerPercentSoc, trips, batteryCapacityK
     rows: [row("vehicle.explain.rows.soc", validSoc, "%", "input"), row("vehicle.explain.rows.kmPerPercent", kmPerPercentSoc, "km/%", "input"), row("vehicle.explain.rows.fallbackConsumption", fallback.consumptionKwh100Km, "kWh/100km", "derived"), row("vehicle.explain.rows.result", result, "km", "result", 0)] };
 }
 
-export function explainKmPerPercent({ trips, liveSoc, liveDistanceKm, batteryCapacityKwh, consumptionKwh100, sourceAt }: {
-  trips: VoltflowMateTripRow[]; liveSoc: number | null | undefined; liveDistanceKm: number | null | undefined;
+export function explainKmPerPercent({ trips, liveSoc, batteryCapacityKwh, consumptionKwh100, sourceAt }: {
+  trips: VoltflowMateTripRow[]; liveSoc: number | null | undefined;
   batteryCapacityKwh: number | null; consumptionKwh100: number | null | undefined; sourceAt?: string | null;
 }): MetricExplanation {
-  const result = resolveKmPerPercentSoc({ trips, liveSoc, liveDistanceKm, batteryCapacityKwh, consumptionKwh100 });
-  const totals = windowTotals(trips, liveSoc, liveDistanceKm);
+  const result = resolveKmPerPercentSoc({ trips, liveSoc, batteryCapacityKwh, consumptionKwh100 });
+  const totals = windowTotals(trips, liveSoc);
   return { metricKey: "kmPerPercent", titleKey: "vehicle.explain.metrics.kmPerPercent.title", formulaKey: "vehicle.explain.metrics.kmPerPercent.formula", sourceAt,
     rows: [row("vehicle.explain.rows.tripWindowDistance", totals.distance, "km", "input"), row("vehicle.explain.rows.socDelta", totals.socDelta, "%", "input"), row("vehicle.explain.rows.batteryCapacity", finite(batteryCapacityKwh), "kWh", "input"), row("vehicle.explain.rows.consumption", finite(consumptionKwh100), "kWh/100km", "input"), row("vehicle.explain.rows.result", result, "km/%", "result") ] };
 }
 
-export function explainDistanceSinceCharge({ trips, anchorStoppedAt, liveDistanceKm, lastSession, sourceAt }: {
-  trips: VoltflowMateTripRow[]; anchorStoppedAt: string | null; liveDistanceKm: number | null | undefined;
+export function explainDistanceSinceCharge({ trips, anchorStoppedAt, lastSession, sourceAt }: {
+  trips: VoltflowMateTripRow[]; anchorStoppedAt: string | null;
   lastSession?: ChargingSessionRow | null; sourceAt?: string | null;
 }): MetricExplanation {
-  const result = sumDistanceSinceCharge(trips, anchorStoppedAt, liveDistanceKm);
+  const result = sumDistanceSinceCharge(trips, anchorStoppedAt);
   const anchorMs = anchorStoppedAt ? Date.parse(anchorStoppedAt) : NaN;
   return { metricKey: "sinceCharge", titleKey: "vehicle.explain.metrics.sinceCharge.title", formulaKey: "vehicle.explain.metrics.sinceCharge.formula", sourceAt,
-    rows: [row("vehicle.explain.rows.lastChargeEnded", Number.isFinite(anchorMs) ? anchorMs : null, "date", "input", 0, !lastSession ? "vehicle.explain.notes.noCharge" : undefined), row("vehicle.explain.rows.liveTripDistance", finite(liveDistanceKm), "km", "input"), row("vehicle.explain.rows.result", result, "km", "result") ] };
+    rows: [row("vehicle.explain.rows.lastChargeEnded", Number.isFinite(anchorMs) ? anchorMs : null, "date", "input", 0, !lastSession ? "vehicle.explain.notes.noCharge" : undefined), row("vehicle.explain.rows.result", result, "km", "result") ] };
 }
 
 export function explainRecentEnergy({ trips, avgConsumptionKwh100, sourceAt }: {
