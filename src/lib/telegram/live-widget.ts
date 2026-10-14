@@ -439,7 +439,6 @@ export async function updateTelegramLiveWidgets({
     const capacityKwh = carInfo?.battery_capacity_kwh;
     const recentTrips = selectTripsWithinDistanceWindow(
       cleanTrips(recentTripsByVehicle.get(vehicleId) ?? []),
-      lastSample.telemetry.current_trip_distance_km,
     );
     const estimatedRangeKm =
       capacityKwh != null && Number.isFinite(capacityKwh) && capacityKwh > 0
