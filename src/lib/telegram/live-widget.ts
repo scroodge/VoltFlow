@@ -96,7 +96,9 @@ async function loadWidgetRow(
 ): Promise<LiveWidgetRow | null> {
   const { data } = await supabase
     .from("telegram_live_messages")
-    .select("user_id,vehicle_id,chat_id,message_id,status,updated_at,last_state")
+    .select(
+      "user_id,vehicle_id,chat_id,message_id,status,updated_at,last_state",
+    )
     .eq("user_id", userId)
     .eq("vehicle_id", vehicleId)
     .maybeSingle();
