@@ -1,3 +1,46 @@
+## Late-charge recovery cuts long offline charges at a 12 h lookback — BUILT 2026-10-20 (option 1, as backward extension); session 5e35b662 repaired in prod; awaiting commit + deploy
+
+**Report (user 275223b5, car `z_byd`, 45.1 kWh):** plugged in 17.10 ~12:00 at 26 %, full at
+~06:48 on 18.10. History shows 52 % → 100 %, 12 h 2 m, 23.33 kWh, status «Восстановлено».
+**Cause (verified in prod):** the car has no internet while parked, so the whole charge was
+queued and uploaded on 18.10 at 11:10–11:14 in hourly batches. Live auto-start rejects samples
+older than 3 min, so `recoverLateChargesForBatch` created the row. (`diplus_power_kw` reads `-1.0`,
+but `telemetry.charge_power_kw` is a real ~1.77 kW.) Each batch scans
+from `earliestLate − LATE_RECOVERY_LOOKBACK_MS` (12 h, `_domain/late-delivery-window.ts`).
+Earlier batches saw the charge still open (and skipped it). The batch that closed it
+(earliest sample ≈ 06:46) scanned from 18:46 on 17.10, so the run started at the scan boundary
+and got 52.4 % as its start. The first charging sample is actually **17.10 11:48:27, SOC 25.8 %**.
+This is not caused by the 17/18 date change. Correct values: 25.8 → 100 %, ~19 h,
+≈ 36.4 kWh at the session's 92 %. The row now says 23.33 kWh.
+**Ownership:** app-owned derived rows in Postgres (`charging_sessions`); no new storage.
+
+### Options
+
+1. **Anchor the scan at the run start (recommended).** Before scanning, find the last
+   *non-charging* sample before `earliestLate` (one indexed query, capped at 72 h). Use it as
+   `fromIso`. The scan then always contains the plug-in, however long the offline charge was.
+   Add a test: a 19 h charge delivered in hourly batches must recover with the true start.
+2. **Raise the lookback to 48 h.** One-line change; 48 h at ~11 s is ~16k rows, still under
+   `MAX_SAMPLES` 20k. It still cuts charges longer than the lookback, and every late batch
+   scans 4× more rows.
+3. **Reject boundary runs.** If a run starts at the first sample of the range, extend the range
+   back and rescan. This is the same result as option 1 but adds a loop.
+
+**Built:** `recoverLateCharges` (`_server/late-charge-recovery.ts`) checks whether the scanned
+range starts mid-charge. If it does, it loads earlier telemetry in 12 h steps, at most 2 steps,
+which covers the detector's 24 h `MAX_DURATION_MS`. If the plug-in is still not found after that,
+it drops the leading run rather than import it truncated. The helpers `startsMidCharge` and
+`withoutLeadingChargingRun` live in `_domain/telemetry-recovery.ts`. Tests cover a 19 h charge
+whose closing window starts 12 h before its end, and a run longer than the cap.
+
+**Data repaired 2026-10-20 (owner approved):** `5e35b662…` was changed from 52.4 % / 17.10 18:45
+to 25.8 % / 17.10 11:49:11. That is the first sample with power > 0.1 kW; `is_charging` was
+already true at 11:48:27. Energy went from 23.33 to 36.37 kWh and cost from 7.23 to 11.28, and
+`recovery_key` was updated. 10 other `telemetry_recovered` rows have a charging sample in the
+5 min before `started_at`. A run-start check (36 h back, same predicate, ≤ 3 min gaps) finds
+none of them truncated: each one's real start equals its stored start. The owner will review
+them separately.
+
 ## Analytics 12 V trend: "Week" shows one point — BUILT 2026-10-20 (option 1); awaiting commit + deploy
 
 "Week" is the ISO calendar week (Mon–Sun), and `bydmate_aux_voltage_daily_rollups` holds only

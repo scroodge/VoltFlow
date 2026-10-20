@@ -109,6 +109,37 @@ function candidateFromRun(
   };
 }
 
+function isRecoveryCharging(sample: RecoveryTelemetrySample) {
+  return isMateAutoSessionCharging(
+    sample.telemetry,
+    telemetrySpeedKmh(sample.telemetry),
+  );
+}
+
+function chronological(samples: readonly RecoveryTelemetrySample[]) {
+  return [...samples]
+    .filter((sample) => Number.isFinite(Date.parse(sample.device_time)))
+    .sort((a, b) => Date.parse(a.device_time) - Date.parse(b.device_time));
+}
+
+/**
+ * True when the earliest sample is already charging: the plug-in lies before the range, so
+ * a run detected from here would get a truncated start SOC and start time.
+ */
+export function startsMidCharge(samples: readonly RecoveryTelemetrySample[]) {
+  const first = chronological(samples)[0];
+  return first != null && isRecoveryCharging(first);
+}
+
+/** Drops a leading charging run whose start is unknown, so it is never imported truncated. */
+export function withoutLeadingChargingRun(
+  samples: readonly RecoveryTelemetrySample[],
+): RecoveryTelemetrySample[] {
+  const ordered = chronological(samples);
+  const firstStop = ordered.findIndex((sample) => !isRecoveryCharging(sample));
+  return firstStop === -1 ? [] : ordered.slice(firstStop);
+}
+
 /**
  * Finds closed, conservative historical-charge candidates in already retained telemetry.
  * It deliberately requires an explicit following non-charging sample, so an unplugged
@@ -118,19 +149,13 @@ export function findTelemetryRecoveryCandidates(
   car: Car,
   samples: readonly RecoveryTelemetrySample[],
 ): TelemetryRecoveryCandidate[] {
-  const ordered = [...samples]
-    .filter((sample) => Number.isFinite(Date.parse(sample.device_time)))
-    .sort((a, b) => Date.parse(a.device_time) - Date.parse(b.device_time));
+  const ordered = chronological(samples);
   const candidates: TelemetryRecoveryCandidate[] = [];
   let run: RecoveryTelemetrySample[] = [];
   let previousChargingMs: number | null = null;
 
   for (const sample of ordered) {
-    const charging = isMateAutoSessionCharging(
-      sample.telemetry,
-      telemetrySpeedKmh(sample.telemetry),
-    );
-    if (charging) {
+    if (isRecoveryCharging(sample)) {
       const sampleMs = Date.parse(sample.device_time);
       if (
         previousChargingMs != null &&

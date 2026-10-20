@@ -17,15 +17,23 @@ const driving = (minute, soc) => ({
   device_time: at(minute),
   telemetry: { soc, charge_power_kw: 0, speed_kmh: 40 },
 });
+const parked = (minute, soc) => ({
+  device_time: at(minute),
+  telemetry: { soc, charge_power_kw: 0, speed_kmh: 0 },
+});
 const windows = [{ vehicleId: "v1", fromIso: at(-60), toIso: at(120) }];
-const closedCharge = [charging(0, 32), charging(2, 33), charging(4, 34), charging(6, 35), driving(85, 35)];
+const closedCharge = [parked(-1, 32), charging(0, 32), charging(2, 33), charging(4, 34), charging(6, 35), driving(85, 35)];
+
+// Honours the requested range like the real adapter, so backward extension is exercised.
+const inRange = (samples) => async (_vehicleId, fromIso, toIso) =>
+  samples.filter((s) => s.device_time >= fromIso && s.device_time <= toIso);
 
 function ports(overrides = {}) {
   const inserted = [];
   return {
     inserted,
     loadCar: async () => car,
-    loadSamples: async () => closedCharge,
+    loadSamples: inRange(closedCharge),
     insert: async (_car, candidate) => {
       inserted.push(candidate);
       return { ok: true, sessionId: `s${inserted.length}` };
@@ -45,7 +53,7 @@ test("a late burst with a closed charge becomes one session", async () => {
 });
 
 test("a charge still open at the end of the range is not imported", async () => {
-  const p = ports({ loadSamples: async () => closedCharge.slice(0, 4) });
+  const p = ports({ loadSamples: inRange(closedCharge.slice(0, 5)) });
   const result = await recoverLateCharges(windows, p);
   assert.equal(p.inserted.length, 0);
   assert.equal(result.recovered, 0);
@@ -69,6 +77,31 @@ test("overlap and duplicate outcomes are silent, real failures are reported", as
   }
   const p = ports({ insert: async () => ({ ok: false, error: "db down" }) });
   assert.deepEqual(await recoverLateCharges(windows, p), { recovered: 0, sessionIds: [], errors: ["db down"] });
+});
+
+test("a long offline charge is recovered from its real plug-in, not the lookback edge", async () => {
+  // 19 h at 2 min cadence; the closing batch's window starts 12 h before its end.
+  const samples = [parked(-1, 26)];
+  for (let minute = 0, soc = 26; minute <= 19 * 60; minute += 2, soc = Math.min(100, soc + 0.13)) {
+    samples.push(charging(minute, Math.round(soc * 10) / 10));
+  }
+  samples.push(parked(19 * 60 + 1, 100));
+  const p = ports({ loadSamples: inRange(samples) });
+  const closingWindow = [{ vehicleId: "v1", fromIso: at(19 * 60 - 12 * 60), toIso: at(19 * 60 + 1) }];
+  const result = await recoverLateCharges(closingWindow, p);
+  assert.equal(result.recovered, 1);
+  assert.equal(p.inserted[0].startedAt, at(0));
+  assert.equal(p.inserted[0].startPercent, 26);
+});
+
+test("a charge whose start lies beyond the extension cap is not imported truncated", async () => {
+  const samples = [];
+  for (let minute = -40 * 60; minute <= 0; minute += 2) samples.push(charging(minute, 50));
+  samples.push(charging(2, 60), parked(4, 60));
+  const p = ports({ loadSamples: inRange(samples) });
+  const result = await recoverLateCharges([{ vehicleId: "v1", fromIso: at(-60), toIso: at(4) }], p);
+  assert.equal(p.inserted.length, 0);
+  assert.deepEqual(result.errors, []);
 });
 
 test("an unreadable range is reported and never scanned partially", async () => {
