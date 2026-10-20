@@ -6,7 +6,7 @@ import {
   finiteTelemetryNumber,
   isTelemetryCharging,
   telemetrySpeedKmh,
-} from "@/features/charging/domain";
+} from "../../features/charging/domain.ts";
 import { isAppleWebPushEndpoint, sendPushToUser } from "./web-push.ts";
 
 /**

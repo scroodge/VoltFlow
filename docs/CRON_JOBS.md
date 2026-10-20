@@ -55,6 +55,16 @@ Manual smoke test (same variables as above):
 > previously broken. Activating it could silently turn on an unproven account-
 > deletion path. It requires a separate audit, dry run, and explicit approval.
 
-The inactivity route is listed here only so both existing cron endpoints are
+The inactivity route is listed here only so all existing cron endpoints are
 discoverable. The crontab instructions above are intentionally scoped to
 `/api/cron/aux-battery-health` and must not be generalized to other routes.
+
+## Telemetry cadence collapse alarms
+
+`POST /api/cron/telemetry-cadence-alarm` checks for cadence collapse (vehicles with low 24-hour sample counts or consecutive moving gaps) and creates operational cadence audits. For linked Telegram owners, it delivers an offline notification directing owners to verify background permissions and connectivity (`20260908130000`, `20261007110000`).
+
+## Telemetry cadence alarms digest
+
+`POST /api/cron/telemetry-cadence-digest` provides administrative cadence alarm rollup reporting (`20260924100000`).
+
+Both cadence endpoints fail closed: requiring `x-cron-secret` matching `CRON_SECRET`.

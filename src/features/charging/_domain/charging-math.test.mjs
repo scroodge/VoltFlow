@@ -14,7 +14,8 @@ test("keeps battery gain distinct from grid energy", () => {
   const gridEnergyKwh = energyFromGridKwh(batteryGainKwh, 92);
 
   assert.ok(Math.abs(batteryGainKwh - 41.943) < 1e-9);
-  assert.ok(Math.abs(gridEnergyKwh - 45.59) < 1e-9);
+  assert.ok(Math.abs(gridEnergyKwh - 45.59) < 1e-3);
+  assert.ok(Math.abs(gridEnergyKwh - 41.943 / 0.92) < 1e-9);
   assert.ok(gridEnergyKwh > 45.1);
 });
 

@@ -97,7 +97,7 @@ are still caught by `bydmate_discard_trip_if_junk` Rules A/B/C below.
 ## Junk filter (`bydmate_discard_trip_if_junk`)
 
 Runs automatically at every trip close and deletes the trip + its track points if **any** rule
-matches. Current deployed logic is migration **`20260613150000_fix_junk_trip_discard_v2.sql`**:
+matches. Current deployed logic is migration **`20261007160000_bydmate_discard_junk_rule_c_skip_client_trips.sql`** (evolving `20260613150000_fix_junk_trip_discard_v2.sql`):
 
 | Rule | Condition | Catches |
 |---|---|---|

@@ -12,7 +12,9 @@ auth.users (Supabase Auth)
   │
   ├─── profiles            (1:1)
   │       │
-  │       └─── push_subscriptions  (1:N)
+  │       ├─── push_subscriptions      (1:N)
+  │       ├─── dashboard_layouts       (1:1)
+  │       └─── bydmate_devices         (1:N per user+kind)
   │
   ├─── cars                (1:N)
   │       │
@@ -31,6 +33,12 @@ auth.users (Supabase Auth)
   ├─── bydmate_battery_snapshots  (1:N per user+vehicle_id)
   ├─── bydmate_idle_drains        (1:N per user+vehicle_id)
   ├─── telegram_live_messages     (1:1 per user+vehicle_id)
+  ├─── bydmate_vehicle_identity   (1:N per user+vehicle_uid)
+  ├─── bydmate_vehicle_identity_events (1:N per user+vehicle_uid)
+  ├─── bydmate_webhook_tokens     (1:N per user+vehicle_id)
+  ├─── aux_voltage_daily_rollups  (1:N per user+vehicle_id+date)
+  ├─── soh_daily_rollups          (1:N per user+vehicle_id+date)
+  ├─── phantom_drain_daily_rollups(1:N per user+vehicle_id+date)
   │
   ├─── bydmate_trips              (1:N per user+vehicle_id)
   │       └─── bydmate_trip_track_points  (1:N per trip)
@@ -40,6 +48,8 @@ auth.users (Supabase Auth)
   ├─── user_service_categories    (1:N)
   │
   └─── (admin) admin_users
+          ├─── admin_audit_log              (1:N)
+          └─── admin_activity_daily_rollups (1:N per user+date)
 
 mate_app_releases               (global, no user_id)
 knowledge_categories            (global CMS)
@@ -86,6 +96,7 @@ Mirror of `auth.users`. Created automatically on signup via trigger.
 | `last_active_at` | timestamptz | Last telemetry or login (`20260706120000`) |
 | `inactivity_warning_sent_at` | timestamptz | Set when the 30-day inactivity warning email is sent; account is eligible for deletion once `last_active_at` is >60 days old **and** this is set |
 | `analytics_card_order` | jsonb | User-owned Analytics-tab card order (string ids); NULL = default order (`20261006210000`) |
+| `pressure_unit` | text | Tire pressure unit: `kpa`, `bar`, or `psi`, default `kpa` (`20260815214000`) |
 | `created_at` | timestamptz | |
 
 Effective premium = `is_admin OR is_premium OR premium_until > now()`, computed by
@@ -102,14 +113,15 @@ User's registered vehicles.
 | `id` | uuid PK | |
 | `user_id` | uuid FK → auth.users | |
 | `name` | text | Display name |
-| `battery_capacity_kwh` | numeric | |
+| `vehicle_alias` | text | Telemetry stream vehicle identifier linking to `bydmate_live_snapshots.vehicle_id` |
+| `battery_capacity_kwh` | numeric | Usable pack capacity (kWh) |
 | `default_charger_power_kw` | numeric | Default 4.4 |
 | `default_efficiency_percent` | numeric | AC (home/commercial) grid-to-battery efficiency, default 90, 0–100 |
 | `fast_dc_efficiency_percent` | numeric | Fast-DC grid-to-battery efficiency, measured separately (`20260713100000`) — DC dispensers meter upstream of cooling/heat losses AC doesn't have |
+| `aux_battery_chemistry` | text | 12 V battery chemistry: `pb` (lead-acid) or `lfp` (lithium iron phosphate), default `pb` (`20260826190000`) |
+| `range_reserve_soc` | numeric | Usable reserve SOC percentage, default 10 (`20261006120000`) |
 | `model_generation` | text | `gen1_2024` or `gen2_2025` |
 | `created_at` | timestamptz | |
-
-`vehicle_alias` (stored in `bydmate_live_snapshots.vehicle_id`) links to `vehicle_id` in telemetry.
 
 ---
 
@@ -232,6 +244,36 @@ Web Push API subscriptions (one per device/browser).
 
 ---
 
+### `bydmate_devices`
+Paired on-car client devices (VoltFlow Mate APK and VoltFlow Dashboard head unit), holding distinct API keys per kind (`20260816120000`, `20260817090000`).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `user_id` | uuid FK → auth.users | |
+| `device_kind` | text | `mate` (car gateway) or `dashboard` (head-unit cluster app) |
+| `api_key` | text unique | Paired client key |
+| `api_key_hash` | text unique | Server-side HMAC hash for fast authenticated lookup |
+| `app_version` | text | Display version string reported on pairing or session (e.g. `0.6.1`) |
+| `version_code` | integer | Android version code reported on pairing or session (e.g. `344`) |
+| `created_at` / `updated_at` | timestamptz | |
+
+Unique on `(user_id, device_kind)`. Pairing one device kind never evicts another.
+
+---
+
+### `dashboard_layouts`
+Cloud backups of VoltFlow Dashboard cluster widget layouts (`20260816140000`).
+
+| Column | Type | Notes |
+|---|---|---|
+| `user_id` | uuid PK/FK → auth.users | One layout backup per account |
+| `layout` | jsonb | Verbatim client widget layout configuration (max 256 KB) |
+| `layout_version` | integer | Config schema version for compatibility checks |
+| `updated_at` | timestamptz | Last backup timestamp |
+
+---
+
 ## Telemetry
 
 ### `bydmate_live_snapshots`
@@ -249,6 +291,7 @@ Latest telemetry snapshot per vehicle — **one row per user+vehicle_id** (upser
 | `telemetry` | jsonb | Parsed fields (soc, speed, power, …) |
 | `location` | jsonb | `{lat, lon, accuracy_m, …}` |
 | `raw_payload` | jsonb | Original validated payload (size-reduced 2026-06); GPS is removed with `location` after 24 h of inactivity |
+| `mate_version` | text | Client version reported by telemetry (`20260613120000`) |
 | `updated_at` | timestamptz | |
 
 Unique constraint: `(user_id, vehicle_id)`.
@@ -374,6 +417,77 @@ dropped `20260706000000`) — see
 | `chat_id` | bigint | |
 | `message_id` | integer | |
 | `status` | text | `active` (only value currently written) |
+| `last_state` | text | Last state rendered in widget (`charging/parked/driving/offline`), bypasses edit throttle on change (`20261012120000`) |
+| `updated_at` | timestamptz | |
+
+### `bydmate_vehicle_identity`
+Maps on-car APK hardware install identity (`X-Vehicle-Uid`) to the vehicle alias (`20260924120000`). Survives renaming of the car in the APK or web UI.
+
+| Column | Type | Notes |
+|---|---|---|
+| `user_id` | uuid PK part → auth.users | |
+| `vehicle_uid` | text PK part | Hardware client UUID created on APK install |
+| `vehicle_id` | text | The canonical vehicle alias this UID is bound to |
+| `mate_name` | text | Latest display name sent by the APK |
+| `created_at` / `updated_at` | timestamptz | |
+
+Companion `bydmate_vehicle_identity_events` records an audit trail of identity lifecycle events (`bound`, `renamed`, `merged`).
+
+---
+
+### `bydmate_webhook_tokens`
+Tokens for third-party BYDMate Webhook telemetry integration without API key headers (`20260929130000`).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `user_id` | uuid FK → auth.users | |
+| `vehicle_id` | text | Bound vehicle alias |
+| `token_hash` | text unique | SHA-256 HMAC hash of the webhook URL token |
+| `label` | text | User-facing description |
+| `created_at` | timestamptz | |
+
+---
+
+### `aux_voltage_daily_rollups`
+Precomputed UTC-day aggregates for 12 V auxiliary battery resting voltage and health trends (`20260827144925`).
+
+| Column | Type | Notes |
+|---|---|---|
+| `user_id` / `vehicle_id` / `date` | uuid / text / date PK | Account, vehicle, and UTC calendar date |
+| `v_resting` | numeric | Median resting voltage after 2+ hours parked and unplugged |
+| `resting_sample_count` | integer | Samples contributing to `v_resting` |
+| `v_min` / `v_max` | numeric | Daily voltage extrema |
+| `sample_count` | integer | Total telemetry samples on that date |
+| `last_device_time` | timestamptz | Last sample device timestamp |
+| `updated_at` | timestamptz | |
+
+---
+
+### `soh_daily_rollups`
+Precomputed UTC-day snapshots of battery State of Health (SoH) degradation trends (`20260903120000`).
+
+| Column | Type | Notes |
+|---|---|---|
+| `user_id` / `vehicle_id` / `date` | uuid / text / date PK | Account, vehicle, and UTC calendar date |
+| `soh_percent` | numeric | Authoritative battery SoH percentage (from BMS `FID_SOH`) |
+| `sample_count` | integer | Total telemetry samples on that date |
+| `last_device_time` | timestamptz | |
+| `updated_at` | timestamptz | |
+
+---
+
+### `phantom_drain_daily_rollups`
+Precomputed UTC-day parked phantom drain aggregates (`20260908120000`).
+
+| Column | Type | Notes |
+|---|---|---|
+| `user_id` / `vehicle_id` / `date` | uuid / text / date PK | Account, vehicle, and UTC calendar date |
+| `soc_start` / `soc_end` | numeric | SOC at the start and end of parked idle intervals |
+| `drain_percent` | numeric | Net parked SOC drop |
+| `idle_hours` | numeric | Total qualifying parked unplugged hours |
+| `sample_count` | integer | Samples contributing to intervals |
+| `last_device_time` | timestamptz | |
 | `updated_at` | timestamptz | |
 
 ---
@@ -402,6 +516,8 @@ the Mate APK's cumulative aggregate.
 | `avg_speed_kmh` | numeric | |
 | `avg_consumption_kwh_100km` | numeric | |
 | `track_simplified_at` | timestamptz | Set after Ramer-Douglas-Peucker simplification |
+| `regen_energy_kwh` | numeric | Cumulative recovered energy in kWh (`20260530121000`) |
+| `traction_energy_kwh` | numeric | Cumulative traction energy in kWh (`20260530121000`) |
 | `source` | text | `telemetry` (default, from `bydmate_telemetry_samples`) or `byd_energydata` (imported from the car's own trip log, no ADB required, no SOC/track data) — `20260706190000` |
 | `fuel_kwh` | numeric | PHEV (DM-i) fuel consumption from BYD `energydata`. **Unit is ambiguous** — column is named `_kwh` but the migration comment says "liters equivalent"; NULL for pure EVs, >0 for PHEV (`20260708120000`) |
 
@@ -674,14 +790,32 @@ The service-role-only `admin_users_attention_queue()` function derives an admin-
 follow-up queue from profile, snapshot, release, entitlement, and admin-role facts. It
 persists no additional user data.
 
-### `premium_payments` (historical name)
+### `admin_audit_log`
+Audit log of administrative actions performed via admin dashboard (`20260917140000`).
 
-App-owned, admin-only Postgres records. Existing rows may describe earlier payments
-associated with Premium access (`applied_until` set). New rows record voluntarily
-reported, account-linked donations for statistics with `applied_until = null`; the
-donation action cannot update account entitlements. Columns include `user_id`, `amount`,
-`currency`, `method`, optional `note`, `recorded_by_admin_id`, and `created_at`.
-The historical table name and rows remain unchanged for compatibility.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `admin_user_id` | uuid FK → auth.users | Performing admin account |
+| `action` | text | Action type (e.g. `grant_premium`, `revoke_premium`, `record_donation`) |
+| `target_user_id` | uuid FK → auth.users | Target account |
+| `details` | jsonb | Operational metadata |
+| `created_at` | timestamptz | |
+
+---
+
+### `admin_activity_daily_rollups`
+Precomputed daily user activity rollups accelerating the admin users dashboard (`20261007170000`).
+
+| Column | Type | Notes |
+|---|---|---|
+| `user_id` / `date` | uuid / date PK | Account and UTC calendar date |
+| `telemetry_sample_count` | integer | Ingested telemetry count on that date |
+| `charging_session_count` | integer | Active charging sessions on that date |
+| `trip_count` | integer | Active trips on that date |
+| `last_seen_at` | timestamptz | Latest activity timestamp |
+| `latest_mate_version` | text | Latest client version seen on that date |
+| `created_at` | timestamptz | |
 
 ---
 

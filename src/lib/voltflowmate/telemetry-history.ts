@@ -7,7 +7,7 @@ import {
   resolveTelemetryWindow,
   type TelemetryHistoryRange,
 } from "./telemetry-ranges.ts";
-import { isTelemetryHistoryCharging } from "@/features/charging/domain";
+import { isTelemetryHistoryCharging } from "../../features/charging/domain.ts";
 import { resolveChargingSessionSampleWindow } from "./telemetry-session-window.ts";
 import { mapSohDailyRows, normalizeSohPercent } from "./soh-history-mapping.ts";
 import { mapDayTelemetryBucketRows, type DayTelemetryBucketRow } from "./telemetry-day-buckets.ts";

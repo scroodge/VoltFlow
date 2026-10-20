@@ -44,9 +44,18 @@ import type { TelemetryHistoryPoint } from "@/lib/voltflowmate/telemetry-history
 import { useTranslation } from "@/hooks/use-translation";
 import { buildChargeDeltaTrend } from "@/lib/voltflowmate/charge-delta-trend";
 import { buildBatteryConsistencySummary } from "@/lib/voltflowmate/battery-consistency";
-import { computeAuxVoltageBaseline, AUX_MIN_RESTING_DAYS } from "@/lib/voltflowmate/aux-voltage-baseline";
-import { normalizeAuxVoltage } from "@/lib/voltflowmate/aux-voltage-history";
-import { buildAnalyticsSummary, consumptionByOutsideTemp } from "@/lib/voltflowmate/telemetry-buckets";
+import {
+  computeAuxVoltageBaseline,
+  AUX_MIN_RESTING_DAYS,
+} from "@/lib/voltflowmate/aux-voltage-baseline";
+import {
+  normalizeAuxVoltage,
+  resolveAuxTrendWindow,
+} from "@/lib/voltflowmate/aux-voltage-history";
+import {
+  buildAnalyticsSummary,
+  consumptionByOutsideTemp,
+} from "@/lib/voltflowmate/telemetry-buckets";
 import { computeHistoryPeriodSummary } from "@/lib/history-day-summary";
 import {
   analyticsRangeAnchorForCurrentDate,
@@ -67,10 +76,21 @@ import type { RouteInsightsResult } from "@/lib/voltflowmate/route-insights";
 import type { RangePredictionReport } from "@/lib/voltflowmate/range-prediction-grading";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import { devFetch, isDevAppRoute, withDevApiParams } from "@/lib/dev/dev-fetch";
-import { formatCurrencyAmount, type Locale, type TranslationKey } from "@/lib/i18n";
-import type { VoltflowMateTripRow, VoltflowMateTripTrackPointRow, ChargingSessionRow } from "@/types/database";
+import {
+  formatCurrencyAmount,
+  type Locale,
+  type TranslationKey,
+} from "@/lib/i18n";
+import type {
+  VoltflowMateTripRow,
+  VoltflowMateTripTrackPointRow,
+  ChargingSessionRow,
+} from "@/types/database";
 import type { PhantomDrainNight } from "@/lib/voltflowmate/phantom-drain";
-import { auxLowVoltage, resolveAuxBatteryChemistry } from "@/lib/vehicle/aux-battery-chemistry";
+import {
+  auxLowVoltage,
+  resolveAuxBatteryChemistry,
+} from "@/lib/vehicle/aux-battery-chemistry";
 import {
   DndContext,
   KeyboardSensor,
@@ -99,16 +119,26 @@ import {
   type AnalyticsCardId,
 } from "@/lib/analytics-card-order";
 
-const HISTORY_RANGES: TelemetryHistoryRange[] = ["day", "week", "month", "quarter", "year"];
+const HISTORY_RANGES: TelemetryHistoryRange[] = [
+  "day",
+  "week",
+  "month",
+  "quarter",
+  "year",
+];
 
-type Translator = (key: TranslationKey, values?: Record<string, string | number>) => string;
+type Translator = (
+  key: TranslationKey,
+  values?: Record<string, string | number>,
+) => string;
 
 type PeriodTripRow = VoltflowMateTripRow & { outside_temp_avg?: number | null };
 
 const EMPTY_PERIOD_TRIPS: PeriodTripRow[] = [];
 const EMPTY_PERIOD_SESSIONS: ChargingSessionRow[] = [];
 const EMPTY_HISTORY_POINTS: TelemetryHistoryPoint[] = [];
-const EMPTY_AUX_DAILY_POINTS: import("@/lib/voltflowmate/aux-voltage-history").AuxVoltageDailyPoint[] = [];
+const EMPTY_AUX_DAILY_POINTS: import("@/lib/voltflowmate/aux-voltage-history").AuxVoltageDailyPoint[] =
+  [];
 
 const BATTERY_HEALTH_STATUS_KEY: Record<
   import("@/lib/voltflowmate/battery-consistency").ConsistencyStatus,
@@ -132,10 +162,15 @@ const BATTERY_HEALTH_TREND_KEY: Record<
 };
 
 function fmt(value: number | null | undefined, digits = 1) {
-  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
+  return typeof value === "number" && Number.isFinite(value)
+    ? value.toFixed(digits)
+    : "—";
 }
 
-function parseInitialAnchorDate(range: TelemetryHistoryRange, dateParam: string | null) {
+function parseInitialAnchorDate(
+  range: TelemetryHistoryRange,
+  dateParam: string | null,
+) {
   if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
     return snapAnchorDateForRange(range, dateParam);
   }
@@ -177,7 +212,10 @@ function useDeferredAnalyticsSection(criticalQueriesSettled: boolean) {
 
   return [
     sectionRef,
-    shouldEnableDeferredAnalyticsQuery({ criticalQueriesSettled, nearViewport }),
+    shouldEnableDeferredAnalyticsQuery({
+      criticalQueriesSettled,
+      nearViewport,
+    }),
   ] as const;
 }
 
@@ -210,8 +248,18 @@ const anchorSelectClassName =
   "h-8 min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30";
 
 const MONTH_NAMES_EN = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 function pad2(n: number) {
@@ -250,16 +298,34 @@ function AnalyticsRangeAnchorPicker({
   tx: Translator;
 }) {
   const [supportsWeekInput, setSupportsWeekInput] = useState(true);
-  const monthYear = anchorDate ? Number(anchorDate.slice(0, 4)) : new Date().getUTCFullYear();
-  const monthNum = anchorDate ? Number(anchorDate.slice(5, 7)) : new Date().getUTCMonth() + 1;
-  const weekParts = useMemo(() => isoWeekPartsFromDate(anchorDate), [anchorDate]);
-  const weekCount = useMemo(() => isoWeeksInYear(weekParts.year), [weekParts.year]);
+  const monthYear = anchorDate
+    ? Number(anchorDate.slice(0, 4))
+    : new Date().getUTCFullYear();
+  const monthNum = anchorDate
+    ? Number(anchorDate.slice(5, 7))
+    : new Date().getUTCMonth() + 1;
+  const weekParts = useMemo(
+    () => isoWeekPartsFromDate(anchorDate),
+    [anchorDate],
+  );
+  const weekCount = useMemo(
+    () => isoWeeksInYear(weekParts.year),
+    [weekParts.year],
+  );
 
-  const quarterPickerValue = useMemo(() => quarterValueFromDate(anchorDate), [anchorDate]);
-  const yearPickerValue = useMemo(() => yearValueFromDate(anchorDate), [anchorDate]);
+  const quarterPickerValue = useMemo(
+    () => quarterValueFromDate(anchorDate),
+    [anchorDate],
+  );
+  const yearPickerValue = useMemo(
+    () => yearValueFromDate(anchorDate),
+    [anchorDate],
+  );
 
   const quarterMatch = /^(\d{4})-Q([1-4])$/.exec(quarterPickerValue);
-  const quarterYear = quarterMatch ? Number(quarterMatch[1]) : new Date().getUTCFullYear();
+  const quarterYear = quarterMatch
+    ? Number(quarterMatch[1])
+    : new Date().getUTCFullYear();
   const quarterNum = quarterMatch ? Number(quarterMatch[2]) : 1;
 
   useEffect(() => {
@@ -287,7 +353,9 @@ function AnalyticsRangeAnchorPicker({
           <Input
             type="week"
             value={isoWeekValueFromDate(anchorDate)}
-            onChange={(event) => onAnchorDateChange(isoWeekValueToAnchorDate(event.target.value))}
+            onChange={(event) =>
+              onAnchorDateChange(isoWeekValueToAnchorDate(event.target.value))
+            }
             className="w-44"
           />
         ) : (
@@ -295,16 +363,22 @@ function AnalyticsRangeAnchorPicker({
             <select
               value={weekParts.week}
               onChange={(event) =>
-                onAnchorDateChange(isoWeekValueToAnchorDate(`${weekParts.year}-W${pad2(Number(event.target.value))}`))
+                onAnchorDateChange(
+                  isoWeekValueToAnchorDate(
+                    `${weekParts.year}-W${pad2(Number(event.target.value))}`,
+                  ),
+                )
               }
               className={`${anchorSelectClassName} w-28`}
               aria-label={tx("vehicle.analytics.anchorWeek")}
             >
-              {Array.from({ length: weekCount }, (_, i) => i + 1).map((week) => (
-                <option key={week} value={week}>
-                  {`W${pad2(week)}`}
-                </option>
-              ))}
+              {Array.from({ length: weekCount }, (_, i) => i + 1).map(
+                (week) => (
+                  <option key={week} value={week}>
+                    {`W${pad2(week)}`}
+                  </option>
+                ),
+              )}
             </select>
             <Input
               type="number"
@@ -313,7 +387,9 @@ function AnalyticsRangeAnchorPicker({
               value={weekParts.year}
               onChange={(event) =>
                 onAnchorDateChange(
-                  isoWeekValueToAnchorDate(`${event.target.value}-W${pad2(Math.min(weekParts.week, isoWeeksInYear(Number(event.target.value))))}`),
+                  isoWeekValueToAnchorDate(
+                    `${event.target.value}-W${pad2(Math.min(weekParts.week, isoWeeksInYear(Number(event.target.value))))}`,
+                  ),
                 )
               }
               className="w-28"
@@ -337,7 +413,9 @@ function AnalyticsRangeAnchorPicker({
             aria-label={tx("vehicle.analytics.anchorMonth")}
           >
             {MONTH_NAMES_EN.map((name, i) => (
-              <option key={i} value={i + 1}>{name}</option>
+              <option key={i} value={i + 1}>
+                {name}
+              </option>
             ))}
           </select>
           <Input
@@ -362,7 +440,9 @@ function AnalyticsRangeAnchorPicker({
             value={quarterNum}
             onChange={(event) =>
               onAnchorDateChange(
-                quarterValueToAnchorDate(`${quarterYear}-Q${event.target.value}`),
+                quarterValueToAnchorDate(
+                  `${quarterYear}-Q${event.target.value}`,
+                ),
               )
             }
             className={`${anchorSelectClassName} w-24`}
@@ -380,7 +460,9 @@ function AnalyticsRangeAnchorPicker({
             value={quarterYear}
             onChange={(event) =>
               onAnchorDateChange(
-                quarterValueToAnchorDate(`${event.target.value}-Q${quarterNum}`),
+                quarterValueToAnchorDate(
+                  `${event.target.value}-Q${quarterNum}`,
+                ),
               )
             }
             className="w-28"
@@ -393,7 +475,9 @@ function AnalyticsRangeAnchorPicker({
           min={2018}
           max={2100}
           value={yearPickerValue}
-          onChange={(event) => onAnchorDateChange(yearValueToAnchorDate(event.target.value))}
+          onChange={(event) =>
+            onAnchorDateChange(yearValueToAnchorDate(event.target.value))
+          }
           className="w-28"
         />
       ) : (
@@ -417,14 +501,22 @@ export function VehicleAnalyticsPanels({
   vehicleId: string;
   initialRange?: TelemetryHistoryRange | null;
   initialDate?: string | null;
-  onAnalyticsStateChange?: (state: { range: TelemetryHistoryRange; date: string }) => void;
+  onAnalyticsStateChange?: (state: {
+    range: TelemetryHistoryRange;
+    date: string;
+  }) => void;
 }) {
   const { locale, t } = useTranslation();
   const tx = t as Translator;
   const currency = useAppPreferences((state) => state.currency);
   const { data: carsResult } = useCarsQuery();
-  const car = carsResult?.cars.find((candidate) => candidate.vehicle_alias === vehicleId);
-  const auxBatteryChemistry = resolveAuxBatteryChemistry(car?.battery_chemistry, car?.model_generation);
+  const car = carsResult?.cars.find(
+    (candidate) => candidate.vehicle_alias === vehicleId,
+  );
+  const auxBatteryChemistry = resolveAuxBatteryChemistry(
+    car?.battery_chemistry,
+    car?.model_generation,
+  );
 
   const formatMoney = (value: number | null | undefined, digits = 2) => {
     if (typeof value !== "number" || !Number.isFinite(value)) return "—";
@@ -460,7 +552,8 @@ export function VehicleAnalyticsPanels({
 
   const { data: liveRows = [] } = useVoltflowMateLiveQuery();
   const currentOutsideTemp =
-    liveRows.find((row) => row.vehicle_id === vehicleId)?.telemetry.outside_temp_c ?? null;
+    liveRows.find((row) => row.vehicle_id === vehicleId)?.telemetry
+      .outside_temp_c ?? null;
 
   const historyQuery = useVoltflowMateTelemetryHistoryQuery({
     range: historyRange,
@@ -490,12 +583,21 @@ export function VehicleAnalyticsPanels({
   });
   const retentionQuery = useQuery({
     queryKey: ["vehicle-retention-status"],
-    queryFn: () => fetchAnalytics<{ isPremium: boolean; retentionDays: number | null }>("/api/vehicle/retention-status"),
+    queryFn: () =>
+      fetchAnalytics<{ isPremium: boolean; retentionDays: number | null }>(
+        "/api/vehicle/retention-status",
+      ),
     staleTime: 5 * 60_000,
   });
 
   const periodOverviewQuery = useQuery({
-    queryKey: ["vehicle-analytics", "period-overview", historyRange, anchorDate, vehicleId],
+    queryKey: [
+      "vehicle-analytics",
+      "period-overview",
+      historyRange,
+      anchorDate,
+      vehicleId,
+    ],
     queryFn: () => {
       const params = new URLSearchParams({
         type: "period-overview",
@@ -526,7 +628,8 @@ export function VehicleAnalyticsPanels({
   });
 
   const periodTrips = periodOverviewQuery.data?.trips ?? EMPTY_PERIOD_TRIPS;
-  const periodSessions = periodOverviewQuery.data?.sessions ?? EMPTY_PERIOD_SESSIONS;
+  const periodSessions =
+    periodOverviewQuery.data?.sessions ?? EMPTY_PERIOD_SESSIONS;
 
   const periodSummary = useMemo(
     () =>
@@ -542,7 +645,8 @@ export function VehicleAnalyticsPanels({
   const periodSummaryLoading = periodOverviewQuery.isLoading;
 
   const periodCostPerKm = useMemo(() => {
-    if (!periodSummary.hasPricedSessions || periodSummary.distanceKm <= 0) return null;
+    if (!periodSummary.hasPricedSessions || periodSummary.distanceKm <= 0)
+      return null;
     return periodSummary.chargingCost / periodSummary.distanceKm;
   }, [periodSummary]);
 
@@ -561,15 +665,28 @@ export function VehicleAnalyticsPanels({
     !historyQuery.isFetching &&
     !periodOverviewQuery.isFetching &&
     !sohQuery.isFetching;
-  const [phantomSectionRef, phantomEnabled] = useDeferredAnalyticsSection(criticalQueriesSettled);
-  const [routeInsightsSectionRef, routeInsightsEnabled] = useDeferredAnalyticsSection(criticalQueriesSettled);
-  const [lifetimeMapSectionRef, lifetimeMapEnabled] = useDeferredAnalyticsSection(criticalQueriesSettled);
-  const [rangePredictionSectionRef, rangePredictionEnabled] = useDeferredAnalyticsSection(criticalQueriesSettled);
+  const [phantomSectionRef, phantomEnabled] = useDeferredAnalyticsSection(
+    criticalQueriesSettled,
+  );
+  const [routeInsightsSectionRef, routeInsightsEnabled] =
+    useDeferredAnalyticsSection(criticalQueriesSettled);
+  const [lifetimeMapSectionRef, lifetimeMapEnabled] =
+    useDeferredAnalyticsSection(criticalQueriesSettled);
+  const [rangePredictionSectionRef, rangePredictionEnabled] =
+    useDeferredAnalyticsSection(criticalQueriesSettled);
 
   const phantomQuery = useQuery({
-    queryKey: ["vehicle-analytics", "phantom", vehicleId, historyRange, anchorDate],
+    queryKey: [
+      "vehicle-analytics",
+      "phantom",
+      vehicleId,
+      historyRange,
+      anchorDate,
+    ],
     queryFn: () =>
-      fetchAnalytics<{ rows: { date: string; drainPercent: number; idleHours: number }[] }>(
+      fetchAnalytics<{
+        rows: { date: string; drainPercent: number; idleHours: number }[];
+      }>(
         `/api/vehicle/analytics?type=phantom&vehicle_id=${encodeURIComponent(vehicleId)}&from=${encodeURIComponent(telemetryWindow.from)}&to=${encodeURIComponent(telemetryWindow.to)}`,
       ),
     enabled: phantomEnabled,
@@ -577,7 +694,13 @@ export function VehicleAnalyticsPanels({
   });
 
   const rangePredictionQuery = useQuery({
-    queryKey: ["vehicle-analytics", "range-prediction", vehicleId, historyRange, anchorDate],
+    queryKey: [
+      "vehicle-analytics",
+      "range-prediction",
+      vehicleId,
+      historyRange,
+      anchorDate,
+    ],
     queryFn: () =>
       fetchAnalytics<RangePredictionReport>(
         `/api/vehicle/analytics?type=range-prediction&vehicle_id=${encodeURIComponent(vehicleId)}&from=${encodeURIComponent(telemetryWindow.from)}&to=${encodeURIComponent(telemetryWindow.to)}`,
@@ -587,7 +710,12 @@ export function VehicleAnalyticsPanels({
   });
 
   const routeInsightsQuery = useQuery({
-    queryKey: ["vehicle-analytics", "route-insights", vehicleId, currentOutsideTemp],
+    queryKey: [
+      "vehicle-analytics",
+      "route-insights",
+      vehicleId,
+      currentOutsideTemp,
+    ],
     queryFn: () => {
       const params = new URLSearchParams({
         type: "route-insights",
@@ -596,7 +724,9 @@ export function VehicleAnalyticsPanels({
       if (currentOutsideTemp != null) {
         params.set("outside_temp", String(currentOutsideTemp));
       }
-      return fetchAnalytics<RouteInsightsResult>(`/api/vehicle/analytics?${params.toString()}`);
+      return fetchAnalytics<RouteInsightsResult>(
+        `/api/vehicle/analytics?${params.toString()}`,
+      );
     },
     enabled: routeInsightsEnabled,
     retry: false,
@@ -664,7 +794,10 @@ export function VehicleAnalyticsPanels({
   );
 
   // Currency symbol for charging cost bar chart
-  const currencyUnit = formatCurrencyAmount(currency, 0, locale as Locale).replace(/[\d.,\s]/g, "").trim() || currency;
+  const currencyUnit =
+    formatCurrencyAmount(currency, 0, locale as Locale)
+      .replace(/[\d.,\s]/g, "")
+      .trim() || currency;
 
   const chargingBarCharts = useChargingBarCharts(
     periodSessions,
@@ -707,41 +840,67 @@ export function VehicleAnalyticsPanels({
   );
 
   const auxDailyPoints = auxVoltageQuery.data ?? EMPTY_AUX_DAILY_POINTS;
-  const visibleAuxDailyPoints = useMemo(
-    () => auxDailyPoints.filter((point) => {
+  const visibleAuxDailyPoints = useMemo(() => {
+    const auxWindow = resolveAuxTrendWindow(historyRange, telemetryWindow);
+    return auxDailyPoints.filter((point) => {
       const time = Date.parse(`${point.date}T00:00:00Z`);
-      return time >= Date.parse(telemetryWindow.from) && time <= Date.parse(telemetryWindow.to);
-    }),
-    [auxDailyPoints, telemetryWindow.from, telemetryWindow.to],
+      return (
+        time >= Date.parse(auxWindow.from) && time <= Date.parse(auxWindow.to)
+      );
+    });
+  }, [auxDailyPoints, historyRange, telemetryWindow]);
+  const auxBaseline = useMemo(
+    () => computeAuxVoltageBaseline(auxDailyPoints),
+    [auxDailyPoints],
   );
-  const auxBaseline = useMemo(() => computeAuxVoltageBaseline(auxDailyPoints), [auxDailyPoints]);
-  const lowAuxDayCount = visibleAuxDailyPoints.filter((point) =>
-    point.vResting != null && point.vResting < auxLowVoltage(auxBatteryChemistry)
+  const lowAuxDayCount = visibleAuxDailyPoints.filter(
+    (point) =>
+      point.vResting != null &&
+      point.vResting < auxLowVoltage(auxBatteryChemistry),
   ).length;
   const auxWindowExtremes = useMemo(() => {
     if (isDayRange) {
       const samples = historyPoints.flatMap((point) => {
         const voltage = normalizeAuxVoltage(point.telemetry.aux_voltage_v);
-        return voltage == null ? [] : [{ voltage, time: Date.parse(point.device_time) }];
+        return voltage == null
+          ? []
+          : [{ voltage, time: Date.parse(point.device_time) }];
       });
       if (samples.length === 0) return null;
       return {
-        min: samples.reduce((best, sample) => sample.voltage < best.voltage ? sample : best),
-        max: samples.reduce((best, sample) => sample.voltage > best.voltage ? sample : best),
+        min: samples.reduce((best, sample) =>
+          sample.voltage < best.voltage ? sample : best,
+        ),
+        max: samples.reduce((best, sample) =>
+          sample.voltage > best.voltage ? sample : best,
+        ),
       };
     }
     if (visibleAuxDailyPoints.length === 0) return null;
-    const minPoint = visibleAuxDailyPoints.reduce((best, point) => point.vMin < best.vMin ? point : best);
-    const maxPoint = visibleAuxDailyPoints.reduce((best, point) => point.vMax > best.vMax ? point : best);
+    const minPoint = visibleAuxDailyPoints.reduce((best, point) =>
+      point.vMin < best.vMin ? point : best,
+    );
+    const maxPoint = visibleAuxDailyPoints.reduce((best, point) =>
+      point.vMax > best.vMax ? point : best,
+    );
     return {
-      min: { voltage: minPoint.vMin, time: Date.parse(`${minPoint.date}T12:00:00Z`) },
-      max: { voltage: maxPoint.vMax, time: Date.parse(`${maxPoint.date}T12:00:00Z`) },
+      min: {
+        voltage: minPoint.vMin,
+        time: Date.parse(`${minPoint.date}T12:00:00Z`),
+      },
+      max: {
+        voltage: maxPoint.vMax,
+        time: Date.parse(`${maxPoint.date}T12:00:00Z`),
+      },
     };
   }, [historyPoints, isDayRange, visibleAuxDailyPoints]);
   const formatAuxExtreme = (sample: { voltage: number; time: number }) => {
-    const when = new Date(sample.time).toLocaleString(locale, isDayRange
-      ? { hour: "2-digit", minute: "2-digit" }
-      : { year: "numeric", month: "short", day: "numeric" });
+    const when = new Date(sample.time).toLocaleString(
+      locale,
+      isDayRange
+        ? { hour: "2-digit", minute: "2-digit" }
+        : { year: "numeric", month: "short", day: "numeric" },
+    );
     return { value: `${sample.voltage.toFixed(2)} V`, hint: when };
   };
 
@@ -752,7 +911,9 @@ export function VehicleAnalyticsPanels({
     if (points.length === 0) return null;
 
     return points.reduce((best, point) =>
-      Date.parse(point.device_time) >= Date.parse(best.device_time) ? point : best,
+      Date.parse(point.device_time) >= Date.parse(best.device_time)
+        ? point
+        : best,
     );
   }, [sohQuery.data]);
   const latestSohPercent = latestSohReading?.telemetry.soh_percent ?? null;
@@ -791,8 +952,12 @@ export function VehicleAnalyticsPanels({
   }, [profileCardOrder, localCardOrder]);
 
   const reorderSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(PointerSensor, {
+      activationConstraint: { delay: 250, tolerance: 8 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
   );
 
   const handleCardDragEnd = (event: DragEndEvent) => {
@@ -809,7 +974,7 @@ export function VehicleAnalyticsPanels({
 
   // Each Analytics card as a keyed node; rendered in the user's saved order.
   const cardSections: Record<AnalyticsCardId, ReactNode> = {
-  soh: (
+    soh: (
       <section className="voltflow-card p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -819,11 +984,14 @@ export function VehicleAnalyticsPanels({
             <p className="mt-1 text-sm text-muted-foreground">
               {sohPanelState === "single" && latestSohReading
                 ? t("vehicle.analytics.sohLatestReading", {
-                    date: new Date(latestSohReading.device_time).toLocaleString(locale, {
-                      year: "numeric",
-                      month: "short",
-                      day: "numeric",
-                    }),
+                    date: new Date(latestSohReading.device_time).toLocaleString(
+                      locale,
+                      {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      },
+                    ),
                   })
                 : t("vehicle.analytics.sohSubtitle")}
             </p>
@@ -831,7 +999,9 @@ export function VehicleAnalyticsPanels({
           {latestSohPercent != null ? (
             <p className="font-heading text-4xl font-bold tabular-nums tracking-tight text-[var(--voltflow-cyan)]">
               {fmt(latestSohPercent, 1)}
-              <span className="ml-0.5 text-xl font-semibold text-muted-foreground">%</span>
+              <span className="ml-0.5 text-xl font-semibold text-muted-foreground">
+                %
+              </span>
             </p>
           ) : null}
         </div>
@@ -840,7 +1010,9 @@ export function VehicleAnalyticsPanels({
             <Skeleton className="h-40 rounded-2xl" />
           ) : sohPanelState === "error" ? (
             <div className="rounded-2xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
-              <p className="text-destructive">{t("vehicle.analytics.sohLoadError")}</p>
+              <p className="text-destructive">
+                {t("vehicle.analytics.sohLoadError")}
+              </p>
               <button
                 type="button"
                 className="mt-3 rounded-full border border-border px-3 py-1.5 font-semibold text-foreground transition hover:border-primary/40 disabled:opacity-50"
@@ -861,7 +1033,9 @@ export function VehicleAnalyticsPanels({
           ) : retentionQuery.data?.isPremium ? (
             <SohTrendChart points={sohQuery.data ?? []} locale={locale} />
           ) : (
-            <PremiumFeatureGate title={t("settings.premiumGates.diagnosticsTitle")}>
+            <PremiumFeatureGate
+              title={t("settings.premiumGates.diagnosticsTitle")}
+            >
               <p className="text-sm text-muted-foreground">
                 {t("settings.premiumGates.diagnosticsBody")}
               </p>
@@ -869,9 +1043,9 @@ export function VehicleAnalyticsPanels({
           )}
         </div>
       </section>
-  ),
+    ),
 
-  battery_health: (
+    battery_health: (
       <section className="voltflow-card p-5">
         <div>
           <h2 className="font-heading text-2xl font-semibold tracking-tight">
@@ -890,7 +1064,9 @@ export function VehicleAnalyticsPanels({
             {latestSohPercent != null ? (
               <p className="mt-1 font-heading text-3xl font-bold tabular-nums tracking-tight text-[var(--voltflow-cyan)]">
                 {fmt(latestSohPercent, 1)}
-                <span className="ml-0.5 text-lg font-semibold text-muted-foreground">%</span>
+                <span className="ml-0.5 text-lg font-semibold text-muted-foreground">
+                  %
+                </span>
               </p>
             ) : (
               <p className="mt-1 text-sm text-muted-foreground">
@@ -910,7 +1086,9 @@ export function VehicleAnalyticsPanels({
               <>
                 <p className="mt-1 font-heading text-3xl font-bold tabular-nums tracking-tight text-[var(--voltflow-cyan)]">
                   {fmt(batteryConsistency.latest.cellDeltaMv, 0)}
-                  <span className="ml-0.5 text-lg font-semibold text-muted-foreground">mV</span>
+                  <span className="ml-0.5 text-lg font-semibold text-muted-foreground">
+                    mV
+                  </span>
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {t("vehicle.analytics.batteryHealthConsistencyAtSoc", {
@@ -939,9 +1117,9 @@ export function VehicleAnalyticsPanels({
           <li>{t("vehicle.analytics.batteryHealthTemperatureNote")}</li>
         </ul>
       </section>
-  ),
+    ),
 
-  cell_balance: (
+    cell_balance: (
       <section className="voltflow-card p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -959,9 +1137,13 @@ export function VehicleAnalyticsPanels({
               </p>
               <p className="font-heading text-4xl font-bold tabular-nums tracking-tight text-[var(--voltflow-cyan)]">
                 {(
-                  chargeDeltaTrend.fullCharges[chargeDeltaTrend.fullCharges.length - 1].deltaV * 1000
+                  chargeDeltaTrend.fullCharges[
+                    chargeDeltaTrend.fullCharges.length - 1
+                  ].deltaV * 1000
                 ).toFixed(0)}
-                <span className="ml-0.5 text-xl font-semibold text-muted-foreground">mV</span>
+                <span className="ml-0.5 text-xl font-semibold text-muted-foreground">
+                  mV
+                </span>
               </p>
             </div>
           ) : null}
@@ -980,9 +1162,15 @@ export function VehicleAnalyticsPanels({
               {t("vehicle.analytics.cellDeltaNoData")}
             </p>
           ) : retentionQuery.data?.isPremium ? (
-            <ChargeDeltaTrendChart trend={chargeDeltaTrend} locale={locale} tx={tx} />
+            <ChargeDeltaTrendChart
+              trend={chargeDeltaTrend}
+              locale={locale}
+              tx={tx}
+            />
           ) : (
-            <PremiumFeatureGate title={t("settings.premiumGates.diagnosticsTitle")}>
+            <PremiumFeatureGate
+              title={t("settings.premiumGates.diagnosticsTitle")}
+            >
               <p className="text-sm text-muted-foreground">
                 {t("settings.premiumGates.diagnosticsBody")}
               </p>
@@ -990,42 +1178,110 @@ export function VehicleAnalyticsPanels({
           )}
         </div>
       </section>
-  ),
+    ),
 
-  aux_12v: (
+    aux_12v: (
       <section className="voltflow-card p-5">
-        <h2 className="font-heading text-2xl font-semibold tracking-tight">{tx("vehicle.analytics.aux12vTitle")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{tx("vehicle.analytics.aux12vSubtitle")}</p>
+        <h2 className="font-heading text-2xl font-semibold tracking-tight">
+          {tx("vehicle.analytics.aux12vTitle")}
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {tx("vehicle.analytics.aux12vSubtitle")}
+        </p>
         {auxVoltageQuery.isLoading && !isDayRange ? (
           <Skeleton className="mt-4 h-52 rounded-2xl" />
         ) : auxVoltageQuery.error && !isDayRange ? (
-          <p className="mt-4 rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">{tx("vehicle.analytics.aux12vNoData")}</p>
-        ) : (isDayRange ? historyPoints.some((point) => typeof point.telemetry.aux_voltage_v === "number") : visibleAuxDailyPoints.length > 0) ? (
+          <p className="mt-4 rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
+            {tx("vehicle.analytics.aux12vNoData")}
+          </p>
+        ) : (
+            isDayRange
+              ? historyPoints.some(
+                  (point) => typeof point.telemetry.aux_voltage_v === "number",
+                )
+              : visibleAuxDailyPoints.length > 0
+          ) ? (
           <>
             <div className="mt-4">
-              <AuxVoltageTrendChart range={historyRange} dailyPoints={visibleAuxDailyPoints} dayPoints={historyPoints} baseline={auxBaseline.baseline} chemistry={auxBatteryChemistry} locale={locale} tx={tx} />
+              <AuxVoltageTrendChart
+                range={historyRange}
+                dailyPoints={visibleAuxDailyPoints}
+                dayPoints={historyPoints}
+                baseline={auxBaseline.baseline}
+                chemistry={auxBatteryChemistry}
+                locale={locale}
+                tx={tx}
+              />
             </div>
-            {auxWindowExtremes ? <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-2">
-              <AnalyticsStat label={t("auxVoltageStats.minimum") as string} {...formatAuxExtreme(auxWindowExtremes.min)} />
-              <AnalyticsStat label={t("auxVoltageStats.maximum") as string} {...formatAuxExtreme(auxWindowExtremes.max)} />
-              {!isDayRange && auxBaseline.restingNow != null ? <AnalyticsStat label={tx("vehicle.analytics.aux12vRestingNow")} value={`${fmt(auxBaseline.restingNow, 2)} V`} /> : null}
-              {!isDayRange && auxBaseline.sufficient ? <AnalyticsStat label={tx("vehicle.analytics.aux12vBaseline")} value={`${fmt(auxBaseline.baseline, 2)} V`} /> : null}
-              {!isDayRange && auxBaseline.sufficient ? <AnalyticsStat label={tx("vehicle.analytics.aux12vChange")} value={`${(auxBaseline.change ?? 0) >= 0 ? "+" : ""}${fmt(auxBaseline.change, 2)} V`} /> : null}
-            </div> : null}
-            {!isDayRange && !auxBaseline.sufficient ? (
-              <p className="mt-3 rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">{tx("vehicle.analytics.aux12vNotEnough", { count: auxBaseline.restingDayCount, required: AUX_MIN_RESTING_DAYS })}</p>
+            {auxWindowExtremes ? (
+              <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-2">
+                <AnalyticsStat
+                  label={t("auxVoltageStats.minimum") as string}
+                  {...formatAuxExtreme(auxWindowExtremes.min)}
+                />
+                <AnalyticsStat
+                  label={t("auxVoltageStats.maximum") as string}
+                  {...formatAuxExtreme(auxWindowExtremes.max)}
+                />
+                {!isDayRange && auxBaseline.restingNow != null ? (
+                  <AnalyticsStat
+                    label={tx("vehicle.analytics.aux12vRestingNow")}
+                    value={`${fmt(auxBaseline.restingNow, 2)} V`}
+                  />
+                ) : null}
+                {!isDayRange && auxBaseline.sufficient ? (
+                  <AnalyticsStat
+                    label={tx("vehicle.analytics.aux12vBaseline")}
+                    value={`${fmt(auxBaseline.baseline, 2)} V`}
+                  />
+                ) : null}
+                {!isDayRange && auxBaseline.sufficient ? (
+                  <AnalyticsStat
+                    label={tx("vehicle.analytics.aux12vChange")}
+                    value={`${(auxBaseline.change ?? 0) >= 0 ? "+" : ""}${fmt(auxBaseline.change, 2)} V`}
+                  />
+                ) : null}
+              </div>
             ) : null}
-            {!isDayRange && auxBaseline.sufficient ? <p className="mt-3 text-xs text-muted-foreground">{tx("vehicle.analytics.aux12vBasedOn", { count: auxBaseline.restingDayCount })}</p> : null}
-            {lowAuxDayCount > 0 ? <p className="mt-2 text-sm text-amber-400">{tx("vehicle.analytics.aux12vLowDays", { count: lowAuxDayCount })}</p> : null}
-            {!retentionQuery.data?.isPremium && (historyRange === "quarter" || historyRange === "year") ? <p className="mt-2 text-xs text-muted-foreground">{tx("vehicle.analytics.aux12vPremiumHistory")}</p> : null}
+            {!isDayRange && !auxBaseline.sufficient ? (
+              <p className="mt-3 rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
+                {tx("vehicle.analytics.aux12vNotEnough", {
+                  count: auxBaseline.restingDayCount,
+                  required: AUX_MIN_RESTING_DAYS,
+                })}
+              </p>
+            ) : null}
+            {!isDayRange && auxBaseline.sufficient ? (
+              <p className="mt-3 text-xs text-muted-foreground">
+                {tx("vehicle.analytics.aux12vBasedOn", {
+                  count: auxBaseline.restingDayCount,
+                })}
+              </p>
+            ) : null}
+            {lowAuxDayCount > 0 ? (
+              <p className="mt-2 text-sm text-amber-400">
+                {tx("vehicle.analytics.aux12vLowDays", {
+                  count: lowAuxDayCount,
+                })}
+              </p>
+            ) : null}
+            {!retentionQuery.data?.isPremium &&
+            (historyRange === "quarter" || historyRange === "year") ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {tx("vehicle.analytics.aux12vPremiumHistory")}
+              </p>
+            ) : null}
           </>
         ) : (
-          <p className="mt-4 rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">{tx("vehicle.analytics.aux12vNoData")}</p>
+          <p className="mt-4 rounded-2xl border border-border bg-white/[0.03] p-4 text-sm text-muted-foreground">
+            {tx("vehicle.analytics.aux12vNoData")}
+          </p>
         )}
       </section>
-  ),
+    ),
 
-  charging_trends: !isDayRange && chargingBarCharts.length > 0 ? (
+    charging_trends:
+      !isDayRange && chargingBarCharts.length > 0 ? (
         <section className="voltflow-card p-5">
           <h2 className="font-heading text-2xl font-semibold tracking-tight">
             {t("vehicle.analytics.chargingTrendsTitle")}
@@ -1048,10 +1304,14 @@ export function VehicleAnalyticsPanels({
         </section>
       ) : null,
 
-  phantom: (
+    phantom: (
       <section ref={phantomSectionRef} className="voltflow-card p-5">
-        <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.phantomTitle")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.phantomSubtitle")}</p>
+        <h2 className="font-heading text-2xl font-semibold tracking-tight">
+          {t("vehicle.analytics.phantomTitle")}
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {t("vehicle.analytics.phantomSubtitle")}
+        </p>
         <div className="mt-4">
           <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
             {t("vehicle.analytics.phantomNightTitle")}
@@ -1078,14 +1338,21 @@ export function VehicleAnalyticsPanels({
                   `${phantomNightQuery.data.night.idleHours.toFixed(1)} h`,
                 ],
               ].map(([label, value]) => (
-                <div key={label} className="flex items-baseline justify-between gap-4 px-3 py-2">
+                <div
+                  key={label}
+                  className="flex items-baseline justify-between gap-4 px-3 py-2"
+                >
                   <dt className="text-muted-foreground">{label}</dt>
-                  <dd className="text-right font-semibold tabular-nums">{value}</dd>
+                  <dd className="text-right font-semibold tabular-nums">
+                    {value}
+                  </dd>
                 </div>
               ))}
             </dl>
           ) : (
-            <p className="mt-2 text-sm text-muted-foreground">{t("vehicle.analytics.phantomNightEmpty")}</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {t("vehicle.analytics.phantomNightEmpty")}
+            </p>
           )}
         </div>
         {phantomPanelState === "loading" ? (
@@ -1099,19 +1366,25 @@ export function VehicleAnalyticsPanels({
             />
           </div>
         ) : phantomPanelState === "empty" ? (
-          <p className="mt-4 text-sm text-muted-foreground">{t("vehicle.analytics.phantomEmpty")}</p>
+          <p className="mt-4 text-sm text-muted-foreground">
+            {t("vehicle.analytics.phantomEmpty")}
+          </p>
         ) : (
           <div className="mt-4">
             <PhantomDrainBarChart rows={phantomQuery.data?.rows ?? []} />
           </div>
         )}
       </section>
-  ),
+    ),
 
-  range_prediction: (
+    range_prediction: (
       <section ref={rangePredictionSectionRef} className="voltflow-card p-5">
-        <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.rangePredictionTitle")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.rangePredictionSubtitle")}</p>
+        <h2 className="font-heading text-2xl font-semibold tracking-tight">
+          {t("vehicle.analytics.rangePredictionTitle")}
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {t("vehicle.analytics.rangePredictionSubtitle")}
+        </p>
         {rangePredictionPanelState === "loading" ? (
           <Skeleton className="mt-4 h-52 rounded-2xl" />
         ) : rangePredictionPanelState === "error" ? (
@@ -1123,7 +1396,9 @@ export function VehicleAnalyticsPanels({
             />
           </div>
         ) : rangePredictionPanelState === "empty" ? (
-          <p className="mt-4 text-sm text-muted-foreground">{t("vehicle.analytics.rangePredictionEmpty")}</p>
+          <p className="mt-4 text-sm text-muted-foreground">
+            {t("vehicle.analytics.rangePredictionEmpty")}
+          </p>
         ) : (
           <RangePredictionReportView
             report={rangePredictionQuery.data as RangePredictionReport}
@@ -1132,24 +1407,31 @@ export function VehicleAnalyticsPanels({
           />
         )}
       </section>
-  ),
+    ),
 
-  consumption_vs_temp: tempConsumptionBuckets.length >= 2 ? (
+    consumption_vs_temp:
+      tempConsumptionBuckets.length >= 2 ? (
         <section className="voltflow-card p-5">
           <h2 className="font-heading text-2xl font-semibold tracking-tight">
             {t("vehicle.analytics.consumptionVsTemp")}
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.consumptionVsTempSubtitle")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("vehicle.analytics.consumptionVsTempSubtitle")}
+          </p>
           <div className="mt-4">
             <TempConsumptionBarChart buckets={tempConsumptionBuckets} />
           </div>
         </section>
       ) : null,
 
-  route_insights: (
+    route_insights: (
       <section ref={routeInsightsSectionRef} className="voltflow-card p-5">
-        <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.routeInsightsTitle")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.routeInsightsSubtitle")}</p>
+        <h2 className="font-heading text-2xl font-semibold tracking-tight">
+          {t("vehicle.analytics.routeInsightsTitle")}
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {t("vehicle.analytics.routeInsightsSubtitle")}
+        </p>
         <RouteInsightsSection
           routes={routeInsightsQuery.data?.routes ?? []}
           parkedRoutes={routeInsightsQuery.data?.parkedRoutes ?? []}
@@ -1160,12 +1442,16 @@ export function VehicleAnalyticsPanels({
           vehicleId={vehicleId}
         />
       </section>
-  ),
+    ),
 
-  lifetime_map: (
+    lifetime_map: (
       <section ref={lifetimeMapSectionRef} className="voltflow-card p-5">
-        <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.lifetimeMapTitle")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.lifetimeMapSubtitle")}</p>
+        <h2 className="font-heading text-2xl font-semibold tracking-tight">
+          {t("vehicle.analytics.lifetimeMapTitle")}
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {t("vehicle.analytics.lifetimeMapSubtitle")}
+        </p>
         <div className="mt-4">
           <RouteMap
             trackPoints={mapQuery.data?.points ?? []}
@@ -1175,27 +1461,30 @@ export function VehicleAnalyticsPanels({
           />
         </div>
       </section>
-  ),
+    ),
 
-  export: (
+    export: (
       <section className="voltflow-card p-5">
-        <h2 className="font-heading text-2xl font-semibold tracking-tight">{t("vehicle.analytics.exportTitle")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("vehicle.analytics.exportSubtitle")}</p>
+        <h2 className="font-heading text-2xl font-semibold tracking-tight">
+          {t("vehicle.analytics.exportTitle")}
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {t("vehicle.analytics.exportSubtitle")}
+        </p>
         <div className="mt-4 flex flex-wrap gap-3">
           <Button asChild variant="outline">
-            <a href={exportUrl} download>{t("vehicle.analytics.exportCsv")}</a>
+            <a href={exportUrl} download>
+              {t("vehicle.analytics.exportCsv")}
+            </a>
           </Button>
           <Button asChild variant="outline">
-            <a
-              href={exportUrl.replace("format=csv", "format=json")}
-              download
-            >
+            <a href={exportUrl.replace("format=csv", "format=json")} download>
               {t("vehicle.analytics.exportJson")}
             </a>
           </Button>
         </div>
       </section>
-  ),
+    ),
   };
 
   const visibleCardIds = cardOrder.filter((id) => cardSections[id] != null);
@@ -1209,7 +1498,9 @@ export function VehicleAnalyticsPanels({
               {t("vehicle.analytics.historyTitle")}
             </h2>
             {!isDayRange ? (
-              <p className="mt-1 text-sm text-muted-foreground">{historySubtitle}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {historySubtitle}
+              </p>
             ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
@@ -1232,12 +1523,16 @@ export function VehicleAnalyticsPanels({
               type="button"
               onClick={() => setReorderMode((value) => !value)}
               aria-pressed={reorderMode}
-              aria-label={reorderMode
-                ? tx("vehicle.analytics.reorderDone")
-                : tx("vehicle.analytics.reorderMode")}
-              title={reorderMode
-                ? tx("vehicle.analytics.reorderDone")
-                : tx("vehicle.analytics.reorderMode")}
+              aria-label={
+                reorderMode
+                  ? tx("vehicle.analytics.reorderDone")
+                  : tx("vehicle.analytics.reorderMode")
+              }
+              title={
+                reorderMode
+                  ? tx("vehicle.analytics.reorderDone")
+                  : tx("vehicle.analytics.reorderMode")
+              }
               className={
                 "inline-flex size-9 items-center justify-center rounded-full border transition " +
                 (reorderMode
@@ -1284,7 +1579,10 @@ export function VehicleAnalyticsPanels({
               currency={currency}
               scope={historyRange}
               requireCharging={false}
-              estimatedNoChargePricePerKwh={periodOverviewQuery.data?.estimatedNoChargeDayPricePerKwh ?? null}
+              estimatedNoChargePricePerKwh={
+                periodOverviewQuery.data?.estimatedNoChargeDayPricePerKwh ??
+                null
+              }
             />
           )}
         </div>
@@ -1297,7 +1595,9 @@ export function VehicleAnalyticsPanels({
             historyPoints={historyPoints}
             anchorDate={anchorDate}
             isLoading={historyQuery.isLoading || periodOverviewQuery.isLoading}
-            hasSummaryError={Boolean(historyQuery.error || periodOverviewQuery.error)}
+            hasSummaryError={Boolean(
+              historyQuery.error || periodOverviewQuery.error,
+            )}
             hasTripsError={Boolean(periodOverviewQuery.error)}
             historyLoading={historyQuery.isLoading}
             historyError={Boolean(historyQuery.error)}
@@ -1313,13 +1613,24 @@ export function VehicleAnalyticsPanels({
                 onRetry={() => void periodOverviewQuery.refetch()}
               />
             ) : (
-              <AnalyticsSummaryStats summary={summary} chargedKwh={periodSummary.chargedKwh > 0 ? periodSummary.chargedKwh : null} />
+              <AnalyticsSummaryStats
+                summary={summary}
+                chargedKwh={
+                  periodSummary.chargedKwh > 0 ? periodSummary.chargedKwh : null
+                }
+              />
             )}
             {!periodSummaryLoading && periodSummary.hasPricedSessions ? (
               <div className="mt-3 grid grid-cols-2 gap-3 min-[430px]:grid-cols-3">
-                <AnalyticsStat label={t("vehicle.analytics.cost") as string} value={formatMoney(periodSummary.chargingCost)} />
+                <AnalyticsStat
+                  label={t("vehicle.analytics.cost") as string}
+                  value={formatMoney(periodSummary.chargingCost)}
+                />
                 {periodCostPerKm != null ? (
-                  <AnalyticsStat label={t("vehicle.analytics.costPerKm") as string} value={`${formatMoney(periodCostPerKm, 3)}/km`} />
+                  <AnalyticsStat
+                    label={t("vehicle.analytics.costPerKm") as string}
+                    value={`${formatMoney(periodCostPerKm, 3)}/km`}
+                  />
                 ) : null}
               </div>
             ) : null}
@@ -1340,14 +1651,16 @@ export function VehicleAnalyticsPanels({
         )}
       </section>
 
-
       {reorderMode ? (
         <DndContext
           sensors={reorderSensors}
           collisionDetection={closestCenter}
           onDragEnd={handleCardDragEnd}
         >
-          <SortableContext items={visibleCardIds} strategy={verticalListSortingStrategy}>
+          <SortableContext
+            items={visibleCardIds}
+            strategy={verticalListSortingStrategy}
+          >
             {visibleCardIds.map((id) => (
               <AnalyticsSortableCard key={id} id={id} label={id}>
                 {cardSections[id]}
@@ -1356,7 +1669,9 @@ export function VehicleAnalyticsPanels({
           </SortableContext>
         </DndContext>
       ) : (
-        visibleCardIds.map((id) => <Fragment key={id}>{cardSections[id]}</Fragment>)
+        visibleCardIds.map((id) => (
+          <Fragment key={id}>{cardSections[id]}</Fragment>
+        ))
       )}
     </div>
   );
@@ -1370,8 +1685,15 @@ function SohTrendChart({
   locale: string;
 }) {
   const validPoints = points
-    .filter((p) => typeof p.telemetry.soh_percent === "number" && Number.isFinite(p.telemetry.soh_percent))
-    .map((p) => ({ time: Date.parse(p.device_time), soh: p.telemetry.soh_percent as number }))
+    .filter(
+      (p) =>
+        typeof p.telemetry.soh_percent === "number" &&
+        Number.isFinite(p.telemetry.soh_percent),
+    )
+    .map((p) => ({
+      time: Date.parse(p.device_time),
+      soh: p.telemetry.soh_percent as number,
+    }))
     .sort((a, b) => a.time - b.time);
 
   if (validPoints.length < 2) return null;
@@ -1394,7 +1716,10 @@ function SohTrendChart({
   };
 
   const pathD = validPoints
-    .map((p, i) => `${i === 0 ? "M" : "L"} ${xFn(p.time).toFixed(1)} ${yFn(p.soh).toFixed(1)}`)
+    .map(
+      (p, i) =>
+        `${i === 0 ? "M" : "L"} ${xFn(p.time).toFixed(1)} ${yFn(p.soh).toFixed(1)}`,
+    )
     .join(" ");
 
   const latest = validPoints[validPoints.length - 1];
@@ -1410,31 +1735,96 @@ function SohTrendChart({
 
   return (
     <svg className="h-44 w-full overflow-visible" viewBox="0 0 340 140">
-      <line x1="34" x2="318" y1="104" y2="104" stroke="currentColor" className="text-border" strokeWidth="1" />
-      <line x1="34" x2="34" y1="16" y2="104" stroke="currentColor" className="text-border" strokeWidth="1" />
+      <line
+        x1="34"
+        x2="318"
+        y1="104"
+        y2="104"
+        stroke="currentColor"
+        className="text-border"
+        strokeWidth="1"
+      />
+      <line
+        x1="34"
+        x2="34"
+        y1="16"
+        y2="104"
+        stroke="currentColor"
+        className="text-border"
+        strokeWidth="1"
+      />
       {yTicks.map((tick) => (
         <g key={tick.label}>
-          <line x1="34" x2="318" y1={yFn(tick.v)} y2={yFn(tick.v)} stroke="currentColor" className="text-border/40" strokeWidth="1" strokeDasharray="4 6" />
-          <text x="29" y={yFn(tick.v) + 3} textAnchor="end" fontSize="9" className="fill-muted-foreground">
+          <line
+            x1="34"
+            x2="318"
+            y1={yFn(tick.v)}
+            y2={yFn(tick.v)}
+            stroke="currentColor"
+            className="text-border/40"
+            strokeWidth="1"
+            strokeDasharray="4 6"
+          />
+          <text
+            x="29"
+            y={yFn(tick.v) + 3}
+            textAnchor="end"
+            fontSize="9"
+            className="fill-muted-foreground"
+          >
             {tick.label}
           </text>
         </g>
       ))}
       {[minTime, midTime, maxTime].map((t, i) => (
         <g key={i}>
-          <line x1={xFn(t)} x2={xFn(t)} y1="104" y2="109" stroke="currentColor" className="text-border" strokeWidth="1" />
-          <text x={xFn(t)} y="122" textAnchor="middle" fontSize="9" className="fill-muted-foreground">
+          <line
+            x1={xFn(t)}
+            x2={xFn(t)}
+            y1="104"
+            y2="109"
+            stroke="currentColor"
+            className="text-border"
+            strokeWidth="1"
+          />
+          <text
+            x={xFn(t)}
+            y="122"
+            textAnchor="middle"
+            fontSize="9"
+            className="fill-muted-foreground"
+          >
             {dateFmt(t)}
           </text>
         </g>
       ))}
-      <path d={pathD} fill="none" stroke="var(--voltflow-cyan)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d={pathD}
+        fill="none"
+        stroke="var(--voltflow-cyan)"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
       {validPoints.length <= 60
         ? validPoints.map((p, i) => (
-            <circle key={i} cx={xFn(p.time)} cy={yFn(p.soh)} r="2.5" fill="var(--voltflow-cyan)" />
+            <circle
+              key={i}
+              cx={xFn(p.time)}
+              cy={yFn(p.soh)}
+              r="2.5"
+              fill="var(--voltflow-cyan)"
+            />
           ))
         : null}
-      <circle cx={xFn(latest.time)} cy={yFn(latest.soh)} r="5" fill="var(--voltflow-cyan)" stroke="#fff" strokeWidth="1.5" />
+      <circle
+        cx={xFn(latest.time)}
+        cy={yFn(latest.soh)}
+        r="5"
+        fill="var(--voltflow-cyan)"
+        stroke="#fff"
+        strokeWidth="1.5"
+      />
     </svg>
   );
 }
@@ -1448,12 +1838,28 @@ function formatNightTime(iso: string) {
   });
 }
 
-function AnalyticsStat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function AnalyticsStat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
   return (
     <div className="rounded-2xl border border-border bg-white/[0.02] p-3">
-      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
-      <p className="mt-1 font-heading text-lg font-semibold tabular-nums">{value}</p>
-      {hint ? <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{hint}</p> : null}
+      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1 font-heading text-lg font-semibold tabular-nums">
+        {value}
+      </p>
+      {hint ? (
+        <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+          {hint}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -1472,18 +1878,29 @@ function RangePredictionReportView({
   return (
     <div className="mt-4">
       <div className="grid grid-cols-2 gap-3 min-[430px]:grid-cols-4">
-        <AnalyticsStat label={tx("vehicle.analytics.rangePredictionCyclesStat")} value={String(report.gradedCount)} />
+        <AnalyticsStat
+          label={tx("vehicle.analytics.rangePredictionCyclesStat")}
+          value={String(report.gradedCount)}
+        />
         <AnalyticsStat
           label={tx("vehicle.analytics.rangePredictionMeanError")}
           value={mean == null ? "—" : `${mean > 0 ? "+" : ""}${fmt(mean)} %`}
         />
         <AnalyticsStat
           label={tx("vehicle.analytics.rangePredictionPromised")}
-          value={report.avgPredictedKmAt100 == null ? "—" : `${fmt(report.avgPredictedKmAt100)} km`}
+          value={
+            report.avgPredictedKmAt100 == null
+              ? "—"
+              : `${fmt(report.avgPredictedKmAt100)} km`
+          }
         />
         <AnalyticsStat
           label={tx("vehicle.analytics.rangePredictionActual")}
-          value={report.avgActualKmAt100 == null ? "—" : `${fmt(report.avgActualKmAt100)} km`}
+          value={
+            report.avgActualKmAt100 == null
+              ? "—"
+              : `${fmt(report.avgActualKmAt100)} km`
+          }
         />
       </div>
       {report.trust ? (
@@ -1493,8 +1910,9 @@ function RangePredictionReportView({
                 factor: report.trust.factor.toFixed(2),
                 count: report.trust.sampleCycles,
                 promise: Math.round(report.avgPredictedKmAt100 / 10) * 10,
-                corrected:
-                  Math.round((report.avgPredictedKmAt100 / 10) * 10 * report.trust.factor),
+                corrected: Math.round(
+                  (report.avgPredictedKmAt100 / 10) * 10 * report.trust.factor,
+                ),
               })
             : tx("vehicle.analytics.rangePredictionTrustRecent", {
                 factor: report.trust.factor.toFixed(2),
@@ -1505,14 +1923,22 @@ function RangePredictionReportView({
       <ul className="mt-4 space-y-1.5">
         {visible.map((cycle) => {
           const magnitude = Math.abs(cycle.errorPct);
-          const tone = magnitude <= 7 ? "text-emerald-600" : magnitude <= 15 ? "text-amber-600" : "text-rose-600";
+          const tone =
+            magnitude <= 7
+              ? "text-emerald-600"
+              : magnitude <= 15
+                ? "text-amber-600"
+                : "text-rose-600";
           return (
             <li
               key={`${cycle.promiseSessionId}:${cycle.nextSessionId}`}
               className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm"
             >
               <span className="w-14 shrink-0 text-xs uppercase tracking-wide text-muted-foreground">
-                {new Date(cycle.cycleEndedAt).toLocaleDateString(locale, { month: "short", day: "numeric" })}
+                {new Date(cycle.cycleEndedAt).toLocaleDateString(locale, {
+                  month: "short",
+                  day: "numeric",
+                })}
               </span>
               <span className="min-w-0 flex-1 text-muted-foreground">
                 {`${fmt(cycle.promiseKm)} km @ ${fmt(cycle.anchorSoc)} % → ${fmt(cycle.predictedKmAt100)} km`}
@@ -1527,7 +1953,9 @@ function RangePredictionReportView({
       </ul>
       {report.cycles.length > visible.length ? (
         <p className="mt-2 text-xs text-muted-foreground">
-          {tx("vehicle.analytics.rangePredictionMore", { count: report.cycles.length - visible.length })}
+          {tx("vehicle.analytics.rangePredictionMore", {
+            count: report.cycles.length - visible.length,
+          })}
         </p>
       ) : null}
     </div>

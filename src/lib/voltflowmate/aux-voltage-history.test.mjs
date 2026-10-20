@@ -1,6 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mapAuxVoltageDailyRows, normalizeAuxVoltage } from "./aux-voltage-history.ts";
+import { mapAuxVoltageDailyRows, normalizeAuxVoltage, resolveAuxTrendWindow } from "./aux-voltage-history.ts";
+
+test("in-progress week trends over the last 7 completed days", () => {
+  const week = { from: "2026-10-19T00:00:00.000Z", to: "2026-10-25T23:59:59.999Z" };
+  const now = new Date("2026-10-20T08:44:00.000Z");
+  assert.deepEqual(resolveAuxTrendWindow("week", week, now), {
+    from: "2026-10-13T00:00:00.000Z",
+    to: "2026-10-20T08:44:00.000Z",
+  });
+});
+
+test("completed weeks and other ranges keep their window", () => {
+  const pastWeek = { from: "2026-10-12T00:00:00.000Z", to: "2026-10-18T23:59:59.999Z" };
+  const now = new Date("2026-10-20T08:44:00.000Z");
+  assert.equal(resolveAuxTrendWindow("week", pastWeek, now), pastWeek);
+  const month = { from: "2026-09-21T00:00:00.000Z", to: "2026-10-20T23:59:59.999Z" };
+  assert.equal(resolveAuxTrendWindow("month", month, now), month);
+});
 
 test("aux voltage normalization defensively clamps to 6-18 V", () => {
   assert.equal(normalizeAuxVoltage("12.65"), 12.65);

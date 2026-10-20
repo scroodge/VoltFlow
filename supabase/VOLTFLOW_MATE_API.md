@@ -11,12 +11,21 @@ POST https://<host>/api/bydmate/telemetry
 Content-Type: application/json
 X-API-Key: <paired-client-key>
 X-Vehicle-Id: <vehicle-id>
+X-Vehicle-Uid: <vehicle-uid>
+X-App: VoltFlow-Mate
 ```
 
 `X-Vehicle-Id` selects the vehicle stream for the authenticated paired key. It is canonical for
 the request: the server normalizes queued samples to this value so an item queued before a user
 changes the client setting remains retryable. Clients should nevertheless send the configured
 vehicle alias in both places and preserve it when retrying.
+
+`X-Vehicle-Uid` (optional, sent by modern APKs from B-03 on) provides a stable hardware install
+identity (UUID). On first contact the server binds this UID to the current vehicle alias in
+`bydmate_vehicle_identity`. If the owner renames the vehicle in the APK, subsequent telemetry
+continues to resolve and store data under the bound canonical key instead of fracturing vehicle history.
+
+`X-App` identifies the client application (`VoltFlow-Mate`).
 
 ## Pairing
 
@@ -113,6 +122,33 @@ Each block belongs to the vehicle in `X-Vehicle-Id` (it does not contain its own
 and may be `null` when no contributing sample has that measurement. `hourly` is optional;
 when present it is an array of these blocks alongside `samples`.
 
+### Client-side trip rollups
+
+Modern Mate APKs also attach cumulative trip blocks in the `trips` array of an object batch.
+When a sample belongs to a client-owned drive, it sets `client_trip: true` and includes `trip_id: "<uuid>"`.
+The server applies the cumulative block via `bydmate_apply_client_trip`, skipping server-side
+trip heuristics:
+
+```json
+{
+  "trip_id": "b3f02b37-2384-4861-a589-3bc87e5b1234",
+  "started_at": "2026-01-01T12:00:00Z",
+  "last_device_time": "2026-01-01T12:25:00Z",
+  "ended_at": "2026-01-01T12:25:00Z",
+  "sample_count": 120,
+  "distance_km": 14.2,
+  "soc_start": 80,
+  "soc_end": 76,
+  "max_speed_kmh": 85,
+  "avg_speed_kmh": 34.1,
+  "avg_consumption_kwh_100km": 15.3,
+  "regen_energy_kwh": 0.4,
+  "traction_energy_kwh": 2.5
+}
+```
+
+`ended_at` is set once the trip is closed locally (gear P or power off); while open it is omitted or `null`.
+
 ### Required fields
 
 | Field | Type | Notes |
@@ -130,9 +166,20 @@ when present it is an array of these blocks alongside `samples`.
 | --- | --- | --- |
 | `diplus` | object or null | Extended vehicle data when available. |
 | `autoservice` | object | Optional vehicle metadata when available. |
-| `mate_version` | string | Client version metadata. |
+| `mate_version` | string | Client version metadata (`BuildConfig.VERSION_NAME`). |
 | `client_hourly` | boolean | Marks a sample as represented by a companion hourly block in the same object batch. |
+| `client_trip` | boolean | Marks a sample as belonging to an APK-owned trip block in `trips`. |
+| `trip_id` | string (UUID) | Unique trip identifier matching the client trip block. |
 | `live_only` | boolean | Status-only snapshot. When true, the server updates the latest live snapshot but skips durable telemetry, hourly-rollup, and trip writes. |
+
+### Normalized `telemetry` metrics
+
+The `telemetry` object contains core vehicle metrics:
+- Standard: `soc` (%), `speed_kmh`, `power_kw`, `battery_temp_c`, `cabin_temp_c`, `outside_temp_c`, `odometer_km`, `soh_percent`.
+- Battery & Cells: `battery_voltage_v`, `aux_voltage_v` (12V battery), `cell_voltage_min_v`, `cell_voltage_max_v`, `cell_delta_v`.
+- Charging: `is_charging` (boolean), `charge_power_kw` (positive kW), `charge_current_a` (signed pack current in Amps, negative during charge), `charge_type` (`AC`/`DC`), `kwh_charged`.
+- Source scales: `soc_source` (`"diplus"` for BMS 0.1% resolution, `"autoservice"` for whole-percent display SOC).
+- Trip & Range: `range_est_km`, `current_trip_distance_km`, `current_trip_consumption_kwh_100km`.
 
 Unknown forward-compatible fields are ignored. Numeric values may be represented as JSON
 numbers or numeric strings. Batches are limited to 300 samples.
@@ -155,7 +202,11 @@ receive an application response equivalent to:
   "inserted_count": 1,
   "duplicate_count": 0,
   "skipped_stale_count": 0,
-  "hourly_rollup_applied": 0
+  "hourly_rollup_applied": 0,
+  "trip_rollup_applied": 0,
+  "live_fast_seconds": 20,
+  "offline_buffer_cap_bytes": 4294967296,
+  "battery_capacity_kwh": 45.1
 }
 ```
 
@@ -163,12 +214,16 @@ The acknowledged inserted and duplicate count must cover every submitted sample,
 `skipped_stale_count` must be zero. Network failures and server errors remain retryable;
 the client preserves the original `vehicle_id` for every queued sample.
 
+`live_fast_seconds` grants the car a temporary fast-status transmission window (e.g. while an owner has the web app open).
+`offline_buffer_cap_bytes` informs the client of its allocated storage quota for offline telemetry queue retention (default 4 GiB).
+`battery_capacity_kwh` provides the vehicle profile capacity (from `cars.battery_capacity_kwh`) so the on-car AI Range agrees with cloud calculations.
+
 Automatic charging processing is part of application acknowledgement. If it fails after
 telemetry persistence, the endpoint returns HTTP `503` with `ok: false` and `retryable: true`.
 Keep and retry the complete batch; telemetry duplicates are safe, and pending charging work
 is committed through a versioned transaction. Snapshot-only requests skip charging processing.
 
-`hourly_rollup_applied` is informational and is not part of sample acknowledgement
+`hourly_rollup_applied` and `trip_rollup_applied` are informational and are not part of sample acknowledgement
 accounting.
 
 ## Command poll and acknowledgement
@@ -202,6 +257,9 @@ The same field rides the telemetry ingest response, which is the carrier that ac
 cars while remote commands are suspended: `next.config.ts` then rewrites this poll to a static
 JSON file and the route never runs.
 
+`offline_buffer_cap_bytes` informs the client of its allowed on-device storage quota for
+offline telemetry queue retention (default 4 GiB).
+
 ```json
 {
   "ok": true,
@@ -211,6 +269,7 @@ JSON file and the route never runs.
   "commands_enabled": true,
   "live_fast_seconds": 20,
   "poll_after_seconds": 6,
+  "offline_buffer_cap_bytes": 4294967296,
   "battery_capacity_kwh": 45.1
 }
 ```

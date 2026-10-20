@@ -1,3 +1,20 @@
+## Analytics 12 V trend: "Week" shows one point — BUILT 2026-10-20 (option 1); awaiting commit + deploy
+
+"Week" is the ISO calendar week (Mon–Sun), and `bydmate_aux_voltage_daily_rollups` holds only
+completed UTC days (cron at 00:10). On Tuesday, car `way` therefore showed one point (Monday);
+on Monday the chart is empty. Prod rollups were complete (daily rows 08.10–19.10, queue empty).
+**Ownership:** app-owned derived telemetry, read-only; no new storage, no migration.
+
+### Options
+
+- **1 (chosen):** while the selected week is still in progress, the 12 V daily trend uses the
+  last 7 completed days (`resolveAuxTrendWindow` in `aux-voltage-history.ts`). Past weeks and
+  other ranges keep their window. Trade-off: this card's window differs from the other cards
+  for the current week.
+- 2: add today's partial day from raw samples (`bydmate_aux_voltage_daily_raw_baseline`):
+  costs an extra query against `bydmate_telemetry_samples`.
+- 3: stretch the X axis over the whole week: cosmetic only, still one point.
+
 ## Charging session history: "Odometer at start" tile — BUILT 2026-10-12 (option A); awaiting commit + deploy
 
 Owner asked for a new tile in a session's history view (next to "Avg power") showing the
