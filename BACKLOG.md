@@ -1,3 +1,32 @@
+## Telegram Mini App: email login says «С возвращением» but stays on the login form — BUILT 2026-10-20 (option 1); awaiting commit + deploy + Mini App check
+
+**Report (2026-10-20 13:35):** a user in the Mini App entered email + password, got the
+«С возвращением.» toast, and nothing else happened («И тишина»). The screenshot shows
+`/login` still on screen under the toast. Restarting Telegram fixed it.
+**Cause:** `/telegram` → «Уже есть аккаунт?» hard-loads `/login?next=/telegram`. After a
+successful `signInWithPassword`, `LoginForm.handleSignIn` (`src/components/auth/login-form.tsx:150-153`)
+does a **soft** `router.replace(next)` + `router.refresh()`. `TelegramEntryGate` already
+documents why that breaks: soft RSC fetches (`?_rsc=…`) get challenged by the Vercel Security
+Checkpoint inside the Telegram WebView, the router fails silently, and the user stays put. The
+session cookie *was* set, which is why a Telegram restart → `/telegram` → authenticated →
+`/dashboard` worked. `handleSignUp` (lines 105-108) has the same soft navigation.
+**Ownership:** no data change; client navigation only.
+
+### Options
+
+1. **Hard navigation only when returning to Telegram (recommended).** In `handleSignIn` and
+   the `data.session` branch of `handleSignUp`: if `wantsTelegramReturn`, call
+   `window.location.assign(next)`; otherwise keep `router.replace` + `refresh`. Minimal; the
+   PWA/browser flow keeps fast soft navigation. Same pattern as `hardNavigate` in the gate.
+2. **Always hard-navigate after login.** Simpler and guarantees fresh server state everywhere,
+   but costs a full reload on every web login. No reports of the checkpoint hitting browsers.
+3. **Detect the WebView (`window.Telegram?.WebApp?.initData`) instead of `next`.** Covers a
+   login inside Telegram reached by another path, but the SDK is only loaded on this page when
+   `next=/telegram`, so detection would be unreliable without loading the script everywhere.
+
+Verification: lint + build; manual check in the Mini App (logout → «Уже есть аккаунт?» →
+email login → lands on `/dashboard` without a restart).
+
 ## Late-charge recovery cuts long offline charges at a 12 h lookback — BUILT 2026-10-20 (option 1, as backward extension); session 5e35b662 repaired in prod; awaiting commit + deploy
 
 **Report (user 275223b5, car `z_byd`, 45.1 kWh):** plugged in 17.10 ~12:00 at 26 %, full at

@@ -12,7 +12,14 @@ import { touchUserActivity } from "@/actions/activity";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { LegalFooterLinks } from "@/components/legal/legal-document-view";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -29,9 +36,22 @@ export function LoginForm() {
   const { t, locale } = useTranslation();
   const wantsTelegramReturn = next === "/telegram";
 
+  // Inside the Telegram WebView a soft router navigation is challenged by the
+  // Vercel Security Checkpoint and fails silently (see TelegramEntryGate), so the
+  // Mini App return path uses a hard load.
+  const navigateAfterAuth = () => {
+    if (wantsTelegramReturn) {
+      window.location.assign(next);
+      return;
+    }
+    router.replace(next);
+    router.refresh();
+  };
+
   const detectTelegramLogin = () => {
     if (!wantsTelegramReturn) return;
-    const webApp = typeof window !== "undefined" ? window.Telegram?.WebApp : undefined;
+    const webApp =
+      typeof window !== "undefined" ? window.Telegram?.WebApp : undefined;
     setTelegramLogin(Boolean(webApp?.initData));
   };
 
@@ -79,7 +99,9 @@ export function LoginForm() {
   const handleSignUp = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const email = String(formData.get("email") ?? "").trim().toLowerCase();
+    const email = String(formData.get("email") ?? "")
+      .trim()
+      .toLowerCase();
     const password = String(formData.get("password") ?? "");
     if (!email || password.length < 8) {
       toast.error(t("auth.weakPassword") as string);
@@ -104,8 +126,7 @@ export function LoginForm() {
     if (data.session) {
       await touchUserActivity();
       toast.success(t("auth.welcome") as string);
-      router.replace(next);
-      router.refresh();
+      navigateAfterAuth();
       return;
     }
     setPendingEmail(email);
@@ -116,7 +137,10 @@ export function LoginForm() {
     if (!pendingEmail) return;
     const supabase = createClient();
     setLoading(true);
-    const { error } = await supabase.auth.resend({ type: "signup", email: pendingEmail });
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: pendingEmail,
+    });
     setLoading(false);
     if (error) {
       toast.error(error.message);
@@ -128,13 +152,18 @@ export function LoginForm() {
   const handleSignIn = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const email = String(formData.get("email") ?? "").trim().toLowerCase();
+    const email = String(formData.get("email") ?? "")
+      .trim()
+      .toLowerCase();
     const password = String(formData.get("password") ?? "");
     if (!email || !password) return;
 
     const supabase = createClient();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     setLoading(false);
     if (error) {
       // User signed up but never clicked the confirmation link.
@@ -149,8 +178,7 @@ export function LoginForm() {
 
     await touchUserActivity();
     toast.success(t("auth.welcome") as string);
-    router.replace(next);
-    router.refresh();
+    navigateAfterAuth();
   };
 
   return (
@@ -274,9 +302,11 @@ export function LoginForm() {
               </div>
             </div>
             <ol className="text-muted-foreground list-decimal space-y-2 pl-5 leading-relaxed">
-              {(t("auth.telegramGoogleSteps") as readonly string[]).map((step) => (
-                <li key={step}>{step}</li>
-              ))}
+              {(t("auth.telegramGoogleSteps") as readonly string[]).map(
+                (step) => (
+                  <li key={step}>{step}</li>
+                ),
+              )}
             </ol>
             <Button
               type="button"
@@ -311,7 +341,10 @@ export function LoginForm() {
 
         <p className="text-muted-foreground text-center">
           {t("auth.installHint")}{" "}
-          <span className="text-foreground font-semibold">{t("auth.addToHome")}</span>.
+          <span className="text-foreground font-semibold">
+            {t("auth.addToHome")}
+          </span>
+          .
         </p>
         <Link
           href="/"
