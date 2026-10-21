@@ -4,6 +4,7 @@
  * Keep feature implementation details under `_domain` private. A caller outside this
  * feature should import from this file rather than from an individual implementation.
  */
+export * from "./_domain/charging-end-time.ts";
 export * from "./_domain/charging-live.ts";
 export * from "./_domain/charging-math.ts";
 export * from "./_domain/checkout-input.ts";

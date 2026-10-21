@@ -421,6 +421,24 @@ dropped `20260706000000`) — see
 | `rendered_device_time` | timestamptz | Device time of the sample on screen; an older batch is skipped so a flushed offline queue never walks the widget backwards; null = unknown (`20261021120000`) |
 | `updated_at` | timestamptz | |
 
+### `bydmate_diagnostic_uploads`
+Audit of Mate «Отправить диагностику» uploads relayed to the developer's Telegram chat
+(`20261021130000`). The bundle is **not** stored — only this row, which drives the rate limit
+(3 / vehicle / hour, 10 / user / day) in `POST /api/bydmate/diagnostics`. App-owned; RLS on with
+no policies, service_role only.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `user_id` | uuid → `auth.users` | cascade delete |
+| `vehicle_id` | text | resolved vehicle alias |
+| `created_at` | timestamptz | |
+| `size_bytes` | integer | gzip size after server redaction |
+| `mate_version` | text | from `X-Mate-Version`, nullable |
+| `status` | text | `sent` / `failed` |
+| `telegram_message_id` | bigint | when sent |
+| `error` | text | Telegram error, ≤ 200 chars |
+
 ### `bydmate_vehicle_identity`
 Maps on-car APK hardware install identity (`X-Vehicle-Uid`) to the vehicle alias (`20260924120000`). Survives renaming of the car in the APK or web UI.
 

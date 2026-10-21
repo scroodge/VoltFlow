@@ -82,6 +82,7 @@ import {
   costFromGridEnergy,
   energyFromGridKwh,
   energyNeededKwh,
+  formatChargingEndTime,
   formatDuration,
   gridSidePowerForEta,
   resolveChargingEtaPowerKw,
@@ -301,27 +302,22 @@ function DashboardStatTile({
 }
 
 function DashboardChargingProgressTile({
-  charged,
-  chargedLabel,
+  endsAt,
+  endsAtLabel,
   timeLeft,
   timeLeftLabel,
   timeExplanation,
-  energyExplanation,
   onExplain,
 }: {
-  charged: string;
-  chargedLabel: string;
+  endsAt: string;
+  endsAtLabel: string;
   timeLeft: string;
   timeLeftLabel: string;
   timeExplanation?: MetricExplanation;
-  energyExplanation?: MetricExplanation;
   onExplain?: (explanation: MetricExplanation) => void;
 }) {
   const timePress = useLongPress(() => {
     if (timeExplanation) onExplain?.(timeExplanation);
-  });
-  const energyPress = useLongPress(() => {
-    if (energyExplanation) onExplain?.(energyExplanation);
   });
   return (
     <div className="rounded-xl border border-border bg-white/[0.03] p-2.5">
@@ -343,24 +339,14 @@ function DashboardChargingProgressTile({
           {timeLeft}
         </span>
       </button>
-      <button
-        type="button"
-        className="relative mt-1 block min-h-11 w-full text-left"
-        {...energyPress}
-      >
-        {energyExplanation ? (
-          <Info
-            className="absolute right-0 top-0 size-3.5 opacity-60"
-            aria-hidden
-          />
-        ) : null}
+      <div className="mt-1 block min-h-11 w-full text-left">
         <span className="block pr-5 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-          {chargedLabel}
+          {endsAtLabel}
         </span>
         <span className="mt-1 block text-sm font-semibold tabular-nums text-muted-foreground">
-          {charged}
+          {endsAt}
         </span>
-      </button>
+      </div>
     </div>
   );
 }
@@ -1473,14 +1459,6 @@ export function DashboardView({
         }),
         activeChargingStats.timeLeft,
       ),
-      energy: withResultDisplay(
-        explainActiveChargeEnergy({
-          ...common,
-          fromPercent: activeSession.start_percent,
-          currentPercent: activeChargingStats.currentSoc,
-        }),
-        activeChargingStats.charged,
-      ),
       cost: withResultDisplay(
         explainActiveChargeCost({
           ...common,
@@ -2000,10 +1978,19 @@ export function DashboardView({
                           t("dashboard.chargingTimeLeft") as string
                         }
                         timeLeft={activeChargingStats.timeLeft}
-                        chargedLabel={t("dashboard.chargingCharged") as string}
-                        charged={activeChargingStats.charged}
+                        endsAtLabel={t("dashboard.chargingEndsAt") as string}
+                        endsAt={
+                          formatChargingEndTime({
+                            nowMs,
+                            timeLeftSeconds:
+                              activeChargingStats.timeLeftSeconds,
+                            locale,
+                            tomorrowLabel: t(
+                              "dashboard.chargingEndsTomorrow",
+                            ) as string,
+                          }) ?? "—"
+                        }
                         timeExplanation={activeExplanations?.time}
-                        energyExplanation={activeExplanations?.energy}
                         onExplain={(explanation) =>
                           setOpenMetric(explanation.metricKey)
                         }

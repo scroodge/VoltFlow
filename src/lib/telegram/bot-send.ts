@@ -32,27 +32,36 @@ export async function sendTelegramLocation(
   if (!token) return { ok: false, error: "missing_bot_token" };
 
   try {
-    const response = await fetch(`https://api.telegram.org/bot${token}/sendLocation`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        latitude: lat,
-        longitude: lon,
-      }),
-    });
+    const response = await fetch(
+      `https://api.telegram.org/bot${token}/sendLocation`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          latitude: lat,
+          longitude: lon,
+        }),
+      },
+    );
 
-    const payload = (await response.json().catch(() => null)) as
-      | { ok?: boolean; description?: string; error_code?: number }
-      | null;
+    const payload = (await response.json().catch(() => null)) as {
+      ok?: boolean;
+      description?: string;
+      error_code?: number;
+    } | null;
 
     if (response.ok && payload?.ok) return { ok: true };
 
     const description = payload?.description ?? `http_${response.status}`;
-    const blocked = response.status === 403 || /blocked|chat not found/i.test(description);
+    const blocked =
+      response.status === 403 || /blocked|chat not found/i.test(description);
     return { ok: false, error: description, blocked };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "fetch_failed" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "fetch_failed",
+    };
   }
 }
 
@@ -66,31 +75,40 @@ export async function editTelegramMessageText(
   if (!token) return { ok: false, error: "missing_bot_token" };
 
   try {
-    const response = await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        message_id: messageId,
-        text,
-        parse_mode: options.parseMode,
-        reply_markup: options.replyMarkup,
-        disable_web_page_preview: options.disableWebPagePreview ?? true,
-      }),
-    });
+    const response = await fetch(
+      `https://api.telegram.org/bot${token}/editMessageText`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          message_id: messageId,
+          text,
+          parse_mode: options.parseMode,
+          reply_markup: options.replyMarkup,
+          disable_web_page_preview: options.disableWebPagePreview ?? true,
+        }),
+      },
+    );
 
-    const payload = (await response.json().catch(() => null)) as
-      | { ok?: boolean; description?: string; error_code?: number }
-      | null;
+    const payload = (await response.json().catch(() => null)) as {
+      ok?: boolean;
+      description?: string;
+      error_code?: number;
+    } | null;
 
     // editMessageText returns true on success, or false if content unchanged
     if (response.ok && payload?.ok) return { ok: true };
 
     const description = payload?.description ?? `http_${response.status}`;
-    const blocked = response.status === 403 || /blocked|chat not found/i.test(description);
+    const blocked =
+      response.status === 403 || /blocked|chat not found/i.test(description);
     return { ok: false, error: description, blocked };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "fetch_failed" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "fetch_failed",
+    };
   }
 }
 
@@ -103,30 +121,94 @@ export async function sendTelegramMessage(
   if (!token) return { ok: false, error: "missing_bot_token" };
 
   try {
-    const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: options.parseMode,
-        reply_markup: options.replyMarkup,
-        disable_notification: options.disableNotification,
-        disable_web_page_preview: options.disableWebPagePreview ?? true,
-      }),
-    });
+    const response = await fetch(
+      `https://api.telegram.org/bot${token}/sendMessage`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          parse_mode: options.parseMode,
+          reply_markup: options.replyMarkup,
+          disable_notification: options.disableNotification,
+          disable_web_page_preview: options.disableWebPagePreview ?? true,
+        }),
+      },
+    );
 
-    const payload = (await response.json().catch(() => null)) as
-      | { ok?: boolean; result?: { message_id?: number }; description?: string; error_code?: number }
-      | null;
+    const payload = (await response.json().catch(() => null)) as {
+      ok?: boolean;
+      result?: { message_id?: number };
+      description?: string;
+      error_code?: number;
+    } | null;
 
-    if (response.ok && payload?.ok) return { ok: true, messageId: payload.result?.message_id };
+    if (response.ok && payload?.ok)
+      return { ok: true, messageId: payload.result?.message_id };
 
     const description = payload?.description ?? `http_${response.status}`;
-    const blocked = response.status === 403 || /blocked|chat not found/i.test(description);
+    const blocked =
+      response.status === 403 || /blocked|chat not found/i.test(description);
     return { ok: false, error: description, blocked };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "fetch_failed" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "fetch_failed",
+    };
+  }
+}
+
+/** Upload a file as a Telegram document (multipart; Bot API cap 50 MB). */
+export async function sendTelegramDocument(
+  chatId: number | string,
+  file: {
+    bytes: Uint8Array<ArrayBuffer>;
+    fileName: string;
+    contentType: string;
+  },
+  options: { caption?: string; parseMode?: "HTML" | "MarkdownV2" } = {},
+): Promise<TelegramSendResult> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return { ok: false, error: "missing_bot_token" };
+
+  try {
+    const form = new FormData();
+    form.set("chat_id", String(chatId));
+    form.set(
+      "document",
+      new Blob([file.bytes], { type: file.contentType }),
+      file.fileName,
+    );
+    if (options.caption) form.set("caption", options.caption);
+    if (options.parseMode) form.set("parse_mode", options.parseMode);
+
+    const response = await fetch(
+      `https://api.telegram.org/bot${token}/sendDocument`,
+      {
+        method: "POST",
+        body: form,
+      },
+    );
+
+    const payload = (await response.json().catch(() => null)) as {
+      ok?: boolean;
+      result?: { message_id?: number };
+      description?: string;
+    } | null;
+
+    if (response.ok && payload?.ok)
+      return { ok: true, messageId: payload.result?.message_id };
+
+    const description = payload?.description ?? `http_${response.status}`;
+    const blocked =
+      response.status === 403 || /blocked|chat not found/i.test(description);
+    return { ok: false, error: description, blocked };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "fetch_failed",
+    };
   }
 }
 
@@ -138,20 +220,30 @@ export async function deleteTelegramMessage(
   if (!token) return { ok: false, error: "missing_bot_token" };
 
   try {
-    const response = await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
-    });
+    const response = await fetch(
+      `https://api.telegram.org/bot${token}/deleteMessage`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
+      },
+    );
 
-    const payload = (await response.json().catch(() => null)) as
-      | { ok?: boolean; description?: string }
-      | null;
+    const payload = (await response.json().catch(() => null)) as {
+      ok?: boolean;
+      description?: string;
+    } | null;
 
     if (response.ok && payload?.ok) return { ok: true };
-    return { ok: false, error: payload?.description ?? `http_${response.status}` };
+    return {
+      ok: false,
+      error: payload?.description ?? `http_${response.status}`,
+    };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "fetch_failed" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "fetch_failed",
+    };
   }
 }
 

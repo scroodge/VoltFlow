@@ -368,6 +368,39 @@ this entitlement. Errors follow the usual vocabulary:
 `missing_api_key` (401), `invalid_api_key` (401), `not_entitled` (403), `invalid_payload`
 and `invalid_layout_version` (400), and `payload_too_large` (413) above 256 KB.
 
+## Diagnostics upload
+
+```http
+POST https://<host>/api/bydmate/diagnostics
+X-API-Key: <paired-client-key>
+X-Vehicle-Id: <vehicle-id>
+X-Vehicle-Uid: <install-uid>            (optional, as for telemetry)
+X-Mate-Version: 0.6.2                   (optional)
+X-Diagnostics-Comment: <percent-encoded UTF-8, ≤ 500 chars>   (optional)
+Content-Type: application/gzip
+
+<gzip of one UTF-8 text bundle, ≤ 4 MB compressed, ≤ 40 MB decompressed>
+```
+
+Mate «Отправить диагностику» sends one text bundle; the server relays it as a document to
+the developer's Telegram chat (`TELEGRAM_DIAGNOSTICS_CHAT_ID`). The bot token never ships in
+the APK. The server **re-redacts** the decompressed text before sending (keys, bearer and bot
+tokens, e-mail, all GPS forms, VIN → last 6) even though Mate redacts first; VoltFlow does not
+store the bundle, only an audit row in `bydmate_diagnostic_uploads`.
+
+| Status | Meaning |
+|---|---|
+| `200 {ok:true}` | Delivered to Telegram |
+| `400` | Missing `X-Vehicle-Id`, unreadable body, or invalid / oversized gzip |
+| `401` | Unknown API key |
+| `413` | Body over 4 MB |
+| `415` | Body is not gzip |
+| `429 {reason}` | `vehicle_hourly` (3 / vehicle / hour) or `user_daily` (10 / user / day); failed sends count too |
+| `502` | Telegram refused the upload (counted) |
+| `503` | Diagnostics not configured on this server |
+
+Do not retry automatically: show the result to the user and let them tap again.
+
 ## Privacy and compatibility
 
 - Omit GPS by sending `location: {}`.

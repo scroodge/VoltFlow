@@ -1,3 +1,134 @@
+## Dashboard charging tile: replace «Заряжено» with the end clock time — PROPOSED 2026-10-21
+
+**Ask (user feedback, 2026-10-14):** "Во сколько" is more useful than "через сколько";
+"сколько влезло" can go. Agreed in a grilling session with the owner.
+
+**Where:** `DashboardChargingProgressTile` (`src/components/dashboard/dashboard-view.tsx:303`),
+fed by `activeChargingStats` (`:1278`). PWA + Mini App dashboard only — the Telegram live
+widget does not show time left.
+
+**Ownership / storage:** no new data. Derived client-side from the existing
+`timeLeftSeconds` (`activeChargingTimeLeftSeconds`, same ETA as «Осталось»), so both lines
+always agree.
+
+### Decisions (all confirmed by owner)
+1. **Layout (A):** top line «Осталось 2h 28m» unchanged; bottom line «Заряжено 16.19 kWh»
+   → «Закончится ~12:34». Session kWh stays visible on the «Последняя зарядка» card.
+2. **Format (A):** 24 h, device time zone. Same day `~12:34`; next day `~03:10 завтра`;
+   later `~03:10, 23 окт.`. EN: «Ends», `~12:34`, `~03:10 tomorrow`, `~03:10, Oct 23`.
+3. **ⓘ (A):** one ⓘ for the tile (the «Осталось» one). Add to the «Время до 100%»
+   explanation: end time = now + time left, recomputed when power changes. Drop the
+   energy ⓘ from this tile (`activeChargeEnergy` explanation stays if used elsewhere).
+4. **Edge cases (A):** `timeLeftSeconds` ≤ 60 s, non-finite, or > 48 h → `—`.
+
+### Build
+- Pure helper `formatChargingEndTime(nowMs, timeLeftSeconds, locale)` →
+  string | null, with `.test.mjs` beside it (today / tomorrow / date / — cases, midnight
+  boundary, 48 h cap).
+- i18n: add `dashboard.chargingEndsAt` (ru «Закончится», en «Ends») + «завтра»/«tomorrow»;
+  remove `chargingCharged` if no other user.
+- Tile: swap the `charged`/`energyExplanation` props for `endsAt`; re-render on the
+  existing live tick so the clock stays current.
+- Verify: `npm run test`, `npm run lint`, `npm run build`; check the tile during a live
+  charge in PWA and Mini App.
+
+## Diagnostics: «Отправить диагностику» in Mate → developer's Telegram — PHASE 1 BUILT 2026-10-21 (server; migration `20261021130000` applied to prod); needs `TELEGRAM_DIAGNOSTICS_CHAT_ID` on Vercel + deploy; phase 2 (Mate) next
+
+**Phase 1 as built:** `POST /api/bydmate/diagnostics` (`src/app/api/bydmate/diagnostics/route.ts`),
+pure helpers + tests in `src/lib/voltflowmate/diagnostics.ts`, `sendTelegramDocument` in
+`bot-send.ts`. Body is raw gzip; version/comment ride in headers
+(`X-Mate-Version`, percent-encoded `X-Diagnostics-Comment`). Server gunzips (40 MB cap),
+re-redacts, re-gzips, sends. Contract: `supabase/VOLTFLOW_MATE_API.md` → Diagnostics upload.
+
+**Why:** field bugs stall on logs we cannot reach without ADB. The lost `cl` drive (below)
+needs `/data/local/tmp/voltflow_cmd_daemon.log` and the chain log; today that means asking a
+user to plug in a laptop.
+
+**Prior art — upstream AndyShaman/BYDMate (#324, `ea89b0e8`/`f5f60e42`, reviewed 2026-10-21):**
+- `LogTelegramSender` sends a *recorded* logcat file (Settings → «Запись логов», 2 h / 50 MB
+  cap) to the **user's own bot** (`getTgBackupConfig`: token + chat the user entered). No
+  developer token in the APK; logs reach the user, who forwards them. One attempt, no retry.
+- `TraceJournal` (2026-09-28): always-on, bounded journal of decisions in `filesDir`, lines
+  passed through `TraceSanitizer` (drops URLs, `COORD_PAIR`, precise numbers, phones,
+  non-ASCII text). This is the part that answers "what happened *before* anyone pressed
+  record" — exactly our case.
+- Our fork already has a simpler `util/LogRecorder.kt` (own-uid logcat → files → Downloads),
+  no `diagnostics/` package, no Telegram sink.
+- **License:** upstream is PolyForm **Noncommercial** 1.0.0. **Owner decision 2026-10-21: no code
+  is carried over from the fork — read it for the approach only, write our own.**
+
+**Not like upstream:** the owner wants every user's report to reach the developer. A bot
+token baked into the APK is extractable by decompiling, and whoever has it can call
+`setWebhook`/`getUpdates` and break the live widget, Hide/Show buttons and Mini App (webhook on
+the VPS), or spam everyone who wrote to the bot; rotating it needs a new APK on every car. So
+the APK uploads to VoltFlow and the **server** forwards it.
+
+### Design
+```
+Mate Settings → «Отправить диагностику разработчику» (+ optional comment, consent dialog)
+  → collect bundle (gzip, ≤ 4 MB) → POST /api/bydmate/diagnostics  (X-API-Key, as telemetry)
+  → server: auth, rate limit, size → Telegram sendDocument (TELEGRAM_BOT_TOKEN, server-only)
+     to TELEGRAM_DIAGNOSTICS_CHAT_ID (developer, env)
+```
+**Ownership / storage:** the bundle is **not stored** by VoltFlow — it exists in the developer's
+Telegram chat only. An app-owned audit row per upload in Postgres
+(`bydmate_diagnostic_uploads`: user_id, vehicle_id, created_at, size_bytes,
+telegram_message_id, mate_version, status) drives the rate limit and answers "did it
+arrive". RLS on, service_role only, no grants to `anon`/`authenticated`.
+
+**Bundle (one `diagnostics-<vehicle>-<UTC>.txt.gz`, sections with headers):**
+1. Header: Mate version/code, DiLink/Android, device time + zone, uptime, car power state.
+2. Liveness: beacon age, TrackingService running, app process, daemon pid, last
+   `AppSupervisor` relaunch ts (`/data/local/tmp/voltflow_app_relaunch_ts`).
+3. Queue: unsent count, oldest/newest `createdAt`, `NEXT_ATTEMPT_AT`, `NEXT_DRAIN_AT`, last
+   upload status line, `wifiOnly`, network state. (For `cl` this alone would show whether the
+   app sat in backoff or was dead.)
+4. Chain log (`BootReceiver.KEY_CHAIN_LOG`).
+5. Daemon log tail (last ~1.5 MB of `voltflow_cmd_daemon.log`).
+6. `logcat -d` of our uid; the latest `LogRecorder` session if one exists.
+
+**Daemon log hand-off:** `/data/local/tmp` belongs to the shell uid; the app must not rely on
+reading it. The app writes a request file to its external files dir (the daemon already reads
+the heartbeat and `voltflow_cmd.conf` there); the daemon's 6 s status loop copies the log
+tail next to it and deletes the request; the app waits ≤ 20 s and sends without that section
+(noting so) if the daemon is down. Logic in a pure `internal` function for
+`CommandDaemonTest`, per the daemon testability rule.
+
+**Redaction (pure, unit-tested, applied to every section):** API key / `X-API-Key`,
+`Bearer …`, Telegram bot tokens (`\d{6,}:[A-Za-z0-9_-]{30,}`), link codes, e-mail, **GPS
+removed** (owner: not needed) — `lat`/`lon`/`latitude`/`longitude` values and coordinate pairs
+like `TraceSanitizer.COORD_PAIR`, `geo:` URIs. VIN masked to the last 6 characters.
+
+**Server limits:** body ≤ 4 MB (Vercel caps at 4.5 MB); 3 uploads / vehicle / hour, 10 / user /
+day (from the audit table); reject non-gzip. Caption: car name, `vehicle_alias`, short
+user id, Mate version, upload time, user comment (escaped, ≤ 500 chars), admin link to the
+user. No e-mail in Telegram.
+
+### Fixes to make the logs worth sending (Mate)
+- **Daemon log is truncated on every watchdog start** (`start_voltflow_cmd.sh:81`, `>`), so a
+  restart erases the evidence. Rotate instead (`mv` → `.1`, keep one) and cap its size.
+- **Chain log keeps 20 lines, `HH:mm:ss` only.** Make it 200 lines with date
+  (`dd.MM HH:mm:ss`), and log the `AppSupervisor` relaunch decision and the
+  `TrackingService` beacon-delete path there too.
+
+### Phases
+1. **VoltFlow:** migration `bydmate_diagnostic_uploads` (+ revoke/grant per the function/table
+   rules), `POST /api/bydmate/diagnostics`, `sendTelegramDocument` in `bot-send.ts`,
+   `TELEGRAM_DIAGNOSTICS_CHAT_ID` env, tests for auth/limits/caption. `curl`-testable alone.
+2. **Mate:** collector + redactor (pure, tested), daemon hand-off, Settings button with consent
+   dialog and comment, daemon log rotation, longer dated chain log. New APK release.
+3. **Later:** an always-on decision journal (our own take on `TraceJournal`) for liveness,
+   queue/backoff and trip lifecycle events, included as a bundle section.
+
+### Options considered
+- **A. Server relay (recommended)** — as above.
+- B. Developer bot token in the APK — rejected: token extraction can break the production bot.
+- C. User's own bot (upstream) — no setup burden on us, but the user must create a bot and
+  forward the file; most of our users won't.
+- D. Admin-triggered remote collection through the command poll — useful later for "please
+  send logs" without a tap, but uploads a user's logs without their action; only with an
+  in-app confirmation.
+
 ## Mate: drive after an offline charge is lost (car `cl`, 2026-10-21) — INVESTIGATING (needs car logs)
 
 **Report (2026-10-21, user «Ваня», car `cl`):** after a 35 → 100 % charge with no internet,
