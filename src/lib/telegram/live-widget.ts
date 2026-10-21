@@ -27,7 +27,10 @@ import {
   telegramLiveWidgetReplyMarkup,
   type TelegramLiveVehicleState,
 } from "@/lib/telegram/live-widget-message";
-import { isTelegramLiveWidgetEditDue } from "@/lib/telegram/live-widget-edit-due";
+import {
+  isTelegramLiveWidgetBacklogSample,
+  isTelegramLiveWidgetEditDue,
+} from "@/lib/telegram/live-widget-edit-due";
 import { resolveLatestMateVersion } from "@/lib/mate-latest-release";
 import { estimateVehicleRangeKm } from "@/lib/voltflowmate/range-estimate";
 import {
@@ -365,6 +368,10 @@ export async function updateTelegramLiveWidgets({
     const row = existingByVehicle.get(vehicleId) ?? null;
     // Hide-button opt-out: a hidden widget is never resurrected by ingest.
     if (row?.status === "hidden") return false;
+    // A replayed offline queue must not walk the widget back to hours-old state.
+    const latest = latestSamples.get(vehicleId);
+    if (latest && isTelegramLiveWidgetBacklogSample(latest.device_time, nowMs))
+      return false;
     const state = stateByVehicle.get(vehicleId);
     return state != null && isTelegramLiveWidgetEditDue(row, nowMs, state);
   });
