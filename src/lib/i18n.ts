@@ -384,7 +384,8 @@ export const dictionaries = {
       signIn: "Sign in",
       chargingProgress: "{remaining} left · {energy} kWh · {cost}",
       chargingTimeLeft: "Time left",
-      chargingCharged: "Charged",
+      chargingEndsAt: "Ends",
+      chargingEndsTomorrow: "tomorrow",
       chargingCostToFull: "Price to 100%",
       explain: {
         metrics: {
@@ -402,8 +403,8 @@ export const dictionaries = {
           },
           activeChargeTime: {
             title: "Time left",
-            formula: "remaining grid energy ÷ current charge power",
-            fallbackFormula: "live session remaining time",
+            formula: "remaining grid energy ÷ current charge power; end time = now + time left",
+            fallbackFormula: "live session remaining time; end time = now + time left",
           },
           activeChargeEnergy: {
             title: "Charged energy",
@@ -2084,7 +2085,8 @@ export const dictionaries = {
       signIn: "Увайсці",
       chargingProgress: "{remaining} засталося · {energy} кВт·г · {cost}",
       chargingTimeLeft: "Засталося",
-      chargingCharged: "Зараджана",
+      chargingEndsAt: "Скончыцца",
+      chargingEndsTomorrow: "заўтра",
       chargingCostToFull: "Кошт да 100%",
       explain: {
         metrics: {
@@ -2102,8 +2104,8 @@ export const dictionaries = {
           },
           activeChargeTime: {
             title: "Засталося часу",
-            formula: "астатняя энергія з сеткі ÷ бягучая магутнасць",
-            fallbackFormula: "астатні час жывой сесіі",
+            formula: "астатняя энергія з сеткі ÷ бягучая магутнасць; час заканчэння = цяпер + астатні час",
+            fallbackFormula: "астатні час жывой сесіі; час заканчэння = цяпер + астатні час",
           },
           activeChargeEnergy: {
             title: "Зараджана энергіі",
@@ -3783,7 +3785,8 @@ export const dictionaries = {
       signIn: "Войти",
       chargingProgress: "{remaining} осталось · {energy} кВт·ч · {cost}",
       chargingTimeLeft: "Осталось",
-      chargingCharged: "Заряжено",
+      chargingEndsAt: "Закончится",
+      chargingEndsTomorrow: "завтра",
       chargingCostToFull: "Цена до 100%",
       explain: {
         metrics: {
@@ -3801,8 +3804,8 @@ export const dictionaries = {
           },
           activeChargeTime: {
             title: "Осталось времени",
-            formula: "оставшаяся энергия из сети ÷ текущая мощность",
-            fallbackFormula: "оставшееся время живой сессии",
+            formula: "оставшаяся энергия из сети ÷ текущая мощность; время окончания = сейчас + оставшееся время",
+            fallbackFormula: "оставшееся время живой сессии; время окончания = сейчас + оставшееся время",
           },
           activeChargeEnergy: {
             title: "Заряжено энергии",

@@ -137,7 +137,6 @@ import { formatSocPercent } from "@/lib/format-soc-percent";
 import { computeHeroDriveMetrics } from "@/lib/voltflowmate/hero-drive-metrics";
 import {
   explainActiveChargeCost,
-  explainActiveChargeEnergy,
   explainActiveChargeTime,
   explainAiRange,
   explainParkChargeCost,
@@ -1307,7 +1306,6 @@ export function DashboardView({
     });
 
     return {
-      charged: `${fmt(liveActive.chargedEnergyKwh, 2)} kWh`,
       chargedEnergyKwh: liveActive.chargedEnergyKwh,
       timeLeft: formatDuration(Math.round(timeLeftSeconds)),
       timeLeftSeconds,

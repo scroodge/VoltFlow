@@ -1,4 +1,4 @@
-## Dashboard charging tile: replace «Заряжено» with the end clock time — PROPOSED 2026-10-21
+## Dashboard charging tile: replace «Заряжено» with the end clock time — BUILT 2026-10-21; awaiting commit + deploy + live-charge check
 
 **Ask (user feedback, 2026-10-14):** "Во сколько" is more useful than "через сколько";
 "сколько влезло" can go. Agreed in a grilling session with the owner.
@@ -32,13 +32,24 @@ always agree.
 - Verify: `npm run test`, `npm run lint`, `npm run build`; check the tile during a live
   charge in PWA and Mini App.
 
-## Diagnostics: «Отправить диагностику» in Mate → developer's Telegram — PHASE 1 BUILT 2026-10-21 (server; migration `20261021130000` applied to prod); needs `TELEGRAM_DIAGNOSTICS_CHAT_ID` on Vercel + deploy; phase 2 (Mate) next
+## Diagnostics: «Отправить диагностику» in Mate → developer's Telegram — PHASE 1 BUILT 2026-10-21 (server; migration `20261021130000` applied to prod); PHASE 2 BUILT in BYDMate-own (uncommitted, debug APK builds, 633 tests); needs `TELEGRAM_DIAGNOSTICS_CHAT_ID`=104553098 on Vercel + deploy, then an on-car test
 
 **Phase 1 as built:** `POST /api/bydmate/diagnostics` (`src/app/api/bydmate/diagnostics/route.ts`),
 pure helpers + tests in `src/lib/voltflowmate/diagnostics.ts`, `sendTelegramDocument` in
 `bot-send.ts`. Body is raw gzip; version/comment ride in headers
 (`X-Mate-Version`, percent-encoded `X-Diagnostics-Comment`). Server gunzips (40 MB cap),
 re-redacts, re-gzips, sends. Contract: `supabase/VOLTFLOW_MATE_API.md` → Diagnostics upload.
+
+**Phase 2 as built (BYDMate-own):** `diagnostics/DiagnosticsBundle` (pure: layout, redaction —
+same rules as the server, change both together — gzip, URL, outcome mapping),
+`diagnostics/DiagnosticsReporter` (collects header, liveness/beacon, queue + backoff keys, chain
+log, daemon log, logcat, recorded sessions; posts), `daemon/DiagnosticsHandoff` (request-file
+hand-off of the daemon log, served from the daemon status loop), `service/ChainLog` (200 dated
+lines, replaces 3 copies), «Отправить диагностику» card on Gateway → Diagnostics (ru/en/be),
+watchdog log rotation to `.1` in both `start_voltflow_cmd.sh` copies (byte-identical). Docs:
+Mate `CHANGELOG.md` [Unreleased], `docs/REMOTE_COMMAND_DAEMON.md`.
+**Not verified on a car:** daemon writing into the app's external files dir as shell (it already
+writes the telemetry spool there, so expected to work), and the end-to-end Telegram delivery.
 
 **Why:** field bugs stall on logs we cannot reach without ADB. The lost `cl` drive (below)
 needs `/data/local/tmp/voltflow_cmd_daemon.log` and the chain log; today that means asking a
