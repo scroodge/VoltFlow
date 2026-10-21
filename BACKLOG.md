@@ -1,3 +1,29 @@
+## Remote commands: «мигнуть фарами» / «гудок» report done but nothing happens (car `way`, 2026-10-21) — PROPOSED
+
+**Report (owner, Mate 0.6.2 on `way`):** of the commands tried only windows open/close worked.
+**Evidence (diagnostics bundle `diagnostics-way-20261021T150410Z` + `vehicle_commands`):** all 10
+commands 17:56–17:59 are `done` with `result.verified=false`: 5× `flash_lights` → `闪灯`, 1× `honk`
+→ `鸣笛`, `windows_preset` open/close, `ac` off, `ac_vent` off. Di+ `sendCmd` answers
+`{"success":true}` to **any** phrase, so `done` only means "Di+ accepted the string".
+**Cause:** `honk → 鸣笛` and `flash_lights → 闪灯` in Mate `CommandAllowlist.kt:190-191` are the
+"comfort-set guesses" (Mate CHANGELOG) — never verified on a car; Di+ does not know them.
+Windows phrases are verified, which is why only they moved. Power was ON (`pwr_state=2`), so
+not the `PWR=0` limit.
+**What is known:** upstream AndyShaman/BYDMate (read for facts only) drives hazard lights with
+`双闪打开` / `双闪关闭` (two commands, on and off) and has **no horn command at all**.
+
+### Options
+1. **Verify first, on `way` via adb** (car ON, owner present): send candidate phrases straight to
+   Di+ (`双闪打开`/`双闪关闭`, `寻车`, `鸣笛`/`喇叭`) and watch the car. Only phrases that visibly
+   actuate go into the allowlist. Physical actuation → owner approves each run.
+2. `flash_lights` → `双闪打开`, and Mate sends `双闪关闭` ~5 s later (one button = a blink), or
+   expose hazard on/off as two buttons. Needs (1).
+3. `honk`: hide the button in the PWA until a working phrase is found (`寻车` may honk+flash on
+   BYD; unverified).
+4. UI honesty: show `verified=false` results as «отправлено в машину», not «выполнено».
+
+**Recommendation:** 1 → 2 → 3, and 4 regardless. Ownership: no data-model change.
+
 ## Dashboard charging tile: replace «Заряжено» with the end clock time — BUILT 2026-10-21; awaiting commit + deploy + live-charge check
 
 **Ask (user feedback, 2026-10-14):** "Во сколько" is more useful than "через сколько";

@@ -11,6 +11,15 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-10-21
 
+- **Dashboard hides «Начать зарядку» when Mate is already watching the car.** A parked car
+  with a fresh snapshot (≤90 s) and no open session gets its sessions from the ingest
+  auto-session engine, so the primary CTA was calculator-only noise. `showsAutoChargeHint`
+  (`src/lib/vehicle-live-mode.ts`, tested) swaps it for «Зарядка отследится автоматически —
+  просто подключите кабель» plus a secondary «Записать зарядку вручную» link (same
+  `openQuickSession` flow). Manual start stays reachable on purpose: firmware that never
+  reports `charge_power_kw` never passes the strict auto-start predicate. Asleep / stale /
+  no-Mate cars keep the CTA unchanged. UI-only; no data-model change.
+
 - **Telegram live widget no longer regresses to a flushed offline queue.** Car `cl` charged
   35 → 100 % without internet; the daemon delivered the parked 99.7 % state at 12:40, then
   the app flushed its queue (07:39 → 12:19) and the widget was edited to "charging 90.8 %"

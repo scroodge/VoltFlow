@@ -15,7 +15,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { toast } from "sonner";
-import { Info } from "lucide-react";
+import { Info, Zap } from "lucide-react";
 
 import {
   startChargingSession,
@@ -152,6 +152,7 @@ import {
   isChargingTelemetry,
   isFreshLiveSnapshot,
   resolveLiveSnapshotForVehicle,
+  showsAutoChargeHint,
 } from "@/lib/vehicle-live-mode";
 import { useAppPreferences } from "@/stores/use-app-preferences";
 import type {
@@ -1663,6 +1664,10 @@ export function DashboardView({
       : vehicleMode === "driving"
         ? (t("dashboard.statusDriving") as string)
         : undefined;
+  const autoChargeHint = showsAutoChargeHint(
+    vehicleMode,
+    Boolean(activeSession),
+  );
 
   return (
     <div className="dashboard-page safe-bottom flex flex-col gap-5 px-4 pb-6 pt-5">
@@ -2063,7 +2068,25 @@ export function DashboardView({
               </div>
             </div>
 
-            {!hasLiveChargingData ? (
+            {autoChargeHint ? (
+              <div className="mt-4 flex flex-col items-center gap-2 rounded-2xl border border-[var(--voltflow-cyan)]/25 bg-[var(--voltflow-cyan)]/5 px-4 py-3 text-center">
+                <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <Zap
+                    className="size-4 shrink-0 text-[var(--voltflow-cyan)]"
+                    aria-hidden
+                  />
+                  {t("dashboard.autoChargeHint")}
+                </p>
+                <button
+                  type="button"
+                  disabled={!selectedCar}
+                  onClick={() => void handleMainAction()}
+                  className="text-xs font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground disabled:opacity-55"
+                >
+                  {t("dashboard.startChargingManually")}
+                </button>
+              </div>
+            ) : !hasLiveChargingData ? (
               <div className="mt-4 grid gap-2">
                 <ChargingActionButton
                   status={actionButtonStatus}

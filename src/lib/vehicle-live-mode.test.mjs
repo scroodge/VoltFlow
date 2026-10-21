@@ -8,8 +8,17 @@ import {
   isDrivingTelemetry,
   isParkedTelemetry,
   LIVE_SNAPSHOT_ASLEEP_MS,
+  showsAutoChargeHint,
   vehicleStatusLabelKey,
 } from "./vehicle-live-mode.ts";
+
+test("auto-charge hint replaces the start CTA only for a fresh parked car without a session", () => {
+  assert.equal(showsAutoChargeHint("parked", false), true);
+  assert.equal(showsAutoChargeHint("parked", true), false);
+  for (const mode of ["asleep", "stale", "driving", "live_charging", "app_charging"]) {
+    assert.equal(showsAutoChargeHint(mode, false), false, mode);
+  }
+});
 
 const NOW = Date.UTC(2026, 4, 30, 12, 0, 0);
 

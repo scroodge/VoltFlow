@@ -28,12 +28,7 @@ export const LIVE_SNAPSHOT_STALE_MS = 90_000;
 export const LIVE_SNAPSHOT_ASLEEP_MS = 20 * 60_000;
 
 export type DashboardVehicleMode =
-  | "app_charging"
-  | "live_charging"
-  | "driving"
-  | "parked"
-  | "asleep"
-  | "stale";
+  "app_charging" | "live_charging" | "driving" | "parked" | "asleep" | "stale";
 
 export function isFreshLiveSnapshot(
   snapshot: VoltflowMateLiveSnapshotRow | null | undefined,
@@ -50,7 +45,9 @@ export function isFreshLiveSnapshot(
  * `device_time`: the question the UI answers is "when did contact last happen", and a batch flushed
  * late carries old device times but is still real contact at flush time.
  */
-export function lastContactAtMs(snapshot: VoltflowMateLiveSnapshotRow | null | undefined): number | null {
+export function lastContactAtMs(
+  snapshot: VoltflowMateLiveSnapshotRow | null | undefined,
+): number | null {
   if (!snapshot) return null;
   const receivedMs = Date.parse(snapshot.received_at);
   return Number.isFinite(receivedMs) ? receivedMs : null;
@@ -72,7 +69,9 @@ export function isAsleepLiveSnapshot(
 }
 
 /** @deprecated Use isDriveTelemetry from bydmate/gear */
-export function isRawDrivingTelemetry(snapshot: VoltflowMateLiveSnapshotRow | null | undefined) {
+export function isRawDrivingTelemetry(
+  snapshot: VoltflowMateLiveSnapshotRow | null | undefined,
+) {
   return isDriveTelemetry(snapshot);
 }
 
@@ -93,7 +92,10 @@ function chargingCheckSpeedKmh(
  * a stray charge_power_kw reading must not turn a moving car into "charging".
  */
 export function isChargingTelemetry(
-  snapshot: Pick<VoltflowMateLiveSnapshotRow, "telemetry" | "diplus"> | null | undefined,
+  snapshot:
+    | Pick<VoltflowMateLiveSnapshotRow, "telemetry" | "diplus">
+    | null
+    | undefined,
 ) {
   if (!snapshot) return false;
   const speedKmh = chargingCheckSpeedKmh(snapshot);
@@ -101,12 +103,16 @@ export function isChargingTelemetry(
   return isTelemetryCharging(snapshot.telemetry, snapshot);
 }
 
-export function isParkedTelemetry(snapshot: VoltflowMateLiveSnapshotRow | null | undefined) {
+export function isParkedTelemetry(
+  snapshot: VoltflowMateLiveSnapshotRow | null | undefined,
+) {
   if (!snapshot || isChargingTelemetry(snapshot)) return false;
   return isParkStateTelemetry(snapshot);
 }
 
-export function isDrivingTelemetry(snapshot: VoltflowMateLiveSnapshotRow | null | undefined) {
+export function isDrivingTelemetry(
+  snapshot: VoltflowMateLiveSnapshotRow | null | undefined,
+) {
   if (!snapshot || isChargingTelemetry(snapshot)) return false;
   return isDriveTelemetry(snapshot);
 }
@@ -133,13 +139,16 @@ export function deriveDashboardVehicleMode({
   if (hasActiveSession) return "app_charging";
   // Past the live threshold. A car on the platform's ~15 min suspend rhythm is asleep, not lost —
   // reporting it as "no contact" is what made a healthy locked car look broken to the owner.
-  if (!fresh) return isAsleepLiveSnapshot(snapshot, nowMs, asleepMs) ? "asleep" : "stale";
+  if (!fresh)
+    return isAsleepLiveSnapshot(snapshot, nowMs, asleepMs) ? "asleep" : "stale";
   if (isChargingTelemetry(snapshot)) return "live_charging";
   if (isParkStateTelemetry(snapshot)) return "parked";
   return "stale";
 }
 
-export function dashboardVehicleStatusLabelKey(mode: DashboardVehicleMode): TranslationKey {
+export function dashboardVehicleStatusLabelKey(
+  mode: DashboardVehicleMode,
+): TranslationKey {
   switch (mode) {
     case "app_charging":
       return "dashboard.statusCharging";
@@ -157,7 +166,9 @@ export function dashboardVehicleStatusLabelKey(mode: DashboardVehicleMode): Tran
   }
 }
 
-export function vehicleStatusLabelKey(mode: DashboardVehicleMode): TranslationKey {
+export function vehicleStatusLabelKey(
+  mode: DashboardVehicleMode,
+): TranslationKey {
   switch (mode) {
     case "asleep":
       return "vehicle.status.asleep";
@@ -194,8 +205,25 @@ export function dashboardStatusBadgeClass(mode: DashboardVehicleMode) {
 
 export function canStartChargingSession(mode: DashboardVehicleMode) {
   return (
-    mode === "parked" || mode === "asleep" || mode === "stale" || mode === "live_charging"
+    mode === "parked" ||
+    mode === "asleep" ||
+    mode === "stale" ||
+    mode === "live_charging"
   );
+}
+
+/**
+ * A parked car with a fresh Mate snapshot is already watched by the ingest auto-session
+ * engine, so the dashboard swaps the primary «Start charging» CTA for an auto-start hint and
+ * keeps manual start as a secondary link. Asleep/stale cars keep the CTA: no fresh data means
+ * no auto-start, and the app is back to a calculator. Manual start must stay reachable — a
+ * firmware that never reports `charge_power_kw` never passes the strict start predicate.
+ */
+export function showsAutoChargeHint(
+  mode: DashboardVehicleMode,
+  hasActiveSession: boolean,
+) {
+  return mode === "parked" && !hasActiveSession;
 }
 
 function finiteNumber(value: unknown): number | null {
@@ -216,5 +244,9 @@ export function resolveLiveSnapshotForVehicle(
 ): VoltflowMateLiveSnapshotRow | null {
   if (!snapshots.length) return null;
   if (!vehicleId) return snapshots[0] ?? null;
-  return snapshots.find((row) => row.vehicle_id === vehicleId) ?? snapshots[0] ?? null;
+  return (
+    snapshots.find((row) => row.vehicle_id === vehicleId) ??
+    snapshots[0] ??
+    null
+  );
 }
