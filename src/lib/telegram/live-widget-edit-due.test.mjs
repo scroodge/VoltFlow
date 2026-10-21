@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  isTelegramLiveWidgetBacklogSample,
+  isTelegramLiveWidgetRegression,
   isTelegramLiveWidgetEditDue,
 } from "./live-widget-edit-due.ts";
 
@@ -49,20 +49,34 @@ test("an unknown last_state keeps the plain throttle", () => {
   );
 });
 
-test("a replayed offline batch is backlog, a live one is not (car cl, 2026-10-21)", () => {
-  const flushedAt = Date.parse("2026-10-21T09:46:57.850Z");
-  // Newest sample of the 12:46:57 flush was 11:46:41 local (charging 90.8 %).
+test("an older batch than the rendered sample is a regression (car cl, 2026-10-21)", () => {
+  // Widget showed the daemon's 12:40:54 parked sample; the 12:46:57 flush ended at 11:46:41.
+  const shown = row({ rendered_device_time: "2026-10-21T09:40:54Z" });
+  assert.equal(isTelegramLiveWidgetRegression(shown, "2026-10-21T08:46:41Z"), true);
+  assert.equal(isTelegramLiveWidgetRegression(shown, "2026-10-21T09:46:52Z"), false);
+});
+
+test("an unknown rendered time or a non-active row is never a regression", () => {
+  assert.equal(isTelegramLiveWidgetRegression(row(), "2026-10-21T08:46:41Z"), false);
+  assert.equal(isTelegramLiveWidgetRegression(null, "2026-10-21T08:46:41Z"), false);
   assert.equal(
-    isTelegramLiveWidgetBacklogSample("2026-10-21T08:46:41Z", flushedAt),
-    true,
-  );
-  // The daemon's live sample arrives ~3 s after its device time.
-  assert.equal(
-    isTelegramLiveWidgetBacklogSample("2026-10-21T09:46:54Z", flushedAt),
+    isTelegramLiveWidgetRegression(
+      row({ status: "hidden", rendered_device_time: "2026-10-21T09:40:54Z" }),
+      "2026-10-21T08:46:41Z",
+    ),
     false,
   );
 });
 
-test("an unparseable device time is not treated as backlog", () => {
-  assert.equal(isTelegramLiveWidgetBacklogSample("", NOW), false);
+test("a widget showing stale data is not throttled (offline queue drained in 10 s batches)", () => {
+  const stale = row({
+    last_state: "charging",
+    rendered_device_time: new Date(NOW - 60 * 60 * 1000).toISOString(),
+  });
+  assert.equal(isTelegramLiveWidgetEditDue(stale, NOW, "charging"), true);
+  const fresh = row({
+    last_state: "charging",
+    rendered_device_time: new Date(NOW - 20_000).toISOString(),
+  });
+  assert.equal(isTelegramLiveWidgetEditDue(fresh, NOW, "charging"), false);
 });

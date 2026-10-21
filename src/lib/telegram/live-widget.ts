@@ -24,12 +24,14 @@ import { isChargingTelemetry } from "@/lib/vehicle-live-mode";
 import { translate, type Locale } from "@/lib/i18n";
 import {
   composeTelegramLiveWidget,
+  staleDataTimeLabel,
   telegramLiveWidgetReplyMarkup,
   type TelegramLiveVehicleState,
 } from "@/lib/telegram/live-widget-message";
 import {
-  isTelegramLiveWidgetBacklogSample,
   isTelegramLiveWidgetEditDue,
+  isTelegramLiveWidgetRegression,
+  TELEGRAM_LIVE_WIDGET_STALE_MS,
 } from "@/lib/telegram/live-widget-edit-due";
 import { resolveLatestMateVersion } from "@/lib/mate-latest-release";
 import { estimateVehicleRangeKm } from "@/lib/voltflowmate/range-estimate";
@@ -82,6 +84,7 @@ type LiveWidgetRow = {
   status: string;
   updated_at: string;
   last_state: string | null;
+  rendered_device_time: string | null;
 };
 
 type CarInfo = {
@@ -100,7 +103,7 @@ async function loadWidgetRow(
   const { data } = await supabase
     .from("telegram_live_messages")
     .select(
-      "user_id,vehicle_id,chat_id,message_id,status,updated_at,last_state",
+      "user_id,vehicle_id,chat_id,message_id,status,updated_at,last_state,rendered_device_time",
     )
     .eq("user_id", userId)
     .eq("vehicle_id", vehicleId)
@@ -116,6 +119,7 @@ async function upsertWidgetRow(
   chatId: number,
   messageId: number,
   state: VehicleState,
+  renderedDeviceTime: string,
 ) {
   await supabase.from("telegram_live_messages").upsert(
     {
@@ -126,6 +130,7 @@ async function upsertWidgetRow(
       status: "active",
       updated_at: new Date().toISOString(),
       last_state: state,
+      rendered_device_time: renderedDeviceTime,
     },
     { onConflict: "user_id,vehicle_id" },
   );
@@ -136,10 +141,15 @@ async function touchUpdatedAt(
   userId: string,
   vehicleId: string,
   state: VehicleState,
+  renderedDeviceTime: string,
 ) {
   await supabase
     .from("telegram_live_messages")
-    .update({ updated_at: new Date().toISOString(), last_state: state })
+    .update({
+      updated_at: new Date().toISOString(),
+      last_state: state,
+      rendered_device_time: renderedDeviceTime,
+    })
     .eq("user_id", userId)
     .eq("vehicle_id", vehicleId);
 }
@@ -230,6 +240,21 @@ async function loadActiveChargingSessions(
   return newestActiveSessionByCar(sessions);
 }
 
+// Only read when the shown data is stale (an offline queue flush), so a normal ingest pays
+// no extra query. Every profile in prod is Europe/Minsk today; the fallback matches that.
+async function loadProfileTimeZone(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<string> {
+  const { data } = await supabase
+    .from("profiles")
+    .select("timezone")
+    .eq("id", userId)
+    .maybeSingle();
+  const zone = (data as { timezone?: string | null } | null)?.timezone?.trim();
+  return zone || "Europe/Minsk";
+}
+
 type VehicleState = TelegramLiveVehicleState;
 
 function determineState(
@@ -279,6 +304,7 @@ async function sendOrEditWidget(
   webAppUrl: string,
   locale: Locale,
   state: VehicleState,
+  renderedDeviceTime: string,
 ): Promise<boolean> {
   const replyMarkup = telegramLiveWidgetReplyMarkup(locale, webAppUrl);
 
@@ -293,7 +319,7 @@ async function sendOrEditWidget(
       },
     );
     if (result.ok) {
-      await touchUpdatedAt(supabase, userId, vehicleId, state);
+      await touchUpdatedAt(supabase, userId, vehicleId, state, renderedDeviceTime);
       return true;
     }
     // The tracked message may have been deleted client-side (cleared chat
@@ -314,6 +340,7 @@ async function sendOrEditWidget(
     chatId ?? 0,
     result.messageId,
     state,
+    renderedDeviceTime,
   );
   return true;
 }
@@ -368,9 +395,9 @@ export async function updateTelegramLiveWidgets({
     const row = existingByVehicle.get(vehicleId) ?? null;
     // Hide-button opt-out: a hidden widget is never resurrected by ingest.
     if (row?.status === "hidden") return false;
-    // A replayed offline queue must not walk the widget back to hours-old state.
+    // A replayed offline queue must not walk the widget back to older state.
     const latest = latestSamples.get(vehicleId);
-    if (latest && isTelegramLiveWidgetBacklogSample(latest.device_time, nowMs))
+    if (latest && isTelegramLiveWidgetRegression(row, latest.device_time))
       return false;
     const state = stateByVehicle.get(vehicleId);
     return state != null && isTelegramLiveWidgetEditDue(row, nowMs, state);
@@ -478,6 +505,16 @@ export async function updateTelegramLiveWidgets({
       lon,
       mateVersion: lastSample.mate_version ?? null,
       latestMateVersion,
+      dataTimeLabel:
+        nowMs - Date.parse(lastSample.device_time) > TELEGRAM_LIVE_WIDGET_STALE_MS
+          ? staleDataTimeLabel(
+              lastSample.device_time,
+              nowMs,
+              profileLocale,
+              await loadProfileTimeZone(supabase, userId),
+              TELEGRAM_LIVE_WIDGET_STALE_MS,
+            )
+          : null,
     });
 
     const existing = existingByVehicle.get(vehicleId) ?? null;
@@ -496,6 +533,7 @@ export async function updateTelegramLiveWidgets({
       webAppUrl,
       profileLocale,
       state,
+      lastSample.device_time,
     );
     if (ok) updated++;
   }

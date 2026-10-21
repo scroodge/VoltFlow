@@ -34,7 +34,47 @@ export type TelegramLiveWidgetMessage = {
   mateVersion?: string | null;
   /** Latest published Mate release; null means unknown — never "up to date". */
   latestMateVersion?: string | null;
+  /** When the shown data is stale, its sample time (see `staleDataTimeLabel`); null hides the line. */
+  dataTimeLabel?: string | null;
 };
+
+/**
+ * Absolute time of a stale sample ("12:19", or "20 окт., 12:19" on another day). Absolute,
+ * not "27 min ago": a Telegram message is not re-rendered on its own, so a relative age
+ * would be wrong a minute later. Fresh data (≤ `staleAfterMs`) returns null.
+ */
+export function staleDataTimeLabel(
+  sampleTime: string,
+  nowMs: number,
+  locale: Locale,
+  timeZone: string,
+  staleAfterMs: number,
+): string | null {
+  const sampleMs = Date.parse(sampleTime);
+  if (!Number.isFinite(sampleMs) || nowMs - sampleMs <= staleAfterMs)
+    return null;
+  let zone = timeZone;
+  try {
+    new Intl.DateTimeFormat(locale, { timeZone: zone });
+  } catch {
+    zone = "Europe/Minsk";
+  }
+  const day = (ms: number) =>
+    new Intl.DateTimeFormat("en-CA", { timeZone: zone }).format(ms);
+  const time = new Intl.DateTimeFormat(locale, {
+    timeZone: zone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(sampleMs);
+  if (day(sampleMs) === day(nowMs)) return time;
+  const date = new Intl.DateTimeFormat(locale, {
+    timeZone: zone,
+    day: "numeric",
+    month: "short",
+  }).format(sampleMs);
+  return `${date}, ${time}`;
+}
 
 function socBar(soc: number): string {
   const filled = Math.round((soc / 100) * SOC_BAR_LENGTH);
@@ -128,6 +168,14 @@ export function composeTelegramLiveWidget(
   lines.push(
     `<b>${data.emoji} ${escapeHtml(data.carName)}</b> · ${stateLabel(data.locale, data.state)}`,
   );
+
+  if (data.dataTimeLabel) {
+    lines.push(
+      translate(data.locale, "telegramLiveWidget.dataAsOf", {
+        time: escapeHtml(data.dataTimeLabel),
+      }) as string,
+    );
+  }
 
   if (data.soc != null) {
     lines.push(
