@@ -418,6 +418,7 @@ dropped `20260706000000`) — see
 | `message_id` | integer | |
 | `status` | text | `active` (only value currently written) |
 | `last_state` | text | Last state rendered in widget (`charging/parked/driving/offline`), bypasses edit throttle on change (`20261012120000`) |
+| `rendered_device_time` | timestamptz | Device time of the sample on screen; an older batch is skipped so a flushed offline queue never walks the widget backwards; null = unknown (`20261021120000`) |
 | `updated_at` | timestamptz | |
 
 ### `bydmate_vehicle_identity`

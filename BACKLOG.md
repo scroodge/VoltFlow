@@ -1,24 +1,9 @@
-## Telegram live widget regresses to an old backlog batch (car `cl`, 2026-10-21) — BUILT 2026-10-21; migration `20261021120000` applied to prod; awaiting commit + deploy
+## Mate: drive after an offline charge is lost (car `cl`, 2026-10-21) — INVESTIGATING (needs car logs)
 
-**Report (2026-10-21, user «Ваня», car `cl`):** charged 35 → 100 % with no internet; the
-Telegram widget shows «Зарядка 90.8 % · 6.34 kW · ~39м» while the PWA shows 99.7 %, parked.
-The 12:38 drive (~0.3 km) did not appear as a trip.
-
-**Cause — widget (verified in prod):** the daemon delivered live samples 12:37–12:40 (parked
-99.9 %, drive, parked 99.7 %); only at 12:46:16–12:47:07 did the app flush its offline queue
-(six 300-sample batches, device_time 07:39 → 12:19). `updateTelegramLiveWidgets` rendered the
-newest sample *of the batch*; the 12:46:57 batch (11:46, charging 90.8 %) changed state, which
-bypasses the throttle; the last batch (99 %) was throttled; the car slept.
-
-**Built (owner chose "never go backwards" + absolute data time):**
-- `telegram_live_messages.rendered_device_time` (migration `20261021120000`, applied).
-- `isTelegramLiveWidgetRegression` — skip a batch whose newest sample is older than the shown one.
-- `isTelegramLiveWidgetEditDue` — no 30 s throttle while the shown data is stale (> 3 min), so a
-  queue drained in ~10 s batches ends on its newest sample.
-- `staleDataTimeLabel` + `telegramLiveWidget.dataAsOf` — «🕒 Данные от 12:19» (another day:
-  «20 окт., 12:19») under the state line when the data is > 3 min old. Absolute, because a Telegram
-  message is not re-rendered on its own. `profiles.timezone` is read only in that case.
-Verification: eslint, `tsc --noEmit`, `npm run test` (663 pass).
+**Report (2026-10-21, user «Ваня», car `cl`):** after a 35 → 100 % charge with no internet,
+a ~0.3 km drive at 12:38–12:40 did not appear as a trip. The widget half of the same report
+shipped 2026-10-21 (see CHANGELOG).
+**Ownership:** no data-model change.
 
 **Cause — missing trip (verified in prod + Mate source; not a server bug):**
 - Daemon wrote *history* samples at 12:37–12:40, which it only does when the app's 1 Hz beacon

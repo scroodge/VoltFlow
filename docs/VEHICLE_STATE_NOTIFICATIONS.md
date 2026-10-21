@@ -88,8 +88,22 @@ permissions.
   `driving` (drive telemetry) → `charging` (charging signal) → `parked` →
   `offline` if the sample is more than 10 minutes old at receipt time.
 - **Edits throttle to at most once per 30 seconds** per `(user_id, vehicle_id)`
-  (`THROTTLE_MS`), tracked via `telegram_live_messages.updated_at`. Updates
-  inside the window are skipped, not queued.
+  (`TELEGRAM_LIVE_WIDGET_THROTTLE_MS`), tracked via `telegram_live_messages.updated_at`.
+  Updates inside the window are skipped, not queued. A state change bypasses the
+  throttle (`last_state`), and so does a widget whose shown data is stale (> 3 min,
+  `TELEGRAM_LIVE_WIDGET_STALE_MS`) — an offline queue is flushed in ~10 s batches, and
+  throttling the last one would leave the widget on an intermediate sample.
+- **The widget never goes backwards.** `rendered_device_time` stores the device time of
+  the sample on screen; a batch whose newest sample is older is skipped
+  (`isTelegramLiveWidgetRegression`). Mate flushes an offline queue *after* the daemon
+  has already delivered live state, so the batch's newest sample can be hours older than
+  what the widget shows (car `cl`, 2026-10-21: parked 99.7 % at 12:40 was overwritten by
+  "charging 90.8 %" from 11:46). Both rules live in `live-widget-edit-due.ts`.
+- **Stale data carries its time.** When the rendered sample is more than 3 minutes old, a
+  `🕒 Данные от 12:19` line (another day: `20 окт., 12:19`) follows the state line
+  (`staleDataTimeLabel`, i18n `telegramLiveWidget.dataAsOf`). It is absolute, not "N min
+  ago", because a Telegram message is not re-rendered on its own. The time zone is
+  `profiles.timezone`, read only in this case, so a normal ingest pays no extra query.
 - If the existing message is `active` and fresh, the widget is edited in
   place. If the vehicle just came back from `offline` (car was silent
   >10 min), a **new** message is sent instead of editing the old one, so

@@ -9,6 +9,18 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-10-21
+
+- **Telegram live widget no longer regresses to a flushed offline queue.** Car `cl` charged
+  35 → 100 % without internet; the daemon delivered the parked 99.7 % state at 12:40, then
+  the app flushed its queue (07:39 → 12:19) and the widget was edited to "charging 90.8 %"
+  from 11:46 and stayed there. The widget now stores `rendered_device_time` (migration
+  `20261021120000`, applied to prod) and skips any batch older than what it shows; a widget
+  on stale data (> 3 min) is not throttled, so a queue drain ends on its newest sample; and
+  stale data shows `🕒 Данные от HH:MM`. Tests in `live-widget-edit-due.test.mjs` and
+  `live-widget-message.test.mjs`. See `docs/VEHICLE_STATE_NOTIFICATIONS.md`. The missing
+  12:38 trip from the same report is a Mate-side issue and stays in `BACKLOG.md`.
+
 ## 2026-10-14
 
 - **"Distance since charge" no longer counts the car's raw trip meter.** Car `cl` showed
