@@ -4,10 +4,13 @@ import { useMemo, useState, type ReactNode } from "react";
 import {
   AirVent,
   ChevronDown,
+  Megaphone,
   PanelBottomClose,
   PanelTopOpen,
   Snowflake,
+  Sparkles,
   Trash2,
+  Volume2,
   Wind,
 } from "lucide-react";
 
@@ -128,6 +131,43 @@ const CLIMATE_ACTIONS: ComfortAction[] = [
   },
 ];
 
+const LIGHT_ACTIONS: ComfortAction[] = [
+  {
+    id: "flash-lights",
+    label: "Мигнуть фарами",
+    type: "flash_lights",
+    params: {},
+    icon: <Sparkles className="size-4" />,
+    variant: "default",
+  },
+  {
+    id: "flash-20s",
+    label: "Моргать 20 сек",
+    type: "flash_20s",
+    params: {},
+    icon: <Sparkles className="size-4" />,
+    variant: "secondary",
+  },
+  {
+    id: "find-car",
+    label: "Поиск авто (фары + гудок)",
+    type: "find_car",
+    params: {},
+    icon: <Megaphone className="size-4" />,
+    variant: "secondary",
+  },
+  {
+    id: "honk",
+    label: "Посигналить",
+    type: "honk",
+    params: {},
+    icon: <Volume2 className="size-4" />,
+    variant: "outline",
+  },
+];
+
+
+
 function ActionGrid({
   actions,
   disabled,
@@ -207,11 +247,21 @@ export function VehicleComfortControls({
   async function runAction(action: ComfortAction) {
     setPendingId(action.id);
     try {
-      await sendCommand.mutateAsync({ type: action.type, params: action.params });
+      if (action.id === "flash-20s") {
+        for (let i = 0; i < 4; i++) {
+          await sendCommand.mutateAsync({ type: "flash_lights", params: {} });
+          if (i < 3) {
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+          }
+        }
+      } else {
+        await sendCommand.mutateAsync({ type: action.type, params: action.params });
+      }
     } finally {
       setPendingId(null);
     }
   }
+
 
   if (!vehicleId) return null;
 
@@ -275,6 +325,17 @@ export function VehicleComfortControls({
         ) : null}
 
         {snapshot ? <LiveSnapshotRow snapshot={snapshot} aux={aux} /> : null}
+
+        <section className="space-y-2">
+          <h3 className="text-sm font-medium">Фары и сигнализация</h3>
+          <ActionGrid
+            actions={LIGHT_ACTIONS}
+            columns={2}
+            disabled={disabled}
+            pendingId={pendingId}
+            onAction={(action) => void runAction(action)}
+          />
+        </section>
 
         <section className="space-y-2">
           <h3 className="text-sm font-medium">Окна</h3>

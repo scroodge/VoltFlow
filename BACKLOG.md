@@ -1,3 +1,56 @@
+## Telegram live widget regresses to an old backlog batch (car `cl`, 2026-10-21) — PROPOSED
+
+**Report (2026-10-21, user «Ваня», car `cl`):** charged 35 → 100 % with no internet; the
+Telegram widget shows «Зарядка 90.8 % · 6.34 kW · ~39м» while the PWA shows 99.7 %, parked.
+The 12:38 drive (~0.3 km) did not appear as a trip.
+
+**Cause — widget (verified in prod):** the car came back online at ~12:37 and the daemon pushed
+live samples 12:37–12:40 (parked 99.9 %, drive, parked 99.7 %). Only at 12:46:16–12:47:07 did
+the app flush its offline queue: six 300-sample batches with device_time 07:39 → 12:19.
+`updateTelegramLiveWidgets` (`src/lib/telegram/live-widget.ts:336-363`) renders the newest
+sample **of the incoming batch**, not the newest the car has sent, and `determineState`
+judges staleness by `receivedAt`, not `device_time`. The 12:46:57 batch (newest sample 11:46,
+SOC 90.8 %, charging) flipped the state parked → charging, which bypasses the throttle, so the
+widget was edited to «charging 90.8 %». The last batch (12:47:07, 99 %) was same-state and
+throttled (30 s). The car then slept, so nothing corrected it.
+
+**Cause — missing trip (verified in prod, not a server bug):** the 12:38–12:40 drive arrived
+only as untagged daemon samples, one per minute (gear R → D 50 km/h → P, odometer
+15251.5 → 15251.8, no trip meter). `cl` records client trips, so the
+`v_legacy_open_blocked` guard (migration `20261012120000`) correctly refuses to open a server
+trip from untagged samples. No client trip arrived because the Mate app was not running
+during the drive (10 s charging cadence ended 12:19:50, daemon cadence from 12:37:48, app
+queue flushed at 12:46). It may still arrive if Mate recorded it and finalizes on the next
+boot; otherwise it is lost on the server side. Root cause is on the Mate side (why the app
+was down after a long offline charge) — to investigate in `BYDMate-own`.
+**Ownership:** no data-model change.
+
+### Options (widget)
+
+1. **Skip backlog batches** — if the batch's newest `device_time` is older than 10 min vs
+   `receivedAt` (the same threshold `determineState` uses for offline), do not edit the
+   widget. No new query. A backlog-only ingest leaves the widget on its last live state.
+2. **Never go backwards** — read `bydmate_live_snapshots.device_time` (one query, only when an
+   edit is due) and skip when the batch's newest sample is older. Also covers short
+   out-of-order deliveries (< 10 min), at the cost of a query.
+3. Store the rendered `device_time` in `telegram_live_messages` (migration) and refuse to
+   regress. Most exact, but needs a migration for the same effect as option 2.
+
+**Recommendation:** option 1 (+ unit test). Option 2 if short reorderings turn out to matter.
+
+### Options (trip)
+
+A. Do nothing server-side; investigate in Mate why the app was not alive after the offline
+   charge (the flushed queue is exactly 1800 samples, 07:39:53 → 12:19:50 — possibly a cap
+   that dropped 12:20 → 12:37; unverified. The app was gone
+   12:20 → 12:46).
+B. Let an untagged daemon drive open a server trip when no client sample arrived for that
+   vehicle in the last N minutes (app dead). Re-opens the stub-duplicate risk the
+   `20261012120000` guard was added for, and the trip would have no distance (daemon sends no
+   trip meter) — not recommended without the Mate fix.
+
+**Recommendation:** A.
+
 ## Telegram Mini App: email login says «С возвращением» but stays on the login form — BUILT 2026-10-20 (option 1); awaiting commit + deploy + Mini App check
 
 **Report (2026-10-20 13:35):** a user in the Mini App entered email + password, got the

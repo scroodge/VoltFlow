@@ -6,6 +6,7 @@ import { fetchVehicleBatteryCapacityKwh } from "@/lib/voltflowmate/vehicle-batte
 import { resolveVehicleKey } from "@/lib/voltflowmate/vehicle-identity";
 import {
   ACTIVE_COMMAND_POLL_AFTER_SECONDS,
+  IDLE_COMMAND_POLL_AFTER_SECONDS,
   REMOTE_COMMANDS_DISABLED,
   SUSPENDED_COMMAND_POLL_AFTER_SECONDS,
 } from "@/lib/voltflowmate/remote-commands";
@@ -15,34 +16,9 @@ export const runtime = "nodejs";
 const COMMAND_TIMEOUT_MS = 60 * 1000;
 const MAX_BATCH = 10;
 
-/**
- * Poll cadence handed back to the car in `poll_after_seconds`.
- *
- * This route was the single largest source of Vercel invocations: every car polls it around
- * the clock (the daemon's command loop is not gated on the app being alive), so a 6s interval
- * is ~14.4k invocations/car/day — several times the entire telemetry ingest path, and while
- * [REMOTE_COMMANDS_DISABLED] every one of them returns an empty array.
- *
- * A car running an older build ignores the field and keeps its built-in 6s, so this is purely
- * additive and needs no version gate.
- */
 const ACTIVE_POLL_AFTER_SECONDS = ACTIVE_COMMAND_POLL_AFTER_SECONDS;
-/**
- * While commands are suspended the poll carries nothing a slower cadence would lose: the
- * `live_fast_seconds` grant now also rides the telemetry ingest response, which every car
- * sends at 15s (driving) to 60s (parked/charging). Live-view *entry* latency is therefore
- * bounded by that cadence rather than by this one, and once fast mode is on the 3s
- * `live_only` pings renew the grant themselves.
- *
- * 300s is the ceiling both supported clients accept: they clamp the server-provided interval
- * to MAX_SERVER_POLL_MS = 300_000. Drop this back to [ACTIVE_POLL_AFTER_SECONDS] the moment
- * remote commands come back.
- */
+const IDLE_POLL_AFTER_SECONDS = IDLE_COMMAND_POLL_AFTER_SECONDS;
 const SUSPENDED_POLL_AFTER_SECONDS = SUSPENDED_COMMAND_POLL_AFTER_SECONDS;
-
-const POLL_AFTER_SECONDS = REMOTE_COMMANDS_DISABLED
-  ? SUSPENDED_POLL_AFTER_SECONDS
-  : ACTIVE_POLL_AFTER_SECONDS;
 
 type PendingCommand = {
   id: string;
@@ -109,9 +85,9 @@ export async function GET(request: Request) {
       return Response.json({
         ok: true,
         commands: [],
-        commands_enabled: !REMOTE_COMMANDS_DISABLED,
+        commands_enabled: false,
         live_fast_seconds: liveFastSeconds,
-        poll_after_seconds: POLL_AFTER_SECONDS,
+        poll_after_seconds: SUSPENDED_POLL_AFTER_SECONDS,
         ...offlineBufferGrantField(),
         ...capacityField,
       });
@@ -151,16 +127,21 @@ export async function GET(request: Request) {
     // writes. Only touch the table when there is something stale to expire or fresh to send.
     const pending = (rows ?? []) as PendingCommand[];
     if (pending.length === 0) {
+      const pollSeconds =
+        liveFastSeconds > 0
+          ? ACTIVE_POLL_AFTER_SECONDS
+          : IDLE_POLL_AFTER_SECONDS;
       return Response.json({
         ok: true,
         commands: [],
-        commands_enabled: !REMOTE_COMMANDS_DISABLED,
+        commands_enabled: true,
         live_fast_seconds: liveFastSeconds,
-        poll_after_seconds: POLL_AFTER_SECONDS,
+        poll_after_seconds: pollSeconds,
         ...offlineBufferGrantField(),
         ...capacityField,
       });
     }
+
 
     const cutoff = Date.now() - COMMAND_TIMEOUT_MS;
     const staleIds: string[] = [];
