@@ -1,19 +1,19 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { AcceptedTelemetry } from "@/lib/voltflowmate/telemetry-sanitizer";
-import type { TelemetryPayload } from "@/lib/voltflowmate/ingest-payload";
-import { latestDeviceTimeByVehicle } from "@/lib/voltflowmate/latest-sample";
-import { DEFAULT_SITE_URL } from "@/lib/site-url";
+import type { AcceptedTelemetry } from "../voltflowmate/telemetry-sanitizer.ts";
+import type { TelemetryPayload } from "../voltflowmate/ingest-payload.ts";
+import { latestDeviceTimeByVehicle } from "../voltflowmate/latest-sample.ts";
+import { DEFAULT_SITE_URL } from "../site-url.ts";
 import {
   finiteTelemetryNumber,
   isTelemetryCharging,
-} from "@/features/charging/domain";
+} from "../../features/charging/domain.ts";
 import {
   nextChargeNotificationState,
   type ChargeNotificationState,
-} from "@/lib/push/charge-thresholds";
-import { sendPushToUser } from "@/lib/push/web-push";
-import { sendTelegramMessage } from "@/lib/telegram/bot-send";
+} from "./charge-thresholds.ts";
+import { sendPushToUser } from "./web-push.ts";
+import { sendTelegramMessage } from "../telegram/bot-send.ts";
 
 type NotifyChannel = "web_push" | "telegram" | "both";
 
@@ -196,6 +196,8 @@ export async function processVoltflowMateChargeNotifications({
   );
   const latestDeviceTimes = latestDeviceTimeByVehicle(orderedSamples);
 
+  const notificationPromises: Promise<{ sent: number }>[] = [];
+
   for (const sample of orderedSamples) {
     const previousState = states.get(sample.vehicle_id) ?? null;
     const result = nextChargeNotificationState({
@@ -210,28 +212,46 @@ export async function processVoltflowMateChargeNotifications({
 
     for (const threshold of result.thresholdsToNotify) {
       thresholds.push(threshold);
-      const deliveryResult = await sendChargeNotificationToUser({
-        supabase,
-        userId,
-        payload: notificationPayload(sample.vehicle_id, threshold, result.nextState.chargeStartedAt),
-        channel: notificationProfile.channel,
-        telegramId: notificationProfile.telegramId,
-      });
-      sent += deliveryResult.sent;
+      notificationPromises.push(
+        sendChargeNotificationToUser({
+          supabase,
+          userId,
+          payload: notificationPayload(sample.vehicle_id, threshold, result.nextState.chargeStartedAt),
+          channel: notificationProfile.channel,
+          telegramId: notificationProfile.telegramId,
+        }),
+      );
     }
   }
 
-  for (const vehicleId of vehicleIds) {
-    const state = states.get(vehicleId);
-    if (!state) continue;
-    const deviceTime = latestDeviceTimes.get(vehicleId) ?? new Date().toISOString();
-    const { error: upsertError } = await supabase
-      .from("bydmate_charge_notification_state")
-      .upsert(stateToRow(userId, vehicleId, deviceTime, state), {
-        onConflict: "user_id,vehicle_id",
-      });
+  const rowsToUpsert = vehicleIds
+    .map((vehicleId) => {
+      const state = states.get(vehicleId);
+      if (!state) return null;
+      const deviceTime = latestDeviceTimes.get(vehicleId) ?? new Date().toISOString();
+      return stateToRow(userId, vehicleId, deviceTime, state);
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null);
 
-    if (upsertError) throw new Error(upsertError.message);
+  const upsertPromise =
+    rowsToUpsert.length > 0
+      ? supabase
+          .from("bydmate_charge_notification_state")
+          .upsert(rowsToUpsert, {
+            onConflict: "user_id,vehicle_id",
+          })
+          .then(({ error: upsertError }) => {
+            if (upsertError) throw new Error(upsertError.message);
+          })
+      : Promise.resolve();
+
+  const [deliveryResults] = await Promise.all([
+    Promise.all(notificationPromises),
+    upsertPromise,
+  ]);
+
+  for (const deliveryResult of deliveryResults) {
+    sent += deliveryResult.sent;
   }
 
   return { sent, thresholds };
