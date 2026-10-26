@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  acceptedLocationFromSnapshot,
+  acceptedTelemetryFromSnapshot,
   filterDisplayTripTrackPoints,
   sanitizeLocation,
   sanitizePayloadLocations,
@@ -242,4 +244,186 @@ test("keeps persisted trip track points for map display without jump re-filterin
 
   assert.equal(result.droppedPointCount, 0);
   assert.equal(result.points.length, 3);
+});
+
+test("acceptedLocationFromSnapshot parses valid location and telemetry speed", () => {
+  const row = {
+    vehicle_id: "veh-123",
+    device_time: "2026-05-21T17:16:19.145Z",
+    location: {
+      lat: 53.92552,
+      lon: 27.63499,
+      accuracy_m: 5,
+      bearing_deg: 70,
+    },
+    telemetry: {
+      speed_kmh: 65,
+    },
+  };
+
+  const result = acceptedLocationFromSnapshot(row);
+  assert.deepEqual(result, {
+    vehicleId: "veh-123",
+    location: {
+      lat: 53.92552,
+      lon: 27.63499,
+      deviceTimeMs: Date.parse("2026-05-21T17:16:19.145Z"),
+      speedKmh: 65,
+    },
+  });
+});
+
+test("acceptedLocationFromSnapshot handles numeric strings via Zod preprocess", () => {
+  const row = {
+    vehicle_id: "veh-123",
+    device_time: "2026-05-21T17:16:19.145Z",
+    location: {
+      lat: "53.92552",
+      lon: "27.63499",
+      accuracy_m: "5",
+      bearing_deg: "70",
+    },
+    telemetry: {
+      speed_kmh: "50",
+    },
+  };
+
+  const result = acceptedLocationFromSnapshot(row);
+  assert.equal(result?.location.lat, 53.92552);
+  assert.equal(result?.location.lon, 27.63499);
+  assert.equal(result?.location.speedKmh, 50);
+});
+
+test("acceptedLocationFromSnapshot sets speedKmh to null when telemetry is missing or speed is out-of-range", () => {
+  const baseRow = {
+    vehicle_id: "veh-123",
+    device_time: "2026-05-21T17:16:19.145Z",
+    location: { lat: 53.92552, lon: 27.63499, accuracy_m: 5, bearing_deg: 70 },
+  };
+
+  assert.equal(
+    acceptedLocationFromSnapshot({ ...baseRow, telemetry: null })?.location.speedKmh,
+    null,
+  );
+  assert.equal(
+    acceptedLocationFromSnapshot({ ...baseRow, telemetry: { speed_kmh: -10 } })
+      ?.location.speedKmh,
+    null,
+  );
+  assert.equal(
+    acceptedLocationFromSnapshot({ ...baseRow, telemetry: { speed_kmh: 300 } })
+      ?.location.speedKmh,
+    null,
+  );
+  assert.equal(
+    acceptedLocationFromSnapshot({ ...baseRow, telemetry: { speed_kmh: "invalid" } })
+      ?.location.speedKmh,
+    null,
+  );
+});
+
+test("acceptedLocationFromSnapshot returns null for invalid location schema or missing lat/lon", () => {
+  const baseRow = {
+    vehicle_id: "veh-123",
+    device_time: "2026-05-21T17:16:19.145Z",
+    telemetry: { speed_kmh: 30 },
+  };
+
+  assert.equal(acceptedLocationFromSnapshot({ ...baseRow, location: null }), null);
+  assert.equal(acceptedLocationFromSnapshot({ ...baseRow, location: {} }), null);
+  assert.equal(
+    acceptedLocationFromSnapshot({ ...baseRow, location: { lat: 53.9 } }),
+    null,
+  );
+  assert.equal(
+    acceptedLocationFromSnapshot({
+      ...baseRow,
+      location: { lat: "not-a-number", lon: 27.6 },
+    }),
+    null,
+  );
+});
+
+test("acceptedLocationFromSnapshot returns null for implausible coordinates", () => {
+  const baseRow = {
+    vehicle_id: "veh-123",
+    device_time: "2026-05-21T17:16:19.145Z",
+    telemetry: { speed_kmh: 30 },
+  };
+
+  assert.equal(
+    acceptedLocationFromSnapshot({ ...baseRow, location: { lat: 0, lon: 0 } }),
+    null,
+  );
+  assert.equal(
+    acceptedLocationFromSnapshot({ ...baseRow, location: { lat: 95, lon: 27.6 } }),
+    null,
+  );
+  assert.equal(
+    acceptedLocationFromSnapshot({
+      ...baseRow,
+      location: { lat: 53.9, lon: 27.6, accuracy_m: 150 },
+    }),
+    null,
+  );
+  assert.equal(
+    acceptedLocationFromSnapshot({
+      ...baseRow,
+      location: { lat: 53.9, lon: 27.6, accuracy_m: 50, bearing_deg: null },
+    }),
+    null,
+  );
+});
+
+test("acceptedLocationFromSnapshot returns null for invalid device_time", () => {
+  const row = {
+    vehicle_id: "veh-123",
+    device_time: "invalid-date-string",
+    location: { lat: 53.92552, lon: 27.63499, accuracy_m: 5, bearing_deg: 70 },
+    telemetry: { speed_kmh: 30 },
+  };
+
+  assert.equal(acceptedLocationFromSnapshot(row), null);
+});
+
+test("acceptedTelemetryFromSnapshot parses valid telemetry row", () => {
+  const row = {
+    vehicle_id: "veh-123",
+    device_time: "2026-05-21T17:16:19.145Z",
+    telemetry: {
+      soc: 85,
+      speed_kmh: 40,
+      battery_temp_c: 25,
+    },
+  };
+
+  const result = acceptedTelemetryFromSnapshot(row);
+  assert.deepEqual(result, {
+    vehicleId: "veh-123",
+    telemetry: {
+      telemetry: {
+        soc: 85,
+        speed_kmh: 40,
+        battery_temp_c: 25,
+      },
+      deviceTimeMs: Date.parse("2026-05-21T17:16:19.145Z"),
+    },
+  });
+});
+
+test("acceptedTelemetryFromSnapshot returns null for invalid telemetry schema or invalid device_time", () => {
+  const validRow = {
+    vehicle_id: "veh-123",
+    device_time: "2026-05-21T17:16:19.145Z",
+    telemetry: { soc: 80 },
+  };
+
+  assert.equal(
+    acceptedTelemetryFromSnapshot({ ...validRow, telemetry: "invalid" }),
+    null,
+  );
+  assert.equal(
+    acceptedTelemetryFromSnapshot({ ...validRow, device_time: "bad-date" }),
+    null,
+  );
 });
