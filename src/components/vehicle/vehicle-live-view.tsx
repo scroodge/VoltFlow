@@ -1763,7 +1763,6 @@ type TripSegment = {
 };
 
 const TRIP_GAP_MS = 5 * 60 * 1000;
-const MAX_ROUTE_POINTS = 2000;
 const MAP_VIEW_WIDTH = 320;
 const MAP_VIEW_HEIGHT = 180;
 const ROUTE_MAP_PAD_X = 16;
