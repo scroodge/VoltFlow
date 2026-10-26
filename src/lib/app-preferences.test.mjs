@@ -44,6 +44,15 @@ test("ignores invalid persisted locale values", () => {
   });
 });
 
+test("returns null when parsing invalid JSON or non-record payloads", () => {
+  assert.equal(parsePersistedAppPreferences(null), null);
+  assert.equal(parsePersistedAppPreferences(""), null);
+  assert.equal(parsePersistedAppPreferences("{invalid_json"), null);
+  assert.equal(parsePersistedAppPreferences("12345"), null);
+  assert.equal(parsePersistedAppPreferences('"just a string"'), null);
+  assert.equal(parsePersistedAppPreferences("true"), null);
+});
+
 test("detects an on-device locale preference without throwing on bad storage", () => {
   const storage = new Map([
     [
