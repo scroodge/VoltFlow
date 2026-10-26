@@ -92,27 +92,35 @@ export async function POST(request: Request) {
     }
 
     const executedAt = new Date().toISOString();
-    let updated = 0;
 
-    for (const ack of acks) {
+    const validAcks = acks.filter((ack) => {
       const id = typeof ack.id === "string" ? ack.id.trim() : "";
       const status = typeof ack.status === "string" ? ack.status.trim() : "";
-      if (!id || !ALLOWED_STATUSES.has(status)) continue;
+      return id && ALLOWED_STATUSES.has(status);
+    });
 
-      const { error } = await supabase
-        .from("vehicle_commands")
-        .update({
-          status,
-          executed_at: executedAt,
-          result: ack.result ?? {},
-        })
-        .eq("id", id)
-        .eq("user_id", profile.id)
-        .eq("vehicle_id", vehicleId)
-        .in("status", ["pending", "sent"]);
+    const updateResults = await Promise.all(
+      validAcks.map(async (ack) => {
+        const id = (ack.id as string).trim();
+        const status = (ack.status as string).trim();
 
-      if (!error) updated += 1;
-    }
+        const { error } = await supabase
+          .from("vehicle_commands")
+          .update({
+            status,
+            executed_at: executedAt,
+            result: ack.result ?? {},
+          })
+          .eq("id", id)
+          .eq("user_id", profile.id)
+          .eq("vehicle_id", vehicleId)
+          .in("status", ["pending", "sent"]);
+
+        return !error;
+      }),
+    );
+
+    const updated = updateResults.filter(Boolean).length;
 
     return Response.json({ ok: true, updated });
   } catch {
