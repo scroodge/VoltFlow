@@ -99,7 +99,6 @@ import {
   tripTractionEnergyKwh,
   weightedAvgConsumptionKwh100,
 } from "@/lib/voltflowmate/trip-metrics";
-import { isRouteTrackDisplayable } from "@/lib/voltflowmate/route-insights";
 import {
   resolvePreferredTripDistanceKm,
   trackPathDistanceKm,
