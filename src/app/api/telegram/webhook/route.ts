@@ -111,11 +111,12 @@ async function handleCallbackQuery(
       .from("telegram_live_messages")
       .select("chat_id,message_id,status")
       .eq("user_id", profile.id);
-    for (const row of rows ?? []) {
-      if (row.status === "active") {
-        await deleteTelegramMessage(row.chat_id, row.message_id).catch(() => undefined);
-      }
-    }
+    const activeRows = (rows ?? []).filter((row) => row.status === "active");
+    await Promise.all(
+      activeRows.map((row) =>
+        deleteTelegramMessage(row.chat_id, row.message_id).catch(() => undefined),
+      ),
+    );
     await supabase
       .from("telegram_live_messages")
       .delete()
