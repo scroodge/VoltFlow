@@ -1779,7 +1779,6 @@ const ROUTE_LINE_COLOR = "#1e40af";
 const ROUTE_STROKE_WIDTH = 4;
 const ROUTE_HIT_RADIUS = 10;
 const REGEN_POWER_THRESHOLD_KW = 0.05;
-const COAST_POWER_COLOR = "#475569";
 const ROUTE_LAYER_OPTIONS: Array<{
   id: RouteLayer;
   label: string;
