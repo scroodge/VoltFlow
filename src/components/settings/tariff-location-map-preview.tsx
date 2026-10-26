@@ -12,14 +12,13 @@ export function TariffLocationMapPreview({
   const { t } = useTranslation();
   const latDelta = 0.006;
   const lngDelta = 0.012;
-  const params = new URLSearchParams({
+  const osmUrl = `https://www.openstreetmap.org/export/embed.html?${new URLSearchParams({
     bbox: [lng - lngDelta, lat - latDelta, lng + lngDelta, lat + latDelta].join(
       ",",
     ),
     layer: "mapnik",
     marker: `${lat},${lng}`,
-  });
-  const osmUrl = `https://www.openstreetmap.org/export/embed.html?${params.toString()}`;
+  }).toString()}`;
   const externalUrl = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=16/${lat}/${lng}`;
 
   return (
