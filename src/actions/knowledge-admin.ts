@@ -494,16 +494,13 @@ async function uploadArticleSectionImages(
 
 async function uploadImageList(files: FormDataEntryValue[], bucket: string): Promise<SparePartImage[]> {
   const uploads = files.filter((file): file is File => file instanceof File && file.size > 0);
-  const images: SparePartImage[] = [];
 
-  for (const file of uploads) {
-    images.push({
+  return Promise.all(
+    uploads.map(async (file) => ({
       url: await uploadKnowledgeImage(file, bucket),
       alt: file.name.replace(/\.[^.]+$/, ""),
-    });
-  }
-
-  return images;
+    })),
+  );
 }
 
 async function uploadKnowledgeImage(file: File, bucket: string) {
