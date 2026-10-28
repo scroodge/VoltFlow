@@ -594,7 +594,14 @@ unless you grant it.
 
 Options 1 + 2, with 3 as a later add-on.
 
-## Client trips: `ended_at` frozen at the first stop while the trip keeps going (#43 follow-up) — BUILT LOCALLY, UNAPPLIED 2026-10-28
+## Client trips: `ended_at` frozen at the first stop while the trip keeps going (#43 follow-up) — APPLIED TO PROD 2026-10-28 (`20261027120000`); awaiting a live drive with a stop
+
+> **Applied 2026-10-28 ~18:22 UTC** via psql on the pooler. Rolled-back rehearsal on `46cbcea3`
+> first: an equal-count retry with a later time left `ended_at` unchanged; a strict advance
+> (`sample_count` 9214 → 9300, `last_device_time` 08:10) moved `ended_at` to 08:10; rollback
+> restored the row. After apply: function body live, `anon`/`authenticated` execute = false,
+> `service_role` = true. Historical rows were already repaired before this (`46cbcea3` already
+> ended 07:56:25 = `last_device_time`), so the repair migration was dropped.
 
 **Finding (read-only prod checks, 2026-10-27).** The stage 2 distance guard works: no client trip since
 2026-10-07 has `distance_km > 1,500`. But 7 recent client trips fail the 250 km/h check (e.g. `46cbcea3`:
