@@ -1,9 +1,11 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import {
   fetchLatestMateReleaseFromGithub,
   MateReleaseError,
+  syncMateReleaseCatalog,
 } from "@/lib/mate-latest-release";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
@@ -14,6 +16,7 @@ const RELEASE_CACHE_HEADERS = {
 export async function GET() {
   try {
     const release = await fetchLatestMateReleaseFromGithub();
+    after(() => syncMateReleaseCatalog(getSupabaseAdmin(), release));
     return NextResponse.json(release, { headers: RELEASE_CACHE_HEADERS });
   } catch (error) {
     if (error instanceof MateReleaseError) {

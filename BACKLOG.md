@@ -1,3 +1,28 @@
+## Mate release catalog (`mate_app_releases`) self-syncs from GitHub — BUILT 2026-10-28 (tests green); awaiting commit + deploy
+
+**Problem.** The catalog is written only by the manual `BYDMate-own/tools/publish-mate-release.sh`,
+which no release step ran from 0.4.8 to 0.6.1 (top row stayed 0.4.8 from 2026-07-16 to 2026-10-28).
+GitHub is the source of truth for users, but `admin_users_attention_queue` reads **only** the
+catalog, so the admin queue compared every car against 0.4.8. The user-facing banner and the
+Telegram live widget fall back to it when GitHub fails.
+
+**Options.** (1) Server inserts the GitHub latest release into the catalog when it is missing
+(chosen). (2) Pass the GitHub version into the admin RPC and stop reading the catalog in SQL —
+admin breaks when GitHub is down, and the user fallback stays manual. (3) Keep it manual
+(release-apk step 7b) — already failed once.
+
+**Design.** `syncMateReleaseCatalog` (`src/lib/mate-latest-release.ts`): insert
+`on conflict (version) do nothing`, so a manual/script row is never overwritten; skip when the
+GitHub body has no `versionCode N` (a `null` code ranks *below* older rows under
+`version_code desc nulls last`, which would make the catalog look older, not newer). Called
+best-effort from `GET /api/bydmate/latest-release` (`after()`, ~once per 5 min revalidation) and
+awaited before the admin attention RPC. Failures are logged, never surfaced.
+
+**Data ownership:** app-owned release catalog in Postgres; no user data, no migration.
+
+**Verification:** unit test for the row builder; after deploy, a GitHub release that is missing
+from the catalog appears there within one revalidation window.
+
 ## Remote commands: «мигнуть фарами» / «гудок» report done but nothing happens (car `way`, 2026-10-21) — PROPOSED
 
 **Report (owner, Mate 0.6.2 on `way`):** of the commands tried only windows open/close worked.
@@ -569,7 +594,68 @@ unless you grant it.
 
 Options 1 + 2, with 3 as a later add-on.
 
-## Odometer-scale trip distances (`bydmate_trips.distance_km`) — STAGE 1 (grader) BUILT 2026-10-07; stages 2–3 and other consumers PROPOSED
+## Client trips: `ended_at` frozen at the first stop while the trip keeps going (#43 follow-up) — BUILT LOCALLY, UNAPPLIED 2026-10-28
+
+**Finding (read-only prod checks, 2026-10-27).** The stage 2 distance guard works: no client trip since
+2026-10-07 has `distance_km > 1,500`. But 7 recent client trips fail the 250 km/h check (e.g. `46cbcea3`:
+168.4 km in a 14 min row). The distance is **correct** — it equals the odometer delta from `started_at` to
+`last_device_time` exactly for all 7 (61.2, 168.4, 91.2, 37.2, 23.8, 3.8, 3.9 km). The bad field is
+`ended_at`: in `46cbcea3` the row "ends" at 05:16 but blocks kept arriving until 07:56 (174 min of driving).
+Cause: `bydmate_apply_client_trip` sets `ended_at = coalesce(ended_at, block.ended_at)`, so the first
+`ended_at` the APK sends (a short stop) is kept forever, while the same trip id keeps sending blocks
+(`sample_count`, `distance_km`, `last_device_time` all keep growing). Scope: client trips where
+`last_device_time > ended_at + 5 min` — 5 in Jul, 11 in Aug, 5 in Sep, **19 in Oct** (8 vehicles).
+Overlaps with `byd_energydata` rows for the same span are the usual dual-source pair, not double counting.
+
+Effects: wrong duration / implied speed; the distance guard sees an "implausible" speed (in a later block
+it could replace a real distance with the sample-repair over the short window); trip lists show a 1-14 min
+trip with tens of km.
+
+**Implementation status (2026-10-28).** `20261027120000_bydmate_client_trip_extend_ended_at.sql`
+implements option A only. It deliberately contains no historical `UPDATE`. A selected-account rehearsal
+applied the migration plus its synthetic-trip contract test inside one transaction: strict advance,
+equal-count retry, stale block and function privileges passed, then `ROLLBACK` left neither row nor function
+definition in production. The migration itself remains unapplied.
+
+**Contract finding (source review, 2026-10-28).** A trip block is cumulative, but the API schema does not
+bind `sample_count` to `last_device_time`; the existing RPC intentionally accepts an equal-count refresh.
+An equal-count block is therefore a valid retry but not evidence that a closed trip continued. Raw telemetry
+samples also have no `trip_id`; only optional GPS track points are tied to a client trip. A broad historical
+query over telemetry by vehicle and time cannot prove that the movement belonged to this trip rather than a
+later one.
+
+**Options.**
+1. **A (recommended): live guard only.** New idempotent migration replaces
+   `bydmate_apply_client_trip`. For an already-closed row it extends `ended_at` only when both
+   `block.sample_count > stored.sample_count`, `block.last_device_time > stored.last_device_time`, **and**
+   `block.last_device_time > stored.ended_at`; it then uses
+   `greatest(stored.ended_at, block.ended_at, block.last_device_time)`. Equal-count retries remain accepted
+   but never move either end time; `last_device_time` stays monotonic. Open-row behaviour and the distance
+   guard stay unchanged. This fixes future runs without claiming that an ambiguous historical row was one
+   continuous trip.
+2. **B: separate, owner-reviewed historical correction.** After A has evidence from a live stop/resume,
+   produce a read-only candidate preview. An automatic write may include only rows with trip-specific evidence
+   after the stored end (for example, matching `bydmate_trip_track_points`); GPS-less rows remain untouched.
+   Review the exact IDs/counts and rehearse the update in a rolled-back transaction before proposing a second
+   migration. Do not infer continuity from `bydmate_telemetry_samples` alone.
+3. **C: read-side only** — readers use `greatest(ended_at, last_device_time)` as the end. No migration, but
+   ~19 `from("bydmate_trips")` sites to cover and the stored row stays wrong.
+4. **D: fix the APK** so a trip that resumes after a stop either reopens with a new `ended_at` or starts a
+   new trip id. Correct at the source, but a separate repo and release cycle; worth doing in addition to A
+   after its source repository is available.
+
+**Open question:** is a resumed drive one trip (A extends it) or should a stop of N minutes split it into two?
+A keeps the APK's own decision (same trip id = same trip); splitting would be a bigger APK change.
+
+**Data ownership:** no new data model; repairs app-owned `bydmate_trips` rows in Postgres.
+
+**Verification:** focused regression coverage for equal-count retry, stale lower-count block, strict advance,
+and monotonic `last_device_time`; compare the replacement SQL body against the current production function;
+`has_function_privilege('anon', …)` remains false; next live stop/resume shows the end growing with unchanged
+distance. Only after that observation, run option B's candidate preview and rolled-back rehearsal. Update
+`docs/TRIPS.md` only after the corresponding migration has actually been applied and verified.
+
+## Odometer-scale trip distances (`bydmate_trips.distance_km`) — STAGES 1–3 BUILT AND APPLIED 2026-10-07; APK fix (#43) open
 
 > **Status 2026-10-07:** `isPlausibleTripDistance` (`trip-distance-plausibility.ts`, cap 1,500 km or
 > 250 km/h) is built and used by `gradeRangePredictionCycles`, which now skips any cycle containing

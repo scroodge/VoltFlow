@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { mapAdminUsersAttention } from "@/lib/admin-users-attention";
 import { mapAdminUsersStats } from "@/lib/admin-users-stats";
 import {
+  fetchLatestMateReleaseFromGithub,
+  syncMateReleaseCatalog,
+} from "@/lib/mate-latest-release";
+import {
   isPremiumFromUntil,
   resolveEffectivePremium,
 } from "@/lib/premium-entitlement";
@@ -342,6 +346,13 @@ async function loadAdminOverview() {
 }
 
 async function loadAdminAttention() {
+  // The attention queue compares cars against the catalog only, so bring it up to date first.
+  const latestRelease = await fetchLatestMateReleaseFromGithub().catch(
+    () => null,
+  );
+  if (latestRelease)
+    await syncMateReleaseCatalog(getSupabaseAdmin(), latestRelease);
+
   const { data, error } = await getSupabaseAdmin().rpc(
     "admin_users_attention_queue",
   );

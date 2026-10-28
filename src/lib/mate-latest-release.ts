@@ -1,8 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 // Server-side lookup of the latest published VoltFlow Mate APK. GitHub releases are the
-// source of truth: the `mate_app_releases` catalog is only a fallback, because the publish
-// script stopped keeping it current (2026-10-12: table top row 0.4.8, cars on 0.6.1).
+// source of truth. The `mate_app_releases` catalog is a fallback for users but the only
+// source for the admin attention queue; `syncMateReleaseCatalog` keeps it current, because
+// the manual publish script was skipped for five releases (top row 0.4.8 until 2026-10-28).
 
 const GITHUB_LATEST_RELEASE_URL =
   "https://api.github.com/repos/scroodge/BYDMate-own/releases/latest";
@@ -30,12 +31,12 @@ type GithubReleasePayload = {
 };
 
 export class MateReleaseError extends Error {
-  constructor(
-    message: string,
-    readonly status?: number,
-  ) {
+  readonly status?: number;
+
+  constructor(message: string, status?: number) {
     super(message);
     this.name = "MateReleaseError";
+    this.status = status;
   }
 }
 
@@ -98,6 +99,52 @@ export async function fetchLatestMateReleaseFromGithub(): Promise<LatestMateRele
     created_at: publishedAt,
     source: "github",
   };
+}
+
+export type MateReleaseCatalogRow = {
+  version: string;
+  version_code: number;
+  apk_url: string | null;
+  release_notes: string | null;
+  published_at: string;
+};
+
+/**
+ * Catalog row for a GitHub release, or `null` without a `versionCode`: the catalog orders by
+ * `version_code desc nulls last`, so a null-code row would rank below older releases.
+ */
+export function mateReleaseCatalogRow(
+  release: LatestMateRelease,
+): MateReleaseCatalogRow | null {
+  if (release.version_code == null) return null;
+  return {
+    version: release.version,
+    version_code: release.version_code,
+    apk_url: release.apk_url,
+    release_notes: release.release_notes,
+    published_at: release.published_at,
+  };
+}
+
+/**
+ * Insert the release into `mate_app_releases` when its version is missing. Never overwrites
+ * an existing row and never throws. Needs a service-role client (clients only read).
+ */
+export async function syncMateReleaseCatalog(
+  supabase: SupabaseClient,
+  release: LatestMateRelease,
+): Promise<void> {
+  const row = mateReleaseCatalogRow(release);
+  if (!row) {
+    console.warn(
+      `Mate release ${release.version} has no versionCode in its notes; catalog not synced.`,
+    );
+    return;
+  }
+  const { error } = await supabase
+    .from("mate_app_releases")
+    .upsert(row, { onConflict: "version", ignoreDuplicates: true });
+  if (error) console.error("Mate release catalog sync failed:", error.message);
 }
 
 async function loadLatestMateVersionFromCatalog(
