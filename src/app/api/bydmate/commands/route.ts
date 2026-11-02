@@ -1,3 +1,4 @@
+import { validateVehicleCommand } from "@/lib/diplus/command-allowlist";
 import { resolveVoltflowMateApiKeyProfile } from "@/lib/voltflowmate/api-auth";
 import { liveFastSecondsFor } from "@/lib/voltflowmate/live-fast";
 import { offlineBufferGrantField } from "@/lib/voltflowmate/offline-buffer";
@@ -44,6 +45,33 @@ async function expireStalePending(
     })
     .in("id", ids)
     .eq("status", "pending");
+}
+
+async function rejectUnsupportedPending(
+  supabase: ReturnType<typeof createServiceClient>,
+  pending: PendingCommand[],
+) {
+  const unsupportedIds = pending
+    .filter((command) => !validateVehicleCommand(command.type, command.params ?? {}).ok)
+    .map((command) => command.id);
+
+  if (unsupportedIds.length > 0) {
+    const { error } = await supabase
+      .from("vehicle_commands")
+      .update({
+        status: "rejected",
+        executed_at: new Date().toISOString(),
+        result: {
+          error: "unsupported_unverified_command",
+          contract_version: "validated_only",
+        },
+      })
+      .in("id", unsupportedIds)
+      .eq("status", "pending");
+    if (error) throw new Error("Unsupported command rejection failed");
+  }
+
+  return pending.filter((command) => !unsupportedIds.includes(command.id));
 }
 
 export async function GET(request: Request) {
@@ -143,11 +171,29 @@ export async function GET(request: Request) {
       });
     }
 
+    // Do not let commands which used to exist in the cloud catalogue reach the
+    // car after the contract is narrowed. Preserve them as rejected audit rows.
+    const supportedPending = await rejectUnsupportedPending(supabase, pending);
+    if (supportedPending.length === 0) {
+      const pollSeconds =
+        liveFastSeconds > 0
+          ? ACTIVE_POLL_AFTER_SECONDS
+          : IDLE_POLL_AFTER_SECONDS;
+      return Response.json({
+        ok: true,
+        commands: [],
+        commands_enabled: true,
+        live_fast_seconds: liveFastSeconds,
+        poll_after_seconds: pollSeconds,
+        ...offlineBufferGrantField(),
+        ...capacityField,
+      });
+    }
 
     const cutoff = Date.now() - COMMAND_TIMEOUT_MS;
     const staleIds: string[] = [];
     const commands: PendingCommand[] = [];
-    for (const row of pending) {
+    for (const row of supportedPending) {
       if (new Date(row.created_at).getTime() < cutoff) {
         staleIds.push(row.id);
       } else {

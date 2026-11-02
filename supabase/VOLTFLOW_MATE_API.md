@@ -231,6 +231,19 @@ accounting.
 Compatible Mate clients may poll for abstract commands and acknowledge their outcome with the
 same paired identity. The client must still enforce vehicle-safety constraints locally.
 
+The cloud accepts and delivers only this live-validated command contract. All other historical
+command types are rejected; they remain in the database only as audit history and never reach
+DiPlus.
+
+| Type | Parameters | DiPlus phrase |
+| --- | --- | --- |
+| `window` | `which`: `driver`/`pass`/`rl`/`rr`/`all`; `pct`: 0–100 | fixed target + percentage |
+| `windows_preset` | `preset`: `vent`/`close`/`open`/`half` | fixed window preset |
+| `ac` | `on`: boolean | `自动空调` / `关空调` |
+| `ac_temp_step` | `direction`: `up`/`down` | `空调升温` / `空调降温` |
+| `ac_recirculation` | `mode`: `internal`/`external` | `内循环` / `外循环` |
+| `seat_heat_driver` | `level`: `0` or `2` | off / validated maximum |
+
 ```http
 GET https://<host>/api/bydmate/commands
 X-API-Key: <paired-client-key>
@@ -264,7 +277,7 @@ offline telemetry queue retention (default 4 GiB).
 {
   "ok": true,
   "commands": [
-    { "id": "command-id", "type": "lock", "params": {}, "created_at": "2026-01-01T12:00:00Z" }
+    { "id": "command-id", "type": "ac", "params": { "on": true }, "created_at": "2026-01-01T12:00:00Z" }
   ],
   "commands_enabled": true,
   "live_fast_seconds": 20,
@@ -291,7 +304,8 @@ X-Vehicle-Id: <vehicle-id>
 
 An acknowledgement status is one of `done`, `failed`, or `rejected`. The command lifecycle is
 `pending` → `sent` → one of those terminal states; unacknowledged pending commands can expire as
-`failed`.
+`failed`. An obsolete or unverified command found in the pending queue is terminally marked
+`rejected` before delivery.
 
 ## Completed-trip summaries
 

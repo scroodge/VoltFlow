@@ -3,43 +3,42 @@ import test from "node:test";
 
 import { buildDiplusPhrase, validateVehicleCommand } from "./command-allowlist.ts";
 
-test("lock builds safe phrase", () => {
-  const result = buildDiplusPhrase("lock", {});
-  assert.equal(result.ok, true);
-  if (result.ok) assert.equal(result.phrase, "车门上锁");
+test("keeps confirmed window commands", () => {
+  assert.deepEqual(buildDiplusPhrase("window", { which: "driver", pct: 10 }), {
+    ok: true,
+    phrase: "主驾车窗打开百分之10",
+  });
+  assert.deepEqual(buildDiplusPhrase("windows_preset", { preset: "vent" }), {
+    ok: true,
+    phrase: "车窗通风",
+  });
+  assert.equal(validateVehicleCommand("window", { which: "driver", pct: 101 }).ok, false);
 });
 
-test("set_soc_limit validates range", () => {
-  assert.equal(validateVehicleCommand("set_soc_limit", { value: 49 }).ok, false);
-  assert.equal(validateVehicleCommand("set_soc_limit", { value: 80 }).ok, true);
+test("maps the live-verified climate commands", () => {
+  assert.deepEqual(buildDiplusPhrase("ac", { on: true }), { ok: true, phrase: "自动空调" });
+  assert.deepEqual(buildDiplusPhrase("ac", { on: false }), { ok: true, phrase: "关空调" });
+  assert.deepEqual(buildDiplusPhrase("ac_temp_step", { direction: "up" }), { ok: true, phrase: "空调升温" });
+  assert.deepEqual(buildDiplusPhrase("ac_temp_step", { direction: "down" }), { ok: true, phrase: "空调降温" });
+  assert.deepEqual(buildDiplusPhrase("ac_recirculation", { mode: "internal" }), { ok: true, phrase: "内循环" });
+  assert.deepEqual(buildDiplusPhrase("ac_recirculation", { mode: "external" }), { ok: true, phrase: "外循环" });
 });
 
-test("window maps driver target", () => {
-  const result = buildDiplusPhrase("window", { which: "driver", pct: 10 });
-  assert.equal(result.ok, true);
-  if (result.ok) assert.equal(result.phrase, "主驾车窗打开百分之10");
+test("maps driver-seat heating only to the verified levels", () => {
+  assert.deepEqual(buildDiplusPhrase("seat_heat_driver", { level: 2 }), {
+    ok: true,
+    phrase: "主驾座椅加热2档",
+  });
+  assert.deepEqual(buildDiplusPhrase("seat_heat_driver", { level: 0 }), {
+    ok: true,
+    phrase: "关闭主驾座椅加热",
+  });
+  assert.equal(validateVehicleCommand("seat_heat_driver", { level: 1 }).ok, false);
 });
 
-test("rejects unknown type", () => {
+test("rejects historical unverified command types", () => {
+  for (const type of ["lock", "ac_vent", "ac_temp", "fan_level", "flash_lights", "tts"]) {
+    assert.equal(validateVehicleCommand(type, {}).ok, false, type);
+  }
   assert.equal(buildDiplusPhrase("发送CAN", {}).ok, false);
-  assert.equal(buildDiplusPhrase("shell", {}).ok, false);
-});
-
-test("schedule_charge pads minutes", () => {
-  const result = buildDiplusPhrase("schedule_charge", { hh: 22, mm: 5, end: 6 });
-  assert.equal(result.ok, true);
-  if (result.ok) assert.equal(result.phrase, "预约充电22:05-6");
-});
-
-test("windows_preset maps vent close open", () => {
-  assert.equal(buildDiplusPhrase("windows_preset", { preset: "vent" }).phrase, "车窗通风");
-  assert.equal(buildDiplusPhrase("windows_preset", { preset: "close" }).phrase, "车窗关闭");
-  assert.equal(buildDiplusPhrase("windows_preset", { preset: "open" }).phrase, "车窗全开");
-});
-
-test("ac and ac_vent map climate phrases", () => {
-  assert.equal(buildDiplusPhrase("ac", { on: true }).phrase, "自动空调");
-  assert.equal(buildDiplusPhrase("ac", { on: false }).phrase, "关闭空调");
-  assert.equal(buildDiplusPhrase("ac_vent", { on: true }).phrase, "打开空调通风");
-  assert.equal(buildDiplusPhrase("ac_vent", { on: false }).phrase, "关闭空调");
 });

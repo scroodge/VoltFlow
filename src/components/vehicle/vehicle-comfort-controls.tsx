@@ -2,15 +2,11 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import {
-  AirVent,
   ChevronDown,
-  Megaphone,
   PanelBottomClose,
   PanelTopOpen,
   Snowflake,
-  Sparkles,
   Trash2,
-  Volume2,
   Wind,
 } from "lucide-react";
 
@@ -114,59 +110,57 @@ const CLIMATE_ACTIONS: ComfortAction[] = [
     variant: "outline",
   },
   {
-    id: "vent-on",
-    label: "Вентиляция вкл",
-    type: "ac_vent",
-    params: { on: true },
-    icon: <AirVent className="size-4" />,
+    id: "ac-temp-up",
+    label: "Температура +1 °C",
+    type: "ac_temp_step",
+    params: { direction: "up" },
+    icon: <Snowflake className="size-4" />,
     variant: "secondary",
   },
   {
-    id: "vent-off",
-    label: "Вентиляция выкл",
-    type: "ac_vent",
-    params: { on: false },
-    icon: <AirVent className="size-4 opacity-50" />,
+    id: "ac-temp-down",
+    label: "Температура −1 °C",
+    type: "ac_temp_step",
+    params: { direction: "down" },
+    icon: <Snowflake className="size-4 opacity-50" />,
+    variant: "outline",
+  },
+  {
+    id: "recirculation-internal",
+    label: "Внутренняя циркуляция",
+    type: "ac_recirculation",
+    params: { mode: "internal" },
+    icon: <Wind className="size-4" />,
+    variant: "secondary",
+  },
+  {
+    id: "recirculation-external",
+    label: "Внешняя циркуляция",
+    type: "ac_recirculation",
+    params: { mode: "external" },
+    icon: <Wind className="size-4 opacity-50" />,
     variant: "outline",
   },
 ];
 
-const LIGHT_ACTIONS: ComfortAction[] = [
+const SEAT_HEAT_ACTIONS: ComfortAction[] = [
   {
-    id: "flash-lights",
-    label: "Мигнуть фарами",
-    type: "flash_lights",
-    params: {},
-    icon: <Sparkles className="size-4" />,
-    variant: "default",
-  },
-  {
-    id: "flash-20s",
-    label: "Моргать 20 сек",
-    type: "flash_20s",
-    params: {},
-    icon: <Sparkles className="size-4" />,
+    id: "seat-heat-driver-max",
+    label: "Вкл. максимум",
+    type: "seat_heat_driver",
+    params: { level: 2 },
+    icon: <Snowflake className="size-4" />,
     variant: "secondary",
   },
   {
-    id: "find-car",
-    label: "Поиск авто (фары + гудок)",
-    type: "find_car",
-    params: {},
-    icon: <Megaphone className="size-4" />,
-    variant: "secondary",
-  },
-  {
-    id: "honk",
-    label: "Посигналить",
-    type: "honk",
-    params: {},
-    icon: <Volume2 className="size-4" />,
+    id: "seat-heat-driver-off",
+    label: "Выкл.",
+    type: "seat_heat_driver",
+    params: { level: 0 },
+    icon: <Snowflake className="size-4 opacity-50" />,
     variant: "outline",
   },
 ];
-
-
 
 function ActionGrid({
   actions,
@@ -247,16 +241,7 @@ export function VehicleComfortControls({
   async function runAction(action: ComfortAction) {
     setPendingId(action.id);
     try {
-      if (action.id === "flash-20s") {
-        for (let i = 0; i < 4; i++) {
-          await sendCommand.mutateAsync({ type: "flash_lights", params: {} });
-          if (i < 3) {
-            await new Promise((resolve) => setTimeout(resolve, 5000));
-          }
-        }
-      } else {
-        await sendCommand.mutateAsync({ type: action.type, params: action.params });
-      }
+      await sendCommand.mutateAsync({ type: action.type, params: action.params });
     } finally {
       setPendingId(null);
     }
@@ -280,7 +265,7 @@ export function VehicleComfortControls({
             <div className="min-w-0 flex-1 space-y-1">
               <CardTitle className="text-base">Remote commands</CardTitle>
               <CardDescription className="text-xs">
-                Окна и климат · на стоянке и при зарядке (0 км/ч)
+                Окна, климат и подогрев · на стоянке и при зарядке (0 км/ч)
               </CardDescription>
               <RemoteReadyBadge remoteReady={remoteReady} compact />
             </div>
@@ -295,7 +280,7 @@ export function VehicleComfortControls({
         ) : (
           <>
             <CardTitle className="text-base">Удалённое управление</CardTitle>
-            <CardDescription>Окна и климат. На стоянке и при зарядке (0 км/ч).</CardDescription>
+            <CardDescription>Окна, климат и подогрев. На стоянке и при зарядке (0 км/ч).</CardDescription>
           </>
         )}
       </CardHeader>
@@ -327,17 +312,6 @@ export function VehicleComfortControls({
         {snapshot ? <LiveSnapshotRow snapshot={snapshot} aux={aux} /> : null}
 
         <section className="space-y-2">
-          <h3 className="text-sm font-medium">Фары и сигнализация</h3>
-          <ActionGrid
-            actions={LIGHT_ACTIONS}
-            columns={2}
-            disabled={disabled}
-            pendingId={pendingId}
-            onAction={(action) => void runAction(action)}
-          />
-        </section>
-
-        <section className="space-y-2">
           <h3 className="text-sm font-medium">Окна</h3>
           <ActionGrid
             actions={WINDOW_ACTIONS}
@@ -358,6 +332,17 @@ export function VehicleComfortControls({
           <h3 className="text-sm font-medium">Климат</h3>
           <ActionGrid
             actions={CLIMATE_ACTIONS}
+            columns={2}
+            disabled={disabled}
+            pendingId={pendingId}
+            onAction={(action) => void runAction(action)}
+          />
+        </section>
+
+        <section className="space-y-2">
+          <h3 className="text-sm font-medium">Подогрев водительского сиденья</h3>
+          <ActionGrid
+            actions={SEAT_HEAT_ACTIONS}
             columns={2}
             disabled={disabled}
             pendingId={pendingId}
