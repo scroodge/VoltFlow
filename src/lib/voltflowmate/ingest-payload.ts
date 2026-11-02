@@ -113,6 +113,13 @@ export const diplusSchema = z
     stall_sentry_mode: z.string().nullable().optional(),
     sentry_provider: z.string().nullable().optional(),
     sentry_active: z.boolean().nullable().optional(),
+    // di+ 2.0.0b8+ (#116 / #117 / #125). bms_state is the same BYD enum as
+    // autoservice.bms_state (0 preparing, 1 charging, 2 complete, 15 gun in / idle) but is
+    // also sent by the car-off daemon. charge_power_raw_kw read 0.0 through real AC charges
+    // — diagnostic only, never a substitute for telemetry.charge_power_kw.
+    bms_state: numericSchema,
+    charge_power_raw_kw: numericSchema,
+    max_charge_power_kw: numericSchema,
   })
   .strip();
 

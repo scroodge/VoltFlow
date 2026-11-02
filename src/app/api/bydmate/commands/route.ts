@@ -2,7 +2,10 @@ import { resolveVoltflowMateApiKeyProfile } from "@/lib/voltflowmate/api-auth";
 import { liveFastSecondsFor } from "@/lib/voltflowmate/live-fast";
 import { offlineBufferGrantField } from "@/lib/voltflowmate/offline-buffer";
 import { createServiceClient } from "@/lib/supabase/service";
-import { fetchVehicleBatteryCapacityKwh } from "@/lib/voltflowmate/vehicle-battery-capacity";
+import {
+  fetchVehicleRangeProfile,
+  vehicleRangeProfileFields,
+} from "@/lib/voltflowmate/vehicle-battery-capacity";
 import { resolveVehicleKey } from "@/lib/voltflowmate/vehicle-identity";
 import {
   ACTIVE_COMMAND_POLL_AFTER_SECONDS,
@@ -72,15 +75,13 @@ export async function GET(request: Request) {
     const liveFastSeconds = liveFastSecondsFor(profile, vehicleId);
     // Car-profile capacity for the APK's on-car AI Range (see vehicle-battery-capacity.ts).
     // One indexed read per poll; omitted when the car cannot be resolved. Older APKs ignore it.
-    const batteryCapacityKwh = await fetchVehicleBatteryCapacityKwh(
+    // Range reserve rides along so the on-car AI Range matches the web's reserve-adjusted one.
+    const rangeProfile = await fetchVehicleRangeProfile(
       supabase,
       profile.id,
       vehicleId,
     ).catch(() => null);
-    const capacityField =
-      batteryCapacityKwh != null
-        ? { battery_capacity_kwh: batteryCapacityKwh }
-        : {};
+    const capacityField = vehicleRangeProfileFields(rangeProfile);
     if (REMOTE_COMMANDS_DISABLED) {
       return Response.json({
         ok: true,

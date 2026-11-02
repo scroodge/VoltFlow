@@ -94,7 +94,8 @@ power is 7 kW, and electricity costs 0.50 per kWh:
 | --- | --- | --- |
 | Available battery energy | `C × clamp(SOC, 0, 100) / 100` | Converts current battery percentage into available kWh. |
 | Battery display | `available kWh / C` | Shows available energy beside full pack capacity. |
-| Estimated range | `usable energy / predicted consumption × 100` | Projects distance from available battery energy and blended consumption. |
+| Estimated range | `usable energy / predicted consumption × 100`, with `usable energy = SOH-adjusted capacity × max(0, SOC − reserve SOC) / 100` | Projects distance from available battery energy above the car's range reserve (`cars.range_reserve_soc_percent`, 0–40%) and blended consumption. |
+| Range trip window | Newest trips until their distances reach ~50 km (`selectTripsWithinDistanceWindow`) | The recent-trip set every AI-range surface (Dashboard, `/vehicle`, Telegram, APK) blends. |
 | SOH-adjusted capacity | `C × clamp(SOH, 70, 105) / 100` | Adjusts usable capacity for measured battery health. |
 | Predicted consumption | `Σ(estimate × weight) / Σweight` | Blends current-trip, recent-trip, energy-derived, instantaneous-power, reported-range, and historical estimates. |
 | Instantaneous consumption input | `power kW / speed km/h × 100` | Converts live traction power and speed to kWh/100 km when speed is suitable. |
@@ -394,7 +395,10 @@ Owning sources: [`search/page.tsx`](../src/app/knowledge/search/page.tsx) and
 ## Maintenance rule
 
 When a user-visible formula changes, update this reference in the same approved change
-as its owning source and canonical domain document. Preserve the distinction between:
+as its owning source and canonical domain document. If the VoltFlow Mate APK mirrors the
+formula (today: AI range and consumption in `AiRangeEstimator.kt`, which also feeds the
+APK's `range_est_km`), the APK port and its mirrored tests change in the same change too —
+see AGENTS.md "Formula parity with the APK". Preserve the distinction between:
 
 - raw vehicle-reported values;
 - exact totals derived from stored facts;

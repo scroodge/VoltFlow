@@ -59,6 +59,19 @@ test("keeps charge_current_a and accepts null, instead of stripping the new key"
   assert.equal(withNull.payloads[0].telemetry.charge_current_a, null);
 });
 
+test("keeps di+ 2.0.0b8+ charging params instead of stripping them", () => {
+  // Live from car `way`, di+ 2.0.0b9, parked: BmsState 15, ChargePowerRaw 0, MaxChargePower 73.3.
+  const result = normalizePayloads({
+    ...basePayload,
+    diplus: { soc: 58, bms_state: 15, charge_power_raw_kw: 0, max_charge_power_kw: "73.3" },
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(result.payloads[0].diplus.bms_state, 15);
+  assert.equal(result.payloads[0].diplus.charge_power_raw_kw, 0);
+  assert.equal(result.payloads[0].diplus.max_charge_power_kw, 73.3);
+});
+
 test("accepts BYDMate batch sample with null diplus", () => {
   const result = normalizePayloads({
     samples: [

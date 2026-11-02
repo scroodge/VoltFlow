@@ -28,7 +28,10 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { resolveVoltflowMateApiKeyProfile } from "@/lib/voltflowmate/api-auth";
 import { liveFastSecondsFor } from "@/lib/voltflowmate/live-fast";
 import { offlineBufferGrantField } from "@/lib/voltflowmate/offline-buffer";
-import { fetchVehicleBatteryCapacityKwh } from "@/lib/voltflowmate/vehicle-battery-capacity";
+import {
+  fetchVehicleRangeProfile,
+  vehicleRangeProfileFields,
+} from "@/lib/voltflowmate/vehicle-battery-capacity";
 import { resolveVehicleKey } from "@/lib/voltflowmate/vehicle-identity";
 import {
   readBodyWithLimit,
@@ -574,7 +577,8 @@ export async function POST(request: Request) {
     // Car-profile capacity for the APK's on-car AI Range (see vehicle-battery-capacity.ts).
     // Carried here because while remote commands are suspended the command poll is a static
     // rewrite (next.config.ts) that never reaches its route. Best-effort, one indexed read.
-    const batteryCapacityKwh = await fetchVehicleBatteryCapacityKwh(
+    // The range reserve rides along so the on-car AI Range matches the web's.
+    const rangeProfile = await fetchVehicleRangeProfile(
       supabase,
       profile.id,
       headerVehicleId,
@@ -593,9 +597,7 @@ export async function POST(request: Request) {
       // Lifts the car's legacy 1000-row offline guard so a long offline stretch queues
       // locally instead of silently dropping the oldest samples. See offline-buffer.ts.
       ...offlineBufferGrantField(),
-      ...(batteryCapacityKwh != null
-        ? { battery_capacity_kwh: batteryCapacityKwh }
-        : {}),
+      ...vehicleRangeProfileFields(rangeProfile),
       ...parseIngestStats(ingestResult, samples.length),
       dropped_location_count: droppedLocations,
       dropped_telemetry_field_count: droppedTelemetryFields,
