@@ -9,6 +9,17 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-10-28
+
+- **Closed client trips now retain the end of a continued drive.** Migration
+  `20261027120000_bydmate_client_trip_extend_ended_at.sql` was applied to production. A closed trip advances
+  only when a cumulative block has a higher `sample_count` and a `last_device_time` later than both stored
+  times; equal-count retries cannot move `ended_at` or `last_device_time`, and time never regresses. The
+  migration has no historical data update. Its transaction contract test covers strict advance, equal-count
+  retry, stale block and API-role grants; production rehearsal passed and rolled back before the real apply.
+  Post-apply verification found the guard present, `anon`/`authenticated` execute denied and `service_role`
+  execute granted. A separate historical-correction proposal remains in `BACKLOG.md`.
+
 ## 2026-10-21
 
 - **Dashboard hides «Начать зарядку» when Mate is already watching the car.** A parked car

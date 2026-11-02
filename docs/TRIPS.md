@@ -73,6 +73,16 @@ number (on healthy trips it agrees with the stored distance to within max(0.5 km
 Rules A/B. Readers treat a `NULL` distance as unknown (`cleanTrips` / `sanitizeTripDistances`).
 Rollback: re-apply the `bydmate_apply_client_trip` body from `20260917120000`.
 
+#### Client `ended_at` extension (since `20261027120000`)
+
+For an already-closed `client_trip`, the server extends `ended_at` only when the incoming cumulative block
+has a strictly higher `sample_count` and its `last_device_time` is later than both the stored
+`last_device_time` and `ended_at`. The new end is
+`greatest(stored ended_at, block ended_at, block last_device_time)`; `last_device_time` itself never moves
+backwards. Equal-count retries remain accepted for aggregate refreshes, but cannot move either time. Open
+trips retain their existing close behaviour. This migration intentionally does **not** repair historical rows:
+raw telemetry is not tied to a trip ID, so any history correction needs its own reviewed evidence and plan.
+
 A final client-owned trip also reaches the same deferred route-insight projection trigger when
 its `ended_at` is accepted. It therefore has the same compact route data when it contains GPS,
 while summary-only inputs with no track remain absent from route analytics.

@@ -594,14 +594,11 @@ unless you grant it.
 
 Options 1 + 2, with 3 as a later add-on.
 
-## Client trips: `ended_at` frozen at the first stop while the trip keeps going (#43 follow-up) — APPLIED TO PROD 2026-10-28 (`20261027120000`); awaiting a live drive with a stop
+## Historical correction for frozen client-trip ends — PROPOSED 2026-10-28
 
-> **Applied 2026-10-28 ~18:22 UTC** via psql on the pooler. Rolled-back rehearsal on `46cbcea3`
-> first: an equal-count retry with a later time left `ended_at` unchanged; a strict advance
-> (`sample_count` 9214 → 9300, `last_device_time` 08:10) moved `ended_at` to 08:10; rollback
-> restored the row. After apply: function body live, `anon`/`authenticated` execute = false,
-> `service_role` = true. Historical rows were already repaired before this (`46cbcea3` already
-> ended 07:56:25 = `last_device_time`), so the repair migration was dropped.
+> The live guard is shipped in `20261027120000_bydmate_client_trip_extend_ended_at.sql`; see
+> `CHANGELOG.md`. It deliberately made no historical `UPDATE`. A post-apply read-only check found
+> 22 closed `client_trip` rows with `last_device_time > ended_at + 5 minutes`.
 
 **Finding (read-only prod checks, 2026-10-27).** The stage 2 distance guard works: no client trip since
 2026-10-07 has `distance_km > 1,500`. But 7 recent client trips fail the 250 km/h check (e.g. `46cbcea3`:
@@ -618,11 +615,8 @@ Effects: wrong duration / implied speed; the distance guard sees an "implausible
 it could replace a real distance with the sample-repair over the short window); trip lists show a 1-14 min
 trip with tens of km.
 
-**Implementation status (2026-10-28).** `20261027120000_bydmate_client_trip_extend_ended_at.sql`
-implements option A only. It deliberately contains no historical `UPDATE`. A selected-account rehearsal
-applied the migration plus its synthetic-trip contract test inside one transaction: strict advance,
-equal-count retry, stale block and function privileges passed, then `ROLLBACK` left neither row nor function
-definition in production. The migration itself remains unapplied.
+**Scope boundary.** The applied live migration contains no historical `UPDATE`; do not treat it as evidence
+that these existing rows were corrected.
 
 **Contract finding (source review, 2026-10-28).** A trip block is cumulative, but the API schema does not
 bind `sample_count` to `last_device_time`; the existing RPC intentionally accepts an equal-count refresh.
@@ -632,35 +626,17 @@ query over telemetry by vehicle and time cannot prove that the movement belonged
 later one.
 
 **Options.**
-1. **A (recommended): live guard only.** New idempotent migration replaces
-   `bydmate_apply_client_trip`. For an already-closed row it extends `ended_at` only when both
-   `block.sample_count > stored.sample_count`, `block.last_device_time > stored.last_device_time`, **and**
-   `block.last_device_time > stored.ended_at`; it then uses
-   `greatest(stored.ended_at, block.ended_at, block.last_device_time)`. Equal-count retries remain accepted
-   but never move either end time; `last_device_time` stays monotonic. Open-row behaviour and the distance
-   guard stay unchanged. This fixes future runs without claiming that an ambiguous historical row was one
-   continuous trip.
-2. **B: separate, owner-reviewed historical correction.** After A has evidence from a live stop/resume,
-   produce a read-only candidate preview. An automatic write may include only rows with trip-specific evidence
-   after the stored end (for example, matching `bydmate_trip_track_points`); GPS-less rows remain untouched.
-   Review the exact IDs/counts and rehearse the update in a rolled-back transaction before proposing a second
-   migration. Do not infer continuity from `bydmate_telemetry_samples` alone.
-3. **C: read-side only** — readers use `greatest(ended_at, last_device_time)` as the end. No migration, but
+1. **A (recommended): owner-reviewed historical correction.** Produce a read-only candidate preview.
+   An automatic write may include only rows with trip-specific evidence after the stored end (for example,
+   matching `bydmate_trip_track_points`); GPS-less rows remain untouched. Review exact IDs/counts and rehearse
+   the update in a rolled-back transaction before proposing a separate migration.
+2. **B: read-side only** — readers use `greatest(ended_at, last_device_time)` as the end. No migration, but
    ~19 `from("bydmate_trips")` sites to cover and the stored row stays wrong.
-4. **D: fix the APK** so a trip that resumes after a stop either reopens with a new `ended_at` or starts a
-   new trip id. Correct at the source, but a separate repo and release cycle; worth doing in addition to A
-   after its source repository is available.
-
-**Open question:** is a resumed drive one trip (A extends it) or should a stop of N minutes split it into two?
-A keeps the APK's own decision (same trip id = same trip); splitting would be a bigger APK change.
+3. **C: leave history unchanged.** The live guard prevents new instances; old rows retain their recorded end.
 
 **Data ownership:** no new data model; repairs app-owned `bydmate_trips` rows in Postgres.
 
-**Verification:** focused regression coverage for equal-count retry, stale lower-count block, strict advance,
-and monotonic `last_device_time`; compare the replacement SQL body against the current production function;
-`has_function_privilege('anon', …)` remains false; next live stop/resume shows the end growing with unchanged
-distance. Only after that observation, run option B's candidate preview and rolled-back rehearsal. Update
-`docs/TRIPS.md` only after the corresponding migration has actually been applied and verified.
+**Verification:** candidate preview, exact-ID review and a rolled-back rehearsal before any historical write.
 
 ## Odometer-scale trip distances (`bydmate_trips.distance_km`) — STAGES 1–3 BUILT AND APPLIED 2026-10-07; APK fix (#43) open
 
