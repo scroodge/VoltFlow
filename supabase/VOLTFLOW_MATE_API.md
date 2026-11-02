@@ -181,6 +181,14 @@ The `telemetry` object contains core vehicle metrics:
 - Source scales: `soc_source` (`"diplus"` for BMS 0.1% resolution, `"autoservice"` for whole-percent display SOC).
 - Trip & Range: `range_est_km`, `current_trip_distance_km`, `current_trip_consumption_kwh_100km`.
 
+Di+ 2.0.0b8+ charging fields in the `diplus` object (Mate 0.6.3+; omitted on older di+), stored as
+`diplus_bms_state` / `diplus_charge_power_raw_kw` / `diplus_max_charge_power_kw`:
+- `bms_state` — BYD BMS state, same raw enum as `autoservice.bms_state` (observed `0` preparing,
+  `1` charging, `2` complete, `15` gun in / idle). Sent on every sample by both senders.
+- `charge_power_raw_kw` — BYD `getChargingPower()`. **Diagnostic only**: reads `0` through AC charges,
+  never a substitute for `telemetry.charge_power_kw`. Driving/charging samples only.
+- `max_charge_power_kw` — BMS max allowed charge power. Driving/charging samples only.
+
 Unknown forward-compatible fields are ignored. Numeric values may be represented as JSON
 numbers or numeric strings. Batches are limited to 300 samples.
 
@@ -243,6 +251,12 @@ DiPlus.
 | `ac_temp_step` | `direction`: `up`/`down` | `空调升温` / `空调降温` |
 | `ac_recirculation` | `mode`: `internal`/`external` | `内循环` / `外循环` |
 | `seat_heat_driver` | `level`: `0` or `2` | off / validated maximum |
+| `camera_snapshot` | no parameters; manual only | a private JPEG captured from local `pano` |
+
+`camera_snapshot` is not a di+ voice phrase. Mate reads one frame from the car-local
+`pano` FLV stream, uploads it through the paired API, and the PWA receives only a short-lived
+signed URL. It must not be scheduled, and the camera stream URL or vehicle-local address is
+never returned to the browser.
 
 ```http
 GET https://<host>/api/bydmate/commands

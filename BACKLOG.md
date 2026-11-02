@@ -1,66 +1,12 @@
-## Di+ 2.0.0b8 charging parameters (#116–#126) in Mate telemetry — PROPOSED 2026-11-02
+## Use di+ BMS state for prompt charging auto-stop (option B of the Di+ 2.0.0b8 work) — PROPOSED 2026-11-02
 
-**Finding.** Decompiling `BYDMate-own/research/diplus.2.0.0-beta8-3.apk` (`com/van/diplus/cmd/w.java`)
-shows new `getDiPars` catalog entries that **do not exist in beta1** (0 string hits):
-
-| # | Di+ name | Meaning | Source inside Di+ |
-|---|---|---|---|
-| 116 | 电池管理状态 | BMS state: 充电准备 / 充电中 / 充电完成 / 放电中 / 充电终止 / C10故障 / 充电枪故障 / 充电机故障 / 交流故障 / 预约充电 / 整车放电 / 超时 / 放电完成 / 充电暂停 | `BYDAutoChargingDevice.getBatteryManagementDeviceState()` |
-| 117 | 充电功率 | Charge power, double | `BYDAutoChargingDevice.getChargingPower()` |
-| 118 | 本次充电量 | Energy this charge, double | `BYDAutoChargingDevice.getChargingCapacity()` |
-| 120 / 121 | 动力电池总电压 / 总电流 | Pack voltage / current | same data as `/api/historyStatus` |
-| 122 / 123 | SOH / cell count | | |
-| 124–126 | 电池可用功率原始值 / 最大允许充电功率 / 最大允许放电功率 | BMS power limits | |
-
-This corrects `BYDMate-own/docs/DIPLUS_DATA.md:507-512` ("no current / pack voltage / charge
-power parameter"), which was true only up to beta1. **No AC / grid / OBC voltage exists** in the
-catalog — the only AC signals are gun state `2` (交流枪) and BMS state `交流故障`.
-
-**What Mate already has (so most of this is duplicate):**
-- Pack V × I: both senders already compute `charge_power_kw` from Di+ `historyStatus`
-  (`HistoryStatusClient.chargePowerKw`, 15 s max age), falling back to whole-kW `发动机功率`.
-  #120/#121 add nothing.
-- #118 is the same `getChargingCapacity()` counter Mate already reads via autoservice as
-  `autoservice_charge_capacity_kwh` / `kwh_charged` — the **cell-only, ~47 % low** counter.
-  Must not be used for energy or cost. No value.
-- BMS state: the app path already sends autoservice `bms_state` (stored as
-  `autoservice_bms_state`); the **daemon path (car off) does not**, and the server charging logic
-  uses it nowhere.
-
-**What is genuinely new and useful:**
-1. **#117 as the fallback** when the `historyStatus` pack reading is stale/missing, instead of
-   integer `发动机功率` (whose AC rounding costs 5–10 %, `DIPLUS_DATA.md:696-702`). Unverified:
-   whether it is battery-side or OBC-side power, and its unit/scale — needs a live read.
-2. **#116 in the daemon path** — "charge finished / stopped / paused / fault" while the car is
-   off, the exact gap behind `is_charging` = gun-connected and the 5-min zero-power stall rule.
-3. **#125 max allowed charge power** — diagnostics only (explains tail taper).
-
-### Options
-
-- **A. Collect only (Mate, no server logic change).** Add `{充电功率}`, `{电池管理状态}`,
-  `{最大允许充电功率}` to the Di+ template; use #117 as the second-tier `charge_power_kw`
-  fallback in **both** senders (app `TelemetrySnapshot` and `CommandDaemon` — the daemon builds its
-  own payload); send #116 from the daemon as the existing `autoservice.bms_state` slot or a new
-  `diplus.bms_state`. Server: accept + store the new `diplus_*` fields only.
-  Small, safe; gives data to validate #117/#116 against pack V×I and real session ends.
-- **B. A + use BMS state in auto-stop.** Close an open session promptly on `充电完成` / `充电终止`
-  / fault states instead of waiting for the 5-min stall. Faster, more correct ends — but changes
-  the charging state machine and must be validated across cars/firmware first (Di+ beta-only,
-  and old Di+ returns nothing → must stay a pure addition, never a requirement).
-- **C. Do nothing.** Pack V×I already covers power; accept integer fallback.
-
-**Recommendation: A now, B as a follow-up** after ~2 weeks of A data shows #116 transitions line
-up with real charge ends on `way` and `cl`.
-
-**Data ownership / storage.** App-owned vehicle telemetry (not user preference), Postgres —
-same as every existing `diplus_*` / `autoservice_*` field on the telemetry sample + live snapshot
-rows. A requires a new idempotent migration (`add column if not exists`) for any new `diplus_*`
-columns, or reuse of `autoservice_bms_state` if the daemon value is semantically the same
-(same BYD enum — verify against autoservice values first).
-
-**Verify before building (needs car ADB authorized):** installed Di+ version on `way`; live
-`getDiPars` read of #116/#117/#120/#121 during an AC charge to pin #117's unit and compare it with
-V×I; Di+ older than b8 must return empty for these and leave behavior unchanged.
+Option A shipped 2026-11-02 (see CHANGELOG): `diplus_bms_state` now arrives from both senders on di+
+2.0.0b8+. Proposal: close an open auto session promptly on BMS `2` (complete) / charge-terminated / fault
+states instead of waiting for the 5-min zero-power stall. Prerequisites: ~2 weeks of data showing
+`diplus_bms_state` transitions line up with real charge ends on `way` and `cl` (prod already shows `15`
+= gun in, idle, for 66k+ "gun in, no power" app-path rows); map the full BYD enum (only 0/1/2/15 observed);
+must stay a pure addition — older di+ sends nothing and must keep today's behavior. Changes the charging
+state machine (`charging-auto-session-step.ts`), so it needs its own options/ownership review before build.
 
 ## Mate release catalog (`mate_app_releases`) self-syncs from GitHub — BUILT 2026-10-28 (tests green); awaiting commit + deploy
 

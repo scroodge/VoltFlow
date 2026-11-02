@@ -9,6 +9,25 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-11-02
+
+- **Di+ 2.0.0b8+ charging parameters are collected (BACKLOG option A, collect-only).** Decompiling di+
+  `2.0.0-beta8-3` found new `getDiPars` entries absent from beta1: #116 电池管理状态 (BYD BMS state), #117
+  充电功率 (`getChargingPower()`), #118 本次充电量, #120/#121 pack V/I, #125 最大允许充电功率. **No AC / grid /
+  OBC voltage exists anywhere in di+.** Mate 0.6.3 (`3bafa9a9`) requests #116/#117/#125 and sends
+  `diplus.bms_state` (every sample, both senders — the car-off daemon previously sent no BMS state) and
+  `diplus.charge_power_raw_kw` / `max_charge_power_kw` (driving/charging samples). **Changed from the plan:**
+  #117 is stored for diagnostics only and does **not** feed `charge_power_kw` — it read `0.0` throughout real
+  AC charges on `way` (BYDMate-own `docs/DIPLUS_DATA.md`), so as a fallback it would report 0. #118 is the
+  cell-only `kwh_charged` counter and #120/#121 duplicate `historyStatus` pack V×I, so neither is sent.
+  Older di+ echoes an unknown `{placeholder}` verbatim and still fills the rest — verified live — so those
+  cars omit the keys. Server: `diplusSchema` keeps the keys; migration
+  `20261102120000_diplus_charging_params.sql` (applied to prod) adds `diplus_bms_state` /
+  `diplus_charge_power_raw_kw` / `diplus_max_charge_power_kw` to samples and live snapshots and writes
+  them from `bydmate_apply_diplus_columns` (`anon`/`authenticated` execute still denied). Verified in prod:
+  `way` on 0.6.3 di+ `2.0.0b9` delivers `diplus_bms_state = 15` (gun in, BMS idle). Nothing in the charging
+  state machine reads these yet; using BMS state for prompt auto-stop (option B) waits for ~2 weeks of data.
+
 ## 2026-10-28
 
 - **Closed client trips now retain the end of a continued drive.** Migration

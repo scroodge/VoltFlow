@@ -257,6 +257,11 @@ export type VoltflowMateDiplus = {
   remote_lock_state?: string | number | null;
   /** Driver door: 1 unlocked, 2 locked. */
   lock_fl?: string | number | null;
+  /** di+ 2.0.0b8+ BYD BMS state, same enum as autoservice.bms_state. */
+  bms_state?: number | null;
+  /** di+ 2.0.0b8+ BYD getChargingPower(); reads 0 on AC — diagnostic only. */
+  charge_power_raw_kw?: number | null;
+  max_charge_power_kw?: number | null;
 };
 
 export type VehicleCommandStatus =
@@ -316,6 +321,9 @@ export type VoltflowMateLiveSnapshotRow = {
   diplus_mileage_km?: number | null;
   diplus_voltage_12v?: number | null;
   diplus_gear?: string | number | null;
+  diplus_bms_state?: number | null;
+  diplus_charge_power_raw_kw?: number | null;
+  diplus_max_charge_power_kw?: number | null;
   mate_version?: string | null;
   autoservice_soc_percent?: number | null;
   autoservice_power_kw?: number | null;
@@ -357,6 +365,9 @@ export type VoltflowMateTelemetrySampleRow = {
   diplus_min_cell_voltage_v?: number | null;
   diplus_max_cell_voltage_v?: number | null;
   diplus_cell_delta_v?: number | null;
+  diplus_bms_state?: number | null;
+  diplus_charge_power_raw_kw?: number | null;
+  diplus_max_charge_power_kw?: number | null;
   autoservice_soc_percent?: number | null;
   autoservice_power_kw?: number | null;
   autoservice_gun_state?: number | null;

@@ -26,6 +26,12 @@ export const VEHICLE_COMMAND_TYPES = [
 export type VehicleCommandType = (typeof VEHICLE_COMMAND_TYPES)[number];
 export type VehicleCommandParams = Record<string, unknown>;
 
+/**
+ * This is not a di+ phrase. Mate captures the local `pano` stream and uploads one
+ * private JPEG, so it must be routed before buildDiplusPhrase().
+ */
+export const CAMERA_SNAPSHOT_COMMAND_TYPE = "camera_snapshot";
+
 const WINDOW_TARGETS: Record<string, string> = {
   driver: "主驾车窗",
   pass: "副驾车窗",
@@ -131,5 +137,10 @@ export function buildDiplusPhrase(
 }
 
 export function validateVehicleCommand(type: string, params: VehicleCommandParams) {
+  if (type === CAMERA_SNAPSHOT_COMMAND_TYPE) {
+    return Object.keys(params ?? {}).length === 0
+      ? ({ ok: true, phrase: "" } satisfies AllowlistResult)
+      : ({ ok: false, error: "camera_snapshot does not accept parameters" } satisfies AllowlistResult);
+  }
   return buildDiplusPhrase(type, params ?? {});
 }

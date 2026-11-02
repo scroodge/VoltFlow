@@ -36,6 +36,12 @@ test("maps driver-seat heating only to the verified levels", () => {
   assert.equal(validateVehicleCommand("seat_heat_driver", { level: 1 }).ok, false);
 });
 
+test("permits the parameterless local camera capture job but not arbitrary parameters", () => {
+  assert.equal(validateVehicleCommand("camera_snapshot", {}).ok, true);
+  assert.equal(validateVehicleCommand("camera_snapshot", { view: "front" }).ok, false);
+  assert.equal(buildDiplusPhrase("camera_snapshot", {}).ok, false);
+});
+
 test("rejects historical unverified command types", () => {
   for (const type of ["lock", "ac_vent", "ac_temp", "fan_level", "flash_lights", "tts"]) {
     assert.equal(validateVehicleCommand(type, {}).ok, false, type);

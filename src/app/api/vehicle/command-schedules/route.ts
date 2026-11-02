@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { validateVehicleCommand } from "@/lib/diplus/command-allowlist";
+import {
+  CAMERA_SNAPSHOT_COMMAND_TYPE,
+  validateVehicleCommand,
+} from "@/lib/diplus/command-allowlist";
 import { resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
 import { REMOTE_COMMANDS_ENABLED } from "@/lib/voltflowmate/remote-commands";
 
@@ -98,6 +101,9 @@ export async function POST(request: NextRequest) {
   }
   const command = validateVehicleCommand(type, params);
   if (!command.ok) return NextResponse.json({ ok: false, error: command.error }, { status: 400 });
+  if (type === CAMERA_SNAPSHOT_COMMAND_TYPE) {
+    return NextResponse.json({ ok: false, error: "camera_snapshot_must_be_requested_manually" }, { status: 400 });
+  }
   if (!await requireKnownVehicle(access.supabase, access.userId, vehicleId)) {
     return NextResponse.json({ ok: false, error: "Unknown vehicle_id for user" }, { status: 400 });
   }

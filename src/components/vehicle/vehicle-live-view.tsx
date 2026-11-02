@@ -51,6 +51,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useVoltflowMateLiveQuery } from "@/hooks/use-voltflowmate-live-query";
+import { useSendVehicleCommand, useVehicleCommandsQuery } from "@/hooks/use-vehicle-commands-query";
 import { useProfileQuery } from "@/hooks/use-profile-query";
 import { useVehicleRangeEstimate } from "@/hooks/use-vehicle-range-estimate";
 import { useRangeTrustQuery } from "@/hooks/use-range-trust-query";
@@ -630,6 +631,7 @@ function VehicleLiveContent({
           />
           {!isStale ? <TirePressureCard snapshot={snapshot} /> : null}
           {!isStale ? <DoorStatusCard snapshot={snapshot} /> : null}
+          {remoteCommandsEnabled ? <CameraSnapshotCard vehicleId={scopedVehicleId ?? snapshot.vehicle_id} /> : null}
           {activeChargingSession ? (
             <ChargingDeltaCard
               session={activeChargingSession}
@@ -676,6 +678,7 @@ function VehicleLiveContent({
               />
               <TirePressureCard snapshot={snapshot} />
               <DoorStatusCard snapshot={snapshot} />
+              {remoteCommandsEnabled ? <CameraSnapshotCard vehicleId={scopedVehicleId ?? snapshot.vehicle_id} /> : null}
               <TripBrowser
                 showDateFilter={Boolean(fixturePoints)}
                 selectedDate={selectedDate}
@@ -1726,6 +1729,50 @@ function DoorStatusCard({
             {tx("vehicle.doors.driverLock")}: {tx(`vehicle.doors.${driverLock}` as TranslationKey)}
           </p>
         ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function CameraSnapshotCard({ vehicleId }: { vehicleId: string }) {
+  const sendCommand = useSendVehicleCommand(vehicleId);
+  const { data: commands = [] } = useVehicleCommandsQuery(vehicleId);
+  const latest = commands.find((command) => command.type === "camera_snapshot") ?? null;
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [capturedAt, setCapturedAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (latest?.status !== "done") return;
+    let cancelled = false;
+    void fetch(`/api/vehicle/camera-snapshots?vehicle_id=${encodeURIComponent(vehicleId)}`)
+      .then(async (response) => ({ response, payload: await response.json() as { snapshot?: { image_url?: string; captured_at?: string } | null } }))
+      .then(({ response, payload }) => {
+        if (!cancelled && response.ok && payload.snapshot?.image_url) {
+          setImageUrl(payload.snapshot.image_url);
+          setCapturedAt(payload.snapshot.captured_at ?? null);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [latest?.id, latest?.status, vehicleId]);
+
+  return (
+    <Card size="sm">
+      <CardHeader className="px-3 pt-2 pb-1">
+        <CardTitle className="font-heading text-sm">Камеры</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2 px-3 pb-3 pt-0">
+        {imageUrl ? <img src={imageUrl} alt="Панорама камер" className="aspect-video w-full rounded-md object-cover" /> : null}
+        <Button
+          type="button"
+          size="sm"
+          disabled={sendCommand.isPending || latest?.status === "pending" || latest?.status === "sent"}
+          onClick={() => void sendCommand.mutateAsync({ type: "camera_snapshot" })}
+        >
+          {sendCommand.isPending || latest?.status === "pending" || latest?.status === "sent"
+            ? "Запрашиваем снимок…"
+            : "Сделать снимок panorama"}
+        </Button>
+        {capturedAt ? <p className="text-[11px] text-muted-foreground">Снимок: {new Date(capturedAt).toLocaleString()}</p> : null}
       </CardContent>
     </Card>
   );
