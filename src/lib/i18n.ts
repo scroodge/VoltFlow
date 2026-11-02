@@ -887,6 +887,18 @@ export const dictionaries = {
         guidance:
           "Check against the vehicle pressure label when the tyres are cold.",
       },
+      doors: {
+        title: "Doors",
+        frontLeft: "Front left",
+        frontRight: "Front right",
+        rearLeft: "Rear left",
+        rearRight: "Rear right",
+        open: "Open",
+        closed: "Closed",
+        driverLock: "Driver lock",
+        locked: "Locked",
+        unlocked: "Unlocked",
+      },
       trips: {
         title: "Trips",
         subtitle:
@@ -2587,6 +2599,18 @@ export const dictionaries = {
       tirePressure: {
         title: "Ціск у шынах",
         guidance: "Звярайце з таблічкай ціску на аўто, калі шыны халодныя.",
+      },
+      doors: {
+        title: "Дзверы",
+        frontLeft: "Спераду злева",
+        frontRight: "Спераду справа",
+        rearLeft: "Ззаду злева",
+        rearRight: "Ззаду справа",
+        open: "Адчынена",
+        closed: "Зачынена",
+        driverLock: "Замок кіроўцы",
+        locked: "Заблакавана",
+        unlocked: "Разблакавана",
       },
       trips: {
         title: "Паездкі",
@@ -4293,6 +4317,18 @@ export const dictionaries = {
         title: "Давление в шинах",
         guidance:
           "Сверяйте с табличкой давления на автомобиле, когда шины холодные.",
+      },
+      doors: {
+        title: "Двери",
+        frontLeft: "Передняя левая",
+        frontRight: "Передняя правая",
+        rearLeft: "Задняя левая",
+        rearRight: "Задняя правая",
+        open: "Открыта",
+        closed: "Закрыта",
+        driverLock: "Замок водителя",
+        locked: "Заблокирован",
+        unlocked: "Разблокирован",
       },
       trips: {
         title: "Поездки",

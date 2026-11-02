@@ -255,6 +255,8 @@ export type VoltflowMateDiplus = {
   sentry_active?: boolean | null;
   stall_sentry_mode?: string | null;
   remote_lock_state?: string | number | null;
+  /** Driver door: 1 unlocked, 2 locked. */
+  lock_fl?: string | number | null;
 };
 
 export type VehicleCommandStatus =

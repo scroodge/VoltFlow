@@ -629,6 +629,7 @@ function VehicleLiveContent({
             rangeTrust={rangeTrust}
           />
           {!isStale ? <TirePressureCard snapshot={snapshot} /> : null}
+          {!isStale ? <DoorStatusCard snapshot={snapshot} /> : null}
           {activeChargingSession ? (
             <ChargingDeltaCard
               session={activeChargingSession}
@@ -674,6 +675,7 @@ function VehicleLiveContent({
                 cabinTempC={cabinTempC}
               />
               <TirePressureCard snapshot={snapshot} />
+              <DoorStatusCard snapshot={snapshot} />
               <TripBrowser
                 showDateFilter={Boolean(fixturePoints)}
                 selectedDate={selectedDate}
@@ -1650,6 +1652,83 @@ function CellHealthCard({
 
 function tirePressureKpa(value: unknown) {
   return isTyrePressureKpa(value) ? value : null;
+}
+
+function readDoorOpen(value: unknown) {
+  if (value === true || value === 1 || value === "1") return true;
+  if (value === false || value === 0 || value === "0") return false;
+  return null;
+}
+
+function readDriverDoorLock(value: unknown) {
+  if (value === 2 || value === "2") return "locked" as const;
+  if (value === 1 || value === "1") return "unlocked" as const;
+  return null;
+}
+
+function DoorStatusCard({
+  snapshot,
+}: {
+  snapshot: VoltflowMateLiveSnapshotRow;
+}) {
+  const { t } = useTranslation();
+  const tx = t as Translator;
+  const doors = [
+    { key: "frontLeft", value: readDoorOpen(snapshot.diplus?.door_fl) },
+    { key: "frontRight", value: readDoorOpen(snapshot.diplus?.door_fr) },
+    { key: "rearLeft", value: readDoorOpen(snapshot.diplus?.door_rl) },
+    { key: "rearRight", value: readDoorOpen(snapshot.diplus?.door_rr) },
+  ] as const;
+  const driverLock = readDriverDoorLock(snapshot.diplus?.lock_fl);
+
+  if (doors.every((door) => door.value == null) && driverLock == null) return null;
+
+  return (
+    <Card size="sm">
+      <CardHeader className="px-3 pt-2 pb-1">
+        <CardTitle className="flex items-center gap-1.5 font-heading text-sm">
+          <CarFront className="size-4" aria-hidden />
+          {tx("vehicle.doors.title")}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="px-3 pb-3 pt-0">
+        <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border/60">
+          {doors.map((door, index) => {
+            const isOpen = door.value === true;
+            const state = door.value == null
+              ? "—"
+              : isOpen
+                ? tx("vehicle.doors.open")
+                : tx("vehicle.doors.closed");
+            return (
+              <div
+                key={door.key}
+                className={`px-3 py-2 ${index % 2 === 1 ? "border-l border-border/60" : ""} ${index < 2 ? "border-b border-border/60" : ""}`}
+              >
+                <p className="text-[10px] leading-4 text-muted-foreground">
+                  {tx(`vehicle.doors.${door.key}` as TranslationKey)}
+                </p>
+                <p className={`font-heading text-sm font-semibold ${
+                  door.value == null
+                    ? "text-muted-foreground"
+                    : isOpen
+                      ? "text-amber-500"
+                      : "text-emerald-600 dark:text-emerald-400"
+                }`}>
+                  {state}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+        {driverLock ? (
+          <p className="mt-2 border-t border-border/60 pt-2 text-[11px] text-muted-foreground">
+            {tx("vehicle.doors.driverLock")}: {tx(`vehicle.doors.${driverLock}` as TranslationKey)}
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
 }
 
 function TirePressureCard({
