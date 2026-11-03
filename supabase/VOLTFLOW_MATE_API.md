@@ -249,6 +249,7 @@ DiPlus.
 | `windows_preset` | `preset`: `vent`/`close`/`open`/`half` | fixed window preset |
 | `ac` | `on`: boolean | `自动空调` / `关空调` |
 | `ac_temp_step` | `direction`: `up`/`down` | `空调升温` / `空调降温` |
+| `fan_speed_step` | `direction`: `up`/`down` | `迪加升风速` / `迪加降风速` |
 | `ac_recirculation` | `mode`: `internal`/`external` | `内循环` / `外循环` |
 | `seat_heat_driver` | `level`: `0` or `2` | off / validated maximum |
 | `camera_snapshot` | no parameters; manual only | a private JPEG captured from local `pano` |

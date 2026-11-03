@@ -1,3 +1,19 @@
+## Remote climate: blower speed +1 / -1 — APPROVED 2026-11-03
+
+**Problem:** the comfort panel exposes temperature steps but not the matching fan-speed
+steps. A fixed fan-speed command is present in di+ documentation but did not actuate on
+`way`, so it must not be exposed.
+
+**Options:** (1) expose only the two confirmed relative commands (chosen); (2) add an
+absolute level picker — rejected until it works on the car; (3) leave fan controls absent.
+
+**Design:** add `fan_speed_step` with `direction: up|down` to the shared cloud/Mate
+allowlists, mapping to `迪加升风速` / `迪加降风速`. Add two buttons in the climate card.
+No new data or storage: the command is an existing user action queued in `vehicle_commands`.
+
+**Verification:** focused allowlist tests in both repositories; on-car check that each
+command changes `风量档位` by exactly one.
+
 ## Use di+ BMS state for prompt charging auto-stop (option B of the Di+ 2.0.0b8 work) — PROPOSED 2026-11-02
 
 Option A shipped 2026-11-02 (see CHANGELOG): `diplus_bms_state` now arrives from both senders on di+

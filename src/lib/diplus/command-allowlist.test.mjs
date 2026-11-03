@@ -20,6 +20,9 @@ test("maps the live-verified climate commands", () => {
   assert.deepEqual(buildDiplusPhrase("ac", { on: false }), { ok: true, phrase: "关空调" });
   assert.deepEqual(buildDiplusPhrase("ac_temp_step", { direction: "up" }), { ok: true, phrase: "空调升温" });
   assert.deepEqual(buildDiplusPhrase("ac_temp_step", { direction: "down" }), { ok: true, phrase: "空调降温" });
+  assert.deepEqual(buildDiplusPhrase("fan_speed_step", { direction: "up" }), { ok: true, phrase: "迪加升风速" });
+  assert.deepEqual(buildDiplusPhrase("fan_speed_step", { direction: "down" }), { ok: true, phrase: "迪加降风速" });
+  assert.equal(validateVehicleCommand("fan_speed_step", { direction: "3" }).ok, false);
   assert.deepEqual(buildDiplusPhrase("ac_recirculation", { mode: "internal" }), { ok: true, phrase: "内循环" });
   assert.deepEqual(buildDiplusPhrase("ac_recirculation", { mode: "external" }), { ok: true, phrase: "外循环" });
 });

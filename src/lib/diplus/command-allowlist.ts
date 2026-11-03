@@ -19,6 +19,7 @@ export const VEHICLE_COMMAND_TYPES = [
   "windows_preset",
   "ac",
   "ac_temp_step",
+  "fan_speed_step",
   "ac_recirculation",
   "seat_heat_driver",
 ] as const;
@@ -108,6 +109,14 @@ export function buildDiplusPhrase(
         return { ok: false, error: "ac_temp_step.direction must be up or down" };
       }
       phrase = direction === "up" ? "空调升温" : "空调降温";
+      break;
+    }
+    case "fan_speed_step": {
+      const direction = typeof params.direction === "string" ? params.direction : "";
+      if (direction !== "up" && direction !== "down") {
+        return { ok: false, error: "fan_speed_step.direction must be up or down" };
+      }
+      phrase = direction === "up" ? "迪加升风速" : "迪加降风速";
       break;
     }
     case "ac_recirculation": {

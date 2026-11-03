@@ -1,3 +1,5 @@
+import { NextRequest } from "next/server";
+
 import { resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
 import { CAMERA_SNAPSHOT_BUCKET } from "@/lib/voltflowmate/camera-snapshots";
 
@@ -5,7 +7,7 @@ export const runtime = "nodejs";
 
 const SIGNED_URL_TTL_SECONDS = 5 * 60;
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const access = await resolveVehicleApiAccess(request);
   if (!access) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
   const vehicleId = new URL(request.url).searchParams.get("vehicle_id")?.trim();

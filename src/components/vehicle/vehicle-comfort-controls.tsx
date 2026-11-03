@@ -126,6 +126,22 @@ const CLIMATE_ACTIONS: ComfortAction[] = [
     variant: "outline",
   },
   {
+    id: "fan-speed-up",
+    label: "Обдув +1",
+    type: "fan_speed_step",
+    params: { direction: "up" },
+    icon: <Wind className="size-4" />,
+    variant: "secondary",
+  },
+  {
+    id: "fan-speed-down",
+    label: "Обдув −1",
+    type: "fan_speed_step",
+    params: { direction: "down" },
+    icon: <Wind className="size-4 opacity-50" />,
+    variant: "outline",
+  },
+  {
     id: "recirculation-internal",
     label: "Внутренняя циркуляция",
     type: "ac_recirculation",
