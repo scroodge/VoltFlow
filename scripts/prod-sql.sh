@@ -10,7 +10,7 @@
 #
 # Output: unaligned, '|'-separated, with a header row; footer row counts off.
 # Anything past PROD_SQL_MAX_LINES (default 60) is dropped with a note.
-# For migrations/DDL use prod-psql-readonly.sh -f (see docs/OPS_LOCAL.md).
+# Enforced read-only (BEGIN READ ONLY … ROLLBACK). Migrations/DDL: scripts/prod-migrate.sh.
 set -euo pipefail
 
 if [ $# -eq 0 ]; then

@@ -1,4 +1,18 @@
-## Prod DB retention & cleanup (audit 2026-11-03) — PROPOSED
+## Ops DB access: tunnel-only direct Postgres access (2026-11-03) — IN PROGRESS (steps 0–2a done 2026-11-03; 2b ≥24 h later, then 4)
+
+**Problem.** Direct Postgres access for ops (psql from a laptop) currently does not go through a tunnel.
+That widens the attack surface for no app benefit: the web app, the APK and the PWA reach the DB only
+through the HTTPS API. **Plan:** the full step-by-step plan with go/no-go checks and a rollback for each step
+lives in the private ops runbook (`docs/OPS_LOCAL.md` → "Proposal: close pooler ports"), kept out of
+this public repo on purpose. Order: (0) read-only inventory of real direct-DB clients → (1) move ops
+scripts to an SSH tunnel (`.env.local` only, server untouched) → (2a) instantly reversible network
+block → (2b) permanent after ≥24 h → (3) verify app + telemetry → (4) rotate the DB password.
+**Done already (2026-11-03):** ops scripts take every connection parameter from `.env.local`
+(`scripts/lib/prod-pooler.sh`), so step 1 is a two-line env change. **Acceptance:** direct DB ports
+unreachable from outside; `scripts/prod-sql.sh` works via the tunnel; fresh `bydmate_telemetry_samples`
+rows and quiet PostgREST alerts after the change; DB password rotated. **Should I build this?**
+
+## Prod DB retention & cleanup (audit 2026-11-03) — items 2–3 SHIPPED (see CHANGELOG 2026-11-03); item 1 APPROVED (90-day raw window), not built
 
 **Audit (read-only, prod).** DB is 6.9 GB; `bydmate_telemetry_samples` is 5.8 GB (heap 3.5 +
 indexes 2.3, ~4.0 M rows, ~1.45 KB/row). Dictionary tables (`russian_forms`, `belarusian_forms`,
@@ -11,39 +25,43 @@ track simplification) plus the aux-voltage / SOH / phantom-drain rollup purges.
 preference data is involved. Item 1 changes a premium promise (`retention-status` says premium/admin
 retention is indefinite), so it needs an explicit owner decision.
 
-### 1. Premium raw-sample retention is unbounded — the only real growth driver
-Two premium/admin users (`384ffa76…`, `4e5c7688…`) hold ~2.6 M of ~4.0 M rows and each adds
-~300 k rows/month → **~0.9 GB/month** linear growth. Free users are steady at ~1.4 GB (30-day window).
-Long-term views already have rollups (`bydmate_telemetry_hourly`, SOH / aux-voltage / phantom-drain
-daily rollups); trip track points are a separate table.
-- **A. Cap premium raw samples at 12 months** (rollups, trips, track points, sessions stay forever).
-  Caps growth at ~3.6 GB for the two users. Smallest promise change.
-- **B. Cap at 6 months.** ~1.8 GB ceiling; loses raw drill-down (e.g. charge-session sample charts,
-  route insights, phantom-drain recompute) for older history.
-- **C. Keep indefinite**, accept ~11 GB/year; revisit when VPS disk headroom is known.
-- Before A/B: verify every raw-sample reader works from rollups beyond the cap —
-  `vehicle-analytics.ts` (`fetchPhantomSamples`), `route-insights.ts`, `attach-trip-energy.ts`,
-  `live-soh-backfill.ts`, `telemetry-history.ts`, charge-session `/samples` route — and update the
-  retention-status copy. The first purge must be batched (not one 2 M-row delete).
+### 1. Premium raw samples: keep the data forever, but distilled — not as raw telemetry
+**Owner philosophy (2026-11-03):** premium user data is kept forever; what is kept is what the
+product actually uses, and raw telemetry is deleted once it has been distilled.
 
-**Recommendation:** A, after checking VPS free disk (shared Contabo host).
+Today two premium/admin users (`384ffa76…`, `4e5c7688…`) hold ~2.6 M of ~4.0 M raw rows and each
+adds ~300 k rows/month → **~0.9 GB/month** linear growth (free users steady at ~1.4 GB).
 
-### 2. Unused 396 MB index `bydmate_telemetry_samples_aux_voltage_analytics_idx`
-0 scans since stats reset (2026-06-24). Its predicate `telemetry ? 'aux_voltage_v'` is never implied
-by the rollup query in `20260826172117_aux_voltage_daily.sql`, which reads
-`coalesce(aux_voltage_v, diplus_voltage_12v)` without that filter. **Recommendation:** confirm with
-`EXPLAIN` on the rollup query, then a new migration `drop index concurrently if exists`. Also saves
-write cost on every ingest. (`soh_analytics_idx`, 439 MB, is used — keep.)
+What reads raw samples for *old* periods (everything else is recent-window only: charging
+finalize / reconcile / recovery / corrections, live SOH backfill, dashboard recent charge):
+| Consumer | Needs from old raw | Already distilled? |
+|---|---|---|
+| Trip detail charts (`trips/[tripId]/samples` → `telemetry-history.ts`) | per-trip series | no |
+| Charge-session curve (`charging-sessions/[id]/samples`) | per-session series | no |
+| Trip list energy (`attach-trip-energy.ts`, up to 10 k samples per call) | per-trip energy | partly (`traction_energy_kwh`/`regen_energy_kwh` on client trips) |
+| Day charts (`bydmate_telemetry_day_buckets` RPC) / long charts | day/hour envelope | hourly yes (`bydmate_telemetry_hourly`); day buckets computed live |
+| Route insights (`route-insights.ts`, 200 samples per trip) | per-trip summary | no |
+| Phantom drain analytics (`fetchPhantomSamples`) | per-day drain | daily rollup exists — verify analytics reads it beyond the window |
+| SOH / 12 V trends | daily values | yes (daily rollups) |
+| Export (`api/vehicle/export`) | raw rows | decision needed: export distilled data for old periods |
 
-### 3. Autovacuum lags on the telemetry table
-681 k dead tuples (~17%), last autovacuum 2026-10-28; the daily purge deletes ~130 k rows, and the
-default 20% scale factor lets dead rows pile up for a week. **Recommendation:**
-`alter table … set (autovacuum_vacuum_scale_factor = 0.02, autovacuum_analyze_scale_factor = 0.02)`.
-Space is reused, not returned to the OS; a one-off `pg_repack` is only worth it after item 1's first purge.
+**Proposal (distill → drop):**
+1. Add compact per-trip and per-charge-session series (downsampled to the chart's point budget,
+   only the columns the charts render) and persist per-trip energy + route-insight summary, written
+   when a trip/session is finalized and backfilled once for existing history.
+2. Point the consumers above at the distilled tables for periods older than the raw window.
+3. Purge premium raw samples older than the raw window (proposed 90 days — margin for
+   reconcile/recovery and re-distillation), batched; the first run must be chunked (~2 M rows).
+Expected steady state: premium raw ≈ ~90 days, distilled tables in the tens of MB.
+Ownership: user-owned history, app-maintained, Postgres. `retention-status` still promises
+"history kept forever"; only the raw resolution changes. None of these are APK-mirrored formulas,
+but trip energy must keep today's calculation.
+**Owner decision 2026-11-03:** raw window = 90 days. **Open:** export format for old periods.
 
-### 4. `cron.job_run_details` has no cleanup
-60 k rows since 2026-06-27 (11 MB, ~13 k rows/month; the rollup jobs run every 5 min).
-**Recommendation:** one more pg_cron job deleting rows older than 30 days. Low priority.
+### 2–4. Status
+- **2 (unused aux-voltage index) and 3 (single-INSERT ingest): shipped 2026-11-03** — see CHANGELOG.
+  Autovacuum tuning (3B) declined by owner: disk headroom is fine, weekly vacuum is acceptable.
+- **4 (`cron.job_run_details` cleanup): not needed** — pg_cron's own run log, ~11 MB; dropped.
 
 ## Remote climate: blower speed +1 / -1 — APPROVED 2026-11-03
 
@@ -2536,7 +2554,15 @@ subscription quotas and send budgets. Validate at send time as direct DB writes 
 exist. **Acceptance:** private/loopback/unapproved destinations cannot be contacted and
 supported push providers still work. Subscription endpoints are user-owned Postgres data.
 
-### AUD-21 — P1: read-only helper does not enforce its promise through the pooler
+### AUD-21 — P1: read-only helper does not enforce its promise through the pooler — ✅ done 2026-11-03
+
+**Resolved 2026-11-03.** `scripts/prod-psql-readonly.sh` dropped PGOPTIONS and now wraps every
+`-c`/`-f` in one transaction-local `BEGIN READ ONLY … ROLLBACK` (no session `SET`, so nothing
+leaks into the pool). Verified on the real pooler: `current_setting('transaction_read_only')`
+→ `on`; forbidden-write probe `create temp table …` → `ERROR: cannot execute CREATE TABLE in a
+read-only transaction`, rc=1. Connection params moved out of tracked files into `.env.local`
+(`scripts/lib/prod-pooler.sh`). Original finding kept below.
+
 
 **Observed earlier in this same review thread.** `scripts/prod-psql-readonly.sh` sets
 startup PGOPTIONS, but live queries returned both default_transaction_read_only and

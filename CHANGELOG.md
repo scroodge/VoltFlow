@@ -9,6 +9,23 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-11-03
+
+- **Telemetry ingest writes each sample once (BACKLOG "Prod DB retention & cleanup", item 3).**
+  `bydmate_ingest_telemetry` inserted the sample with only `telemetry`, then UPDATEd it with the di+
+  columns and again with the `autoservice_*` columns — prod counters showed 7.3 M inserts vs 13.0 M
+  updates on `bydmate_telemetry_samples`, the main source of its dead tuples and index churn. Migration
+  `20261103200000_bydmate_ingest_single_insert.sql` (applied to prod) moves the column mapping into
+  `bydmate_diplus_sample_columns` / `bydmate_autoservice_sample_columns` (same expressions, typed), has the
+  9-arg sample `INSERT` select them, and drops the sample UPDATEs from the 10-arg wrapper; live-snapshot
+  updates keep their guards and use the same functions. Verified on car `way` in a rolled-back transaction
+  (old vs new, four payload variants incl. `live_only`): identical sample and snapshot rows, sample UPDATEs
+  5 → 0. Post-apply on prod: new samples carry di+/autoservice columns, `n_tup_upd` flat.
+- **Dropped the unused partial index `bydmate_telemetry_samples_aux_voltage_analytics_idx` (item 2).**
+  Its `telemetry ? 'aux_voltage_v'` predicate is never implied by the aux-voltage rollup query (it reads
+  `coalesce(aux_voltage_v, diplus_voltage_12v)`), confirmed with `EXPLAIN`; 0 scans since 2026-06-24.
+  Migration `20261103190000` (applied, `concurrently`): table indexes 2297 → 1912 MB.
+
 ## 2026-11-02
 
 - **Di+ 2.0.0b8+ charging parameters are collected (BACKLOG option A, collect-only).** Decompiling di+

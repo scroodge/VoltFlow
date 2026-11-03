@@ -1,0 +1,43 @@
+# Hourly check, from outside the server, that internal-only ports stay closed.
+# A failed run makes GitHub email the repo owner. Why external: a probe on the
+# server itself can't see firewall rules that only match traffic arriving on the
+# public interface, so it would report closed ports as open.
+# The host lives in the PROBE_HOST secret, not in this file.
+name: exposure-check
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Internal ports must be closed
+        env:
+          HOST: ${{ secrets.PROBE_HOST }}
+          # DB pooler, Kong (http/admin/https), Grafana, Loki, cAdvisor, Prometheus,
+          # node_exporter, blackbox exporter.
+          MUST_BE_CLOSED: "5432 6543 8000 8001 8443 3000 3100 8088 9090 9100 9115"
+        run: |
+          if [ -z "$HOST" ]; then echo "::error::PROBE_HOST secret is not set"; exit 1; fi
+          echo "::add-mask::$HOST"
+          is_open() { nc -z -w 5 "$HOST" "$1" 2>/dev/null; }   # netcat-openbsd, preinstalled
+
+          # Control: 443 must answer, otherwise the host is down and "closed" means nothing.
+          if ! is_open 443; then
+            echo "::error::443 unreachable: host down or probe broken, so the result is inconclusive"; exit 1
+          fi
+
+          open=()
+          for p in $MUST_BE_CLOSED; do
+            if is_open "$p"; then open+=("$p"); echo "OPEN   $p"; else echo "closed $p"; fi
+          done
+          if [ ${#open[@]} -gt 0 ]; then
+            echo "::error::exposed to the internet: ${open[*]} (runbook: docs/OPS_LOCAL.md, network exposure)"
+            exit 1
+          fi
