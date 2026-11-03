@@ -1,5 +1,6 @@
 import { validateVehicleCommand } from "@/lib/diplus/command-allowlist";
 import { resolveVoltflowMateApiKeyProfile } from "@/lib/voltflowmate/api-auth";
+import { commandDoorbellField, wantsDoorbell } from "@/lib/voltflowmate/command-doorbell";
 import { liveFastSecondsFor } from "@/lib/voltflowmate/live-fast";
 import { offlineBufferGrantField } from "@/lib/voltflowmate/offline-buffer";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -111,6 +112,9 @@ export async function GET(request: Request) {
       vehicleId,
     ).catch(() => null);
     const capacityField = vehicleRangeProfileFields(rangeProfile);
+    const doorbellField = wantsDoorbell(request)
+      ? await commandDoorbellField(supabase, profile.id, vehicleId)
+      : {};
     if (REMOTE_COMMANDS_DISABLED) {
       return Response.json({
         ok: true,
@@ -120,6 +124,7 @@ export async function GET(request: Request) {
         poll_after_seconds: SUSPENDED_POLL_AFTER_SECONDS,
         ...offlineBufferGrantField(),
         ...capacityField,
+        ...doorbellField,
       });
     }
 
@@ -168,6 +173,7 @@ export async function GET(request: Request) {
         poll_after_seconds: pollSeconds,
         ...offlineBufferGrantField(),
         ...capacityField,
+        ...doorbellField,
       });
     }
 
@@ -187,6 +193,7 @@ export async function GET(request: Request) {
         poll_after_seconds: pollSeconds,
         ...offlineBufferGrantField(),
         ...capacityField,
+        ...doorbellField,
       });
     }
 
@@ -203,25 +210,35 @@ export async function GET(request: Request) {
 
     await expireStalePending(supabase, staleIds);
 
+    // Claim atomically: only rows this request moved pending → sent go to the car. The app
+    // and its daemon both poll, and the doorbell wakes them at the same instant — without
+    // this a step command ("fan +1") could be delivered to, and executed by, both.
+    let claimed: PendingCommand[] = [];
     if (commands.length > 0) {
       const ids = commands.map((row) => row.id);
-      await supabase
+      const { data: claimedRows } = await supabase
         .from("vehicle_commands")
         .update({ status: "sent" })
         .in("id", ids)
-        .eq("status", "pending");
+        .eq("status", "pending")
+        .select("id");
+      const claimedIds = new Set(
+        ((claimedRows ?? []) as { id: string }[]).map((row) => row.id),
+      );
+      claimed = commands.filter((row) => claimedIds.has(row.id));
     }
 
     // Something was actually delivered, so keep the car on the fast cadence to pick up the
     // ack round trip and any follow-up command promptly, regardless of the suspended default.
     return Response.json({
       ok: true,
-      commands,
+      commands: claimed,
       commands_enabled: !REMOTE_COMMANDS_DISABLED,
       live_fast_seconds: liveFastSeconds,
       poll_after_seconds: ACTIVE_POLL_AFTER_SECONDS,
       ...offlineBufferGrantField(),
       ...capacityField,
+      ...doorbellField,
     });
   } catch {
     return Response.json(
