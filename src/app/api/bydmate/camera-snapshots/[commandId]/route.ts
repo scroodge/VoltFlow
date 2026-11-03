@@ -6,7 +6,7 @@ import { resolveVehicleKey } from "@/lib/voltflowmate/vehicle-identity";
 
 export const runtime = "nodejs";
 
-const MAX_JPEG_BYTES = 2 * 1024 * 1024;
+const MAX_JPEG_BYTES = 6 * 1024 * 1024;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function isJpeg(bytes: Uint8Array) {
@@ -63,7 +63,9 @@ export async function PUT(
     }
     if (!isJpeg(bytes)) return Response.json({ ok: false, error: "invalid_jpeg" }, { status: 400 });
 
-    const storagePath = `${profile.id}/${vehicleId}/${commandId}.jpg`;
+    // Keep precisely one rolling snapshot per vehicle. The bucket remains bounded even
+    // with high-resolution captures; the command row records when it was captured.
+    const storagePath = `${profile.id}/${vehicleId}/latest.jpg`;
     const { error: uploadError } = await supabase.storage
       .from(CAMERA_SNAPSHOT_BUCKET)
       .upload(storagePath, bytes, { contentType: "image/jpeg", upsert: true });
