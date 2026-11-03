@@ -1,3 +1,50 @@
+## Prod DB retention & cleanup (audit 2026-11-03) — PROPOSED
+
+**Audit (read-only, prod).** DB is 6.9 GB; `bydmate_telemetry_samples` is 5.8 GB (heap 3.5 +
+indexes 2.3, ~4.0 M rows, ~1.45 KB/row). Dictionary tables (`russian_forms`, `belarusian_forms`,
+`dictionary_entries`, 780 MB) are not referenced by this repo — another project, out of scope.
+Existing pg_cron cleanup all succeeded in the last 7 days: `purge-bydmate-telemetry` (03:00, 2–4 min:
+free-tier samples/track points > 30 d, hourly > 3 y, finalization audits > 30 d, live GPS > 24 h,
+track simplification) plus the aux-voltage / SOH / phantom-drain rollup purges.
+
+**Ownership / storage:** all items below are app-owned operational data in Postgres; no user-facing
+preference data is involved. Item 1 changes a premium promise (`retention-status` says premium/admin
+retention is indefinite), so it needs an explicit owner decision.
+
+### 1. Premium raw-sample retention is unbounded — the only real growth driver
+Two premium/admin users (`384ffa76…`, `4e5c7688…`) hold ~2.6 M of ~4.0 M rows and each adds
+~300 k rows/month → **~0.9 GB/month** linear growth. Free users are steady at ~1.4 GB (30-day window).
+Long-term views already have rollups (`bydmate_telemetry_hourly`, SOH / aux-voltage / phantom-drain
+daily rollups); trip track points are a separate table.
+- **A. Cap premium raw samples at 12 months** (rollups, trips, track points, sessions stay forever).
+  Caps growth at ~3.6 GB for the two users. Smallest promise change.
+- **B. Cap at 6 months.** ~1.8 GB ceiling; loses raw drill-down (e.g. charge-session sample charts,
+  route insights, phantom-drain recompute) for older history.
+- **C. Keep indefinite**, accept ~11 GB/year; revisit when VPS disk headroom is known.
+- Before A/B: verify every raw-sample reader works from rollups beyond the cap —
+  `vehicle-analytics.ts` (`fetchPhantomSamples`), `route-insights.ts`, `attach-trip-energy.ts`,
+  `live-soh-backfill.ts`, `telemetry-history.ts`, charge-session `/samples` route — and update the
+  retention-status copy. The first purge must be batched (not one 2 M-row delete).
+
+**Recommendation:** A, after checking VPS free disk (shared Contabo host).
+
+### 2. Unused 396 MB index `bydmate_telemetry_samples_aux_voltage_analytics_idx`
+0 scans since stats reset (2026-06-24). Its predicate `telemetry ? 'aux_voltage_v'` is never implied
+by the rollup query in `20260826172117_aux_voltage_daily.sql`, which reads
+`coalesce(aux_voltage_v, diplus_voltage_12v)` without that filter. **Recommendation:** confirm with
+`EXPLAIN` on the rollup query, then a new migration `drop index concurrently if exists`. Also saves
+write cost on every ingest. (`soh_analytics_idx`, 439 MB, is used — keep.)
+
+### 3. Autovacuum lags on the telemetry table
+681 k dead tuples (~17%), last autovacuum 2026-10-28; the daily purge deletes ~130 k rows, and the
+default 20% scale factor lets dead rows pile up for a week. **Recommendation:**
+`alter table … set (autovacuum_vacuum_scale_factor = 0.02, autovacuum_analyze_scale_factor = 0.02)`.
+Space is reused, not returned to the OS; a one-off `pg_repack` is only worth it after item 1's first purge.
+
+### 4. `cron.job_run_details` has no cleanup
+60 k rows since 2026-06-27 (11 MB, ~13 k rows/month; the rollup jobs run every 5 min).
+**Recommendation:** one more pg_cron job deleting rows older than 30 days. Low priority.
+
 ## Remote climate: blower speed +1 / -1 — APPROVED 2026-11-03
 
 **Problem:** the comfort panel exposes temperature steps but not the matching fan-speed

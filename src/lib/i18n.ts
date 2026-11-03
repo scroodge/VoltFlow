@@ -241,7 +241,8 @@ export const dictionaries = {
     },
     support: {
       title: "Support the project",
-      intro: "You can make a voluntary, one-time donation to VoltFlow. Donations help cover:",
+      intro:
+        "You can make a voluntary, one-time donation to VoltFlow. Donations help cover:",
       fund1: "monthly hosting and server costs",
       fund2: "domains and their SSL certificates",
       fund3: "further development and new features",
@@ -256,7 +257,8 @@ export const dictionaries = {
       intlHelp: "Please choose the one-time contribution option.",
       checkingAccount: "Checking your account…",
       signInTitle: "Sign in before donating",
-      signInBody: "Sign in so we can identify and record your donation. The payment details will appear after you sign in.",
+      signInBody:
+        "Sign in so we can identify and record your donation. The payment details will appear after you sign in.",
       signIn: "Sign in",
       receiptTitle: "Send your receipt and account details",
       receiptBody:
@@ -405,8 +407,10 @@ export const dictionaries = {
           },
           activeChargeTime: {
             title: "Time left",
-            formula: "remaining grid energy ÷ current charge power; end time = now + time left",
-            fallbackFormula: "live session remaining time; end time = now + time left",
+            formula:
+              "remaining grid energy ÷ current charge power; end time = now + time left",
+            fallbackFormula:
+              "live session remaining time; end time = now + time left",
           },
           activeChargeEnergy: {
             title: "Charged energy",
@@ -775,6 +779,11 @@ export const dictionaries = {
         stale: "stale",
         asleep: "asleep",
         charging: "charging",
+      },
+      camera: {
+        load: "Loading photo…",
+        take: "Take photo",
+        noConnection: "No connection to the car",
       },
       metrics: {
         soc: "SOC",
@@ -1710,7 +1719,8 @@ export const dictionaries = {
         body: "Standard access keeps telemetry for {days} days. Older records are automatically deleted.",
         nextDeletion: "Next cleanup window: {date}",
         upgradeCta: "Ask about access",
-        emailHelp: "Premium access is managed separately from donations. Questions: {email}.",
+        emailHelp:
+          "Premium access is managed separately from donations. Questions: {email}.",
       },
       premiumBadge: "Premium",
       premiumGates: {
@@ -1972,7 +1982,8 @@ export const dictionaries = {
       intlHelp: "Калі ласка, выбірайце варыянт аднаразовага ахвяравання.",
       checkingAccount: "Правяраем ваш акаўнт…",
       signInTitle: "Увайдзіце перад ахвяраваннем",
-      signInBody: "Увайдзіце, каб мы маглі вызначыць, ад каго паступіла ахвяраванне, і ўлічыць яго. Рэквізіты з’явяцца пасля ўваходу.",
+      signInBody:
+        "Увайдзіце, каб мы маглі вызначыць, ад каго паступіла ахвяраванне, і ўлічыць яго. Рэквізіты з’явяцца пасля ўваходу.",
       signIn: "Увайсці",
       receiptTitle: "Дашліце чэк і даныя акаўнта",
       receiptBody:
@@ -2085,7 +2096,8 @@ export const dictionaries = {
       statusLiveCharging: "Зарадка (live)",
       cannotChargeWhileDriving: "Спыніце аўто, перш чым пачынаць зарадку.",
       trackCharge: "Сачыць за зарадкай",
-      autoChargeHint: "Зарадка адсочваецца аўтаматычна — проста падключыце кабель",
+      autoChargeHint:
+        "Зарадка адсочваецца аўтаматычна — проста падключыце кабель",
       startChargingManually: "Запісаць зарадку ўручную",
       packShort: "Батарэя",
       ringTogglePercent: "Паказаць зарад у працэнтах",
@@ -2120,8 +2132,10 @@ export const dictionaries = {
           },
           activeChargeTime: {
             title: "Засталося часу",
-            formula: "астатняя энергія з сеткі ÷ бягучая магутнасць; час заканчэння = цяпер + астатні час",
-            fallbackFormula: "астатні час жывой сесіі; час заканчэння = цяпер + астатні час",
+            formula:
+              "астатняя энергія з сеткі ÷ бягучая магутнасць; час заканчэння = цяпер + астатні час",
+            fallbackFormula:
+              "астатні час жывой сесіі; час заканчэння = цяпер + астатні час",
           },
           activeChargeEnergy: {
             title: "Зараджана энергіі",
@@ -2489,6 +2503,11 @@ export const dictionaries = {
         stale: "састарэла",
         asleep: "спіць",
         charging: "зарадка",
+      },
+      camera: {
+        load: "Ідзе Загрузка…",
+        take: "З фотаць",
+        noConnection: "Няма саедзененія з машынай",
       },
       metrics: {
         soc: "SOC",
@@ -2908,7 +2927,8 @@ export const dictionaries = {
         phantomNightWindow: "Стаянка",
         phantomNightSoc: "SOC",
         phantomNightIdle: "Прастой",
-        phantomNightEmpty: "За апошнія 36 гадзін стаянак 4+ гадзіны з расходам не знойдзена.",
+        phantomNightEmpty:
+          "За апошнія 36 гадзін стаянак 4+ гадзіны з расходам не знойдзена.",
         phantomLoadError:
           "Не ўдалося загрузіць фантомны расход. Паспрабуйце яшчэ раз.",
         rangePredictionTitle: "Дакладнасць прагнозу запасу ходу",
@@ -3425,7 +3445,8 @@ export const dictionaries = {
         body: "Са стандартным доступам тэлеметрыя захоўваецца {days} дзён. Старэйшыя запісы аўтаматычна выдаляюцца.",
         nextDeletion: "Наступнае акно ачысткі: {date}",
         upgradeCta: "Спытаць пра доступ",
-        emailHelp: "Premium-доступ кіруецца асобна ад ахвяраванняў. Пытанні: {email}.",
+        emailHelp:
+          "Premium-доступ кіруецца асобна ад ахвяраванняў. Пытанні: {email}.",
       },
       premiumBadge: "Premium",
       premiumGates: {
@@ -3687,7 +3708,8 @@ export const dictionaries = {
       intlHelp: "Пожалуйста, выбирайте вариант разового доната.",
       checkingAccount: "Проверяем аккаунт…",
       signInTitle: "Войдите перед донатом",
-      signInBody: "Войдите, чтобы мы могли определить, от кого поступил донат, и учесть его. Реквизиты появятся после входа.",
+      signInBody:
+        "Войдите, чтобы мы могли определить, от кого поступил донат, и учесть его. Реквизиты появятся после входа.",
       signIn: "Войти",
       receiptTitle: "Отправьте чек и данные аккаунта",
       receiptBody:
@@ -3799,7 +3821,8 @@ export const dictionaries = {
       statusLiveCharging: "Зарядка (live)",
       cannotChargeWhileDriving: "Остановите авто, прежде чем начать зарядку.",
       trackCharge: "Отслеживать зарядку",
-      autoChargeHint: "Зарядка отследится автоматически — просто подключите кабель",
+      autoChargeHint:
+        "Зарядка отследится автоматически — просто подключите кабель",
       startChargingManually: "Записать зарядку вручную",
       packShort: "Батарея",
       ringTogglePercent: "Показать заряд в процентах",
@@ -3834,8 +3857,10 @@ export const dictionaries = {
           },
           activeChargeTime: {
             title: "Осталось времени",
-            formula: "оставшаяся энергия из сети ÷ текущая мощность; время окончания = сейчас + оставшееся время",
-            fallbackFormula: "оставшееся время живой сессии; время окончания = сейчас + оставшееся время",
+            formula:
+              "оставшаяся энергия из сети ÷ текущая мощность; время окончания = сейчас + оставшееся время",
+            fallbackFormula:
+              "оставшееся время живой сессии; время окончания = сейчас + оставшееся время",
           },
           activeChargeEnergy: {
             title: "Заряжено энергии",
@@ -4206,6 +4231,11 @@ export const dictionaries = {
         stale: "устарело",
         asleep: "спит",
         charging: "зарядка",
+      },
+      camera: {
+        load: "Загружаем фото…",
+        take: "Сделать фото",
+        noConnection: "Нет связи с машиной",
       },
       metrics: {
         soc: "SOC",
@@ -4625,7 +4655,8 @@ export const dictionaries = {
         phantomNightWindow: "Стоянка",
         phantomNightSoc: "SOC",
         phantomNightIdle: "Простой",
-        phantomNightEmpty: "За последние 36 часов не найдено стоянок 4+ часа с разрядом.",
+        phantomNightEmpty:
+          "За последние 36 часов не найдено стоянок 4+ часа с разрядом.",
         phantomLoadError:
           "Не удалось загрузить фантомный разряд. Попробуйте ещё раз.",
         rangePredictionTitle: "Точность прогноза запаса хода",

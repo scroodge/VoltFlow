@@ -24,6 +24,7 @@ import {
   Gauge,
   HeartPulse,
   Info,
+  LoaderCircle,
   Maximize2,
   Minimize2,
   Minus,
@@ -1755,6 +1756,9 @@ function CameraSnapshotCard({
   const [capturedAt, setCapturedAt] = useState<string | null>(null);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const snapshotInFlight = sendCommand.isPending || latest?.status === "pending" || latest?.status === "sent";
+  const { t } = useTranslation();
+  const tx = t as Translator;
 
   useEffect(() => {
     if (latest?.status !== "done") return;
@@ -1784,16 +1788,21 @@ function CameraSnapshotCard({
         <Button
           type="button"
           size="sm"
-          disabled={!enabled || sendCommand.isPending || latest?.status === "pending" || latest?.status === "sent"}
+          disabled={!enabled || snapshotInFlight}
           onClick={() => void sendCommand.mutateAsync({ type: "camera_snapshot" })}
         >
-          {sendCommand.isPending || latest?.status === "pending" || latest?.status === "sent"
-            ? "Запрашиваем снимок…"
+          {snapshotInFlight
+            ? tx("vehicle.camera.load")
             : enabled
-              ? "Сделать снимок panorama"
-              : "Камеры появятся после включения канала"}
+              ? tx("vehicle.camera.take")
+              : tx("vehicle.camera.noConnection")}
         </Button>
-        {imageUrl ? (
+        {snapshotInFlight ? (
+          <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-md border border-border/60 bg-muted/30 text-center text-sm text-muted-foreground">
+            <LoaderCircle className="size-6 animate-spin" aria-hidden="true" />
+            <span>Получаем фото вокруг авто…</span>
+          </div>
+        ) : imageUrl ? (
           <button
             type="button"
             className="block w-full overflow-hidden rounded-md border border-border/60 text-left"
