@@ -58,6 +58,118 @@ Ownership: user-owned history, app-maintained, Postgres. `retention-status` stil
 but trip energy must keep today's calculation.
 **Owner decision 2026-11-03:** raw window = 90 days. **Open:** export format for old periods.
 
+#### 1a. Raw field inventory (prod, 2026-11-03, 0.5 % table sample ≈ 20 k rows, May–Nov)
+Average heap row 723 B: `telemetry` jsonb **500 B (70 %)**, 44 `diplus_*` columns 152 B, 9
+`autoservice_*` columns 44 B. Readers found by grepping `src/` and the bodies of prod SQL functions
+that touch the samples table. Many `diplus_*` hits in `src/` are on `bydmate_live_snapshots` (same
+column names), not on the history table.
+
+| Field(s) | Fill | Old-history readers | Verdict |
+|---|---|---|---|
+| `telemetry.soc`, `is_charging`, `speed_kmh`, `power_kw`, `charge_power_kw` | 100/100/99/87/22 % | ingest, hourly, trips, sessions, charts, route insights | keep in per-trip / per-session series |
+| `telemetry.odometer_km`, `current_trip_distance_km`, `current_trip_consumption_kwh_100km` | 97/79/93 % | trip distance while open; result lands in `bydmate_trips` | already distilled |
+| `telemetry.battery_temp_c`, `outside_temp_c`, `cabin_temp_c` | 98/98/49 % | charts; hourly averages exist | series + hourly |
+| `telemetry.soh_percent` | 94 % | ingest; `soh_daily_rollups` | already distilled |
+| `telemetry.charge_type` | 22 % | charging sessions | one value per session |
+| `telemetry.cell_voltage_min_v`/`max_v`/`cell_delta_v` | 96 % | **duplicate** of `diplus_min/max_cell_voltage_v`, `diplus_cell_delta_v` (ingest coalesces them) | stored twice |
+| `telemetry.aux_voltage_v` | 95 % | **duplicate** of `diplus_voltage_12v` (the aux rollup reads the column) | stored twice |
+| `telemetry.range_est_km` | 93 % | charts only | potential: AI Range accuracy (forecast vs actual) |
+| `telemetry.charge_current_a`, `battery_voltage_v` | 6/4 % | live charging power display | potential: V×I charge curve per session |
+| `telemetry.kwh_charged` | 21 % | diagnostics only (cell-only BMS counter, ~47 % low) | drop from history |
+| `telemetry.soc_source` | 57 % | ingest schema only | drop from history |
+| `telemetry.is_parked`, `telemetry.diplus_*_cell_*` | 0.2–0.4 % (May–Jul) | none | legacy junk |
+| `diplus_charge_gun_state`, `diplus_min/max_cell_voltage_v`, `diplus_cell_delta_v`, `diplus_voltage_12v` | 96–97 % | phantom drain, aux rollup, day buckets, charge-end delta, charts | keep (series / rollups) |
+| `diplus_speed_kmh` | 97 % | cadence-collapse alarm (recent window only) | raw window only |
+| `diplus_soc`, `speed_kmh`, `mileage_km`, `power_kw`, `avg_battery_temp_c`, `inside_temp_c`, `exterior_temp_c` | 2–97 % | none on history | duplicates of `telemetry` keys |
+| doors, windows, sunroof, trunk, hood, `ac_*`, `fan_level`, `gear`, `drive_mode`, `work_mode`, `auto_park`, `rain`, `light_low`, `drl`, `power_state`, `charging_status` | 21–95 % | only `/dev/bydmate-diplus` (product reads them from live snapshots) | not needed in history |
+| `diplus_bms_state`, `charge_power_raw_kw`, `max_charge_power_kw` | 0.4 % | none | near-empty |
+| `diplus_tire_press_*` | 72 % | none | potential: tyre-pressure trend / slow-leak alert |
+| `diplus_battery_capacity_kwh` | 95 % (50 distinct) | none | **not a capacity** (65535 / 0 / -1, or 1–4) — drop |
+| `diplus_total_elec_consumption_kwh` | 95 % | none | potential: BYD energy counter, cross-check for trip energy |
+| `diplus_ac_status`, `ac_temp_c`, `fan_level`, `drive_mode` | 43–92 % | none | potential: climate share of consumption, consumption by drive mode (per-trip share is enough) |
+| `autoservice_lifetime_kwh`, `lifetime_mileage_km` | 15 % | none | potential: lifetime kWh/100 km (one value per day) |
+| other `autoservice_*` (`soc`, `power`, `gun_state`, `bms_state`, `charge_capacity`, `battery_type`, `charge_battery_volt` 0 %) | 0–81 % | none (no reader names any `autoservice_*` column) | duplicates of di+, not needed |
+
+#### 1b. Distilled schema proposal (what survives the 90-day purge)
+1. Existing aggregates unchanged: `bydmate_trips`, `bydmate_trip_track_points`,
+   `bydmate_telemetry_hourly`, `charging_sessions`, SOH / aux-voltage / phantom-drain daily rollups.
+2. **Per-trip and per-charge-session series** (~200 points each, chart point budget): `device_time`,
+   `soc`, `power_kw` / `charge_power_kw`, `speed_kmh`, battery / outside / cabin temp, cell min / max /
+   delta, `charge_gun_state`, and for sessions `charge_current_a` × `battery_voltage_v` and `charge_type`.
+   Trips also get persisted energy and the route-insight summary (and optionally the climate-on share
+   and drive mode).
+3. **New daily vehicle row** (~100 B per car per day): tyre pressure min/max per wheel,
+   `total_elec_consumption_kwh`, `autoservice_lifetime_kwh`,
+   `autoservice_lifetime_mileage_km`. It holds the "potential" fields above so the purge does not
+   destroy them before a feature uses them.
+Everything else is deleted with the raw row. Ownership: user-owned history, app-maintained, Postgres.
+
+#### 1b-detail. Concrete design (2026-11-03) — APPROVED; BUILT, not applied (migrations `20261103210000`, `20261103211000`; read path in `telemetry-history.ts` / `telemetry-series.ts`)
+Dry-run results on prod (100 newest trips, 50 sessions, rolled back): ~10 KB stored per trip (529 points avg,
+58 KB before TOAST) → ~72 MB for today's 7.3 k trips; ~5.8 KB per session; first/last time, array length and
+full-resolution checks 0 mismatches; re-distill after a simulated purge keeps the stored series.
+Changed from the design: `battery_capacity_kwh` dropped (on prod it is 65535 / 0 / -1, or 1–4 — not a capacity);
+daily rows are read per car through the `(user_id, vehicle_id, device_time)` index (the BRIN index reads the
+whole table, ~40 s/day) and backfilled by the hourly job, 3 days per run, not inside the migration.
+**Apply order:** `20261103210000` (DDL only, `lock_timeout` 5 s) → `20261103211000` (cron). Code can deploy
+before or after: a missing series table only logs a warning.
+**Not done:** series in the export (a year of series is far over 4.5 MB — export keeps hourly rows); the
+215 telemetry trips without stored energy and missing `bydmate_trip_insight_inputs` rows (backfill before the purge).
+Consumer check on prod narrowed what is actually missing:
+- **Trip list energy:** `bydmate_finalize_trip_energy` already persists regen/traction; only **215** of 7 252
+  telemetry trips lack it (5 in the last 30 d). The 16 007 `byd_energydata` trips never had raw samples.
+  → one-off backfill with the same SQL function, no new storage.
+- **Route insights:** `bydmate_trip_insight_inputs` already holds the track + outside/battery temp averages
+  (2 627 trips: every trip with a GPS track ≥ 2 points; 10 MB). → backfill missing rows, no new storage.
+- **Phantom drain / SOH / 12 V:** daily rollups exist; before the purge, check that every past day is
+  materialized.
+- **Week/month charts:** already hourly beyond 1–3 days. **Day chart** (`bydmate_telemetry_day_buckets`)
+  reads raw only → for days older than the raw window, fall back to hourly rows (24 points/day).
+- **Trip detail charts and charge-session curves** have no distilled form → new tables below.
+
+New tables (Postgres; user-owned history, app-maintained; RLS select-own like `bydmate_trip_insight_inputs`;
+writes only from `SECURITY DEFINER` functions, `revoke … from public, anon, authenticated`):
+1. `bydmate_trip_series (trip_id pk → bydmate_trips on delete cascade, user_id, vehicle_id, point_count,
+   source_sample_count, series jsonb, distilled_at)`: one row per trip, **columnar** jsonb
+   (`{"t":[epoch ms…], "soc":[…], "power_kw":[…], …}`) so TOAST compresses it. Fields = exactly what
+   `TelemetryHistoryCharts` and `odometerDeltaFromSamples` read: `soc, power_kw, speed_kmh, odometer_km,
+   current_trip_distance_km, battery_temp_c, outside_temp_c, cabin_temp_c, cell min/max/delta`.
+   **≤ 1 200 points**, index-downsampled with first/last kept. Trip median today is 474 samples (p90 1 504),
+   so most trips keep full resolution.
+2. `bydmate_charging_session_series (session_id pk → charging_sessions on delete cascade, …same shape)`:
+   the session's **sample window** (same `resolveChargingSessionSampleWindow` rule), **unfiltered**, with
+   `is_charging, charge_power_kw, charge_gun_state` per point, so the read path keeps applying the existing
+   TS filter `isTelemetryHistoryCharging` (no SQL copy of charging rules). Also `charge_current_a`,
+   `battery_voltage_v`, `charge_type`. **≤ 1 200 points** (10 s cadence → 3.3 h at full resolution;
+   session p90 is 3.5 h).
+3. `bydmate_vehicle_daily_stats (user_id, vehicle_id, day, pk on all three)`: tyre pressure min/max per
+   wheel, `battery_capacity_kwh` (last of day), `total_elec_consumption_kwh`, `lifetime_kwh`,
+   `lifetime_mileage_km` (last of day). About 100 B/day per car.
+
+Writing: one nightly pg_cron job `distill-bydmate-telemetry` (before the 03:00 purge), modelled on the
+existing rollup jobs. It distills trips and sessions that ended ≥ 6 h ago and either have no series or
+were updated after `distilled_at` (reconcile/recovery/corrections can move a session window), plus
+yesterday's daily row. Backfill = the same function looped over history in batches.
+Reading: `fetchTripSamples` / `fetchChargingSessionSamples` read the raw table inside the raw window and
+the series table outside it (series first if raw is empty); the export adds both series sections.
+Size estimate: ~550 points × ~60 B per trip before compression → roughly 100–150 MB for all trips today
+after TOAST, sessions ~20 MB, compared with 3.5 GB of raw heap. To be measured on a 100-trip sample before
+the backfill.
+Not mirrored in the APK; no formula changes.
+**Should I build this?**
+
+#### 1c. Optional, independent of the purge: slim the raw row
+Stop storing the duplicates and junk inside the 90-day window: the `telemetry` cell / aux keys that the
+`diplus_*` columns already hold, `kwh_charged`, `soc_source`, the duplicate `diplus_*` columns and the
+`/dev`-only `diplus_*` columns. Estimated saving: ~25–30 % per row. It touches the ingest RPC and the
+APK payload contract, so it needs its own plan.
+
+#### 1d. Bug: export silently returned no telemetry samples — FIXED 2026-11-03 with format A (see CHANGELOG)
+Remaining under 1b: add the per-trip / per-session series to the export once they exist.
+
+**Owner decision 2026-11-03 — order:** 1d → 1b (series + daily row, with backfill) → purge > 90 days
+(batched) → 1c later, as its own plan.
+
 ### 2–4. Status
 - **2 (unused aux-voltage index) and 3 (single-INSERT ingest): shipped 2026-11-03** — see CHANGELOG.
   Autovacuum tuning (3B) declined by owner: disk headroom is fine, weekly vacuum is acceptable.
@@ -572,6 +684,12 @@ to the VPN or other tenants' services.
 > changed, so a copy taken earlier still works. Revisit if there is any sign of misuse
 > (unexpected rows, new users, traffic from unknown IPs). Compose backup:
 > `/opt/supabase/docker-compose.yml.bak.*`.
+>
+> **2026-11-03: re-proposed for the owner to decide (not applied).** Holder inventory done: the APK gets
+> the anon key dynamically from the poll response and does not hard-code it. Postgres has
+> `app.settings.jwt_secret` set. No keys in pg_cron, Vault or function bodies. Remaining holders are
+> Vercel (VoltFlow + Vusna), the server `.env`, the watchdog env and the local `.env.local` files.
+> Step plan, cost and rollback: private `docs/OPS_LOCAL.md` → "Proposal: rotate JWT secret".
 
 ### Problem
 

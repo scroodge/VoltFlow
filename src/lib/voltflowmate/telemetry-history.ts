@@ -10,10 +10,22 @@ import {
 import { isTelemetryHistoryCharging } from "../../features/charging/domain.ts";
 import { resolveChargingSessionSampleWindow } from "./telemetry-session-window.ts";
 import { mapSohDailyRows, normalizeSohPercent } from "./soh-history-mapping.ts";
-import { mapDayTelemetryBucketRows, type DayTelemetryBucketRow } from "./telemetry-day-buckets.ts";
+import {
+  mapDayTelemetryBucketRows,
+  type DayTelemetryBucketRow,
+} from "./telemetry-day-buckets.ts";
 import { mapWithConcurrency } from "../async/map-with-concurrency.ts";
+import {
+  seriesToTelemetryPoints,
+  shouldUseDistilledSeries,
+  type DistilledSeriesRow,
+} from "./telemetry-series.ts";
 import { resolveSohHistoryWindow } from "../soh-history-request.ts";
-import type { VoltflowMateDiplus, VoltflowMateTelemetry, VoltflowMateTelemetrySampleRow } from "../../types/database.ts";
+import type {
+  VoltflowMateDiplus,
+  VoltflowMateTelemetry,
+  VoltflowMateTelemetrySampleRow,
+} from "../../types/database.ts";
 
 type HourlyRow = {
   hour_start: string;
@@ -37,7 +49,9 @@ const SUPABASE_PAGE_SIZE = 1000;
 const TELEMETRY_SAMPLE_SELECT =
   "device_time, telemetry, diplus_charge_gun_state, diplus_min_cell_voltage_v, diplus_max_cell_voltage_v, diplus_cell_delta_v";
 /** Three envelope points (min/max/last) per server-side day bucket. */
-export const DAY_TELEMETRY_BUCKET_COUNT = Math.floor(MAX_TELEMETRY_CHART_POINTS / 3);
+export const DAY_TELEMETRY_BUCKET_COUNT = Math.floor(
+  MAX_TELEMETRY_CHART_POINTS / 3,
+);
 /** Safety cap for trip detail fetches (~5.5 h at 1 Hz). */
 export const MAX_TRIP_RAW_SAMPLES = 20_000;
 
@@ -81,6 +95,28 @@ function hourlyToSample(row: HourlyRow): TelemetryHistoryPoint {
   };
 }
 
+async function fetchHourlyPoints(
+  supabase: SupabaseClient,
+  userId: string,
+  vehicleFilter: { vehicle_id?: string },
+  from: string,
+  to: string,
+): Promise<TelemetryHistoryPoint[]> {
+  const { data, error } = await supabase
+    .from("bydmate_telemetry_hourly")
+    .select(
+      "hour_start, sample_count, soc_min, soc_max, soc_last, speed_max, power_avg, battery_temp_avg, cabin_temp_avg, outside_temp_avg, regen_kwh_sum, traction_kwh_sum",
+    )
+    .eq("user_id", userId)
+    .match(vehicleFilter)
+    .gte("hour_start", from)
+    .lte("hour_start", to)
+    .order("hour_start", { ascending: true });
+
+  if (error) throw error;
+  return ((data ?? []) as HourlyRow[]).map(hourlyToSample);
+}
+
 export async function fetchTelemetryHistory({
   supabase,
   userId,
@@ -99,8 +135,15 @@ export async function fetchTelemetryHistory({
 
   if (range === "day") {
     const rows: (TelemetryHistorySamplePoint & DayTelemetryBucketRow)[] = [];
-    for (let fromIndex = 0; fromIndex < MAX_TELEMETRY_CHART_POINTS; fromIndex += SUPABASE_PAGE_SIZE) {
-      const toIndex = Math.min(fromIndex + SUPABASE_PAGE_SIZE - 1, MAX_TELEMETRY_CHART_POINTS - 1);
+    for (
+      let fromIndex = 0;
+      fromIndex < MAX_TELEMETRY_CHART_POINTS;
+      fromIndex += SUPABASE_PAGE_SIZE
+    ) {
+      const toIndex = Math.min(
+        fromIndex + SUPABASE_PAGE_SIZE - 1,
+        MAX_TELEMETRY_CHART_POINTS - 1,
+      );
       const { data, error } = await supabase
         .rpc("bydmate_telemetry_day_buckets", {
           p_user_id: userId,
@@ -113,33 +156,42 @@ export async function fetchTelemetryHistory({
         .order("bucket_kind", { ascending: true })
         .range(fromIndex, toIndex);
       if (error) throw error;
-      const page = (data ?? []) as (TelemetryHistorySamplePoint & DayTelemetryBucketRow)[];
+      const page = (data ?? []) as (TelemetryHistorySamplePoint &
+        DayTelemetryBucketRow)[];
       rows.push(...page);
       if (page.length < toIndex - fromIndex + 1) break;
     }
-    return mapDayTelemetryBucketRows<TelemetryHistorySamplePoint>(rows, MAX_TELEMETRY_CHART_POINTS);
+    if (rows.length > 0) {
+      return mapDayTelemetryBucketRows<TelemetryHistorySamplePoint>(
+        rows,
+        MAX_TELEMETRY_CHART_POINTS,
+      );
+    }
+    // No raw samples for the day (past the retention purge, or none sent): the hourly rollup
+    // outlives the raw rows.
+    return fetchHourlyPoints(
+      supabase,
+      userId,
+      vehicleFilter,
+      window.from,
+      window.to,
+    );
   }
 
   const rawFrom =
     window.rawSampleDays > 0
-      ? new Date(Date.parse(window.to) - window.rawSampleDays * 24 * 60 * 60 * 1000).toISOString()
+      ? new Date(
+          Date.parse(window.to) - window.rawSampleDays * 24 * 60 * 60 * 1000,
+        ).toISOString()
       : null;
 
-  const hourlyTo = rawFrom ?? window.to;
-  const { data: hourlyData, error: hourlyError } = await supabase
-    .from("bydmate_telemetry_hourly")
-    .select(
-      "hour_start, sample_count, soc_min, soc_max, soc_last, speed_max, power_avg, battery_temp_avg, cabin_temp_avg, outside_temp_avg, regen_kwh_sum, traction_kwh_sum",
-    )
-    .eq("user_id", userId)
-    .match(vehicleFilter)
-    .gte("hour_start", window.from)
-    .lte("hour_start", hourlyTo)
-    .order("hour_start", { ascending: true });
-
-  if (hourlyError) throw hourlyError;
-
-  const hourlyPoints = ((hourlyData ?? []) as HourlyRow[]).map(hourlyToSample);
+  const hourlyPoints = await fetchHourlyPoints(
+    supabase,
+    userId,
+    vehicleFilter,
+    window.from,
+    rawFrom ?? window.to,
+  );
 
   if (!rawFrom) {
     return downsampleByIndex(hourlyPoints, MAX_TELEMETRY_CHART_POINTS);
@@ -183,15 +235,46 @@ export async function fetchTripSamples({
 
   const endAt = trip.ended_at ?? trip.last_device_time;
 
-  const points = await fetchTelemetrySamplePages({
-    supabase,
-    userId,
-    vehicleId: trip.vehicle_id,
-    from: trip.started_at,
-    to: endAt,
-    maxRows: MAX_TRIP_RAW_SAMPLES,
-  });
+  const [points, distilled] = await Promise.all([
+    fetchTelemetrySamplePages({
+      supabase,
+      userId,
+      vehicleId: trip.vehicle_id,
+      from: trip.started_at,
+      to: endAt,
+      maxRows: MAX_TRIP_RAW_SAMPLES,
+    }),
+    fetchDistilledSeries(supabase, "bydmate_trip_series", "trip_id", trip.id),
+  ]);
+  if (
+    points.length < MAX_TRIP_RAW_SAMPLES &&
+    shouldUseDistilledSeries(points.length, distilled)
+  ) {
+    return seriesToTelemetryPoints(distilled?.series).map(stripChargingContext);
+  }
   return points.map(stripChargingContext);
+}
+
+/**
+ * Distilled series row, or null when there is none. A lookup failure (e.g. the table not yet
+ * migrated) must not break charts that raw samples can still draw.
+ */
+async function fetchDistilledSeries(
+  supabase: SupabaseClient,
+  table: "bydmate_trip_series" | "bydmate_charging_session_series",
+  idColumn: "trip_id" | "session_id",
+  id: string,
+): Promise<DistilledSeriesRow | null> {
+  const { data, error } = await supabase
+    .from(table)
+    .select("source_sample_count, point_count, series")
+    .eq(idColumn, id)
+    .maybeSingle();
+  if (error) {
+    console.warn(`[telemetry-history] ${table} lookup failed`, error.message);
+    return null;
+  }
+  return (data as DistilledSeriesRow | null) ?? null;
 }
 
 async function fetchTelemetrySamplePages({
@@ -283,7 +366,9 @@ export async function fetchChargingSessionSamples({
 }): Promise<TelemetryHistoryPoint[]> {
   const { data: session, error: sessionError } = await supabase
     .from("charging_sessions")
-    .select("id, user_id, status, started_at, stopped_at, updated_at, created_at, current_percent, target_percent")
+    .select(
+      "id, user_id, status, started_at, stopped_at, updated_at, created_at, current_percent, target_percent",
+    )
     .eq("id", sessionId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -300,33 +385,62 @@ export async function fetchChargingSessionSamples({
     targetPercent: session.target_percent,
   });
 
-  const data = await fetchChargingTelemetrySamplePages({
-    supabase,
-    userId,
-    vehicleId,
-    from: window.from,
-    to: window.to,
-  });
+  const [raw, distilled] = await Promise.all([
+    fetchChargingTelemetrySamplePages({
+      supabase,
+      userId,
+      vehicleId,
+      from: window.from,
+      to: window.to,
+    }),
+    session.status === "charging"
+      ? Promise.resolve(null)
+      : fetchDistilledSeries(
+          supabase,
+          "bydmate_charging_session_series",
+          "session_id",
+          session.id,
+        ),
+  ]);
+  // The distilled row holds the session's whole window unfiltered, so the same charging filter
+  // below applies to either source.
+  const data: TelemetryHistorySamplePoint[] = shouldUseDistilledSeries(
+    raw.length,
+    distilled,
+  )
+    ? seriesToTelemetryPoints(distilled?.series)
+    : raw;
 
   const chargingPoints = data.filter((point) =>
     isTelemetryHistoryCharging(point.telemetry, point),
   );
-  return downsampleByIndex(chargingPoints, MAX_TELEMETRY_CHART_POINTS).map(stripChargingContext);
+  return downsampleByIndex(chargingPoints, MAX_TELEMETRY_CHART_POINTS).map(
+    stripChargingContext,
+  );
 }
 
 const SOH_DAILY_PROBE_LIMIT = 20;
 const SOH_FETCH_CONCURRENCY = 25;
 
-export function parseSohPercent(telemetry: VoltflowMateTelemetry): number | null {
+export function parseSohPercent(
+  telemetry: VoltflowMateTelemetry,
+): number | null {
   return normalizeSohPercent(telemetry.soh_percent);
 }
 
-export function enumerateCalendarDays(fromIso: string, toIso: string): string[] {
+export function enumerateCalendarDays(
+  fromIso: string,
+  toIso: string,
+): string[] {
   const days: string[] = [];
   const start = new Date(fromIso);
   const end = new Date(toIso);
-  const cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
-  const endDay = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()));
+  const cursor = new Date(
+    Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()),
+  );
+  const endDay = new Date(
+    Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()),
+  );
 
   while (cursor <= endDay) {
     days.push(cursor.toISOString().slice(0, 10));
@@ -395,7 +509,9 @@ async function fetchSohTelemetryHistoryFallback({
     fetchSohSampleForDay({ supabase, userId, vehicleId, day }),
   );
 
-  return points.filter((point): point is TelemetryHistoryPoint => point != null);
+  return points.filter(
+    (point): point is TelemetryHistoryPoint => point != null,
+  );
 }
 
 /** Selected-range SOH chart: one latest valid SOH point per UTC day. */
@@ -424,12 +540,21 @@ export async function fetchSohTelemetryHistory({
   // is applied. It is intentionally temporary: the RPC removes the 366-query fan-out.
   // Do not turn transient database/network failures into a 366-query amplification.
   if (error && isMissingSohRpc(error)) {
-    return fetchSohTelemetryHistoryFallback({ supabase, userId, vehicleId, range, anchorDate });
+    return fetchSohTelemetryHistoryFallback({
+      supabase,
+      userId,
+      vehicleId,
+      range,
+      anchorDate,
+    });
   }
   if (error) throw error;
 
   return mapSohDailyRows(
-    (data ?? []) as { device_time: string; soh_percent: number | string | null }[],
+    (data ?? []) as {
+      device_time: string;
+      soh_percent: number | string | null;
+    }[],
   );
 }
 
@@ -438,6 +563,7 @@ function isMissingSohRpc(error: { code?: string; message?: string }) {
   return (
     error.code === "PGRST202" ||
     error.code === "42883" ||
-    (message.includes("bydmate_soh_daily") && message.includes("does not exist"))
+    (message.includes("bydmate_soh_daily") &&
+      message.includes("does not exist"))
   );
 }

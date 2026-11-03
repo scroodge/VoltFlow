@@ -11,6 +11,16 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-11-03
 
+- **Data export ships telemetry samples again (BACKLOG "Prod DB retention & cleanup", item 1d).**
+  `/api/vehicle/export` selected a `location` column that `bydmate_telemetry_samples` does not have; the
+  query failed and the ignored error turned into `telemetry_samples: []` in every JSON/CSV export. The
+  select now lists only existing columns, and a failed section returns 500 instead of an empty list.
+  Export format (owner choice A): the whole range ships as `telemetry_hourly` (rollups that outlive the
+  raw purge); `telemetry_samples` holds only the newest 24 h (`telemetry_samples_from`), spread over the
+  window by `downsampleByIndex` to 2 000 rows. Restoring the raw rows unchanged would have broken the
+  JSON download: 10 000 rows measured 4.68 MB (over Vercel's 4.5 MB response limit) and covered ~8 h.
+  Prod estimate for the heaviest account, 1-year range: ~2.9 MB. CSV gains `hour` rows (`soc_last`).
+  Code only — takes effect on the next deploy.
 - **Telemetry ingest writes each sample once (BACKLOG "Prod DB retention & cleanup", item 3).**
   `bydmate_ingest_telemetry` inserted the sample with only `telemetry`, then UPDATEd it with the di+
   columns and again with the `autoservice_*` columns — prod counters showed 7.3 M inserts vs 13.0 M
