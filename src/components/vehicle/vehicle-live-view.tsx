@@ -69,6 +69,7 @@ import { useSessionsQuery } from "@/hooks/use-sessions-query";
 import { useTickingClock } from "@/hooks/use-ticking-clock";
 import { useTranslation } from "@/hooks/use-translation";
 import { useLongPress } from "@/hooks/use-long-press";
+import { devFetch } from "@/lib/dev/dev-fetch";
 import { useAppPath } from "@/lib/dev/dev-path";
 import { formatPressureFromKpa, isTyrePressureKpa } from "@/lib/pressure-units";
 import { gearIsPark, readGear } from "@/lib/voltflowmate/gear";
@@ -1752,18 +1753,24 @@ function CameraSnapshotCard({
   const latest = commands.find((command) => command.type === "camera_snapshot") ?? null;
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [capturedAt, setCapturedAt] = useState<string | null>(null);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     if (latest?.status !== "done") return;
     let cancelled = false;
-    void fetch(`/api/vehicle/camera-snapshots?vehicle_id=${encodeURIComponent(vehicleId)}`)
+    setSnapshotError(null);
+    void devFetch(`/api/vehicle/camera-snapshots?vehicle_id=${encodeURIComponent(vehicleId)}`)
       .then(async (response) => ({ response, payload: await response.json() as { snapshot?: { image_url?: string; captured_at?: string } | null } }))
       .then(({ response, payload }) => {
+        if (!response.ok) throw new Error("snapshot_lookup_failed");
         if (!cancelled && response.ok && payload.snapshot?.image_url) {
           setImageUrl(payload.snapshot.image_url);
           setCapturedAt(payload.snapshot.captured_at ?? null);
         }
+      })
+      .catch(() => {
+        if (!cancelled) setSnapshotError("Не удалось загрузить снимок");
       });
     return () => { cancelled = true; };
   }, [latest?.id, latest?.status, vehicleId]);
@@ -1800,6 +1807,7 @@ function CameraSnapshotCard({
           </button>
         ) : null}
         {capturedAt ? <p className="text-[11px] text-muted-foreground">Снимок: {new Date(capturedAt).toLocaleString()}</p> : null}
+        {snapshotError ? <p className="text-[11px] text-destructive">{snapshotError}</p> : null}
       </CardContent>
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-w-4xl p-2">
