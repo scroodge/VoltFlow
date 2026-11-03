@@ -12,7 +12,7 @@ block → (2b) permanent after ≥24 h → (3) verify app + telemetry → (4) ro
 unreachable from outside; `scripts/prod-sql.sh` works via the tunnel; fresh `bydmate_telemetry_samples`
 rows and quiet PostgREST alerts after the change; DB password rotated. **Should I build this?**
 
-## Prod DB retention & cleanup (audit 2026-11-03) — items 2–3 SHIPPED (see CHANGELOG 2026-11-03); item 1 APPROVED (90-day raw window), not built
+## Prod DB retention & cleanup (audit 2026-11-03) — items 2–3, 1d, 1b SHIPPED (see CHANGELOG 2026-11-03); next: energy / insight backfill, then the 90-day premium raw purge
 
 **Audit (read-only, prod).** DB is 6.9 GB; `bydmate_telemetry_samples` is 5.8 GB (heap 3.5 +
 indexes 2.3, ~4.0 M rows, ~1.45 KB/row). Dictionary tables (`russian_forms`, `belarusian_forms`,
@@ -104,7 +104,7 @@ column names), not on the history table.
    destroy them before a feature uses them.
 Everything else is deleted with the raw row. Ownership: user-owned history, app-maintained, Postgres.
 
-#### 1b-detail. Concrete design (2026-11-03) — APPROVED; BUILT, not applied (migrations `20261103210000`, `20261103211000`; read path in `telemetry-history.ts` / `telemetry-series.ts`)
+#### 1b-detail. Concrete design (2026-11-03) — SHIPPED to prod 2026-11-03 (see CHANGELOG; read-path code awaits deploy) (migrations `20261103210000`, `20261103211000`; read path in `telemetry-history.ts` / `telemetry-series.ts`)
 Dry-run results on prod (100 newest trips, 50 sessions, rolled back): ~10 KB stored per trip (529 points avg,
 58 KB before TOAST) → ~72 MB for today's 7.3 k trips; ~5.8 KB per session; first/last time, array length and
 full-resolution checks 0 mismatches; re-distill after a simulated purge keeps the stored series.

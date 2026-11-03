@@ -11,6 +11,20 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-11-03
 
+- **Distilled telemetry that outlives the raw purge (BACKLOG "Prod DB retention & cleanup", item 1b).**
+  Migrations `20261103210000_bydmate_telemetry_series_distill.sql` and
+  `20261103211000_schedule_bydmate_telemetry_distill.sql` (applied to prod): `bydmate_trip_series` and
+  `bydmate_charging_session_series` hold one columnar, index-downsampled series per finished trip /
+  session (≤ 1 200 points, the fields the charts read; sessions keep their whole window unfiltered so the
+  TS charging filter still applies), and `bydmate_vehicle_daily_stats` one row per car-day (tyre pressure
+  min/max, energy / lifetime counters). Users read their own rows; only `SECURITY DEFINER` functions
+  (`service_role`) write. pg_cron: `distill-bydmate-telemetry-series` hourly (200 + 200, newest first,
+  free-tier series follow the 30-day window) and `distill-bydmate-vehicle-days` hourly (yesterday + 3
+  missing days). Dry run on 100 trips: ~10 KB stored per trip, 0 parity mismatches vs raw. Read path
+  (`telemetry-history.ts`, new `telemetry-series.ts` + tests): trip / session charts use the series when raw
+  samples are incomplete; the day chart falls back to hourly rows when the day has no raw samples.
+  Read-path code takes effect on the next deploy. di+ `battery_capacity_kwh` was left out: on prod it is
+  65535 / 0 / -1 or 1–4, not a capacity.
 - **Data export ships telemetry samples again (BACKLOG "Prod DB retention & cleanup", item 1d).**
   `/api/vehicle/export` selected a `location` column that `bydmate_telemetry_samples` does not have; the
   query failed and the ignored error turned into `telemetry_samples: []` in every JSON/CSV export. The
