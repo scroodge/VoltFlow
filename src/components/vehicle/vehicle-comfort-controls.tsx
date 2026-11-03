@@ -28,6 +28,7 @@ import {
   useVehicleCommandSchedulesQuery,
 } from "@/hooks/use-vehicle-command-schedules-query";
 import {
+  isClimateControlAllowed,
   isControlAllowed,
   isRemoteReady,
   isTelemetryFresh,
@@ -253,6 +254,8 @@ export function VehicleComfortControls({
     Date.now() - new Date(snapshot.received_at).getTime() > VEHICLE_CONTROL_STALE_MS;
   const lowAux = !relaxGuards && aux != null && aux > 0 && aux < VEHICLE_CONTROL_LOW_AUX_V;
   const disabled = !vehicleId || !allowed || sendCommand.isPending;
+  const climateDisabled =
+    !vehicleId || !(relaxGuards || isClimateControlAllowed(snapshot)) || sendCommand.isPending;
 
   async function runAction(action: ComfortAction) {
     setPendingId(action.id);
@@ -349,7 +352,7 @@ export function VehicleComfortControls({
           <ActionGrid
             actions={CLIMATE_ACTIONS}
             columns={2}
-            disabled={disabled}
+            disabled={climateDisabled}
             pendingId={pendingId}
             onAction={(action) => void runAction(action)}
           />

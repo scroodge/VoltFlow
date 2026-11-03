@@ -116,7 +116,7 @@ export function buildDiplusPhrase(
       if (direction !== "up" && direction !== "down") {
         return { ok: false, error: "fan_speed_step.direction must be up or down" };
       }
-      phrase = direction === "up" ? "迪加升风速" : "迪加降风速";
+      phrase = direction === "up" ? "升风速" : "降风速";
       break;
     }
     case "ac_recirculation": {
