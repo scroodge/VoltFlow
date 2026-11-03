@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 
 import { resolveVehicleApiAccess } from "@/lib/dev/dev-api-auth";
+import { createServiceClient } from "@/lib/supabase/service";
 import { CAMERA_SNAPSHOT_BUCKET } from "@/lib/voltflowmate/camera-snapshots";
 
 export const runtime = "nodejs";
@@ -32,7 +33,9 @@ export async function GET(request: NextRequest) {
   if (!storagePath.startsWith(expectedPrefix)) {
     return Response.json({ ok: false, error: "invalid_snapshot_path" }, { status: 500 });
   }
-  const { data: signed, error: signError } = await access.supabase.storage
+  // The ownership check above uses the caller's client. The private bucket deliberately has
+  // no direct user storage policy, so only this server route may mint its short-lived URL.
+  const { data: signed, error: signError } = await createServiceClient().storage
     .from(CAMERA_SNAPSHOT_BUCKET)
     .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
   if (signError || !signed?.signedUrl) {
