@@ -7,7 +7,7 @@ import { REMOTE_COMMANDS_ENABLED } from "@/lib/voltflowmate/remote-commands";
 export const runtime = "nodejs";
 
 const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
-const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_MAX = 50;
 const COMMAND_TIMEOUT_MS = 60 * 1000;
 
 type CommandRow = {
