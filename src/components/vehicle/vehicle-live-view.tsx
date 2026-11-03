@@ -631,7 +631,10 @@ function VehicleLiveContent({
           />
           {!isStale ? <TirePressureCard snapshot={snapshot} /> : null}
           {!isStale ? <DoorStatusCard snapshot={snapshot} /> : null}
-          {remoteCommandsEnabled ? <CameraSnapshotCard vehicleId={scopedVehicleId ?? snapshot.vehicle_id} /> : null}
+          <CameraSnapshotCard
+            vehicleId={scopedVehicleId ?? snapshot.vehicle_id}
+            enabled={remoteCommandsEnabled}
+          />
           {activeChargingSession ? (
             <ChargingDeltaCard
               session={activeChargingSession}
@@ -678,7 +681,10 @@ function VehicleLiveContent({
               />
               <TirePressureCard snapshot={snapshot} />
               <DoorStatusCard snapshot={snapshot} />
-              {remoteCommandsEnabled ? <CameraSnapshotCard vehicleId={scopedVehicleId ?? snapshot.vehicle_id} /> : null}
+              <CameraSnapshotCard
+                vehicleId={scopedVehicleId ?? snapshot.vehicle_id}
+                enabled={remoteCommandsEnabled}
+              />
               <TripBrowser
                 showDateFilter={Boolean(fixturePoints)}
                 selectedDate={selectedDate}
@@ -1734,12 +1740,19 @@ function DoorStatusCard({
   );
 }
 
-function CameraSnapshotCard({ vehicleId }: { vehicleId: string }) {
+function CameraSnapshotCard({
+  vehicleId,
+  enabled,
+}: {
+  vehicleId: string;
+  enabled: boolean;
+}) {
   const sendCommand = useSendVehicleCommand(vehicleId);
   const { data: commands = [] } = useVehicleCommandsQuery(vehicleId);
   const latest = commands.find((command) => command.type === "camera_snapshot") ?? null;
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [capturedAt, setCapturedAt] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     if (latest?.status !== "done") return;
@@ -1761,19 +1774,39 @@ function CameraSnapshotCard({ vehicleId }: { vehicleId: string }) {
         <CardTitle className="font-heading text-sm">Камеры</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 px-3 pb-3 pt-0">
-        {imageUrl ? <img src={imageUrl} alt="Панорама камер" className="aspect-video w-full rounded-md object-cover" /> : null}
         <Button
           type="button"
           size="sm"
-          disabled={sendCommand.isPending || latest?.status === "pending" || latest?.status === "sent"}
+          disabled={!enabled || sendCommand.isPending || latest?.status === "pending" || latest?.status === "sent"}
           onClick={() => void sendCommand.mutateAsync({ type: "camera_snapshot" })}
         >
           {sendCommand.isPending || latest?.status === "pending" || latest?.status === "sent"
             ? "Запрашиваем снимок…"
-            : "Сделать снимок panorama"}
+            : enabled
+              ? "Сделать снимок panorama"
+              : "Камеры появятся после включения канала"}
         </Button>
+        {imageUrl ? (
+          <button
+            type="button"
+            className="block w-full overflow-hidden rounded-md border border-border/60 text-left"
+            onClick={() => setPreviewOpen(true)}
+          >
+            <img
+              src={imageUrl}
+              alt="Панорама камер — открыть крупно"
+              className="aspect-video w-full object-cover"
+            />
+          </button>
+        ) : null}
         {capturedAt ? <p className="text-[11px] text-muted-foreground">Снимок: {new Date(capturedAt).toLocaleString()}</p> : null}
       </CardContent>
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-4xl p-2">
+          <DialogTitle className="sr-only">Панорама камер</DialogTitle>
+          {imageUrl ? <img src={imageUrl} alt="Панорама камер" className="w-full rounded-md" /> : null}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
