@@ -7,6 +7,13 @@ export { gearIsPark, readGear };
 export const VEHICLE_CONTROL_STALE_MS = 90_000;
 export const VEHICLE_CONTROL_LOW_AUX_V = 11.8;
 
+/**
+ * Scheduled commands are hidden and not materialized: di+ phrases do nothing while the car is
+ * off (`电源状态 = 0`), so a scheduled pre-heat would report success and never run. Flip back
+ * once there is a way to power the car on remotely. Stored schedules are kept untouched.
+ */
+export const VEHICLE_COMMAND_SCHEDULES_ENABLED = false;
+
 export function isTelemetryFresh(
   snapshot: VoltflowMateLiveSnapshotRow | undefined,
 ) {

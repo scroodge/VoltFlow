@@ -30,6 +30,7 @@ import {
 import {
   isClimateControlAllowed,
   isControlAllowed,
+  VEHICLE_COMMAND_SCHEDULES_ENABLED,
   isRemoteReady,
   isTelemetryFresh,
   readAuxVoltage,
@@ -234,7 +235,10 @@ export function VehicleComfortControls({
   const { data: commands } = useVehicleCommandsQuery(vehicleId, {
     enabled: !collapsible || expanded,
   });
-  const { data: schedules } = useVehicleCommandSchedulesQuery(vehicleId, !collapsible || expanded);
+  const { data: schedules } = useVehicleCommandSchedulesQuery(
+    vehicleId,
+    VEHICLE_COMMAND_SCHEDULES_ENABLED && (!collapsible || expanded),
+  );
   const scheduleActions = useVehicleCommandSchedules(vehicleId);
   const sendCommand = useSendVehicleCommand(vehicleId);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -340,12 +344,14 @@ export function VehicleComfortControls({
           />
         </section>
 
+        {VEHICLE_COMMAND_SCHEDULES_ENABLED ? (
         <ScheduleControls
           schedules={schedules ?? []}
           disabled={!allowed || scheduleActions.create.isPending}
           onCreate={(input) => scheduleActions.create.mutate(input)}
           onDelete={(id) => scheduleActions.remove.mutate(id)}
         />
+        ) : null}
 
         <section className="space-y-2">
           <h3 className="text-sm font-medium">Климат</h3>

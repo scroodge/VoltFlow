@@ -8,6 +8,7 @@ import {
   vehicleRangeProfileFields,
 } from "@/lib/voltflowmate/vehicle-battery-capacity";
 import { resolveVehicleKey } from "@/lib/voltflowmate/vehicle-identity";
+import { VEHICLE_COMMAND_SCHEDULES_ENABLED } from "@/lib/vehicle/vehicle-control-guards";
 import {
   ACTIVE_COMMAND_POLL_AFTER_SECONDS,
   IDLE_COMMAND_POLL_AFTER_SECONDS,
@@ -122,13 +123,12 @@ export async function GET(request: Request) {
       });
     }
 
-    const { error: scheduleError } = await supabase.rpc(
-      "enqueue_due_vehicle_command_schedules",
-      {
-        p_user_id: profile.id,
-        p_vehicle_id: vehicleId,
-      },
-    );
+    const { error: scheduleError } = VEHICLE_COMMAND_SCHEDULES_ENABLED
+      ? await supabase.rpc("enqueue_due_vehicle_command_schedules", {
+          p_user_id: profile.id,
+          p_vehicle_id: vehicleId,
+        })
+      : { error: null };
     if (scheduleError) {
       return Response.json(
         { ok: false, error: "Schedule materialization failed" },
