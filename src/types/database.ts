@@ -228,6 +228,7 @@ export type VoltflowMateDiplus = {
   ac_status?: string | number | boolean | null;
   ac_temp_c?: number | null;
   fan_level?: number | null;
+  ac_circ?: number | null;
   door_fl?: string | number | boolean | null;
   door_fr?: string | number | boolean | null;
   door_rl?: string | number | boolean | null;

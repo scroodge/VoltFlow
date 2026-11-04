@@ -86,6 +86,8 @@ export const diplusSchema = z
     ac_status: diplusFlagSchema.nullable().optional(),
     ac_temp_c: numericSchema,
     fan_level: numericSchema,
+    // `空调循环方式`; kept in the live snapshot's diplus jsonb for the climate buttons.
+    ac_circ: numericSchema,
     door_fl: diplusFlagSchema.nullable().optional(),
     door_fr: diplusFlagSchema.nullable().optional(),
     door_rl: diplusFlagSchema.nullable().optional(),

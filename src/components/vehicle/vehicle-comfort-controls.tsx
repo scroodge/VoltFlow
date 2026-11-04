@@ -3,6 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import {
   ChevronDown,
+  LoaderCircle,
   PanelBottomClose,
   PanelTopOpen,
   Snowflake,
@@ -11,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { ClimatePanel } from "@/components/vehicle/climate-panel";
 import {
   Card,
   CardContent,
@@ -180,16 +182,29 @@ const SEAT_HEAT_ACTIONS: ComfortAction[] = [
   },
 ];
 
+/** Same command as [action], not yet acked by the car. */
+function isActionInFlight(action: ComfortAction, commands: readonly VehicleCommandRow[] | undefined) {
+  const params = JSON.stringify(action.params);
+  return (commands ?? []).some(
+    (command) =>
+      (command.status === "pending" || command.status === "sent") &&
+      command.type === action.type &&
+      JSON.stringify(command.params ?? {}) === params,
+  );
+}
+
 function ActionGrid({
   actions,
   disabled,
-  pendingId,
+  pendingIds,
+  commands,
   onAction,
   columns = 3,
 }: {
   actions: ComfortAction[];
   disabled: boolean;
-  pendingId: string | null;
+  pendingIds: readonly string[];
+  commands: readonly VehicleCommandRow[] | undefined;
   onAction: (action: ComfortAction) => void;
   columns?: 2 | 3;
 }) {
@@ -197,20 +212,28 @@ function ActionGrid({
 
   return (
     <div className={`grid grid-cols-1 gap-2 ${columnClass}`}>
-      {actions.map((action) => (
-        <Button
-          key={action.id}
-          type="button"
-          size="lg"
-          variant={action.variant ?? "default"}
-          disabled={disabled || pendingId === action.id}
-          className="h-auto min-h-11 justify-start gap-2 px-3 py-2.5 text-left whitespace-normal"
-          onClick={() => onAction(action)}
-        >
-          {action.icon}
-          <span className="text-sm font-medium leading-tight">{action.label}</span>
-        </Button>
-      ))}
+      {actions.map((action) => {
+        // Only the pressed button shows progress, until the car acks; the rest stay usable.
+        const busy = pendingIds.includes(action.id) || isActionInFlight(action, commands);
+        return (
+          <Button
+            key={action.id}
+            type="button"
+            size="lg"
+            variant={action.variant ?? "default"}
+            disabled={disabled}
+            aria-busy={busy}
+            className={cn(
+              "h-auto min-h-11 justify-start gap-2 px-3 py-2.5 text-left whitespace-normal",
+              busy && "pointer-events-none ring-2 ring-primary/60",
+            )}
+            onClick={() => onAction(action)}
+          >
+            {busy ? <LoaderCircle className="size-4 animate-spin" /> : action.icon}
+            <span className="text-sm font-medium leading-tight">{action.label}</span>
+          </Button>
+        );
+      })}
     </div>
   );
 }
@@ -241,7 +264,8 @@ export function VehicleComfortControls({
   );
   const scheduleActions = useVehicleCommandSchedules(vehicleId);
   const sendCommand = useSendVehicleCommand(vehicleId);
-  const [pendingId, setPendingId] = useState<string | null>(null);
+  // Buttons whose POST is still in flight; after that, the command row's status takes over.
+  const [pendingIds, setPendingIds] = useState<string[]>([]);
 
   const snapshot = useMemo(() => {
     if (!vehicleId) return undefined;
@@ -257,16 +281,20 @@ export function VehicleComfortControls({
     snapshot != null &&
     Date.now() - new Date(snapshot.received_at).getTime() > VEHICLE_CONTROL_STALE_MS;
   const lowAux = !relaxGuards && aux != null && aux > 0 && aux < VEHICLE_CONTROL_LOW_AUX_V;
-  const disabled = !vehicleId || !allowed || sendCommand.isPending;
-  const climateDisabled =
-    !vehicleId || !(relaxGuards || isClimateControlAllowed(snapshot)) || sendCommand.isPending;
+  const disabled = !vehicleId || !allowed;
+  const climateDisabled = !vehicleId || !(relaxGuards || isClimateControlAllowed(snapshot));
 
-  async function runAction(action: ComfortAction) {
-    setPendingId(action.id);
+  async function runAction(action: Pick<ComfortAction, "id" | "type" | "params">) {
+    setPendingIds((ids) => [...ids, action.id]);
     try {
       await sendCommand.mutateAsync({ type: action.type, params: action.params });
+    } catch {
+      // Shown below the controls via sendCommand.error.
     } finally {
-      setPendingId(null);
+      setPendingIds((ids) => {
+        const index = ids.indexOf(action.id);
+        return index < 0 ? ids : [...ids.slice(0, index), ...ids.slice(index + 1)];
+      });
     }
   }
 
@@ -339,7 +367,8 @@ export function VehicleComfortControls({
           <ActionGrid
             actions={WINDOW_ACTIONS}
             disabled={disabled}
-            pendingId={pendingId}
+            pendingIds={pendingIds}
+            commands={commands}
             onAction={(action) => void runAction(action)}
           />
         </section>
@@ -355,12 +384,12 @@ export function VehicleComfortControls({
 
         <section className="space-y-2">
           <h3 className="text-sm font-medium">Климат</h3>
-          <ActionGrid
-            actions={CLIMATE_ACTIONS}
-            columns={2}
+          <ClimatePanel
+            snapshot={snapshot}
+            commands={commands}
             disabled={climateDisabled}
-            pendingId={pendingId}
-            onAction={(action) => void runAction(action)}
+            pendingIds={pendingIds}
+            onCommand={(command) => void runAction(command)}
           />
         </section>
 
@@ -370,7 +399,8 @@ export function VehicleComfortControls({
             actions={SEAT_HEAT_ACTIONS}
             columns={2}
             disabled={disabled}
-            pendingId={pendingId}
+            pendingIds={pendingIds}
+            commands={commands}
             onAction={(action) => void runAction(action)}
           />
         </section>
