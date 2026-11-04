@@ -15,7 +15,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import {
-  CIRCULATION_VALUES,
+  circulationMode,
   climateCommandsInFlight,
   readClimateState,
   unconfirmedClimateCommand,
@@ -130,11 +130,11 @@ export function ClimatePanel({
   const busyType = (type: string, idPrefix: string) =>
     inFlight.some((command) => command.type === type) ||
     pendingIds.some((id) => id.startsWith(idPrefix));
-  const circBusy = (mode: "internal" | "external") =>
-    inFlight.some(
-      (command) =>
-        command.type === "ac_recirculation" && command.params?.mode === mode,
-    ) || pendingIds.includes(`recirculation-${mode}`);
+  // Unknown mode: the first press switches to internal.
+  const mode = circulationMode(state.ac_circ);
+  const circBusy =
+    inFlight.some((command) => command.type === "ac_recirculation") ||
+    pendingIds.includes("recirculation-toggle");
   const acBusy = busyType("ac", "ac-toggle");
   const unconfirmed = unconfirmedClimateCommand(
     commands,
@@ -143,11 +143,6 @@ export function ClimatePanel({
   );
 
   const acOn = state.ac_status == null ? null : state.ac_status !== 0;
-  const circ = state.ac_circ;
-  const circActive = (mode: "internal" | "external") =>
-    circ != null &&
-    CIRCULATION_VALUES[mode] != null &&
-    CIRCULATION_VALUES[mode] === circ;
 
   return (
     <div className="space-y-2">
@@ -183,64 +178,44 @@ export function ClimatePanel({
             {acOn == null ? "Климат" : acOn ? "Вкл" : "Выкл"}
           </span>
         </Button>
-        <div
-          className="grid grid-cols-2 gap-1"
-          role="group"
-          aria-label="Циркуляция"
+        <Button
+          type="button"
+          size="lg"
+          variant="outline"
+          disabled={disabled}
+          className={cn(
+            "h-11 justify-center gap-2",
+            circBusy && "ring-2 ring-primary/60",
+          )}
+          aria-busy={circBusy}
+          aria-label={
+            mode === "internal"
+              ? "Циркуляция внутренняя, переключить на внешнюю"
+              : "Циркуляция внешняя, переключить на внутреннюю"
+          }
+          onClick={() =>
+            onCommand({
+              id: "recirculation-toggle",
+              type: "ac_recirculation",
+              params: { mode: mode === "internal" ? "external" : "internal" },
+            })
+          }
         >
-          <Button
-            type="button"
-            size="lg"
-            variant={circActive("internal") ? "default" : "outline"}
-            disabled={disabled}
-            className={cn(
-              "h-11",
-              circBusy("internal") && "ring-2 ring-primary/60",
-            )}
-            aria-busy={circBusy("internal")}
-            aria-label="Внутренняя циркуляция"
-            aria-pressed={circActive("internal")}
-            onClick={() =>
-              onCommand({
-                id: "recirculation-internal",
-                type: "ac_recirculation",
-                params: { mode: "internal" },
-              })
-            }
-          >
-            {circBusy("internal") ? (
-              <LoaderCircle className="size-4 animate-spin" />
-            ) : (
-              <RefreshCw className="size-4" />
-            )}
-          </Button>
-          <Button
-            type="button"
-            size="lg"
-            variant={circActive("external") ? "default" : "outline"}
-            disabled={disabled}
-            className={cn(
-              "h-11",
-              circBusy("external") && "ring-2 ring-primary/60",
-            )}
-            aria-busy={circBusy("external")}
-            aria-label="Внешняя циркуляция"
-            aria-pressed={circActive("external")}
-            onClick={() =>
-              onCommand({
-                id: "recirculation-external",
-                type: "ac_recirculation",
-                params: { mode: "external" },
-              })
-            }
-          >
-            {circBusy("external") ? (
-              <LoaderCircle className="size-4 animate-spin" />
-            ) : (
-              <Wind className="size-4" />
-            )}
-          </Button>
-        </div>
+          {circBusy ? (
+            <LoaderCircle className="size-4 animate-spin" />
+          ) : mode === "internal" ? (
+            <RefreshCw className="size-4" />
+          ) : (
+            <Wind className="size-4" />
+          )}
+          <span className="text-sm font-medium">
+            {mode === "internal"
+              ? "Внутр."
+              : mode === "external"
+                ? "Наруж."
+                : "Циркуляция"}
+          </span>
+        </Button>
         <Stepper
           icon={<Thermometer className="size-4 text-muted-foreground" />}
           value={formatNumber(state.ac_temp_c, "°")}

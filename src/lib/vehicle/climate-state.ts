@@ -12,14 +12,16 @@ import type {
 export type ClimateField = "ac_status" | "ac_temp_c" | "fan_level" | "ac_circ";
 export type ClimateState = Record<ClimateField, number | null>;
 
-/** `空调循环方式` per mode, as measured on the car. Null = not measured: no highlight. */
-export const CIRCULATION_VALUES: {
-  internal: number | null;
-  external: number | null;
-} = {
-  internal: null,
-  external: null,
-};
+/** `空调循环方式` per mode, measured on `way` 2026-11-04 (`内循环` moved it 0 → 1). */
+export const CIRCULATION_VALUES = { internal: 1, external: 0 } as const;
+
+export function circulationMode(
+  value: number | null,
+): "internal" | "external" | null {
+  if (value === CIRCULATION_VALUES.internal) return "internal";
+  if (value === CIRCULATION_VALUES.external) return "external";
+  return null;
+}
 
 export const CLIMATE_COMMAND_TYPES = [
   "ac",
