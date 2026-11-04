@@ -248,7 +248,7 @@ export const dictionaries = {
       fund3: "further development and new features",
       premiumPerkTitle: "Thank you for your support",
       premiumPerkBody:
-        "Donations do not change access to VoltFlow features or data retention and are not required to use the app.",
+        "Donations are not required for VoltFlow's basic features and do not change them. Supporters get extended Premium features, such as unlimited remote commands.",
       cardTitle: "Bank card transfer",
       copy: "Copy",
       copied: "Copied",
@@ -1973,7 +1973,7 @@ export const dictionaries = {
       fund3: "далейшае развіццё праекта і яго магчымасцяў",
       premiumPerkTitle: "Дзякуй за падтрымку",
       premiumPerkBody:
-        "Ахвяраванне не змяняе доступ да функцый VoltFlow або тэрмін захоўвання даных і не патрабуецца для карыстання праграмай.",
+        "Ахвяраванне не патрабуецца для базавых функцый VoltFlow і не змяняе іх. Тым, хто падтрымаў праект, адкрываюцца пашыраныя магчымасці Premium — напрыклад, аддаленыя каманды без абмежаванняў.",
       cardTitle: "Пераказ на банкаўскую карту",
       copy: "Скапіраваць",
       copied: "Скапіравана",
@@ -3699,7 +3699,7 @@ export const dictionaries = {
       fund3: "дальнейшее развитие проекта и его функциональных возможностей",
       premiumPerkTitle: "Спасибо за поддержку",
       premiumPerkBody:
-        "Донат не меняет доступ к функциям VoltFlow или срок хранения данных и не требуется для использования приложения.",
+        "Донат не нужен для базовых функций VoltFlow и не меняет их. Поддержавшим проект открываются расширенные возможности Premium — например, удалённые команды без ограничений.",
       cardTitle: "Перевод на банковскую карту",
       copy: "Скопировать",
       copied: "Скопировано",

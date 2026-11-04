@@ -41,7 +41,7 @@ export function CommandErrorNotice({ error }: { error: unknown }) {
         </Button>
         <Dialog open={supportOpen} onOpenChange={setSupportOpen}>
           <DialogContent className="max-h-[90dvh] overflow-y-auto">
-            <DialogHeader>
+            <DialogHeader className="pr-8">
               <DialogTitle>Поддержать VoltFlow</DialogTitle>
               <DialogDescription>{QUOTA_SUPPORT_PITCH}</DialogDescription>
             </DialogHeader>

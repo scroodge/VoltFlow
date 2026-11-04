@@ -83,7 +83,7 @@ function formatWait(seconds: number): string {
 export function quotaMessage(block: QuotaBlock): string {
   const next =
     block.bucket === "snapshot" ? "Следующий снимок" : "Следующая команда";
-  return `Лимит бесплатного тарифа исчерпан. ${next} — через ${formatWait(block.retryAfterSeconds)}.`;
+  return `Лимит исчерпан. ${next} — через ${formatWait(block.retryAfterSeconds)}.`;
 }
 
 /** Shown with the quota message, so the limit reads as a rule, not an error. */
