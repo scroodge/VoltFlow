@@ -154,6 +154,7 @@ export function ClimatePanel({
           disabled={disabled}
           className={cn(
             "h-11 justify-center gap-2",
+            acOn === false && "col-span-2",
             acBusy && "ring-2 ring-primary/60",
           )}
           aria-busy={acBusy}
@@ -178,86 +179,94 @@ export function ClimatePanel({
             {acOn == null ? "Климат" : acOn ? "Вкл" : "Выкл"}
           </span>
         </Button>
-        <Button
-          type="button"
-          size="lg"
-          variant="outline"
-          disabled={disabled}
-          className={cn(
-            "h-11 justify-center gap-2",
-            circBusy && "ring-2 ring-primary/60",
-          )}
-          aria-busy={circBusy}
-          aria-label={
-            mode === "internal"
-              ? "Циркуляция внутренняя, переключить на внешнюю"
-              : "Циркуляция внешняя, переключить на внутреннюю"
-          }
-          onClick={() =>
-            onCommand({
-              id: "recirculation-toggle",
-              type: "ac_recirculation",
-              params: { mode: mode === "internal" ? "external" : "internal" },
-            })
-          }
-        >
-          {circBusy ? (
-            <LoaderCircle className="size-4 animate-spin" />
-          ) : mode === "internal" ? (
-            <RefreshCw className="size-4" />
-          ) : (
-            <Wind className="size-4" />
-          )}
-          <span className="text-sm font-medium">
-            {mode === "internal"
-              ? "Внутр."
-              : mode === "external"
-                ? "Наруж."
-                : "Циркуляция"}
-          </span>
-        </Button>
-        <Stepper
-          icon={<Thermometer className="size-4 text-muted-foreground" />}
-          value={formatNumber(state.ac_temp_c, "°")}
-          busy={busyType("ac_temp_step", "ac-temp")}
-          disabled={disabled}
-          label="Температура"
-          onDown={() =>
-            onCommand({
-              id: "ac-temp-down",
-              type: "ac_temp_step",
-              params: { direction: "down" },
-            })
-          }
-          onUp={() =>
-            onCommand({
-              id: "ac-temp-up",
-              type: "ac_temp_step",
-              params: { direction: "up" },
-            })
-          }
-        />
-        <Stepper
-          icon={<Fan className="size-4 text-muted-foreground" />}
-          value={formatNumber(state.fan_level)}
-          busy={busyType("fan_speed_step", "fan-speed")}
-          disabled={disabled}
-          label="Обдув"
-          onDown={() =>
-            onCommand({
-              id: "fan-speed-down",
-              type: "fan_speed_step",
-              params: { direction: "down" },
-            })
-          }
-          onUp={() =>
-            onCommand({
-              id: "fan-speed-up",
-              type: "fan_speed_step",
-              params: { direction: "up" },
-            })
-          }
-        />
+        {/* With the climate off the car keeps the last temperature, fan and air source,
+            but they do nothing: only the power button is shown. */}
+        {acOn === false ? null : (
+          <>
+            <Button
+              type="button"
+              size="lg"
+              variant="outline"
+              disabled={disabled}
+              className={cn(
+                "h-11 justify-center gap-2",
+                circBusy && "ring-2 ring-primary/60",
+              )}
+              aria-busy={circBusy}
+              aria-label={
+                mode === "internal"
+                  ? "Циркуляция внутренняя, переключить на внешнюю"
+                  : "Циркуляция внешняя, переключить на внутреннюю"
+              }
+              onClick={() =>
+                onCommand({
+                  id: "recirculation-toggle",
+                  type: "ac_recirculation",
+                  params: {
+                    mode: mode === "internal" ? "external" : "internal",
+                  },
+                })
+              }
+            >
+              {circBusy ? (
+                <LoaderCircle className="size-4 animate-spin" />
+              ) : mode === "internal" ? (
+                <RefreshCw className="size-4" />
+              ) : (
+                <Wind className="size-4" />
+              )}
+              <span className="text-sm font-medium">
+                {mode === "internal"
+                  ? "Внутр."
+                  : mode === "external"
+                    ? "Наруж."
+                    : "Циркуляция"}
+              </span>
+            </Button>
+            <Stepper
+              icon={<Thermometer className="size-4 text-muted-foreground" />}
+              value={formatNumber(state.ac_temp_c, "°")}
+              busy={busyType("ac_temp_step", "ac-temp")}
+              disabled={disabled}
+              label="Температура"
+              onDown={() =>
+                onCommand({
+                  id: "ac-temp-down",
+                  type: "ac_temp_step",
+                  params: { direction: "down" },
+                })
+              }
+              onUp={() =>
+                onCommand({
+                  id: "ac-temp-up",
+                  type: "ac_temp_step",
+                  params: { direction: "up" },
+                })
+              }
+            />
+            <Stepper
+              icon={<Fan className="size-4 text-muted-foreground" />}
+              value={formatNumber(state.fan_level)}
+              busy={busyType("fan_speed_step", "fan-speed")}
+              disabled={disabled}
+              label="Обдув"
+              onDown={() =>
+                onCommand({
+                  id: "fan-speed-down",
+                  type: "fan_speed_step",
+                  params: { direction: "down" },
+                })
+              }
+              onUp={() =>
+                onCommand({
+                  id: "fan-speed-up",
+                  type: "fan_speed_step",
+                  params: { direction: "up" },
+                })
+              }
+            />
+          </>
+        )}
       </div>
       {unconfirmed ? (
         <p className={cn("flex items-center gap-1.5 text-xs text-amber-600")}>

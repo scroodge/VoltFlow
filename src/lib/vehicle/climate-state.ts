@@ -30,6 +30,9 @@ export const CLIMATE_COMMAND_TYPES = [
   "ac_recirculation",
 ] as const;
 
+/** How long an acked value outranks newer snapshots (see readClimateState). */
+export const ACK_GRACE_MS = 3_000;
+
 const FIELDS: ClimateField[] = [
   "ac_status",
   "ac_temp_c",
@@ -87,7 +90,9 @@ export function readClimateState(
     const acked = stateOf(command);
     if (!acked || overridden.has(acked.field)) continue;
     overridden.add(acked.field);
-    if (new Date(command.executed_at).getTime() > snapshotAt) {
+    // A snapshot received just after the ack may still carry the value di+ read before the
+    // command, so the ack wins for ACK_GRACE_MS beyond its own time.
+    if (new Date(command.executed_at).getTime() + ACK_GRACE_MS > snapshotAt) {
       state[acked.field] = acked.after;
     }
   }

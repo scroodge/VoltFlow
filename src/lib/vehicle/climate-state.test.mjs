@@ -64,6 +64,17 @@ test("a newer ack overrides the snapshot, an older one does not", () => {
   assert.equal(readClimateState(snapshot, [older]).fan_level, 3);
 });
 
+test("an ack outranks a snapshot received just after it", () => {
+  const ack = cmd("a", "fan_speed_step", "done", -1500, {
+    result: {
+      verified: true,
+      state: { field: "fan_level", before: 3, after: 2 },
+    },
+  });
+  // executed at -900 ms; the snapshot (received at 0) still read the old 3.
+  assert.equal(readClimateState(snapshot, [ack]).fan_level, 2);
+});
+
 test("only the newest ack per field counts", () => {
   const first = cmd("a", "ac_temp_step", "done", 1000, {
     result: { state: { field: "ac_temp_c", after: 23 } },
