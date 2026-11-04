@@ -1,4 +1,6 @@
-const PREMIUM_UPGRADE_EMAIL = "washjurine@gmail.com";
+import { SUPPORT_EMAIL } from "./support.ts";
+
+const PREMIUM_UPGRADE_EMAIL = SUPPORT_EMAIL;
 
 export function getPremiumUpgradeEmail() {
   return PREMIUM_UPGRADE_EMAIL;

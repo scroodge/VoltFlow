@@ -17,7 +17,10 @@ export type SupportCard = {
  * isn't set.
  */
 export const SUPPORT_CARDS: readonly SupportCard[] = [
-  { number: process.env.NEXT_PUBLIC_SUPPORT_CARD_BY ?? "", bank: "BSB Bank  Беларусь" },
+  {
+    number: process.env.NEXT_PUBLIC_SUPPORT_CARD_BY ?? "",
+    bank: "BSB Bank  Беларусь",
+  },
   { number: process.env.NEXT_PUBLIC_SUPPORT_CARD_RU ?? "", bank: "Т-Банк, РФ" },
 ].filter((card) => card.number !== "");
 
@@ -30,5 +33,9 @@ export const SUPPORT_TELEGRAM_BOT_URL = "https://t.me/Voltflowscr_bot";
 /** Direct deep link to the VoltFlow Telegram Mini App (onboarding entry). */
 export const TELEGRAM_MINIAPP_URL = "https://t.me/Voltflowscr_bot/voltflow";
 
-/** Donation receipts can also go here by email. */
-export const SUPPORT_EMAIL = "washjurine@gmail.com";
+/**
+ * The one public contact address (receipts, account access, legal). Every
+ * user-facing mailto must use this — do not hardcode a personal address.
+ * `noreply@voltflow.life` is the outgoing sender only, never a contact.
+ */
+export const SUPPORT_EMAIL = "support@voltflow.life";

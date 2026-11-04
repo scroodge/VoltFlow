@@ -9,6 +9,24 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-11-04
+
+### One public support address: `support@voltflow.life`
+
+The `/support` receipt mailto and the premium/account-access mailto sent users to a personal
+Gmail (`washjurine@gmail.com`). The legal documents already used `support@voltflow.life`.
+`SUPPORT_EMAIL` (`src/lib/support.ts`) is now the single source:
+`premium-upgrade-mailto.ts` imports it, and `legal-operator.ts` uses it as the default
+(the `NEXT_PUBLIC_LEGAL_CONTACT_EMAIL` override is kept). `src/lib/support-email.test.mjs`
+checks that all three agree. The owner confirmed that the mailbox receives mail.
+
+`noreply@voltflow.life` is the outgoing sender only. "Ваша почта" on `/support` is the
+signed-in user's own address, not a contact.
+
+Open, outside the repo: MX for `voltflow.life` lists SES inbound and ImprovMX at the same
+priority (10). If SES has no receipt rule, some inbound mail can still be dropped at random.
+Drop that MX or give it a higher preference number.
+
 ## 2026-11-03
 
 - **Trip energy no longer lost when a trip ends on a power-less sample; energy and route-insight
