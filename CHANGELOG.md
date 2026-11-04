@@ -11,6 +11,14 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-11-03
 
+- **Trip energy no longer lost when a trip ends on a power-less sample; energy and route-insight
+  inputs backfilled before the raw purge (BACKLOG "Prod DB retention & cleanup", items 1b / 1e).**
+  `20261103220000_backfill_trip_energy_and_insight_inputs.sql` stored energy for finished trips that had
+  none and created `bydmate_trip_insight_inputs` for every trip that still has track points (2 627 → 4 188).
+  `20261103230000_bydmate_finalize_trip_energy_power_count.sql` makes `bydmate_finalize_trip_energy`
+  store the sums when the trip has more than one power sample (TS `calculateTripEnergy` rule) instead of
+  only when the last sample had power, and re-ran it: trips without stored energy 214 → 37 (those have no
+  power samples). Existing values untouched. Both applied to prod.
 - **Distilled telemetry that outlives the raw purge (BACKLOG "Prod DB retention & cleanup", item 1b).**
   Migrations `20261103210000_bydmate_telemetry_series_distill.sql` and
   `20261103211000_schedule_bydmate_telemetry_distill.sql` (applied to prod): `bydmate_trip_series` and

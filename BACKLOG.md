@@ -158,6 +158,24 @@ the backfill.
 Not mirrored in the APK; no formula changes.
 **Should I build this?**
 
+#### 1e. Bug: SQL trip energy drops the result when the last sample has no power — SHIPPED 2026-11-03 (see CHANGELOG)
+Backfill `20261103220000` (applied) stored energy for 110 of 214 trips and insight inputs for every trip
+that still has track points (4 188 rows, was 2 627). 104 trips still lack energy: 37 have no power
+samples at all, but **67 have numeric power samples**. Cause: `bydmate_finalize_trip_energy` stores the
+sums only `when v_prev_power is not null`, i.e. when the *last* sample in the trip has power; a trip
+ending on a power-less sample gets NULL. The TS twin `calculateTripEnergy` (`trip-energy.ts`) stores them
+when `powerSampleCount > 1` (same 180 s gap rule, same interval formula). Today the trip list hides this by
+recomputing from raw samples on every load; after the 90-day purge those trips would show no energy.
+Fix: a new migration redefining the function to count power samples and store when the count is > 1,
+then re-run it for the 67 trips. Changes the stored value only for trips that today get NULL; no APK
+formula involved. **APPROVED 2026-11-03; built as `20261103230000_bydmate_finalize_trip_energy_power_count.sql`.**
+Dry run on prod: 104 → 37 trips without energy (the 37 have no power samples), 2.3 s.
+**Open question found on the way (not blocking):** re-running the SQL function on 300 recent trips that
+already have energy changes 299 of them — all are APK client trips whose stored energy came from the car
+(avg traction 1.35 kWh stored vs 1.64 recomputed from raw; one trip differs by 86 kWh). The old function
+gives the same result, so it is not caused by the fix; nothing overwrites existing values. Worth checking
+whether raw samples in a client trip's window include another trip, or the car's integration differs.
+
 #### 1c. Optional, independent of the purge: slim the raw row
 Stop storing the duplicates and junk inside the 90-day window: the `telemetry` cell / aux keys that the
 `diplus_*` columns already hold, `kwh_charged`, `soc_source`, the duplicate `diplus_*` columns and the
