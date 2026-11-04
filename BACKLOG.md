@@ -1,3 +1,46 @@
+## One public support address: `support@voltflow.life` (2026-11-04) — PROPOSED
+
+**Problem.** The app uses two different contact addresses:
+
+| Where | Address | Source |
+|---|---|---|
+| `/support` "send receipt by email" (mailto) | `washjurine@gmail.com` | `src/lib/support.ts:34` `SUPPORT_EMAIL` |
+| Premium / account-access mailto | `washjurine@gmail.com` | `src/lib/premium-upgrade-mailto.ts:1` |
+| Legal documents | `support@voltflow.life` | `src/lib/legal-operator.ts:7` (env `NEXT_PUBLIC_LEGAL_CONTACT_EMAIL` overrides) |
+
+`noreply@voltflow.life` is the outgoing sender only (auth mail, inactivity cron). It is not a
+contact address. "Ваша почта" on `/support` is the signed-in user's own email, and that is
+correct.
+
+**Prerequisite: deliverability (blocker).** `dig MX voltflow.life` (2026-11-04) returns three
+records:
+- `10 inbound-smtp.eu-west-1.amazonaws.com`: AWS SES inbound
+- `10 mx1.improvmx.com`: ImprovMX forwarding
+- `20 mx2.improvmx.com`: ImprovMX forwarding
+
+SES and ImprovMX have the **same priority**, so senders pick either one at random. If SES has
+no receipt rule for `support@`, about half of incoming mail is silently dropped. Before
+switching, verify: (a) ImprovMX has an alias `support@` → a mailbox that is actually read;
+(b) whether SES inbound is needed (receipt rules). If it is not, remove that MX record, or
+raise its preference number so that it is only a fallback. Then send test mail from two
+external providers (Gmail, Yandex) and confirm both arrive.
+
+**Options.**
+1. **One constant, `support@voltflow.life` (recommended).** `SUPPORT_EMAIL` becomes the single
+   source of truth. `premium-upgrade-mailto.ts` imports it, and `legal-operator.ts` uses it as
+   its default (the env override stays). Benefit: the personal Gmail is no longer published in
+   the bundle, and changing the address later is a one-line edit. Cost: depends on the
+   deliverability fix above.
+2. **Keep Gmail everywhere and change the legal docs to it.** Works today. Cost: exposes the
+   personal address and ties support to one person.
+3. **Leave as is.** Inconsistent, and the legal-doc address may not deliver.
+
+**Data ownership:** app-owned static config in code (no DB, no localStorage).
+
+**Scope (option 1):** `src/lib/support.ts`, `src/lib/premium-upgrade-mailto.ts`,
+`src/lib/legal-operator.ts`, and a focused test asserting all three resolve to `SUPPORT_EMAIL`.
+DNS/ImprovMX changes are done by the owner outside the repo.
+
 ## Ops DB access: tunnel-only direct Postgres access (2026-11-03) — IN PROGRESS (steps 0–2a done 2026-11-03; 2b ≥24 h later, then 4)
 
 **Problem.** Direct Postgres access for ops (psql from a laptop) currently does not go through a tunnel.
