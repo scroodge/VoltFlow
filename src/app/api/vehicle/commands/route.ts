@@ -8,11 +8,19 @@ import {
 } from "@/lib/voltflowmate/command-ack-timeout";
 import { REMOTE_COMMANDS_ENABLED } from "@/lib/voltflowmate/remote-commands";
 import { createServiceClient } from "@/lib/supabase/service";
+import {
+  CAMERA_SNAPSHOT_TYPE,
+  COUNTED_STATUSES,
+  quotaBlock,
+  quotaBucket,
+  quotaMessage,
+  quotaWindowMs,
+  type QuotaRow,
+} from "@/lib/vehicle/command-quota";
+import { resolveCommandTier } from "@/lib/vehicle/command-tier-server";
 
 export const runtime = "nodejs";
 
-const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
-const RATE_LIMIT_MAX = 50;
 const COMMAND_TIMEOUT_MS = 60 * 1000;
 
 type CommandRow = {
@@ -142,28 +150,49 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const since = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString();
-  const { count, error: countError } = await access.supabase
-    .from("vehicle_commands")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", access.userId)
-    .gte("created_at", since);
-
-  if (countError) {
-    return NextResponse.json(
-      { ok: false, error: "Rate check failed" },
-      { status: 500 },
+  // Plan quota: free = 1 command / 5 min and 1 camera snapshot / 8 h; Premium and admins
+  // unlimited (see command-quota.ts).
+  const tier = await resolveCommandTier(access.supabase, access.userId);
+  if (tier === "free") {
+    const bucket = quotaBucket(type);
+    const since = new Date(Date.now() - quotaWindowMs(bucket)).toISOString();
+    let recentQuery = access.supabase
+      .from("vehicle_commands")
+      .select("created_at, status, result")
+      .eq("user_id", access.userId)
+      .in("status", [...COUNTED_STATUSES])
+      .gte("created_at", since);
+    recentQuery =
+      bucket === "snapshot"
+        ? recentQuery.eq("type", CAMERA_SNAPSHOT_TYPE)
+        : recentQuery.neq("type", CAMERA_SNAPSHOT_TYPE);
+    const { data: recent, error: recentError } = await recentQuery;
+    if (recentError) {
+      return NextResponse.json(
+        { ok: false, error: "Rate check failed" },
+        { status: 500 },
+      );
+    }
+    const block = quotaBlock(
+      tier,
+      type,
+      (recent ?? []) as QuotaRow[],
+      Date.now(),
     );
-  }
-
-  if ((count ?? 0) >= RATE_LIMIT_MAX) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: `Rate limit: max ${RATE_LIMIT_MAX} commands per 5 minutes`,
-      },
-      { status: 429 },
-    );
+    if (block) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: quotaMessage(block),
+          code: "plan_quota",
+          retry_after_seconds: block.retryAfterSeconds,
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": String(block.retryAfterSeconds) },
+        },
+      );
+    }
   }
 
   const { data: car, error: carError } = await access.supabase

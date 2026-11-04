@@ -13,6 +13,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { ClimatePanel } from "@/components/vehicle/climate-panel";
+import { CommandErrorNotice } from "@/components/vehicle/command-quota-notice";
 import {
   Card,
   CardContent,
@@ -245,6 +246,8 @@ export type VehicleComfortControlsProps = {
   /** Collapsed header on Vehicle page; expands on tap. */
   collapsible?: boolean;
   defaultExpanded?: boolean;
+  /** Raw command history under the buttons. Users get the inline "not confirmed" hint instead. */
+  showHistory?: boolean;
 };
 
 export function VehicleComfortControls({
@@ -252,6 +255,7 @@ export function VehicleComfortControls({
   relaxGuards = false,
   collapsible = false,
   defaultExpanded = false,
+  showHistory = false,
 }: VehicleComfortControlsProps) {
   const { data: liveRows } = useVoltflowMateLiveQuery();
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -405,15 +409,9 @@ export function VehicleComfortControls({
           />
         </section>
 
-        {sendCommand.isError ? (
-          <p className="text-sm text-destructive">
-            {sendCommand.error instanceof Error
-              ? sendCommand.error.message
-              : "Ошибка команды"}
-          </p>
-        ) : null}
+        <CommandErrorNotice error={sendCommand.isError ? sendCommand.error : null} />
 
-        {commands && commands.length > 0 ? (
+        {showHistory && commands && commands.length > 0 ? (
           <CommandHistory commands={commands} />
         ) : null}
       </CardContent>

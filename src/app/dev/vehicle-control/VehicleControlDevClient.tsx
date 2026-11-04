@@ -158,7 +158,7 @@ export function VehicleControlDevClient({
         </p>
       </header>
 
-      <VehicleControlPanel enabled vehicleId={vehicleId} relaxGuards defaultExpanded />
+      <VehicleControlPanel enabled vehicleId={vehicleId} relaxGuards defaultExpanded showHistory />
 
       <Card>
         <CardHeader className="pb-3">

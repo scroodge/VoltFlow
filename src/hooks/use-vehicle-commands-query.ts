@@ -9,7 +9,9 @@ import { createClient } from "@/lib/supabase/client";
 import { queryKeys } from "@/lib/query-keys";
 import type { VehicleCommandRow } from "@/types/database";
 
-async function fetchVehicleCommands(vehicleId: string | null): Promise<VehicleCommandRow[]> {
+async function fetchVehicleCommands(
+  vehicleId: string | null,
+): Promise<VehicleCommandRow[]> {
   const params = new URLSearchParams({ limit: "20" });
   if (vehicleId) params.set("vehicle_id", vehicleId);
   const response = await devFetch(`/api/vehicle/commands?${params.toString()}`);
@@ -28,7 +30,8 @@ export function useVehicleCommandsQuery(
   const pageVisible = usePageVisible();
   const mountId = useRef(crypto.randomUUID()).current;
 
-  const enabled = (options?.enabled ?? true) && Boolean(vehicleId) && pageVisible;
+  const enabled =
+    (options?.enabled ?? true) && Boolean(vehicleId) && pageVisible;
 
   useEffect(() => {
     if (!vehicleId || devRoute) return;
@@ -74,11 +77,26 @@ export function useVehicleCommandsQuery(
   });
 }
 
+/** A refused command; `code: "plan_quota"` means the free plan limit (see command-quota.ts). */
+export class VehicleCommandError extends Error {
+  constructor(
+    message: string,
+    readonly code?: string,
+    readonly retryAfterSeconds?: number,
+  ) {
+    super(message);
+    this.name = "VehicleCommandError";
+  }
+}
+
 export function useSendVehicleCommand(vehicleId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: { type: string; params?: Record<string, unknown> }) => {
+    mutationFn: async (input: {
+      type: string;
+      params?: Record<string, unknown>;
+    }) => {
       if (!vehicleId) throw new Error("No vehicle selected");
       const response = await devFetch("/api/vehicle/commands", {
         method: "POST",
@@ -89,13 +107,24 @@ export function useSendVehicleCommand(vehicleId: string | null) {
           params: input.params ?? {},
         }),
       });
-      const payload = (await response.json()) as { ok?: boolean; error?: string };
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        code?: string;
+        retry_after_seconds?: number;
+      };
       if (!response.ok || !payload.ok) {
-        throw new Error(payload.error ?? "Command failed");
+        throw new VehicleCommandError(
+          payload.error ?? "Command failed",
+          payload.code,
+          payload.retry_after_seconds,
+        );
       }
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.vehicleCommands(vehicleId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.vehicleCommands(vehicleId),
+      });
     },
   });
 }

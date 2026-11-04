@@ -45,6 +45,7 @@ import { DemoWatermark } from "@/components/demo/demo-watermark";
 import { demoChargingSessions } from "@/lib/demo-data";
 import { useVehicleConnection } from "@/hooks/use-vehicle-connection";
 import { VehicleAnalyticsTeaser } from "@/components/vehicle/vehicle-analytics-teaser";
+import { CommandErrorNotice } from "@/components/vehicle/command-quota-notice";
 import { VehicleControlPanel } from "@/components/vehicle/vehicle-control-panel";
 import { MetricExplainerSheet } from "@/components/vehicle/metric-explainer-sheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -643,21 +644,23 @@ function VehicleLiveContent({
               vehicleId={scopedVehicleId ?? snapshot.vehicle_id}
             />
           ) : null}
-          {!fixturePoints && isAdmin ? (
+          {!fixturePoints ? (
             <VehicleControlPanel
               enabled={remoteCommandsEnabled}
               vehicleId={scopedVehicleId ?? snapshot.vehicle_id}
               collapsible
+              showHistory={isAdmin}
             />
           ) : null}
         </>
       ) : (
         <>
-          {!fixturePoints && isAdmin ? (
+          {!fixturePoints ? (
             <VehicleControlPanel
               enabled={remoteCommandsEnabled}
               vehicleId={scopedVehicleId ?? snapshot.vehicle_id}
               collapsible
+              showHistory={isAdmin}
             />
           ) : null}
           <CellHealthCard snapshot={snapshot} />
@@ -1789,7 +1792,7 @@ function CameraSnapshotCard({
           type="button"
           size="sm"
           disabled={!enabled || snapshotInFlight}
-          onClick={() => void sendCommand.mutateAsync({ type: "camera_snapshot" })}
+          onClick={() => sendCommand.mutate({ type: "camera_snapshot" })}
         >
           {snapshotInFlight
             ? tx("vehicle.camera.load")
@@ -1797,6 +1800,7 @@ function CameraSnapshotCard({
               ? tx("vehicle.camera.take")
               : tx("vehicle.camera.noConnection")}
         </Button>
+        <CommandErrorNotice error={sendCommand.isError ? sendCommand.error : null} />
         {snapshotInFlight ? (
           <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-md border border-border/60 bg-muted/30 text-center text-sm text-muted-foreground">
             <LoaderCircle className="size-6 animate-spin" aria-hidden="true" />
