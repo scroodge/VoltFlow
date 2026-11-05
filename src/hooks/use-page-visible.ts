@@ -2,16 +2,16 @@
 
 import { useSyncExternalStore } from "react";
 
-function subscribe(onStoreChange: () => void) {
+export function subscribe(onStoreChange: () => void) {
   document.addEventListener("visibilitychange", onStoreChange);
   return () => document.removeEventListener("visibilitychange", onStoreChange);
 }
 
-function getSnapshot() {
+export function getSnapshot() {
   return document.visibilityState === "visible";
 }
 
-function getServerSnapshot() {
+export function getServerSnapshot() {
   return true;
 }
 
