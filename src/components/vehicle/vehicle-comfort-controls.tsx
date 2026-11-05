@@ -81,7 +81,7 @@ type ComfortAction = {
 const WINDOW_ACTIONS: ComfortAction[] = [
   {
     id: "windows-vent",
-    label: "Проветрить",
+    label: "15%",
     type: "windows_preset",
     params: { preset: "vent" },
     icon: <Wind className="size-4" />,
