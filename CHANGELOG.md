@@ -9,6 +9,17 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-11-05
+
+**Distill cron no longer churns expired free-tier rows** (BACKLOG "Prod DB retention & cleanup", 1f).
+`bydmate_distill_telemetry_series` took the newest 200 trips/sessions without a series. These were
+free-tier ones past the 30-day raw window, so the run wrote an empty series, its own free-tier cleanup
+deleted it, and the next run picked the same rows. 1 965 premium trips with raw samples were never
+reached. Migration `20261105100000` (applied) leaves free users' trips and sessions older than 30 days
+out of the candidates. The free-user set is computed once per run, per distinct user. Grants:
+`service_role` only (checked: anon/authenticated `f`). The purge gate is now "premium trips/sessions
+without a series = 0".
+
 ## 2026-11-04
 
 ### One public support address: `support@voltflow.life`

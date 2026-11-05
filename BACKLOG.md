@@ -1,3 +1,14 @@
+## Link-code hashing: set a dedicated `BYDMATE_LINK_CODE_PEPPER` (2026-11-05) — PROPOSED
+
+`src/lib/voltflowmate/link-code.ts` falls back to `SUPABASE_SERVICE_ROLE_KEY` when `BYDMATE_LINK_CODE_PEPPER`
+is unset, so any JWT/key rotation invalidates link codes issued just before it. Mate API keys and
+di+ webhook tokens already have their own peppers on Vercel and were not affected by the
+2026-11-05 rotation. **Do:** confirm on Vercel whether `BYDMATE_LINK_CODE_PEPPER` exists. If not, set a fresh random
+value and redeploy. Only codes pending at that moment are lost, and they are short-lived. Also add
+`BYDMATE_API_KEY_PEPPER` to the local `.env.local`: without it, local hash and fingerprint checks fall back
+to service_role and report false mismatches (this caused a false "all cars broken" alarm on 2026-11-05).
+**Acceptance:** no pepper resolves to `SUPABASE_SERVICE_ROLE_KEY` in production, and local checks match prod.
+
 ## Ops DB access: tunnel-only direct Postgres access — DONE 2026-11-05 (direct DB ports bound to localhost; ops via SSH tunnel; external hourly check green; DB-password rotation downgraded to low priority, see private runbook)
 
 **Problem.** Direct Postgres access for ops (psql from a laptop) currently does not go through a tunnel.
@@ -175,6 +186,26 @@ already have energy changes 299 of them — all are APK client trips whose store
 (avg traction 1.35 kWh stored vs 1.64 recomputed from raw; one trip differs by 86 kWh). The old function
 gives the same result, so it is not caused by the fix; nothing overwrites existing values. Worth checking
 whether raw samples in a client trip's window include another trip, or the car's integration differs.
+
+#### 1f. Bug: distill cron churns free-tier rows and starves premium history (found 2026-11-05)
+Prod 2026-11-05 10:00 UTC, ~38 h after the cron started: 1 843 trip series. Finished telemetry trips
+without a series: 5 485, of which 1 987 are premium (1 965 still have raw samples) and 3 498 are free
+(21 with samples). Runs take 3–6 s, and new series per hour fell from 9 to 1. Session series: 562;
+1 062 sessions are missing one.
+Cause: in `bydmate_distill_telemetry_series`, the candidates are the newest 200 trips/sessions with no
+series row. Older free-tier trips sort ahead of premium history. The run writes an empty row
+(`source_sample_count = 0`, raw already pruned), and the free-tier cleanup at the end of the same run
+deletes it (series older than 30 days). The next run picks the same 200 again, so no premium trip is
+reached.
+Fix (new migration, `create or replace`, same grants): leave free users' trips and sessions that started
+more than 30 days ago out of the candidate list. The free-user set is computed once with
+`is_user_premium` per distinct user, as in the cleanup. Optionally raise the batch from 200 to 500 for the
+backlog: runs now take seconds, and a 200-trip run took 23 s. No change on the read path, no APK
+involvement, no data deleted. Data ownership is unchanged (app-owned, Postgres).
+The purge waits for this: the counter only reaches 0 once the free-tier part is also excluded from it,
+so the purge gate becomes "premium trips/sessions without a series = 0".
+**APPROVED 2026-11-05; built as `20261105100000_bydmate_distill_skip_expired_free_tier.sql`** (batch
+left at 200). Dry run on prod with one 50-row batch: trip series 1 843 → 1 892, i.e. real trips again.
 
 #### 1c. Optional, independent of the purge: slim the raw row
 Stop storing the duplicates and junk inside the 90-day window: the `telemetry` cell / aux keys that the
@@ -741,7 +772,9 @@ to the VPN or other tenants' services.
 > fallback (single key in `authorized_keys`); `grafana/grafana:latest` and other `latest` tags are
 > unpinned.
 
-## SECURITY: Kong Admin API (port 8001) was public — contain, then rotate Supabase keys — STEP 1 DONE 2026-10-07, STEP 2 DECLINED
+## SECURITY: Kong Admin API (port 8001) was public — contain, then rotate Supabase keys — DONE (step 1 2026-10-07, step 2 rotation 2026-11-05)
+
+> **2026-11-05: keys rotated.** The old `anon`/`service_role` keys now get 401. Details and the JWKS lesson are in the private runbook.
 
 > **Status 2026-10-07:** Step 1 applied and verified (`8001` bound to `127.0.0.1`; from the
 > internet `:8001` no longer answers, REST/auth still return 401 as expected). **Step 2 (key
