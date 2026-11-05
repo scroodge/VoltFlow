@@ -39,6 +39,13 @@ test("maps driver-seat heating only to the verified levels", () => {
   assert.equal(validateVehicleCommand("seat_heat_driver", { level: 1 }).ok, false);
 });
 
+test("maps daytime running lights on/off to the verified phrases", () => {
+  assert.deepEqual(buildDiplusPhrase("drl", { on: true }), { ok: true, phrase: "打开日行灯" });
+  assert.deepEqual(buildDiplusPhrase("drl", { on: false }), { ok: true, phrase: "关闭日行灯" });
+  assert.equal(validateVehicleCommand("drl", {}).ok, false);
+  assert.equal(validateVehicleCommand("drl", { on: "maybe" }).ok, false);
+});
+
 test("permits the parameterless local camera capture job but not arbitrary parameters", () => {
   assert.equal(validateVehicleCommand("camera_snapshot", {}).ok, true);
   assert.equal(validateVehicleCommand("camera_snapshot", { view: "front" }).ok, false);

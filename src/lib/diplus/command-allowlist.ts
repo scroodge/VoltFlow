@@ -22,6 +22,7 @@ export const VEHICLE_COMMAND_TYPES = [
   "fan_speed_step",
   "ac_recirculation",
   "seat_heat_driver",
+  "drl",
 ] as const;
 
 export type VehicleCommandType = (typeof VEHICLE_COMMAND_TYPES)[number];
@@ -49,15 +50,15 @@ const WINDOWS_PRESET_PHRASES: Record<string, string> = {
 };
 
 export type AllowlistResult =
-  | { ok: true; phrase: string }
-  | { ok: false; error: string };
+  { ok: true; phrase: string } | { ok: false; error: string };
 
 function containsDeniedPhrase(text: string) {
   return DIPLUS_DENY_PATTERNS.some((pattern) => text.includes(pattern));
 }
 
 function readInt(value: unknown) {
-  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
+  if (typeof value === "number" && Number.isFinite(value))
+    return Math.trunc(value);
   if (typeof value === "string" && value.trim() !== "") {
     const parsed = Number(value);
     if (Number.isFinite(parsed)) return Math.trunc(parsed);
@@ -80,7 +81,8 @@ export function buildDiplusPhrase(
 
   switch (type) {
     case "window": {
-      const target = WINDOW_TARGETS[typeof params.which === "string" ? params.which : ""];
+      const target =
+        WINDOW_TARGETS[typeof params.which === "string" ? params.which : ""];
       const pct = readInt(params.pct);
       if (!target) return { ok: false, error: "window.which invalid" };
       if (pct == null || pct < 0 || pct > 100) {
@@ -90,9 +92,10 @@ export function buildDiplusPhrase(
       break;
     }
     case "windows_preset": {
-      const preset = WINDOWS_PRESET_PHRASES[
-        typeof params.preset === "string" ? params.preset : ""
-      ];
+      const preset =
+        WINDOWS_PRESET_PHRASES[
+          typeof params.preset === "string" ? params.preset : ""
+        ];
       if (!preset) return { ok: false, error: "windows_preset.preset invalid" };
       phrase = preset;
       break;
@@ -104,17 +107,25 @@ export function buildDiplusPhrase(
       break;
     }
     case "ac_temp_step": {
-      const direction = typeof params.direction === "string" ? params.direction : "";
+      const direction =
+        typeof params.direction === "string" ? params.direction : "";
       if (direction !== "up" && direction !== "down") {
-        return { ok: false, error: "ac_temp_step.direction must be up or down" };
+        return {
+          ok: false,
+          error: "ac_temp_step.direction must be up or down",
+        };
       }
       phrase = direction === "up" ? "空调升温" : "空调降温";
       break;
     }
     case "fan_speed_step": {
-      const direction = typeof params.direction === "string" ? params.direction : "";
+      const direction =
+        typeof params.direction === "string" ? params.direction : "";
       if (direction !== "up" && direction !== "down") {
-        return { ok: false, error: "fan_speed_step.direction must be up or down" };
+        return {
+          ok: false,
+          error: "fan_speed_step.direction must be up or down",
+        };
       }
       phrase = direction === "up" ? "升风速" : "降风速";
       break;
@@ -122,7 +133,10 @@ export function buildDiplusPhrase(
     case "ac_recirculation": {
       const mode = typeof params.mode === "string" ? params.mode : "";
       if (mode !== "internal" && mode !== "external") {
-        return { ok: false, error: "ac_recirculation.mode must be internal or external" };
+        return {
+          ok: false,
+          error: "ac_recirculation.mode must be internal or external",
+        };
       }
       phrase = mode === "internal" ? "内循环" : "外循环";
       break;
@@ -135,6 +149,13 @@ export function buildDiplusPhrase(
       phrase = level === 2 ? "主驾座椅加热2档" : "关闭主驾座椅加热";
       break;
     }
+    case "drl": {
+      // Verified on `way` 2026-11-04: di+ {日行灯} flips 1 (on) ↔ 2 (off).
+      const on = readBool(params.on);
+      if (on == null) return { ok: false, error: "drl.on must be boolean" };
+      phrase = on ? "打开日行灯" : "关闭日行灯";
+      break;
+    }
     default:
       return { ok: false, error: `Unknown command type: ${type}` };
   }
@@ -145,11 +166,17 @@ export function buildDiplusPhrase(
   return { ok: true, phrase };
 }
 
-export function validateVehicleCommand(type: string, params: VehicleCommandParams) {
+export function validateVehicleCommand(
+  type: string,
+  params: VehicleCommandParams,
+) {
   if (type === CAMERA_SNAPSHOT_COMMAND_TYPE) {
     return Object.keys(params ?? {}).length === 0
       ? ({ ok: true, phrase: "" } satisfies AllowlistResult)
-      : ({ ok: false, error: "camera_snapshot does not accept parameters" } satisfies AllowlistResult);
+      : ({
+          ok: false,
+          error: "camera_snapshot does not accept parameters",
+        } satisfies AllowlistResult);
   }
   return buildDiplusPhrase(type, params ?? {});
 }

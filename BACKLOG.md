@@ -1,4 +1,4 @@
-## Ops DB access: tunnel-only direct Postgres access (2026-11-03) — IN PROGRESS (steps 0–2a done 2026-11-03; 2b ≥24 h later, then 4)
+## Ops DB access: tunnel-only direct Postgres access — DONE 2026-11-05 (direct DB ports bound to localhost; ops via SSH tunnel; external hourly check green; DB-password rotation downgraded to low priority, see private runbook)
 
 **Problem.** Direct Postgres access for ops (psql from a laptop) currently does not go through a tunnel.
 That widens the attack surface for no app benefit: the web app, the APK and the PWA reach the DB only
@@ -208,6 +208,54 @@ No new data or storage: the command is an existing user action queued in `vehicl
 
 **Verification:** focused allowlist tests in both repositories; on-car check that each
 command changes `风量档位` by exactly one.
+
+## Remote command: daytime running lights (ДХО) on / off — BUILT 2026-11-05 (both repos, tests green; uncommitted); awaiting deploy + Mate release + on-car button check
+
+**Step 1 result (2026-11-04, `way`, P, power ON):** `迪加关闭日行灯` → `{日行灯}` 1 → 2;
+`迪加打开日行灯` → 2 → 1, each within 3 s. Phrases confirmed; built per the design below.
+
+**Ask (owner):** add DRL on/off to the remote commands.
+
+**What exists:** DRL *state* already flows — Mate reads di+ `{日行灯}` (`DiParsClient.kt:126`,
+`0` invalid, `1` on, `2` off) and sends it as telemetry `drl` (`ingest-payload.ts:111`). No DRL
+*command* phrase is known: none in either allowlist, `BYDMate-own/docs/DIPLUS_DATA.md`, or the
+upstream sources. Di+ `sendCmd` answers `success:true` to **any** phrase (see the «мигнуть фарами»
+entry below), so a guessed phrase would ship as a silent no-op.
+
+**Options:**
+1. **Verify the phrase on `way` first (chosen).** Car ON, in P, owner present: send candidates
+   straight to Di+ via adb — `关闭日行灯` / `打开日行灯`, then `日行灯关闭` / `日行灯打开` — and
+   watch both the lamps and `{日行灯}` flip `1 ↔ 2`. Only a phrase that actuates goes in. If none
+   does (BYD often locks DRL off to the HU settings menu), stop here and record it as not
+   supported.
+2. Ship the guessed phrase with a probe and let `verified=false` reveal failure — rejected: users
+   see a button that does nothing.
+3. Read-only: show DRL state in the status panel without a command — fallback if (1) fails.
+
+**Design (after 1 succeeds):**
+- New type `drl` with `{ on: boolean }` in both allowlists, kept identical:
+  `src/lib/diplus/command-allowlist.ts` and `BYDMate-own/.../data/remote/CommandAllowlist.kt`.
+- Mate `CommandStateProbe`: `drl` → probe `日行灯`, `verified` when it reads `1` (on) / `2` (off),
+  so the result is real, not «di+ accepted».
+- Gating: **not** added to `MOVEMENT_EXEMPT_TYPES`, so the existing park/stationary block
+  applies (no DRL toggling while driving). Existing 12 V low-voltage block applies too.
+- PWA: on/off toggle in the commands panel, reflecting the live `drl` value; ru/en/be strings.
+- Both repos change together → new Mate release required; older Mate rejects the unknown type
+  (`Unknown command type`), which the PWA already surfaces as a failed command.
+
+**Data ownership:** no new data. The command is a user action queued in the existing
+`vehicle_commands` table (Postgres); state comes from the existing telemetry. No migration.
+
+**UI as built (owner feedback 2026-11-05):** DRL is one toggle button (label from live `drl`,
+or from a `drl` command executed after that snapshot). Seat heat and DRL share one row. Seat
+heat stays **two** buttons «Вкл | Выкл»: di+ exposes no seat-heat state, so a toggle would guess
+from the last command and go wrong after the car switches heating off itself.
+
+**Follow-up (PROPOSED):** look for a readable seat-heat state on `way` via the autoservice path
+(`FidRegistry`) with adb; if one is found, add it to telemetry and turn seat heat into a toggle too.
+
+**Verification:** allowlist tests in both repos (valid on/off, rejected bad params), probe test in
+`CommandStateProbeTest`; on-car check that each button flips `drl` and the lamps.
 
 ## Use di+ BMS state for prompt charging auto-stop (option B of the Di+ 2.0.0b8 work) — PROPOSED 2026-11-02
 

@@ -252,6 +252,7 @@ DiPlus.
 | `fan_speed_step` | `direction`: `up`/`down` | `迪加升风速` / `迪加降风速` |
 | `ac_recirculation` | `mode`: `internal`/`external` | `内循环` / `外循环` |
 | `seat_heat_driver` | `level`: `0` or `2` | off / validated maximum |
+| `drl` | `on`: boolean; park/stationary only | `打开日行灯` / `关闭日行灯` (verified via `{日行灯}` 1 ↔ 2) |
 | `camera_snapshot` | no parameters; manual only | a private JPEG captured from local `pano` |
 
 `camera_snapshot` is not a di+ voice phrase. Mate reads one frame from the car-local
