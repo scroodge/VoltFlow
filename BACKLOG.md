@@ -1,3 +1,78 @@
+## Remote commands without di+ phrases: call BYD's vehicle API directly (2026-11-05) — PROPOSED, build planned 2026-11-06
+
+**Goal.** Mate executes remote commands itself instead of sending `迪加<phrase>` to di+
+(`127.0.0.1:8988/api/sendCmd`). Expected gains:
+- a real result instead of di+'s `success:true` for any phrase (see «мигнуть фарами / гудок
+  report done but nothing happens» below);
+- no dependency on di+'s HTTP server and its phrase set changing between betas;
+- access to controls di+ has no phrase for.
+
+**di+ itself stays installed.** Its 熄火哨兵 keeps the head unit awake while parked (Mate
+`AGENTS.md`), so this removes di+ from the *command* path only. The read path (`getDiPars`) is
+out of scope.
+
+**What is known (static analysis of `research/diplus-2.0.0b9-src`, 2026-11-05):**
+- di+ parses the phrase and calls BYD's in-firmware SDK. For DRL that is
+  `BYDAutoLightDevice.getInstance(ctx).setDayTimeLightState(1 | 2)` (`sources/z/j.java:43`,
+  `sources/z/i.java`). Others use `BYDAutoAcDevice`, `BYDAutoBodyworkDevice`,
+  `BYDAutoSettingDevice` and so on.
+- di+ is a plain sideloaded app that declares `BYDAUTO_*_SET` / `*_COMMON` permissions in its
+  manifest.
+- One layer lower is the `autoservice` binder (`android.gui.BYDAutoServer`, tx 6 `setInt(dev,
+  fid, value)`, tx 10 `setIntArray`; `docs/EV_PRO_APP_ANALYSIS.md`). Mate already **reads** it
+  from shell uid (`service call autoservice 5 …`, `FidRegistry`).
+- Raw fids are model-specific. The upstream catalog was validated on Leopard 3, and on `way`
+  (Yuan Up) the DRL fid `1004/1231040528` read `0` while di+ said `1`. SDK methods resolve
+  this inside the firmware, raw fids do not.
+
+**Unknowns, checked first on the car (step 1; read-only):**
+1. The protection level of `BYDAUTO_LIGHT_SET` / `BYDAUTO_AC_SET` / `BYDAUTO_BODYWORK_SET`
+   (`pm list permissions -f`), and whether di+ holds them (`dumpsys package com.van.diplus`).
+   This decides between options A and B.
+2. Whether shell uid may *write* to `autoservice`. Probe with a harmless, reversible
+   command: DRL on → off while parked, then confirm `{日行灯}` via di+.
+3. Pull `/system/framework` BYD jars from `way`, decompile `BYDAutoLightDevice` /
+   `BYDAutoAcDevice` / `BYDAutoBodyworkDevice`, and map each method we use to its `(dev, fid,
+   value)` on this firmware.
+
+**Options:**
+
+| | How | Pros | Cons |
+|---|---|---|---|
+| A | The app declares the `BYDAUTO_*` permissions and calls the SDK classes by reflection, in-process | Same call as di+; the firmware handles model differences | Works only if a sideloaded app gets the permissions (unknown 1). Commands run only while the app is alive, so the daemon path needs a hand-off |
+| B | `CommandDaemon` (shell uid) runs `service call autoservice 6 i32 dev i32 fid i32 value` | Works with the car off. The daemon is already the command executor | Raw fids per model/firmware. Needs unknown 2 = yes. No firmware-side validation |
+| C | Hybrid, chosen per command: direct for commands proven on this model, di+ phrase as fallback | Safe rollout, nothing breaks for unverified cars | Two code paths to maintain |
+
+**Recommendation: C, built on A or B, whichever step 1 proves.**
+- Start with DRL only: it is harmless, reversible, and its state is readable for verification.
+- Then extend to climate and windows, one command at a time and only after an on-car check.
+- `CommandAllowlist` stays the single gate: the cloud command type is unchanged, and only the
+  executor below it changes.
+- The direct path is enabled per car model by a validated mapping. Without a mapping, fall
+  back to the di+ phrase.
+- `CommandStateProbe` keeps verifying the result.
+- Park / 12 V gating is unchanged.
+
+**Data ownership.** No new user data, no migration, and no web change: the cloud contract
+(`type` + `params`) stays as is. The mapping (`command` → SDK method or `(dev, fid, value)`
+per model) is app-owned and lives in the APK code.
+
+**Plan for 2026-11-06:**
+1. On-car probes 1–3 (car online, parked). Write the results into Mate
+   `docs/DIPLUS_DATA.md`.
+2. Pick A or B from the results and confirm with the owner.
+3. Build a `DirectCommandExecutor` behind an interface for DRL only, with the di+ fallback.
+   Write unit tests for the pure mapping and gating; device code stays thin.
+4. On-car check: DRL on/off from the PWA, `verified` via `CommandStateProbe`.
+5. Update Mate `docs/HOW_IT_WORKS.md` and `docs/REMOTE_COMMAND_DAEMON.md`. Do not change the
+   APK version without the owner's OK.
+
+**Risks:**
+- Direct writes skip di+'s own guards. Keep the allowlist exhaustive and never expose raw
+  `(dev, fid, value)` to the cloud.
+- A wrong fid on another model could write an unrelated setting. This is why the mapping is
+  per model and di+ remains the fallback.
+
 ## Link-code hashing: set a dedicated `BYDMATE_LINK_CODE_PEPPER` (2026-11-05) — PROPOSED
 
 `src/lib/voltflowmate/link-code.ts` falls back to `SUPABASE_SERVICE_ROLE_KEY` when `BYDMATE_LINK_CODE_PEPPER`
