@@ -289,6 +289,12 @@ JSON file and the route never runs.
 `offline_buffer_cap_bytes` informs the client of its allowed on-device storage quota for
 offline telemetry queue retention (default 4 GiB).
 
+`X-Command-Standby: 1` (optional request header) makes the poll claim no command: `commands` is
+empty and pending rows stay `pending`, while every other field above is returned as usual. Mate's
+app process sends it while its shell-uid daemon is polling on the same car (daemon beacon under
+150 s old), so the daemon — which survives power-off and writes to the car directly — is the only
+executor. Clients that never send the header are unaffected.
+
 ```json
 {
   "ok": true,

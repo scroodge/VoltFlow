@@ -13,6 +13,7 @@ import { VEHICLE_COMMAND_SCHEDULES_ENABLED } from "@/lib/vehicle/vehicle-control
 import {
   ACTIVE_COMMAND_POLL_AFTER_SECONDS,
   IDLE_COMMAND_POLL_AFTER_SECONDS,
+  isCommandStandby,
   REMOTE_COMMANDS_DISABLED,
   SUSPENDED_COMMAND_POLL_AFTER_SECONDS,
 } from "@/lib/voltflowmate/remote-commands";
@@ -213,8 +214,10 @@ export async function GET(request: Request) {
     // Claim atomically: only rows this request moved pending → sent go to the car. The app
     // and its daemon both poll, and the doorbell wakes them at the same instant — without
     // this a step command ("fan +1") could be delivered to, and executed by, both.
+    // A standby poll (Mate app while its daemon polls) claims nothing: the rows stay pending
+    // for the daemon's next poll, and the doorbell has already woken it.
     let claimed: PendingCommand[] = [];
-    if (commands.length > 0) {
+    if (commands.length > 0 && !isCommandStandby(request)) {
       const ids = commands.map((row) => row.id);
       const { data: claimedRows } = await supabase
         .from("vehicle_commands")
