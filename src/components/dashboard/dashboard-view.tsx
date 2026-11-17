@@ -282,16 +282,16 @@ function DashboardStatTile({
           aria-hidden
         />
       ) : null}
-      <p className="pr-5 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      <p className="break-words pr-5 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
         {label}
       </p>
-      <p className="flex items-center font-heading text-base font-bold tabular-nums">
+      <p className="flex min-w-0 items-center font-heading text-base font-bold tabular-nums">
         {value}
       </p>
     </>
   );
   const className =
-    "relative grid min-h-[84px] w-full grid-rows-[auto_1fr] rounded-xl border border-border bg-white/[0.03] p-2.5 text-left";
+    "relative grid min-h-[84px] w-full min-w-0 grid-rows-[auto_1fr] rounded-xl border border-border bg-white/[0.03] p-2.5 text-left";
   return explanation ? (
     <button type="button" className={className} {...longPressProps}>
       {content}
@@ -320,7 +320,7 @@ function DashboardChargingProgressTile({
     if (timeExplanation) onExplain?.(timeExplanation);
   });
   return (
-    <div className="rounded-xl border border-border bg-white/[0.03] p-2.5">
+    <div className="min-w-0 rounded-xl border border-border bg-white/[0.03] p-2.5">
       <button
         type="button"
         className="relative block min-h-11 w-full text-left"
@@ -332,15 +332,15 @@ function DashboardChargingProgressTile({
             aria-hidden
           />
         ) : null}
-        <span className="block pr-5 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <span className="block break-words pr-5 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {timeLeftLabel}
         </span>
-        <span className="mt-1 block font-heading text-base font-bold tabular-nums">
+        <span className="mt-1 block truncate font-heading text-base font-bold tabular-nums">
           {timeLeft}
         </span>
       </button>
       <div className="mt-1 block min-h-11 w-full text-left">
-        <span className="block pr-5 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <span className="block break-words text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {endsAtLabel}
         </span>
         <span className="mt-1 block text-sm font-semibold tabular-nums text-muted-foreground">
@@ -1785,9 +1785,11 @@ export function DashboardView({
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                   {t("dashboard.vehicle")}
                 </p>
-                <h1 className="mt-1 flex items-center gap-2 font-heading text-xl font-bold tracking-normal">
-                  <span className="truncate">{selectedCar?.name ?? "EV"}</span>
-                  <PremiumBadge />
+                <h1 className="mt-1 flex min-w-0 items-center gap-2 font-heading text-xl font-bold tracking-normal">
+                  <span className="min-w-0 truncate">
+                    {selectedCar?.name ?? "EV"}
+                  </span>
+                  <PremiumBadge compact />
                 </h1>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1">
@@ -1809,8 +1811,20 @@ export function DashboardView({
               </div>
             </div>
 
-            <div className="mt-3 grid grid-cols-[116px_minmax(0,1fr)] items-stretch gap-3">
-              <div>
+            {/* While charging, the right column holds a 2×2 tile grid. Below 420 px
+                that left ~90 px per tile (iPhone mini / Display Zoom ≈ 320 px), so
+                the tiles move under the ring at full width there. */}
+            <div
+              className={cn(
+                "mt-3 grid grid-cols-[116px_minmax(0,1fr)] items-stretch gap-3",
+                activeChargingStats && "max-[419px]:grid-cols-1",
+              )}
+            >
+              <div
+                className={cn(
+                  activeChargingStats && "max-[419px]:mx-auto max-[419px]:w-[116px]",
+                )}
+              >
                 {selectedCarImage ? (
                   <div className="mb-1 flex h-12 w-[116px] items-center justify-center overflow-hidden">
                     <Image

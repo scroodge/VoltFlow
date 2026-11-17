@@ -1,3 +1,93 @@
+## Dashboard charging card: narrow-phone layout, tariff picker, time-of-day tariffs (2026-11-17) — PROPOSED
+
+**Trigger.** Screenshot from an iPhone 12 mini (375 pt) taken during a real charge of `way`
+at 08:35. The user charges on a 22:00–09:00 tariff at 0.49 BYN/kWh. The price is locked
+at session start: a session started at 08:55 keeps 0.49 until it ends, even after 09:00.
+
+### 1. Layout on 375 pt (`src/components/dashboard/dashboard-view.tsx`)
+
+Observed: the info icon overlaps «ОСТАЛОСЬ»; «ЗАКОНЧИТСЯ» runs out of its tile; «ЦЕНА ДО
+100%» wraps onto 3 lines; «8.6 / 45.1» touches the tile edge; «Yuan UP …» is squeezed by the
+Premium badge; the bottom nav cuts off «Настройки». Cause: the hero is a
+`grid-cols-[116px_minmax(0,1fr)]`, so the four tiles get about 95 px each, with
+`tracking-[0.14em]` uppercase labels and `text-base` values.
+
+Options:
+- **A (recommended).** Below 390 px, stack the tiles under the ring as a full-width 2×2
+  grid; keep the side-by-side layout from 390 px up. Also reduce label tracking to
+  `0.08em`, reserve space for the info icon (`pr-5` on every label line, not just the
+  first), and add `min-w-0` plus `truncate` to the values.
+- B. Keep the layout and shorten the labels instead («Осталось» → «Ост.», «Цена до 100%» →
+  «До 100%»). Smaller change, but the tiles stay cramped and Russian/English labels still
+  differ in length.
+- Header: below 390 px, show the Premium badge as an icon only. Nav: allow
+  `text-[11px]`, or use «Ещё»/«Профиль» if «Настройки» still does not fit (check `en` too).
+
+### 2. Pick the tariff from the dashboard
+
+Today the tariff can only be changed on the session screen
+(`charging-session-screen.tsx` → `updateChargingSessionTariff`, which sets `tariff_manual`).
+The dashboard «Цена до 100%» uses `activeSession.price_per_kwh` and offers no way to change
+it.
+
+- **Recommended.** Add a tappable «Тариф» chip under the 2×2 tiles: `<provider> ·
+  <price>/kWh`, plus a «ночь» marker once part 3 exists. It opens a bottom sheet with the
+  provider select, AC/DC type and price, and saves through the same
+  `updateChargingSessionTariff` action. Extract the session screen's form into a shared
+  component instead of duplicating it. After saving, invalidate the session query so the
+  cost tile updates.
+- Alternative: make the «Цена до 100%» tile itself open the sheet. Less visible, and its
+  long-press is already used for the explanation.
+
+### 3. Time-of-day tariffs, price locked at session start
+
+The model has no time windows today: `user_providers` stores one price per type
+(`home / commercial_ac / fast_dc`), and `resolveSessionTariff` ignores the time of day.
+
+**Data ownership.** This is **user-owned** data stored in **Postgres**, next to
+`user_providers`, under the same RLS. It has to live server-side: auto sessions are created
+on the server (`processVoltflowMateAutoChargingSessions`), which cannot read
+localStorage.
+
+Options:
+- **A (recommended).** Add a new table `user_provider_time_windows`: `id`, `user_id`,
+  `user_provider_id` (FK, cascade), `tariff_type`, `start_minute`, `end_minute` (0–1439;
+  `start > end` means the window wraps past midnight, e.g. 1320→540), `price_per_kwh`,
+  and RLS `auth.uid() = user_id`. It supports several windows per provider (day/night,
+  peak) and per AC/DC type.
+- B. Add three nullable columns to `user_providers` (`night_start_minute`,
+  `night_end_minute`, `night_home_price_per_kwh`). Simpler, but it allows only one window
+  and only for home AC.
+
+Resolution rule, in a pure function `resolveTimeWindowPrice(provider, tariffType,
+startedAt, timeZone)` with `.test.mjs` coverage:
+- Use the local time of `started_at` in `profiles.timezone`, falling back to
+  `Europe/Minsk`. A window matches when `start ≤ t < end`, or when it wraps midnight and
+  `t ≥ start || t < end`.
+- **Resolve once, at session start.** Write the result into the session's `price_per_kwh`
+  and never recalculate it by wall clock afterwards. That gives the 08:55 → 0.49 behaviour
+  by itself. A backdated auto session uses the `started_at` of the first charging sample,
+  not the time the streak was confirmed.
+- Apply the rule in `resolveSessionTariff`, auto start, manual start and
+  `telemetry-recovery-insert`. A manual tariff choice (`tariff_manual`) always overrides
+  it.
+- The tariff picker in part 2 shows the window as «Ночь 22:00–09:00 · 0.49».
+- Settings → providers: add a «Время действия» block to the provider card, with a list of
+  windows.
+
+Migration: `create table if not exists` plus RLS. No new function, so no grants are
+needed. Apply it to prod with `scripts/prod-migrate.sh`.
+
+**APK parity.** Not affected: the APK does not calculate charging cost.
+
+**Order.** 1 → 2 → 3, each a separate change. Part 1 alone already fixes the screenshot.
+
+**Verification.** Add `.test.mjs` for windows (wrap past midnight, 08:59 vs 09:00, start
+at 08:55 with the price kept, timezone handling). Check part 1 at 375 px in a browser, in
+both RU and EN. Run `npm run build`, `npm run lint` and `npm run test`.
+
+---
+
 ## Remote commands without di+ phrases: call BYD's vehicle API directly (2026-11-05) — PROPOSED, build planned 2026-11-06
 
 **Goal.** Mate executes remote commands itself instead of sending `迪加<phrase>` to di+
@@ -708,6 +798,115 @@ odometer reading when the charge started.
   the ingest path, both start paths and needs a migration — overkill for a display field.
 
 # Backlog — proposed plans awaiting go-ahead
+
+## Disaster recovery: encrypted off-site backup of the Contabo server — PROPOSED 2026-11-16
+
+### Problem and evidence
+
+The Contabo VPS currently has no verified restorable backup.  A cron job runs daily at
+03:00, but its `backup.sh` writes `pg_dump` to `/tmp` **inside** `supabase-db` and then
+tries to move the same path on the host.  Its log shows this `mv: cannot stat` failure
+every day from 2026-08-29 through 2026-11-16; no dump was produced.
+
+The VPS has one 400 GB root disk (86 GB used).  Critical VoltFlow state includes the
+6.7 GB Supabase Postgres database, 23 MB Storage data, `/opt/supabase`, the Telegram
+service, nginx/TLS/systemd/cron configuration, and Docker volumes.  The server also
+runs F1, HelloMate, monitoring, VPN, Uptime Kuma, SearxNG, Chat Agent and 21 GB of
+Immich data; a true server-recovery backup must either include them or explicitly
+exclude them.
+
+The Mac has only 48 GiB free, and no external disk is currently mounted.  It cannot
+reliably stage a full server copy before copying it elsewhere.
+
+### Options
+
+1. **Encrypted restic repository on the mounted external drive (recommended).** A Mac
+   command orchestrates a server-side, atomic snapshot and writes it directly to an
+   encrypted, deduplicated restic repository on the external drive.  The bytes pass
+   through the Mac but are never staged on its constrained internal disk.  Restic keeps
+   immutable prior snapshots until retention prunes them, verifies repository integrity,
+   and encrypts database dumps, `.env` files, TLS material and user data at rest.
+   Requires installing restic on the Mac and server, an always-available mounted drive,
+   and a recovery password kept outside the server and that drive.
+2. **`tar` + `zstd` archives copied through the Mac.** Uses tools already installed but
+   has brittle retention, no deduplication, no encrypted repository semantics, and needs
+   custom integrity/restore code.  It is poorer for a multi-tens-of-GiB server.
+3. **Provider snapshot only.** Fast to provision but puts the sole recovery copy in the
+   same cloud/provider failure domain and does not prove application/database restore.
+   Use only as an additional layer, never as the primary recovery plan.
+
+### Proposed scope
+
+1. Create a root-owned server snapshot helper.  It writes into a timestamped temporary
+   directory, validates every artifact, writes a SHA-256 manifest, then atomically
+   publishes a completed snapshot.  It will replace the broken cron job rather than run
+   alongside it.
+2. Dump every Postgres service logically, including globals/roles, with host-side output
+   redirection from `docker exec` (not a container `/tmp` path).  Validate each custom
+   dump with `pg_restore --list` before it becomes eligible for retention.  Do **not**
+   copy a running PostgreSQL data directory as a filesystem archive.
+3. Capture required non-database persistent data and recovery configuration: Supabase
+   Storage/functions/configuration, named Docker volumes and bind-mounted application
+   data, `/opt` application/compose configuration, nginx, Let’s Encrypt, systemd units,
+   crontabs, Docker image/compose inventory, and a versioned restore runbook.  Image
+   layers/caches are reproducible and excluded; the inventory pins what must be pulled
+   during recovery.  Docker services with mutable files will be quiesced only for the
+   short archive window or exported through their native consistent mechanism.
+4. Add one Mac command, `local-scripts/backup-server.sh`, that refuses to run unless the
+   expected encrypted external drive is mounted, creates the server snapshot through SSH,
+   transfers it into restic, verifies the new repository snapshot, applies retention, and
+   only then permits the server to discard its temporary bundle.  It reports the backup
+   ID, timestamp, size, and the effective recovery-point objective (RPO).  Secrets stay
+   out of output, git and the external drive's plaintext filesystem.
+5. Install a LaunchAgent that invokes the **same command** on a schedule (database every
+   6 h; configuration/full data daily), logs success/failure locally, and leaves the
+   newest verified server snapshot in place when the Mac or disk is absent.  A manual run
+   remains exactly one command.  The schedule can only meet its RPO while the Mac is on,
+   networked, and the external drive is attached; failures must be visible, not silently
+   skipped.
+6. Add a separate one-command restore rehearsal into an isolated directory/temporary
+   Docker project: verify archive hashes, restore a database dump, start the minimum
+   Supabase stack, and run health checks without touching production.  Perform it after
+   the first backup and quarterly thereafter.  A backup is not considered successful
+   merely because an archive was created.
+
+### Scope decision needed
+
+**Recommendation: include the whole VPS**, not just VoltFlow.  A cloud loss otherwise
+still loses the server's other active services and their data; current persistent data
+includes 21 GB of Immich in addition to VoltFlow.  If the intended scope is VoltFlow
+only, explicitly exclude the named unrelated services and their volumes from the
+manifest so the recovery promise is precise.
+
+### Data ownership and location
+
+This introduces no user-facing model.  The backup contains app-owned operational and
+user data already stored on the server (Postgres, Storage and service volumes).  The
+only durable off-site copy lives in an encrypted restic repository on the user's
+external drive; the server retains only short-lived, encrypted staging snapshots.  The
+restic password/recovery key belongs to the operator and must be stored separately in
+a password manager or another protected offline location, never in this repo, server
+or drive.
+
+### Verification and recovery target
+
+- After each run: manifest + SHA-256 check, `pg_restore --list`, `restic check`, and
+  confirmation that the new snapshot is listed before pruning old copies.
+- First and quarterly rehearsal: restore into an isolated location, start the recovered
+  database/Supabase services, and prove the API and data are readable.
+- Target RPO: at most 6 h while the scheduled Mac and external drive are available;
+  target RTO is measured during the first rehearsal and then documented rather than
+  guessed.  A lower RPO would require a separately approved continuous PostgreSQL WAL
+  archive destination.
+
+### Prerequisites before implementation
+
+- Connect and identify the external disk (mount label/path and available capacity; plan
+  for at least 2–3 times the first full encrypted snapshot for retention).
+- Confirm whether “our server” means the whole VPS (recommended) or VoltFlow-only.
+- Approve installing `restic` and creating root-owned server files plus a Mac LaunchAgent.
+
+### Should I build this?
 
 ## Telegram live widget: state change bypasses the 30 s edit throttle — BUILT 2026-10-12, migration applied to prod; code awaiting commit + deploy
 

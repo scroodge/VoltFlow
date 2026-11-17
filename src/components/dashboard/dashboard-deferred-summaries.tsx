@@ -57,13 +57,13 @@ function SummaryCard({
   return (
     <Link
       href={href}
-      className="grid min-h-[92px] grid-cols-[1fr_auto] items-center gap-3 rounded-2xl border border-border bg-white/[0.03] p-4 transition hover:border-primary/50 hover:bg-white/[0.05]"
+      className="grid min-h-[92px] min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-2xl border border-border bg-white/[0.03] p-3 transition hover:border-primary/50 hover:bg-white/[0.05] min-[400px]:gap-3 min-[400px]:p-4"
     >
       <span className="min-w-0">
-        <span className="block text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <span className="block break-words text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground min-[400px]:tracking-[0.14em]">
           {label}
         </span>
-        <span className="block font-heading text-lg font-bold tracking-normal text-foreground">
+        <span className="block truncate font-heading text-lg font-bold tracking-normal text-foreground">
           {title}
         </span>
         <span className="mt-1 block text-sm leading-5 text-muted-foreground">{body}</span>
