@@ -1,3 +1,39 @@
+## Late telemetry must repair an auto-session tail, not discard the full charge (2026-11-17) — APPROVED
+
+**Observed in production.** A Mate batch can arrive hours late, while its last few samples
+are still inside the three-minute live-start window. The live planner then creates a short
+normal (`legacy`) session from that tail. Late recovery correctly detects the full closed
+charging run, but `insertRecoveredSession` rejects it because the tail overlaps. The outcome
+is silently treated as expected, leaving the user with only the final minutes and their
+small SOC/kWh delta.
+
+**Data ownership / storage.** No new data model. Charging facts remain **user-owned** rows in
+Postgres (`charging_sessions`); the change repairs existing auto-derived values only. It never
+changes a manual receipt or provider-corrected energy.
+
+Options:
+
+- **A (recommended, approved).** When a recovery candidate fully contains exactly one closed,
+  auto-derived uncorrected session, update that row from the candidate instead of rejecting it:
+  its timestamps, measured SOC, derived grid energy/cost, tariff and recovery provenance become
+  the recovered values. Keep the same row ID so links and Realtime consumers remain valid.
+- B. Suppress live processing for every mixed late batch. This prevents the overlap but drops a
+  genuinely still-open charge at the batch tail, which recovery deliberately cannot import.
+- C. Insert the recovered row alongside the tail. This double-counts one physical charge in day
+  and month totals.
+
+Safety guards: repair only one fully-contained closed row with `manual_entry = false` and
+`energy_overridden = false`; reject any partial overlap, multiple overlaps, an open row, or a
+manual/corrected row. Preserve the existing duplicate-key behavior.
+
+**Acceptance.** A delayed closed charge with a fresh tail produces one complete session, not a
+tail; a manual or corrected overlapping row is unchanged; History and analytics contain the
+complete SOC/kWh once. Add focused tests around the recovery insert operation. Repair the
+confirmed affected production rows only after the code path is proven and with an explicit
+production-data apply step.
+
+---
+
 ## Dashboard charging card: narrow-phone layout, tariff picker, time-of-day tariffs (2026-11-17) — PROPOSED
 
 **Trigger.** Screenshot from an iPhone 12 mini (375 pt) taken during a real charge of `way`
