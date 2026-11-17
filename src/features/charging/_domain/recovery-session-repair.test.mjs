@@ -5,7 +5,9 @@ import { recoveryTailSessionToRepair } from "./recovery-session-repair.ts";
 
 const candidate = {
   startedAt: "2026-11-15T11:29:40.780Z",
-  stoppedAt: "2026-11-15T16:27:57.320Z",
+  // Recovery closes on the first non-charging sample; the auto reducer closes the tail
+  // at the second confirmation, 32 seconds later.
+  stoppedAt: "2026-11-15T16:27:25.366Z",
 };
 
 function tail(overrides = {}) {
@@ -48,4 +50,11 @@ test("a partial, exact, or ambiguous overlap stays protected", () => {
     null,
   );
   assert.equal(recoveryTailSessionToRepair([tail(), tail({ id: "other" })], candidate), null);
+  assert.equal(
+    recoveryTailSessionToRepair(
+      [tail({ stopped_at: "2026-11-15T16:30:25.367Z" })],
+      candidate,
+    ),
+    null,
+  );
 });

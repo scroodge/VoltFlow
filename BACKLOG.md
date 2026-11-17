@@ -22,9 +22,12 @@ Options:
 - C. Insert the recovered row alongside the tail. This double-counts one physical charge in day
   and month totals.
 
-Safety guards: repair only one fully-contained closed row with `manual_entry = false` and
-`energy_overridden = false`; reject any partial overlap, multiple overlaps, an open row, or a
-manual/corrected row. Preserve the existing duplicate-key behavior.
+Safety guards: repair only one closed row with `manual_entry = false` and
+`energy_overridden = false` whose start lies inside the recovered interval. Its stop may trail
+the recovered stop by at most three minutes — the live reducer deliberately waits for a second
+non-charging confirmation while recovery closes at the first. Reject any longer/partial overlap,
+multiple overlaps, an open row, or a manual/corrected row. Preserve the existing duplicate-key
+behavior.
 
 **Acceptance.** A delayed closed charge with a fresh tail produces one complete session, not a
 tail; a manual or corrected overlapping row is unchanged; History and analytics contain the

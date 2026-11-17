@@ -12,7 +12,7 @@ const car = {
 const candidate = {
   key: "2026-11-15T11:29:40.780Z:2026-11-15T16:27:57.320Z",
   startedAt: "2026-11-15T11:29:40.780Z",
-  stoppedAt: "2026-11-15T16:27:57.320Z",
+  stoppedAt: "2026-11-15T16:27:25.366Z",
   startPercent: 50.4,
   endPercent: 69.3,
   chargerPowerKw: 1.77,
