@@ -838,139 +838,92 @@ odometer reading when the charge started.
 
 # Backlog — proposed plans awaiting go-ahead
 
-## Disaster recovery: encrypted off-site backup of the Contabo server — IN PROGRESS 2026-11-16
+## Weekly analytics: compare charging power and battery temperature by session — PROPOSED 2026-11-17
 
 ### Problem and evidence
 
-The Contabo VPS currently has no verified restorable backup.  A cron job runs daily at
-03:00, but its `backup.sh` writes `pg_dump` to `/tmp` **inside** `supabase-db` and then
-tries to move the same path on the host.  Its log shows this `mv: cannot stat` failure
-every day from 2026-08-29 through 2026-11-16; no dump was produced.
-
-The VPS has one 400 GB root disk (86 GB used).  Critical VoltFlow state includes the
-6.7 GB Supabase Postgres database, 23 MB Storage data, `/opt/supabase`, the Telegram
-service, nginx/TLS/systemd/cron configuration, and Docker volumes.  The server also
-runs F1, HelloMate, monitoring, VPN, Uptime Kuma, SearxNG, Chat Agent and 21 GB of
-Immich data; a true server-recovery backup must either include them or explicitly
-exclude them.
-
-The Mac has only 48 GiB free, and no external disk is currently mounted.  It cannot
-reliably stage a full server copy before copying it elsewhere.
+The power/temperature timeline already exists for one charging session in
+`src/features/charging/_ui/charging-power-temperature-chart.tsx`, using the authenticated
+`/api/vehicle/charging-sessions/[sessionId]/samples` endpoint. Weekly analytics in
+`vehicle-analytics-panels.tsx` receives the week's `periodSessions`, but its charging
+section renders only aggregate bar charts. It does not request any session samples or
+show the new timeline. The session endpoint already scopes requests to the signed-in
+user and returns measured power/temperature points, subject to available telemetry.
 
 ### Options
 
-1. **Encrypted restic repository on the mounted external drive (recommended).** A Mac
-   command orchestrates a server-side, atomic snapshot and writes it directly to an
-   encrypted, deduplicated restic repository on the external drive.  The bytes pass
-   through the Mac but are never staged on its constrained internal disk.  Restic keeps
-   immutable prior snapshots until retention prunes them, verifies repository integrity,
-   and encrypts database dumps, `.env` files, TLS material and user data at rest.
-   Requires installing restic on the Mac, an always-available mounted drive,
-   and a recovery password kept outside the server and that drive.
-2. **`tar` + `zstd` archives copied through the Mac.** Uses tools already installed but
-   has brittle retention, no deduplication, no encrypted repository semantics, and needs
-   custom integrity/restore code.  It is poorer for a multi-tens-of-GiB server.
-3. **Provider snapshot only.** Fast to provision but puts the sole recovery copy in the
-   same cloud/provider failure domain and does not prove application/database restore.
-   Use only as an additional layer, never as the primary recovery plan.
+1. **Session buttons above one comparison chart (recommended).** Add a weekly charging
+   card listing that week's sessions as toggle buttons (date, start SOC and charge type
+   when available). Clicking a button adds or removes that session's two curves. The
+   user chooses any number up to the number of sessions with data. Align X by elapsed
+   time since each charge started, so shape and warm-up can be compared even when
+   sessions occurred on different days. Keep kW and °C on separate labelled Y axes;
+   assign each session a stable color and distinguish power from temperature by solid
+   versus dashed strokes. Legend/hover identify session, elapsed time, measured value,
+   and actual timestamp. Fetch samples only for selected sessions, with limited parallel
+   requests; show per-session loading/error/no-data states. Preserve line gaps and the
+   existing fullscreen/zoom behavior. A single selected session is a normal timeline.
+2. **Put each selected session in its own chart.** Simpler to read with many sessions,
+   but makes comparing power and temperature at the same elapsed time less direct and
+   grows the page vertically.
+3. **Overlay on calendar time.** Small implementation change, but charges on different
+   days do not overlap visually, so it does not meet the comparison goal.
 
-### Proposed scope
+### Recommendation and scope
 
-1. Create a root-owned server snapshot helper.  It writes into a timestamped temporary
-   directory, validates every artifact, writes a SHA-256 manifest, then atomically
-   publishes a completed snapshot.  It will replace the broken cron job rather than run
-   alongside it.
-2. Dump every Postgres service logically, including globals/roles, with host-side output
-   redirection from `docker exec` (not a container `/tmp` path).  Validate each custom
-   dump with `pg_restore --list` before it becomes eligible for retention.  Do **not**
-   copy a running PostgreSQL data directory as a filesystem archive.
-3. Capture only non-database **unique** persistent data and recovery configuration:
-   Supabase Storage/functions/configuration, Immich media and its stopped database,
-   application-owned bind data, current `.env`/Compose files, nginx, Let’s Encrypt,
-   systemd units, crontabs, Docker image/compose inventory, and a versioned restore
-   runbook. Image layers, source clones, `node_modules`, virtual environments, logs,
-   model/download caches, Redis queues, Prometheus/Loki history, stale `.env.bak*` files,
-   and all running PostgreSQL data directories are reproducible or covered by the logical
-   dumps and are excluded. The inventory pins the image tags and Git revisions that must
-   be pulled during recovery. A raw Immich Postgres archive is allowed only while no
-   Immich container is running; otherwise the snapshot fails until a native logical dump
-   is added.
-4. Add one Mac command, `local-scripts/backup-server.sh`, that refuses to run unless the
-   expected encrypted external drive is mounted, creates the server snapshot through SSH,
-   transfers it into restic, verifies the new repository snapshot, applies retention, and
-   only then permits the server to discard its temporary bundle.  It reports the backup
-   ID, timestamp, size, and the effective recovery-point objective (RPO).  Secrets stay
-   out of output, git and the external drive's plaintext filesystem.
-5. Install a LaunchAgent that invokes the **same command** on a schedule (database every
-   6 h; configuration/full data daily), logs success/failure locally, and leaves the
-   newest verified server snapshot in place when the Mac or disk is absent.  A manual run
-   remains exactly one command.  The schedule can only meet its RPO while the Mac is on,
-   networked, and the external drive is attached; failures must be visible, not silently
-   skipped.
-6. Add a separate one-command restore rehearsal into an isolated directory/temporary
-   Docker project: verify archive hashes, restore a database dump, start the minimum
-   Supabase stack, and run health checks without touching production.  Perform it after
-   the first backup and quarterly thereafter.  A backup is not considered successful
-   merely because an archive was created.
+Build option 1 for the **Week** range first. Reuse the existing sample API, point
+preparation, chart interaction helpers, and authenticated query cache. Do not bundle
+telemetry into `period-overview`: it would download every session even if unselected.
+Show an empty state when the week has no charge sessions and a clear message when an
+older session has no retained measured points. Keep aggregate charging bar charts.
+Decide whether comparison selections reset when changing week or persist per week;
+recommend resetting on week change so hidden selections from another week cannot appear.
 
-### Confirmed scope
+**Data ownership and location:** charging sessions and measured telemetry are
+**user-owned in Postgres**, as today. The selected overlay buttons are a temporary,
+**user-owned client-side UI preference** in component state; no Postgres or localStorage
+write is proposed. Please confirm both ownership and location before implementation.
 
-Only **VoltFlow/Supabase, F1 News and HelloMate** are in scope. Immich, Uptime Kuma,
-Chat Agent, monitoring, VPN, SearxNG and AI gateway are deliberately excluded — including
-their databases, volumes and configurations. Shared host access/reverse-proxy/TLS
-configuration remains only where it is needed to bring those three services back online.
+**Likely owners:** `src/components/vehicle/vehicle-analytics-panels.tsx`, a focused
+comparison component under `src/components/vehicle/`, the existing charging chart's
+reusable plotting logic, and `src/lib/i18n.ts` for all locales. Verify comparison with
+sessions of unequal lengths and missing temperature, a selected session with no measured
+points, selection changes, and narrow mobile layout. Do not run build/lint/tests unless
+separately requested under the current project verification preference.
 
-### Data ownership and location
+### Should I build this?
 
-This introduces no user-facing model.  The backup contains app-owned operational and
-user data already stored on the server (Postgres, Storage and service volumes).  The
-only durable off-site copy lives in an encrypted restic repository on the user's
-external drive; the server retains only short-lived, encrypted staging snapshots.  The
-restic password/recovery key belongs to the operator and must be stored separately in
-a password manager or another protected offline location, never in this repo, server
-or drive.
+---
 
-### Verification and recovery target
+## Codex project config: remove ignored settings (2026-11-18) — PROPOSED
 
-- After each run: manifest + SHA-256 check, `pg_restore --list`, `restic check`, and
-  confirmation that the new snapshot is listed before pruning old copies.
-- First and quarterly rehearsal: restore into an isolated location, start the recovered
-  database/Supabase services, and prove the API and data are readable.
-- Target RPO: at most 6 h while the scheduled Mac and external drive are available;
-  target RTO is measured during the first rehearsal and then documented rather than
-  guessed.  A lower RPO would require a separately approved continuous PostgreSQL WAL
-  archive destination.
+**Observed.** Codex CLI 0.169.0 reports three ignored keys in the ignored local file
+`.codex/config.toml`: `features.skills`, `model_personality`, and
+`shell_environment_policy.policy`.
 
-### Prerequisites before implementation
+**Evidence.** `codex features list` marks the old personality feature as removed and does not
+list `skills`; strict, isolated CLI probes accept `personality = "concise"` and
+`shell_environment_policy.inherit = "all"`.
 
-- Connect and identify the external disk (mount label/path and available capacity; use at
-  least 64 GB, preferably 128 GB+, for the encrypted repository and its retained points).
-- Confirm whether “our server” means the whole VPS (recommended) or VoltFlow-only.
-- Approve installing `restic` and creating root-owned server files plus a Mac LaunchAgent.
+### Options
 
-### Implementation progress — 2026-11-17
+1. **Replace/remove the stale keys (recommended).** Replace `model_personality` with
+   `personality`, replace `policy = "exclude"` with `inherit = "all"`, retain the existing
+   `exclude` list for the two AWS credentials, and remove `features.skills`. Skills are now
+   available through the built-in skill catalog, so no feature switch is needed.
+2. Remove all three settings. This removes warnings but also loses the intended concise reply
+   preference and explicit AWS credential exclusions.
+3. Keep the file as-is. Codex continues to emit the three warnings and ignores the preferences.
 
-- Initial whole-VPS approval was narrowed by the operator before off-site export: only
-  VoltFlow/Supabase, F1 News and HelloMate are retained. The first broad local snapshots
-  are not eligible for off-site import and are removed after narrow replacements verify.
-- Installed root-only `/usr/local/sbin/voltflow-backup-snapshot` and
-  `/etc/cron.d/voltflow-backup`: database/VoltFlow snapshots every six hours, full VPS
-  snapshot daily. The snapshotter makes logical, validated dumps for all three PostgreSQL
-  containers, excludes live PostgreSQL data directories from the filesystem archive, and
-  retains 8 DB and 2 full server snapshots locally.
-- Removed the obsolete `/opt/supabase-dump/backup.sh` root-cron line only after the new
-  path succeeded. The legacy job had produced no usable dump since 2026-08-29.
-- Verified first server-side snapshots: DB/VoltFlow `20261116T203352Z-vmi3078244`,
-  1,198,706,285 bytes; full VPS `20261117T023001Z-vmi3078244`, 24,229,615,976 bytes.
-  Each was archive-tested and SHA-256-manifested before publication.
-- Installed restic 0.19.1 and the hourly user LaunchAgent on the Mac. The agent correctly
-  refuses to use the internal disk; off-site import remains pending because no external
-  disk is mounted under `/Volumes`.
-- Scope refinement completed: new snapshots contain only VoltFlow/Supabase, F1 News and
-  HelloMate. The verified scoped DB snapshot `20261117T182003Z-vmi3078244` is 398,289,933
-  bytes; the scoped full snapshot `20261117T182701Z-vmi3078244` is 440,556,047 bytes.
-  Earlier snapshots containing Immich, Chat Agent and other excluded services were
-  deleted only after these replacements published successfully.
+### Recommendation
+
+Option 1. It preserves the effective intent while making the project config valid for the
+installed CLI. No application behavior, user data, or deployment configuration changes.
+
+### Verification
+
+Run `codex --strict-config --help` from the project and confirm it exits successfully without
+the three ignored-setting diagnostics.
 
 ### Should I build this?
 

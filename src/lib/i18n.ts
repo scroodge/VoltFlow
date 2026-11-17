@@ -1195,6 +1195,7 @@ export const dictionaries = {
         chargingTrendsTitle: "Charging trends",
         chargingTrendsSubtitle:
           "Energy, cost, and speed per period from completed sessions.",
+        chargingCompareHint: "Select sessions to compare power (solid) and battery temperature (dashed) over elapsed charge time.",
         chargingEnergyTitle: "Energy charged",
         chargingEnergyLabel: "kWh charged",
         chargingCostChartTitle: "Charging cost",
@@ -2919,6 +2920,7 @@ export const dictionaries = {
         monthlySubtitle: "Пrabег, зарадка, рэген і расход за выбраны месяц.",
         chargingTrendsTitle: "Трэнды зарадкі",
         chargingTrendsSubtitle: "Энергія, кошт і хуткасць за перыяд.",
+        chargingCompareHint: "Выберыце зарадкі для параўнання магутнасці (суцэльная) і тэмпературы батарэі (пункцір) па часе зарадкі.",
         chargingEnergyTitle: "Зарадзіся энергія",
         chargingEnergyLabel: "кВт·г зарадка",
         chargingCostChartTitle: "Кошт зарадкі",
@@ -4650,6 +4652,7 @@ export const dictionaries = {
         monthlySubtitle: "Пробег, зарядка, реген и расход за выбранный месяц.",
         chargingTrendsTitle: "Тренды зарядки",
         chargingTrendsSubtitle: "Энергия, стоимость и скорость по периодам.",
+        chargingCompareHint: "Выберите зарядки, чтобы сравнить мощность (сплошная линия) и температуру батареи (пунктир) по времени зарядки.",
         chargingEnergyTitle: "Заряженная энергия",
         chargingEnergyLabel: "кВт·ч зарядка",
         chargingCostChartTitle: "Стоимость зарядки",

@@ -1,7 +1,7 @@
 "use client";
 
 import type { PointerEvent } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Maximize2, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -81,6 +81,85 @@ export function ChargingPowerTemperatureChart({
   }
 
   return <PowerTemperaturePlot points={points} locale={locale} tx={tx} />;
+}
+
+/** Selected-session overlays for the weekly analytics comparison. */
+export function ChargingSessionsComparison({
+  sessions,
+  vehicleId,
+}: {
+  sessions: ChargingSessionRow[];
+  vehicleId: string;
+}) {
+  const { locale, t } = useTranslation();
+  const tx = t as Translator;
+  const [selected, setSelected] = useState<string[]>([]);
+  const [series, setSeries] = useState<Record<string, ChargingPowerTemperaturePoint[]>>({});
+  const sessionsWithTelemetry = sessions.filter((session) => session.started_at);
+
+  return (
+    <section className="mt-5 rounded-2xl border border-border bg-background/30 p-4">
+      <h3 className="font-heading text-lg font-semibold">{tx("charging.powerTemperatureTimeline")}</h3>
+      <p className="mt-1 text-sm text-muted-foreground">{tx("vehicle.analytics.chargingCompareHint")}</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {sessionsWithTelemetry.map((session, index) => {
+          const active = selected.includes(session.id);
+          return (
+            <button key={session.id} type="button" aria-pressed={active}
+              onClick={() => setSelected((ids) => active ? ids.filter((id) => id !== session.id) : [...ids, session.id])}
+              className={`rounded-full border px-3 py-1.5 text-sm ${active ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground"}`}>
+              {new Date(session.started_at!).toLocaleDateString(locale, { month: "short", day: "numeric" })} · {session.start_percent}→{session.current_percent}%
+            </button>
+          );
+        })}
+      </div>
+      {selected.length > 0 ? (
+        <div className="mt-4">
+          {selected.map((id) => {
+            const session = sessionsWithTelemetry.find((row) => row.id === id);
+            return session ? <SelectedSessionPlot key={id} session={session} vehicleId={vehicleId} onPoints={(points) => setSeries((current) => ({ ...current, [id]: points }))} /> : null;
+          })}
+          <CombinedSessionsPlot sessions={sessionsWithTelemetry.filter((session) => selected.includes(session.id) && series[session.id]?.length)} series={series} locale={locale} tx={tx} />
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function SelectedSessionPlot({ session, vehicleId, onPoints }: {
+  session: ChargingSessionRow; vehicleId: string; onPoints: (points: ChargingPowerTemperaturePoint[]) => void;
+}) {
+  const { data = [], isLoading, error } = useVoltflowMateChargingSessionSamplesQuery(session.id, vehicleId, session.status);
+  const points = useMemo(() => chargingPowerTemperaturePoints(data), [data]);
+  useEffect(() => { if (!isLoading && !error) onPoints(points); }, [error, isLoading, onPoints, points]);
+  return null;
+}
+
+function CombinedSessionsPlot({ sessions, series, locale, tx }: { sessions: ChargingSessionRow[]; series: Record<string, ChargingPowerTemperaturePoint[]>; locale: string; tx: Translator }) {
+  const [zoom, setZoom] = useState(1);
+  const [hover, setHover] = useState<number | null>(null);
+  const colors = ["#38bdf8", "#fb923c", "#a78bfa", "#34d399", "#f472b6", "#facc15"];
+  const prepared = sessions.map((session, i) => ({ session, points: series[session.id] ?? [], color: colors[i % colors.length]! }));
+  const elapsed = prepared.flatMap(({ session, points }) => points.map((p) => p.time - Date.parse(session.started_at ?? "")));
+  const fullElapsed = Math.max(1, ...elapsed);
+  const maxElapsed = fullElapsed / zoom;
+  const x = (ms: number) => 28 + (ms - (fullElapsed - maxElapsed)) / maxElapsed * 284;
+  const allPower = prepared.flatMap(({ points }) => points.flatMap((p) => p.powerKw == null ? [] : [p.powerKw]));
+  const allTemp = prepared.flatMap(({ points }) => points.flatMap((p) => p.batteryTempC == null ? [] : [p.batteryTempC]));
+  const makePath = (points: ChargingPowerTemperaturePoint[], origin: number, key: "powerKw" | "batteryTempC", values: number[]) => {
+    if (!values.length) return "";
+    const min = Math.min(...values), max = Math.max(...values), span = Math.max(max - min, 0.5);
+    return points.filter((p) => p[key] != null && p.time - origin >= fullElapsed - maxElapsed).map((p, i) => `${i ? "L" : "M"} ${x(p.time - origin).toFixed(1)} ${(105 - (p[key]! - min) / span * 82).toFixed(1)}`).join(" ");
+  };
+  if (!prepared.length) return <p className="text-sm text-muted-foreground">{tx("charging.powerTemperatureTimelineEmpty")}</p>;
+  const powerRange = allPower.length ? axisRange(allPower, true) : null;
+  const tempRange = allTemp.length ? axisRange(allTemp) : null;
+  const hoveredRows = hover == null ? [] : prepared.flatMap(({ session, points, color }) => {
+    const origin = Date.parse(session.started_at ?? "");
+    const point = points.reduce<ChargingPowerTemperaturePoint | null>((best, p) => Math.abs(p.time - origin - hover) < Math.abs((best?.time ?? Infinity) - origin - hover) ? p : best, null);
+    return point ? [{ session, point, color }] : [];
+  });
+  return <div className="mt-3"><div className="mb-2 flex flex-wrap items-center gap-3 text-xs">{prepared.map(({ session, color }) => <span key={session.id} style={{ color }}>{new Date(session.started_at!).toLocaleDateString(locale, { month: "short", day: "numeric" })}</span>)}<div className="ml-auto flex items-center gap-2"><Button size="sm" variant="outline" disabled={zoom <= 1} onClick={() => setZoom((z) => Math.max(1, z / 2))}>−</Button><span>{zoom}×</span><Button size="sm" variant="outline" disabled={zoom >= 8} onClick={() => setZoom((z) => Math.min(8, z * 2))}>+</Button></div></div><div className="relative"><svg viewBox="0 0 320 145" className="h-72 w-full touch-none" role="img" aria-label={tx("charging.powerTemperatureTimeline")} onPointerMove={(event) => { const rect = event.currentTarget.getBoundingClientRect(); const xPos = (event.clientX - rect.left) / rect.width * 320; setHover((fullElapsed - maxElapsed) + Math.max(0, Math.min(1, (xPos - 28) / 284)) * maxElapsed); }} onPointerLeave={() => setHover(null)}><line x1="28" y1="15" x2="28" y2="105" className="stroke-border"/><line x1="312" y1="15" x2="312" y2="105" className="stroke-border"/><text x="28" y="12" className="fill-sky-400 text-[8px]">{powerRange?.max.toFixed(1)} kW</text><text x="28" y="104" className="fill-sky-400 text-[8px]">{powerRange?.min.toFixed(1)} kW</text><text x="312" y="12" textAnchor="end" className="fill-orange-400 text-[8px]">{tempRange?.max.toFixed(1)} °C</text><text x="312" y="104" textAnchor="end" className="fill-orange-400 text-[8px]">{tempRange?.min.toFixed(1)} °C</text>{prepared.map(({ session, points, color }, i) => { const origin = Date.parse(session.started_at ?? ""); return <g key={session.id}><path d={makePath(points, origin, "powerKw", allPower)} fill="none" stroke={color} strokeWidth="2.5"/><path d={makePath(points, origin, "batteryTempC", allTemp)} fill="none" stroke={color} strokeWidth="2" strokeDasharray="5 4"/>{points.filter((p) => p.acOn != null && p.time - origin >= fullElapsed - maxElapsed).map((p) => <rect key={`ac-${p.time}`} x={x(p.time - origin)} y={112 + i * 5} width="3" height="3" fill={p.acOn ? "#ef4444" : "#475569"}><title>{p.acOn ? "A/C on" : "A/C off"}</title></rect>)}</g>; })}{hover != null ? <line x1={x(hover)} x2={x(hover)} y1="15" y2="138" stroke="white" strokeDasharray="3 3"/> : null}<text x="28" y="118" className="fill-muted-foreground text-[9px]">{Math.round((fullElapsed - maxElapsed) / 60000)} min</text><text x="312" y="118" textAnchor="end" className="fill-muted-foreground text-[9px]">{Math.round(fullElapsed / 60000)} min</text><text x="28" y="143" fill="#ef4444" fontSize="8">A/C</text></svg></div><div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground"><span>━ {tx("vehicle.telemetry.chargePower")} (kW)</span><span>┄ {tx("vehicle.telemetry.batteryTemp")} (°C)</span><span className="text-red-500">■ A/C on</span><span>■ A/C off</span></div>{hoveredRows.length ? <div className="mt-2 grid gap-1 text-xs">{hoveredRows.map(({ session, point, color }) => <p key={session.id} style={{ color }}>{new Date(session.started_at!).toLocaleDateString(locale, { month: "short", day: "numeric" })}: {((point.time - Date.parse(session.started_at!)) / 60000).toFixed(1)} min · {point.powerKw?.toFixed(1) ?? "—"} kW · {point.batteryTempC?.toFixed(1) ?? "—"} °C · A/C {point.acOn == null ? "—" : point.acOn ? "on" : "off"}</p>)}</div> : null}</div>;
 }
 
 function PowerTemperaturePlot({

@@ -9,6 +9,7 @@ import type { VoltflowMateDiplus, VoltflowMateTelemetry, SessionStatus } from "@
 export type ChargingSessionTelemetrySample = {
   device_time: string;
   telemetry: VoltflowMateTelemetry;
+  diplus_ac_status?: string | number | boolean | null;
   diplus?: VoltflowMateDiplus;
   diplus_min_cell_voltage_v?: number | null;
   diplus_max_cell_voltage_v?: number | null;

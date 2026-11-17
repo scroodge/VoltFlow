@@ -47,7 +47,7 @@ const SUPABASE_PAGE_SIZE = 1000;
 // (it duplicated the flat diplus_* columns). Cell-voltage/SOC readers already
 // prefer the flat columns; the live snapshot table keeps its own diplus blob.
 const TELEMETRY_SAMPLE_SELECT =
-  "device_time, telemetry, diplus_charge_gun_state, diplus_min_cell_voltage_v, diplus_max_cell_voltage_v, diplus_cell_delta_v";
+  "device_time, telemetry, diplus_charge_gun_state, diplus_ac_status, diplus_min_cell_voltage_v, diplus_max_cell_voltage_v, diplus_cell_delta_v";
 /** Three envelope points (min/max/last) per server-side day bucket. */
 export const DAY_TELEMETRY_BUCKET_COUNT = Math.floor(
   MAX_TELEMETRY_CHART_POINTS / 3,
@@ -60,6 +60,7 @@ export type TelemetryHistoryPoint = {
   telemetry: VoltflowMateTelemetry;
   diplus?: VoltflowMateDiplus;
   diplus_charge_gun_state?: string | number | null;
+  diplus_ac_status?: string | number | boolean | null;
   diplus_min_cell_voltage_v?: number | null;
   diplus_max_cell_voltage_v?: number | null;
   diplus_cell_delta_v?: number | null;
@@ -73,6 +74,7 @@ export type TelemetryHistoryPoint = {
 
 type TelemetryHistorySamplePoint = TelemetryHistoryPoint & {
   diplus_charge_gun_state?: string | number | null;
+  diplus_ac_status?: string | number | boolean | null;
 };
 
 function hourlyToSample(row: HourlyRow): TelemetryHistoryPoint {

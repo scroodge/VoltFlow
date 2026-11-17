@@ -13,6 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { AnalyticsDayView } from "@/components/vehicle/analytics-day-view";
 import { ChargeDeltaTrendChart } from "@/components/vehicle/charge-delta-trend-chart";
+import { ChargingSessionsComparison } from "@/features/charging/_ui/charging-power-temperature-chart";
 import { AuxVoltageTrendChart } from "@/components/vehicle/aux-voltage-trend-chart";
 import { HistoryDaySummaryCard } from "@/components/history/history-day-summary-card";
 import {
@@ -1301,6 +1302,9 @@ export function VehicleAnalyticsPanels({
               ))}
             </div>
           )}
+          {historyRange === "week" && periodSessions.length > 0 ? (
+            <ChargingSessionsComparison sessions={periodSessions} vehicleId={vehicleId} />
+          ) : null}
         </section>
       ) : null,
 
