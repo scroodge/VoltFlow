@@ -138,7 +138,10 @@ import type {
   VoltflowMateTripTrackPointRow,
   ChargingSessionRow,
 } from "@/types/database";
-import { ChargingDeltaCard } from "@/features/charging/ui";
+import {
+  ChargingDeltaCard,
+  ChargingPowerTemperatureChart,
+} from "@/features/charging/ui";
 import {
   chargingParamsFromSession,
   deriveSessionProgressFromSoc,
@@ -639,10 +642,16 @@ function VehicleLiveContent({
             enabled={remoteCommandsEnabled}
           />
           {activeChargingSession ? (
-            <ChargingDeltaCard
-              session={activeChargingSession}
-              vehicleId={scopedVehicleId ?? snapshot.vehicle_id}
-            />
+            <>
+              <ChargingPowerTemperatureChart
+                session={activeChargingSession}
+                vehicleId={scopedVehicleId ?? snapshot.vehicle_id}
+              />
+              <ChargingDeltaCard
+                session={activeChargingSession}
+                vehicleId={scopedVehicleId ?? snapshot.vehicle_id}
+              />
+            </>
           ) : null}
           {!fixturePoints ? (
             <VehicleControlPanel

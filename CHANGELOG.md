@@ -9,6 +9,16 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-11-17
+
+### Agentmemory is required at every task boundary
+
+`AGENTS.md` now requires a relevant agentmemory recall before investigating every task,
+and a concise, verified result saved to agentmemory at every handoff. If the service is
+unavailable, agents must continue from repository evidence and state that limitation.
+The policy explicitly excludes secrets, private endpoints, personal telemetry, raw logs,
+and speculation from saved results.
+
 ## 2026-11-05
 
 **Distill cron no longer churns expired free-tier rows** (BACKLOG "Prod DB retention & cleanup", 1f).

@@ -799,7 +799,7 @@ odometer reading when the charge started.
 
 # Backlog — proposed plans awaiting go-ahead
 
-## Disaster recovery: encrypted off-site backup of the Contabo server — PROPOSED 2026-11-16
+## Disaster recovery: encrypted off-site backup of the Contabo server — IN PROGRESS 2026-11-16
 
 ### Problem and evidence
 
@@ -826,7 +826,7 @@ reliably stage a full server copy before copying it elsewhere.
    through the Mac but are never staged on its constrained internal disk.  Restic keeps
    immutable prior snapshots until retention prunes them, verifies repository integrity,
    and encrypts database dumps, `.env` files, TLS material and user data at rest.
-   Requires installing restic on the Mac and server, an always-available mounted drive,
+   Requires installing restic on the Mac, an always-available mounted drive,
    and a recovery password kept outside the server and that drive.
 2. **`tar` + `zstd` archives copied through the Mac.** Uses tools already installed but
    has brittle retention, no deduplication, no encrypted repository semantics, and needs
@@ -845,13 +845,17 @@ reliably stage a full server copy before copying it elsewhere.
    redirection from `docker exec` (not a container `/tmp` path).  Validate each custom
    dump with `pg_restore --list` before it becomes eligible for retention.  Do **not**
    copy a running PostgreSQL data directory as a filesystem archive.
-3. Capture required non-database persistent data and recovery configuration: Supabase
-   Storage/functions/configuration, named Docker volumes and bind-mounted application
-   data, `/opt` application/compose configuration, nginx, Let’s Encrypt, systemd units,
-   crontabs, Docker image/compose inventory, and a versioned restore runbook.  Image
-   layers/caches are reproducible and excluded; the inventory pins what must be pulled
-   during recovery.  Docker services with mutable files will be quiesced only for the
-   short archive window or exported through their native consistent mechanism.
+3. Capture only non-database **unique** persistent data and recovery configuration:
+   Supabase Storage/functions/configuration, Immich media and its stopped database,
+   application-owned bind data, current `.env`/Compose files, nginx, Let’s Encrypt,
+   systemd units, crontabs, Docker image/compose inventory, and a versioned restore
+   runbook. Image layers, source clones, `node_modules`, virtual environments, logs,
+   model/download caches, Redis queues, Prometheus/Loki history, stale `.env.bak*` files,
+   and all running PostgreSQL data directories are reproducible or covered by the logical
+   dumps and are excluded. The inventory pins the image tags and Git revisions that must
+   be pulled during recovery. A raw Immich Postgres archive is allowed only while no
+   Immich container is running; otherwise the snapshot fails until a native logical dump
+   is added.
 4. Add one Mac command, `local-scripts/backup-server.sh`, that refuses to run unless the
    expected encrypted external drive is mounted, creates the server snapshot through SSH,
    transfers it into restic, verifies the new repository snapshot, applies retention, and
@@ -870,13 +874,12 @@ reliably stage a full server copy before copying it elsewhere.
    the first backup and quarterly thereafter.  A backup is not considered successful
    merely because an archive was created.
 
-### Scope decision needed
+### Confirmed scope
 
-**Recommendation: include the whole VPS**, not just VoltFlow.  A cloud loss otherwise
-still loses the server's other active services and their data; current persistent data
-includes 21 GB of Immich in addition to VoltFlow.  If the intended scope is VoltFlow
-only, explicitly exclude the named unrelated services and their volumes from the
-manifest so the recovery promise is precise.
+Only **VoltFlow/Supabase, F1 News and HelloMate** are in scope. Immich, Uptime Kuma,
+Chat Agent, monitoring, VPN, SearxNG and AI gateway are deliberately excluded — including
+their databases, volumes and configurations. Shared host access/reverse-proxy/TLS
+configuration remains only where it is needed to bring those three services back online.
 
 ### Data ownership and location
 
@@ -901,10 +904,111 @@ or drive.
 
 ### Prerequisites before implementation
 
-- Connect and identify the external disk (mount label/path and available capacity; plan
-  for at least 2–3 times the first full encrypted snapshot for retention).
+- Connect and identify the external disk (mount label/path and available capacity; use at
+  least 64 GB, preferably 128 GB+, for the encrypted repository and its retained points).
 - Confirm whether “our server” means the whole VPS (recommended) or VoltFlow-only.
 - Approve installing `restic` and creating root-owned server files plus a Mac LaunchAgent.
+
+### Implementation progress — 2026-11-17
+
+- Initial whole-VPS approval was narrowed by the operator before off-site export: only
+  VoltFlow/Supabase, F1 News and HelloMate are retained. The first broad local snapshots
+  are not eligible for off-site import and are removed after narrow replacements verify.
+- Installed root-only `/usr/local/sbin/voltflow-backup-snapshot` and
+  `/etc/cron.d/voltflow-backup`: database/VoltFlow snapshots every six hours, full VPS
+  snapshot daily. The snapshotter makes logical, validated dumps for all three PostgreSQL
+  containers, excludes live PostgreSQL data directories from the filesystem archive, and
+  retains 8 DB and 2 full server snapshots locally.
+- Removed the obsolete `/opt/supabase-dump/backup.sh` root-cron line only after the new
+  path succeeded. The legacy job had produced no usable dump since 2026-08-29.
+- Verified first server-side snapshots: DB/VoltFlow `20261116T203352Z-vmi3078244`,
+  1,198,706,285 bytes; full VPS `20261117T023001Z-vmi3078244`, 24,229,615,976 bytes.
+  Each was archive-tested and SHA-256-manifested before publication.
+- Installed restic 0.19.1 and the hourly user LaunchAgent on the Mac. The agent correctly
+  refuses to use the internal disk; off-site import remains pending because no external
+  disk is mounted under `/Volumes`.
+- Scope refinement completed: new snapshots contain only VoltFlow/Supabase, F1 News and
+  HelloMate. The verified scoped DB snapshot `20261117T182003Z-vmi3078244` is 398,289,933
+  bytes; the scoped full snapshot `20261117T182701Z-vmi3078244` is 440,556,047 bytes.
+  Earlier snapshots containing Immich, Chat Agent and other excluded services were
+  deleted only after these replacements published successfully.
+
+### Should I build this?
+
+---
+
+## Charging-session power and battery-temperature timeline — IN PROGRESS 2026-11-17
+
+### Problem and evidence
+
+The charging-history detail (`/history/[id]`) already fetches the session's telemetry
+points through `GET /api/vehicle/charging-sessions/[sessionId]/samples`; the active
+vehicle screen uses the same query for the cell-delta card.  Those points already retain
+the measured `telemetry.charge_power_kw`, `telemetry.battery_temp_c`, and `device_time`.
+Today the UI exposes only a current/average power value and the cell-delta curve, so it
+cannot show how real charging power changes as the pack warms up.
+
+### Options
+
+1. **One shared, dual-axis time chart built from the existing session series (recommended).**
+   Add a small, testable mapper from session points to two measured series: charging power
+   in kW and battery temperature in °C. Render it in the charging-session detail (the
+   charging analytics view) and in the active charging screen. The shared X axis is
+   `device_time`; the left Y axis is kW and the right Y axis is °C. Hover shows the exact
+   timestamp and both values. Keep gaps in telemetry as breaks in the lines, retain explicit
+   zero-kW points, and never invent power or temperature from session math. This reuses the
+   existing React Query key, so placing the chart beside the existing cell-delta card adds
+   no endpoint or database query.
+2. **Two independent charts, one for power and one for temperature.** Easier axes but makes
+   time comparison less immediate and costs more vertical space on the charging screen.
+3. **Overlay both series after normalizing them to 0–100%.** Compact, but misleading: the
+   user loses actual kW/°C values and the two measures appear comparable when they are not.
+
+### Recommendation
+
+Build option 1 as `ChargingPowerTemperatureChart`, backed by a pure point-preparation
+module and its focused Node test. Reuse the existing chart-interaction helpers for hover,
+tooltip, responsive SVG, and broken lines. Show the card only when the session contains at
+least one finite measured `charge_power_kw`; temperature is independently optional and is
+shown whenever samples provide it. The chart refreshes with the existing 30-second active
+session query cadence and becomes static when the session ends. Add localized labels/title,
+axis units, tooltip rows, loading, and no-measured-power states in English, Belarusian, and
+Russian.
+
+**Likely owners:**
+
+- `src/features/charging/_ui/charging-power-temperature-chart.tsx` — shared visualization;
+- `src/features/charging/_domain/charging-power-temperature-chart.ts` + `.test.mjs` — pure
+  extraction, ordering, gap and finite-value behaviour;
+- `src/features/charging/_ui/charging-session-screen.tsx` — historical/session analytics
+  placement;
+- `src/components/vehicle/vehicle-live-view.tsx` — active-charging placement;
+- `src/lib/i18n.ts` — chart copy in three locales.
+
+### Data ownership and location
+
+No new user-facing data model or preference. The graph reads the existing **user-owned**
+telemetry history in **Postgres**, scoped by the authenticated session-samples endpoint and
+its resolved vehicle/session ownership. It writes nothing and adds no localStorage state.
+
+### Verification
+
+Run the focused mapper test; then run the relevant project test command and type-check/lint
+after implementation. Manually verify a finished session and an active one: X axis uses
+local time, left axis/tooltip use kW, right axis/tooltip use °C, missing temperature does
+not fabricate a line, zero measured power remains visible, and telemetry gaps do not create
+false continuous segments. Confirm the two placements share cached session data and do not
+introduce a second network request.
+
+### Implementation progress — 2026-11-17
+
+- Approved and implemented the shared dual-axis chart plus its pure data mapper and focused
+  test. The chart now appears in the charging-session detail and beside the existing
+  cell-delta card while a session is actively charging.
+- Added English, Belarusian, and Russian copy. The existing session-samples query remains
+  the sole data source; no migration, endpoint, model, or persisted preference was added.
+- Per operator preference, build, lint, and tests have not been run in this turn. The
+  whitespace check passed; browser/runtime verification remains pending.
 
 ### Should I build this?
 

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { BatteryRing } from "./BatteryRing";
 import { ChargingDeltaCard } from "./charging-delta-card";
+import { ChargingPowerTemperatureChart } from "./charging-power-temperature-chart";
 import { EnergyCorrectionCard } from "./energy-correction-card";
 import { ChargingStatsGrid, type ChargingStat } from "./ChargingStatsGrid";
 import { sessionStartOdometerKm } from "../_domain/session-start-odometer";
@@ -933,6 +934,11 @@ export function ChargingSessionScreen({
       {historyMode ? (
         <EnergyCorrectionCard session={session} sessionId={sessionId} />
       ) : null}
+
+      <ChargingPowerTemperatureChart
+        session={session}
+        vehicleId={sessionVehicleId ?? undefined}
+      />
 
       <ChargingDeltaCard
         session={session}

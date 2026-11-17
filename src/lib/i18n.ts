@@ -556,6 +556,9 @@ export const dictionaries = {
       fullCost: "Cost at 100%",
       acPower: "AC power",
       avgPower: "Avg power",
+      powerTemperatureTimeline: "Charging power & battery temperature",
+      powerTemperatureTimelineEmpty:
+        "No measured charging-power data for this session yet.",
       startOdometer: "Odometer at start",
       batteryPack: "Battery pack",
       estimatedFinish: "Estimated finish",
@@ -2281,6 +2284,9 @@ export const dictionaries = {
       fullCost: "Кошт да 100%",
       acPower: "AC-магутнасць",
       avgPower: "Сяр. магутнасць",
+      powerTemperatureTimeline: "Магутнасць зарадкі і тэмпература батарэі",
+      powerTemperatureTimelineEmpty:
+        "Для гэтай сесіі пакуль няма вымераных даных магутнасці зарадкі.",
       startOdometer: "Адометр на старце",
       batteryPack: "Батарэя",
       estimatedFinish: "Ацэнічнае завяршэнне",
@@ -4008,6 +4014,9 @@ export const dictionaries = {
       fullCost: "К 100%",
       acPower: "AC-мощность",
       avgPower: "Ср. мощность",
+      powerTemperatureTimeline: "Мощность зарядки и температура батареи",
+      powerTemperatureTimelineEmpty:
+        "Для этой сессии пока нет измеренных данных мощности зарядки.",
       startOdometer: "Одометр на старте",
       batteryPack: "Батарея",
       estimatedFinish: "Оценочное завершение",
