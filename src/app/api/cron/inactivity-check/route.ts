@@ -33,22 +33,35 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (warnCandidates) {
-    for (const profile of warnCandidates) {
-      if (!profile.email) continue;
-      const result = await sendInactivityWarning(profile.email);
+  if (warnCandidates && warnCandidates.length > 0) {
+    const validCandidates = warnCandidates.filter((p): p is typeof p & { email: string } => Boolean(p.email));
+
+    const emailResults = await Promise.all(
+      validCandidates.map(async (profile) => {
+        const result = await sendInactivityWarning(profile.email);
+        return { profile, result };
+      }),
+    );
+
+    const warnedIds: string[] = [];
+    for (const { profile, result } of emailResults) {
       if (result.ok) {
-        const { error: warningStampError } = await getSupabaseAdmin()
-          .from("profiles")
-          .update({ inactivity_warning_sent_at: now.toISOString() })
-          .eq("id", profile.id);
-        if (warningStampError) {
-          results.errors.push(`Warning stamp failed for ${profile.id}: ${warningStampError.message}`);
-        } else {
-          results.warnings_sent++;
-        }
+        warnedIds.push(profile.id);
       } else {
         results.errors.push(`Warning email failed for ${profile.id}: ${result.error}`);
+      }
+    }
+
+    if (warnedIds.length > 0) {
+      const { error: warningStampError } = await getSupabaseAdmin()
+        .from("profiles")
+        .update({ inactivity_warning_sent_at: now.toISOString() })
+        .in("id", warnedIds);
+
+      if (warningStampError) {
+        results.errors.push(`Warning stamp failed for ${warnedIds.length} profiles: ${warningStampError.message}`);
+      } else {
+        results.warnings_sent += warnedIds.length;
       }
     }
   }
@@ -69,11 +82,17 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (deleteCandidates) {
-    for (const profile of deleteCandidates) {
-      const { error } = await getSupabaseAdmin().auth.admin.deleteUser(profile.id);
+  if (deleteCandidates && deleteCandidates.length > 0) {
+    const deleteResults = await Promise.all(
+      deleteCandidates.map(async (profile) => {
+        const { error } = await getSupabaseAdmin().auth.admin.deleteUser(profile.id);
+        return { profileId: profile.id, error };
+      }),
+    );
+
+    for (const { profileId, error } of deleteResults) {
       if (error) {
-        results.errors.push(`Deletion failed for ${profile.id}: ${error.message}`);
+        results.errors.push(`Deletion failed for ${profileId}: ${error.message}`);
       } else {
         results.accounts_deleted++;
       }
