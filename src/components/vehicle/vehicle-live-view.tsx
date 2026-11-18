@@ -49,7 +49,6 @@ import { CommandErrorNotice } from "@/components/vehicle/command-quota-notice";
 import { VehicleControlPanel } from "@/components/vehicle/vehicle-control-panel";
 import { MetricExplainerSheet } from "@/components/vehicle/metric-explainer-sheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useVoltflowMateLiveQuery } from "@/hooks/use-voltflowmate-live-query";
