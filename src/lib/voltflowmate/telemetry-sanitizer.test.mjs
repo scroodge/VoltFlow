@@ -178,7 +178,78 @@ test("drops an impossible charge current without discarding the rest of the samp
   assert.equal(result.droppedTelemetryFields, 1);
 });
 
-test("filters persisted trip track points for legacy dirty trips", () => {
+test("sanitizeTripTrackPoints handles empty input array", () => {
+  const result = sanitizeTripTrackPoints([]);
+
+  assert.equal(result.droppedPointCount, 0);
+  assert.deepEqual(result.points, []);
+});
+
+test("sanitizeTripTrackPoints accepts a sequence of valid track points without dropping any", () => {
+  const validPoints = [
+    {
+      device_time: "2026-05-21T17:16:26.164Z",
+      lat: 53.92552049,
+      lon: 27.63499593,
+      accuracy_m: 3.79,
+      bearing_deg: 73.4,
+      speed_kmh: 12,
+      extra_info: "custom_data_1",
+    },
+    {
+      device_time: "2026-05-21T17:16:29.686Z",
+      lat: 53.92569747,
+      lon: 27.63530375,
+      accuracy_m: 3.79,
+      bearing_deg: 68.8,
+      speed_kmh: 11,
+      extra_info: "custom_data_2",
+    },
+  ];
+
+  const result = sanitizeTripTrackPoints(validPoints);
+
+  assert.equal(result.droppedPointCount, 0);
+  assert.equal(result.points.length, 2);
+  assert.deepEqual(result.points, validPoints);
+});
+
+test("sanitizeTripTrackPoints drops points with invalid coordinates or zero-island coordinates", () => {
+  const pointsWithInvalidCoords = [
+    {
+      device_time: "2026-05-21T17:16:26.164Z",
+      lat: 0,
+      lon: 0,
+      accuracy_m: 5,
+      bearing_deg: 90,
+      speed_kmh: 10,
+    },
+    {
+      device_time: "2026-05-21T17:16:29.686Z",
+      lat: 100, // out of range
+      lon: 27.63530375,
+      accuracy_m: 5,
+      bearing_deg: 90,
+      speed_kmh: 10,
+    },
+    {
+      device_time: "2026-05-21T17:16:32.000Z",
+      lat: 53.92552049,
+      lon: 27.63499593,
+      accuracy_m: 3.79,
+      bearing_deg: 73.4,
+      speed_kmh: 12,
+    },
+  ];
+
+  const result = sanitizeTripTrackPoints(pointsWithInvalidCoords);
+
+  assert.equal(result.droppedPointCount, 2);
+  assert.equal(result.points.length, 1);
+  assert.equal(result.points[0].device_time, "2026-05-21T17:16:32.000Z");
+});
+
+test("filters persisted trip track points for legacy dirty trips and maintains jump sequence state", () => {
   const result = sanitizeTripTrackPoints([
     {
       device_time: "2026-05-21T17:17:28.592Z",
