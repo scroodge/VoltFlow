@@ -12,6 +12,27 @@ test("grants nothing when no window has been stamped", () => {
   );
 });
 
+test("rounds up sub-second remaining times to 1 second", () => {
+  assert.equal(
+    liveFastSecondsFor({ liveFastUntil: new Date(Date.now() + 100).toISOString(), liveFastVehicleId: "car-a" }, "car-a"),
+    1,
+  );
+});
+
+test("grants exactly LIVE_FAST_GRANT_SECONDS when remaining time matches grant limit exactly", () => {
+  assert.equal(
+    liveFastSecondsFor({ liveFastUntil: new Date(Date.now() + LIVE_FAST_GRANT_SECONDS * 1000).toISOString(), liveFastVehicleId: "car-a" }, "car-a"),
+    LIVE_FAST_GRANT_SECONDS,
+  );
+});
+
+test("returns 0 when remaining time is exactly 0", () => {
+  assert.equal(
+    liveFastSecondsFor({ liveFastUntil: new Date(Date.now()).toISOString(), liveFastVehicleId: "car-a" }, "car-a"),
+    0,
+  );
+});
+
 test("grants nothing once the window has lapsed", () => {
   assert.equal(
     liveFastSecondsFor({ liveFastUntil: inSeconds(-1), liveFastVehicleId: "car-a" }, "car-a"),
