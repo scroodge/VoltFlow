@@ -284,10 +284,10 @@ function DashboardStatTile({
           aria-hidden
         />
       ) : null}
-      <p className="break-words pr-5 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+      <p className="break-words pr-5 text-[10px] font-semibold uppercase tracking-[0.04em] text-muted-foreground min-[400px]:text-xs min-[400px]:tracking-[0.08em]">
         {label}
       </p>
-      <p className="flex min-w-0 items-center font-heading text-base font-bold tabular-nums">
+      <p className="flex min-w-0 items-center font-heading text-sm font-bold tabular-nums min-[400px]:text-base">
         {value}
       </p>
     </>
@@ -338,18 +338,18 @@ function DashboardChargingProgressTile({
             aria-hidden
           />
         ) : null}
-        <span className="block break-words pr-5 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <span className="block break-words pr-5 text-[10px] font-semibold uppercase tracking-[0.04em] text-muted-foreground min-[400px]:text-xs min-[400px]:tracking-[0.08em]">
           {timeLeftLabel}
         </span>
-        <span className="mt-1 block truncate font-heading text-base font-bold tabular-nums">
+        <span className="mt-1 block truncate font-heading text-sm font-bold tabular-nums min-[400px]:text-base">
           {timeLeft}
         </span>
       </button>
       <div className="mt-1 block min-h-11 w-full text-left">
-        <span className="block break-words text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <span className="block break-words text-[10px] font-semibold uppercase tracking-[0.04em] text-muted-foreground min-[400px]:text-xs min-[400px]:tracking-[0.08em]">
           {endsAtLabel}
         </span>
-        <span className="mt-1 block text-sm font-semibold tabular-nums text-muted-foreground">
+        <span className="mt-1 block text-xs font-semibold tabular-nums text-muted-foreground min-[400px]:text-sm">
           {endsAt}
         </span>
       </div>
@@ -1817,20 +1817,8 @@ export function DashboardView({
               </div>
             </div>
 
-            {/* While charging, the right column holds a 2×2 tile grid. Below 420 px
-                that left ~90 px per tile (iPhone mini / Display Zoom ≈ 320 px), so
-                the tiles move under the ring at full width there. */}
-            <div
-              className={cn(
-                "mt-3 grid grid-cols-[116px_minmax(0,1fr)] items-stretch gap-3",
-                activeChargingStats && "max-[419px]:grid-cols-1",
-              )}
-            >
-              <div
-                className={cn(
-                  activeChargingStats && "max-[419px]:mx-auto max-[419px]:w-[116px]",
-                )}
-              >
+            <div className="mt-3 grid grid-cols-[116px_minmax(0,1fr)] items-stretch gap-3">
+              <div>
                 {selectedCarImage ? (
                   <div className="mb-1 flex h-12 w-[116px] items-center justify-center overflow-hidden">
                     <Image

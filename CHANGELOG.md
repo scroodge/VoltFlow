@@ -11,6 +11,12 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ## 2026-11-17
 
+### Dashboard tiles keep their side-by-side placement on narrow screens
+
+Restored the vehicle ring and charging tiles to the established two-column layout on screens
+below 420 px. Tile labels and values use smaller type on narrow screens and return to their
+previous sizes from 400 px. No build or tests were run.
+
 ### Agentmemory is required at every task boundary
 
 `AGENTS.md` now requires a relevant agentmemory recall before investigating every task,
@@ -4722,3 +4728,9 @@ Also dropped the redundant raw `diplus` blob from telemetry (DB 509 → 258 MB).
   recovery flow.
 - **Telegram Mini App entry** (BotFather Main Mini App); archived plan in the local-only
   `docs/archive/TELEGRAM_MINIAPP_PLAN.md`.
+## 2026-11-18 — Codex project configuration
+
+Removed the ignored `features.skills` flag, renamed `model_personality` to `personality`, and
+replaced `shell_environment_policy.policy` with `inherit = "all"`. Kept the explicit exclusions
+for `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`.
+

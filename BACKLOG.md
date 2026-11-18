@@ -1,3 +1,9 @@
+## Dashboard tiles: restore two-column layout on narrow screens — APPROVED, shipped 2026-11-18
+
+Restore the vehicle ring and charging tiles to the established side-by-side layout below 420 px.
+Reduce tile labels and values only at narrow widths, returning to the existing sizes at 400 px.
+No data model or storage changes. Approved by the user on 2026-11-18.
+
 ## Late telemetry must repair an auto-session tail, not discard the full charge (2026-11-17) — APPROVED
 
 **Observed in production.** A Mate batch can arrive hours late, while its last few samples
@@ -934,39 +940,6 @@ charging session in Postgres**, as today. No new preference or storage is propos
 
 ---
 
-## Codex project config: remove ignored settings (2026-11-18) — PROPOSED
-
-**Observed.** Codex CLI 0.169.0 reports three ignored keys in the ignored local file
-`.codex/config.toml`: `features.skills`, `model_personality`, and
-`shell_environment_policy.policy`.
-
-**Evidence.** `codex features list` marks the old personality feature as removed and does not
-list `skills`; strict, isolated CLI probes accept `personality = "concise"` and
-`shell_environment_policy.inherit = "all"`.
-
-### Options
-
-1. **Replace/remove the stale keys (recommended).** Replace `model_personality` with
-   `personality`, replace `policy = "exclude"` with `inherit = "all"`, retain the existing
-   `exclude` list for the two AWS credentials, and remove `features.skills`. Skills are now
-   available through the built-in skill catalog, so no feature switch is needed.
-2. Remove all three settings. This removes warnings but also loses the intended concise reply
-   preference and explicit AWS credential exclusions.
-3. Keep the file as-is. Codex continues to emit the three warnings and ignores the preferences.
-
-### Recommendation
-
-Option 1. It preserves the effective intent while making the project config valid for the
-installed CLI. No application behavior, user data, or deployment configuration changes.
-
-### Verification
-
-Run `codex --strict-config --help` from the project and confirm it exits successfully without
-the three ignored-setting diagnostics.
-
-### Should I build this?
-
----
 
 ## Charging-session power and battery-temperature timeline — IN PROGRESS 2026-11-17
 
