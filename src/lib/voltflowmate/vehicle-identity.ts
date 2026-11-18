@@ -17,13 +17,16 @@ type RpcClient = {
   ) => PromiseLike<{ data: unknown; error: unknown }>;
 };
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** The uid header, or null when absent or not a UUID (treated like an older APK). */
+/**
+ * Normalize a vehicle identifier reported by VoltFlow Mate (e.g. "byd_123456").
+ * Ensures it is safe to use as a path component or cache key.
+ */
 export function parseVehicleUid(raw: string | null | undefined): string | null {
-  const value = raw?.trim();
-  return value && UUID_RE.test(value) ? value.toLowerCase() : null;
+  if (!raw) return null;
+  const normalized = raw.trim().toLowerCase();
+  if (normalized.length < 3 || normalized.length > 64) return null;
+  if (!/^[a-z0-9_-]+$/.test(normalized)) return null;
+  return normalized;
 }
 
 export async function resolveVehicleKey(
