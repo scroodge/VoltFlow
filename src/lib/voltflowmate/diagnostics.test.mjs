@@ -113,3 +113,48 @@ test("caption escapes HTML and stays within Telegram's 1024 chars", () => {
   assert.ok(long.length <= 1024);
   assert.match(long, /&amp;…$/);
 });
+
+test("diagnosticsCaption edge cases: 2000 char comments, html entities, null fields, and byte rounding", () => {
+  // Test 2000-char comment containing HTML special characters (<, >, &)
+  const comment2000 = "Problem <issue> & details ".repeat(80); // ~2160 chars
+  const captionLongComment = diagnosticsCaption({
+    carName: "Test Car",
+    vehicleId: "veh_12345",
+    userId: "user_67890",
+    mateVersion: "1.0.0",
+    comment: comment2000,
+    bytes: 2048,
+  });
+
+  assert.ok(captionLongComment.length <= 1024);
+  assert.match(captionLongComment, /…$/);
+  // Ensure HTML escaping is valid and no broken entity tags (e.g., &am or &l) exist at the end
+  assert.doesNotMatch(captionLongComment, /&(?:amp|lt|gt)?[a-zA-Z0-9]*$/);
+  assert.match(captionLongComment, /&lt;issue&gt; &amp; details/);
+
+  // Test null carName, null mateVersion, null comment, and small bytes (<1024 bytes)
+  const captionNulls = diagnosticsCaption({
+    carName: null,
+    vehicleId: "veh_999",
+    userId: "user_888",
+    mateVersion: null,
+    comment: null,
+    bytes: 500,
+  });
+
+  assert.match(captionNulls, /🛠 <b>Диагностика<\/b> · — \(<code>veh_999<\/code>\)/);
+  assert.match(captionNulls, /👤 <code>user_888<\/code>/);
+  assert.match(captionNulls, /📱 Mate \? · 1 KB/);
+  assert.doesNotMatch(captionNulls, /💬/);
+
+  // Test 0 bytes
+  const captionZeroBytes = diagnosticsCaption({
+    carName: "Car",
+    vehicleId: "v1",
+    userId: "u1",
+    mateVersion: "0.1",
+    comment: "test",
+    bytes: 0,
+  });
+  assert.match(captionZeroBytes, /1 KB/);
+});
