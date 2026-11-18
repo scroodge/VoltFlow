@@ -265,11 +265,13 @@ function DashboardStatTile({
   value,
   explanation,
   onExplain,
+  onClick,
 }: {
   label: string;
   value: ReactNode;
   explanation?: MetricExplanation;
   onExplain?: (explanation: MetricExplanation) => void;
+  onClick?: () => void;
 }) {
   const longPressProps = useLongPress(() => {
     if (explanation) onExplain?.(explanation);
@@ -292,7 +294,11 @@ function DashboardStatTile({
   );
   const className =
     "relative grid min-h-[84px] w-full min-w-0 grid-rows-[auto_1fr] rounded-xl border border-border bg-white/[0.03] p-2.5 text-left";
-  return explanation ? (
+  return onClick ? (
+    <button type="button" className={`${className} cursor-pointer hover:border-primary/50 hover:bg-primary/5`} onClick={onClick} aria-label={label}>
+      {content}
+    </button>
+  ) : explanation ? (
     <button type="button" className={className} {...longPressProps}>
       {content}
     </button>
@@ -2053,6 +2059,7 @@ export function DashboardView({
                             {chargingTileLabel}
                           </span>
                         }
+                        onClick={activeSession ? () => router.push(appPath(`/charging/${activeSession.id}`)) : undefined}
                       />
                     </div>
                   ) : (
@@ -2074,6 +2081,7 @@ export function DashboardView({
                               {chargingTileLabel}
                             </span>
                           }
+                          onClick={activeSession ? () => router.push(appPath(`/charging/${activeSession.id}`)) : undefined}
                         />
                       ) : null}
                     </div>

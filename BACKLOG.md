@@ -895,6 +895,45 @@ separately requested under the current project verification preference.
 
 ---
 
+## Dashboard active charge: edit tariff without leaving home — PROPOSED 2026-11-18
+
+### Problem and evidence
+
+The active charging detail screen (`ChargingSessionScreen`, `/charging/[id]`) has tariff
+type, provider, and price controls and saves through `updateChargingSessionTariff`.
+The dashboard (`dashboard-view.tsx`) shows the active charge but its visible tariff
+selectors are in the manual *start session* form. There is no direct tariff-edit control
+on the active charging card, so the user must open session detail to change the current
+session tariff. The canonical charging-session doc defines how efficiency, energy, and
+cost are recomputed when a tariff changes; the server action already handles this safely.
+
+### Options
+
+1. **Add an edit action to the active charge card that opens the existing session detail
+   tariff editor (recommended).** Minimal behavior duplication; reuses the existing
+   authenticated save path and cost recalculation. User can return to the dashboard after
+   saving.
+2. **Embed the tariff form directly on the dashboard card.** Fastest single-screen flow,
+   but duplicates state, provider options, validation, GPS auto-match messaging, and save
+   handling from the session detail screen.
+3. **Add compact provider/price controls but omit tariff type.** Smaller UI, but can leave
+   efficiency incorrect when switching between AC and fast DC.
+
+### Recommendation
+
+Build option 1: add a clearly labelled tariff-edit link/button to the active charging
+card, deep-linking to the active session's existing tariff editor (or add an editor anchor
+there if needed). Preserve the tariff type, provider, price, and existing cost/efficiency
+recalculation behavior. Avoid introducing a second mutation path. Verify active-session
+navigation and saving a tariff change from the home card flow.
+
+**Data ownership and location:** tariff selection is part of the **user-owned active
+charging session in Postgres**, as today. No new preference or storage is proposed.
+
+### Should I build this?
+
+---
+
 ## Codex project config: remove ignored settings (2026-11-18) — PROPOSED
 
 **Observed.** Codex CLI 0.169.0 reports three ignored keys in the ignored local file
