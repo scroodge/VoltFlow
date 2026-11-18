@@ -31,6 +31,8 @@ if (args.length === 1 && args[0] === "--list") {
   const result = spawnSync(process.execPath, [
     "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON",
     "--experimental-strip-types",
+    "--import",
+    join(root, "scripts", "alias-register.mjs"),
     "--test",
     ...args,
     ...files,
