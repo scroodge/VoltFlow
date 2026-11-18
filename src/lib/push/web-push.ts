@@ -124,22 +124,26 @@ export async function sendPushToUser(
 
   webpush.setVapidDetails(vapid.subject, vapid.publicKey, vapid.privateKey);
 
-  let sent = 0;
-  for (const row of targetRows as PushRow[]) {
-    try {
-      await webpush.sendNotification(toWebPushSubscription(row), JSON.stringify(payload));
-      sent += 1;
-    } catch (err) {
-      const statusCode = webPushStatusCode(err);
-      if (statusCode === 404 || statusCode === 410) {
-        await supabase
-          .from("push_subscriptions")
-          .delete()
-          .eq("user_id", userId)
-          .eq("endpoint", row.endpoint);
+  const results = await Promise.all(
+    (targetRows as PushRow[]).map(async (row) => {
+      try {
+        await webpush.sendNotification(toWebPushSubscription(row), JSON.stringify(payload));
+        return { success: true };
+      } catch (err) {
+        const statusCode = webPushStatusCode(err);
+        if (statusCode === 404 || statusCode === 410) {
+          await supabase
+            .from("push_subscriptions")
+            .delete()
+            .eq("user_id", userId)
+            .eq("endpoint", row.endpoint);
+        }
+        return { success: false };
       }
-    }
-  }
+    }),
+  );
+
+  const sent = results.reduce((acc, res) => (res.success ? acc + 1 : acc), 0);
 
   return { ok: true as const, sent };
 }
