@@ -5,14 +5,21 @@ type ApiRequestOptions = Omit<RequestInit, "body" | "method"> & {
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL;
 
 export class ApiError extends Error {
+  public readonly status: number;
+  public readonly statusText: string;
+  public readonly url: string;
+
   constructor(
     message: string,
-    public readonly status: number,
-    public readonly statusText: string,
-    public readonly url: string,
+    status: number,
+    statusText: string,
+    url: string,
   ) {
     super(message);
     this.name = "ApiError";
+    this.status = status;
+    this.statusText = statusText;
+    this.url = url;
   }
 }
 
