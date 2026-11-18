@@ -54,6 +54,35 @@ test("enumerateCalendarDays includes inclusive UTC day bounds", () => {
   assert.deepEqual(days, ["2026-06-08", "2026-06-09", "2026-06-10"]);
 });
 
+test("enumerateCalendarDays handles same-day bounds", () => {
+  const days = enumerateCalendarDays("2026-06-08T08:00:00.000Z", "2026-06-08T22:00:00.000Z");
+  assert.deepEqual(days, ["2026-06-08"]);
+});
+
+test("enumerateCalendarDays handles month boundary transitions", () => {
+  const days = enumerateCalendarDays("2026-02-27T10:00:00.000Z", "2026-03-02T15:00:00.000Z");
+  assert.deepEqual(days, ["2026-02-27", "2026-02-28", "2026-03-01", "2026-03-02"]);
+});
+
+test("enumerateCalendarDays correctly handles leap years vs non-leap years", () => {
+  const leapDays = enumerateCalendarDays("2024-02-28T00:00:00.000Z", "2024-03-01T00:00:00.000Z");
+  assert.deepEqual(leapDays, ["2024-02-28", "2024-02-29", "2024-03-01"]);
+
+  const nonLeapDays = enumerateCalendarDays("2025-02-28T00:00:00.000Z", "2025-03-01T00:00:00.000Z");
+  assert.deepEqual(nonLeapDays, ["2025-02-28", "2025-03-01"]);
+});
+
+test("enumerateCalendarDays handles year boundary roll-over", () => {
+  const days = enumerateCalendarDays("2025-12-30T12:00:00.000Z", "2026-01-02T12:00:00.000Z");
+  assert.deepEqual(days, ["2025-12-30", "2025-12-31", "2026-01-01", "2026-01-02"]);
+});
+
+test("enumerateCalendarDays returns empty array when from date is after to date or input is invalid", () => {
+  assert.deepEqual(enumerateCalendarDays("2026-06-10T00:00:00.000Z", "2026-06-08T00:00:00.000Z"), []);
+  assert.deepEqual(enumerateCalendarDays("invalid-date", "2026-06-08T00:00:00.000Z"), []);
+  assert.deepEqual(enumerateCalendarDays("2026-06-08T00:00:00.000Z", "invalid-date"), []);
+});
+
 test("medianSampleGapSeconds computes median gap in seconds", () => {
   const gap = medianSampleGapSeconds([
     "2026-05-31T10:00:00.000Z",
