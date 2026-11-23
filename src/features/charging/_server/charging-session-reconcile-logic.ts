@@ -35,6 +35,8 @@ export type ReconcileChargingSession = {
   status: string;
   started_at: string | null;
   stopped_at: string | null;
+  session_origin?: string;
+  recovery_key?: string | null;
 };
 
 const RECONCILE_LOOKBACK_DAYS = 14;
@@ -56,6 +58,42 @@ export const SESSION_WINDOW_PAD_MS = 5 * 60_000;
  *  before treating a stop candidate as garbage. */
 const STOP_CANDIDATE_FUTURE_SKEW_MS = 60_000;
 
+type ClosedSessionWindowInput = {
+  started_at: string | null;
+  stopped_at: string | null;
+  updated_at: string;
+  session_origin?: string;
+  recovery_key?: string | null;
+};
+
+export function recoveredSessionStopMs(
+  session: Pick<ClosedSessionWindowInput, "session_origin" | "recovery_key" | "started_at">,
+): number | null {
+  if (session.session_origin !== "telemetry_recovered" || !session.recovery_key) return null;
+  const bounds = /^(.+?(?:Z|[+-]\d{2}:\d{2})):(.+)$/.exec(session.recovery_key);
+  if (!bounds) return null;
+  const startedMs = Date.parse(bounds[1]);
+  const stoppedMs = Date.parse(bounds[2]);
+  return startedMs === Date.parse(session.started_at ?? "") && stoppedMs >= startedMs
+    ? stoppedMs
+    : null;
+}
+
+export function closedSessionReconcileWindow(
+  session: ClosedSessionWindowInput,
+  nextStartMs: number | null,
+  nowMs: number,
+) {
+  const startMs = Date.parse(session.started_at ?? "");
+  const storedStopMs = Date.parse(session.stopped_at ?? "");
+  const fallbackEndMs = storedStopMs >= startMs ? storedStopMs + SESSION_WINDOW_PAD_MS : nowMs + 60_000;
+  const hardEndMs = Math.min(
+    recoveredSessionStopMs(session) ?? Infinity,
+    nextStartMs == null ? Infinity : nextStartMs - 1,
+  );
+  return { startMs, endMs: Math.min(fallbackEndMs, hardEndMs), hardEndMs };
+}
+
 /**
  * Live SOC is only trustworthy for a *closed* session's repair patch when it was captured
  * near that session's own timeframe. Without this, the car's *current* SOC (fresh relative
@@ -71,8 +109,9 @@ const STOP_CANDIDATE_FUTURE_SKEW_MS = 60_000;
  * anchor → no trusted window → null.
  */
 export function liveSocWithinSessionWindow(
-  session: { started_at: string | null; stopped_at: string | null; updated_at: string },
+  session: ClosedSessionWindowInput,
   liveRow: VoltflowMateLiveSnapshotRow | null,
+  hardEndMs = Infinity,
 ): { soc: number; receivedMs: number } | null {
   if (!liveRow || !session.started_at) return null;
   const receivedMs = Date.parse(liveRow.received_at);
@@ -85,6 +124,10 @@ export function liveSocWithinSessionWindow(
       : Date.parse(session.updated_at ?? "");
   if (!Number.isFinite(endAnchorMs) || endAnchorMs < startMs) return null;
   if (receivedMs < startMs || receivedMs > endAnchorMs + SESSION_WINDOW_PAD_MS) return null;
+  if (Number.isFinite(hardEndMs)) {
+    const measuredMs = Date.parse(liveRow.device_time);
+    if (!Number.isFinite(measuredMs) || measuredMs < startMs || measuredMs > hardEndMs || receivedMs > hardEndMs) return null;
+  }
   const soc = snapshotSoc(liveRow);
   return soc == null ? null : { soc, receivedMs };
 }
@@ -273,6 +316,7 @@ export function buildReconciledSessionPatch({
   liveSoc,
   liveSocReceivedMs = null,
   nowMs,
+  hardEndMs = Infinity,
 }: {
   session: ReconcileChargingSession;
   summary: ReturnType<typeof summarizeSessionTelemetry>;
@@ -280,6 +324,7 @@ export function buildReconciledSessionPatch({
   /** When the liveSoc snapshot was received — a stop anchor when the stored stopped_at is unusable. */
   liveSocReceivedMs?: number | null;
   nowMs: number;
+  hardEndMs?: number;
 }) {
   // No SOC evidence in the session's window (telemetry pruned/missing) and no live SOC to
   // anchor to — measuredSocFromMate would fall back to start_percent and wipe a legit,
@@ -316,7 +361,8 @@ export function buildReconciledSessionPatch({
     energyMatches &&
     costMatches &&
     session.stopped_at &&
-    Date.parse(session.stopped_at) >= startMs
+    Date.parse(session.stopped_at) >= startMs &&
+    Date.parse(session.stopped_at) <= hardEndMs
   ) {
     return null;
   }
@@ -328,13 +374,17 @@ export function buildReconciledSessionPatch({
   // future stopped_at must not win Math.max and make the session look days long.
   const nowCapMs = nowMs + STOP_CANDIDATE_FUTURE_SKEW_MS;
   const isPlausibleStopMs = (ms: number) => Number.isFinite(ms) && ms >= startMs && ms <= nowCapMs;
-  const storedStoppedMs = session.stopped_at ? Date.parse(session.stopped_at) : NaN;
-  const storedStoppedValid = isPlausibleStopMs(storedStoppedMs);
+  const storedStop = Date.parse(session.stopped_at ?? "");
+  const storedStoppedMs = storedStop <= hardEndMs
+    ? storedStop
+    : recoveredSessionStopMs(session) ?? NaN;
+  const storedStoppedValid = isPlausibleStopMs(storedStoppedMs) && storedStoppedMs <= hardEndMs;
 
   const stopCandidates = [
-    ...[summary.firstTargetSocAt, summary.lastAcChargeAt, session.stopped_at]
+    ...[summary.firstTargetSocAt, summary.lastAcChargeAt]
       .map((value) => (value ? Date.parse(value) : NaN))
       .filter(isPlausibleStopMs),
+    ...(storedStoppedValid ? [storedStoppedMs] : []),
     ...(storedStoppedValid
       ? []
       : [
@@ -347,7 +397,8 @@ export function buildReconciledSessionPatch({
   // duration (the old startMs + 60s fallback stamped every such session as 1 minute).
   if (stopCandidates.length === 0) return null;
 
-  const stoppedAtMs = Math.max(...stopCandidates);
+  const stoppedAtMs = Math.min(hardEndMs, Math.max(...stopCandidates));
+  if (stoppedAtMs < startMs) return null;
 
   return {
     current_percent: progress.currentPercent,

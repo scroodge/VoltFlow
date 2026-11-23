@@ -1,6 +1,7 @@
 import {
   processVoltflowMateAutoChargingSessions,
   recoverLateChargesForBatch,
+  mergeChargingContinuations,
   reconcileChargingSessionsForUser,
 } from "@/features/charging/server";
 import {
@@ -431,7 +432,7 @@ export async function POST(request: Request) {
             error: message,
           };
         })
-      : Promise.resolve({ started: 0, stopped: 0, sessionIds: [] as string[] });
+      : Promise.resolve({ started: 0, stopped: 0, sessionIds: [] as string[], closedIds: [] as string[] });
 
     // Phase 3 of the cloud-offload plan: apply the client's cumulative per-hour rollup(s), if
     // any were attached to this flush. Best-effort and separate from ingest — a failure here
@@ -549,6 +550,16 @@ export async function POST(request: Request) {
       console.error("late charge recovery:", message);
     }
 
+    const { closedIds, ...autoChargingSummary } = autoChargingSessions;
+    try {
+      await mergeChargingContinuations(supabase, profile.id, [
+        ...closedIds,
+        ...lateChargeRecovery.sessionIds,
+      ]);
+    } catch (continuationError) {
+      console.error("charging continuation:", continuationError);
+    }
+
     // Only reconcile when auto-session processing actually opened/closed a row.
     // Reconcile reads sessions + samples back from Supabase, so running it on
     // every ~1Hz sample was a large, mostly-redundant CPU + egress cost. The
@@ -606,7 +617,7 @@ export async function POST(request: Request) {
       charge_notifications: chargeNotifications,
       live_status_notifications: liveStatusNotifications,
       telegram_live_widgets: telegramWidgets,
-      auto_charging_sessions: autoChargingSessions,
+      auto_charging_sessions: autoChargingSummary,
       charging_session_reconcile: chargingSessionReconcile,
       late_charge_recovery: {
         recovered: lateChargeRecovery.recovered,

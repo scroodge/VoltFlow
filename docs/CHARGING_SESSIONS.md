@@ -240,6 +240,23 @@ for normal reconciliation. `recovery_key` makes the import idempotent, while the
 guard prevents a duplicate with an existing session. The feature does not relax the live
 three-minute auto-start rule.
 
+### Charging across a station pause
+
+After a live close or a late recovery creates a closed row, ingest checks its adjacent
+sessions for the same car. A recovered session's original stop is available in its
+`recovery_key`. A continuation requires power to resume within five minutes, a measured
+zero-power pause, continuous parked telemetry with the gun connected while power is off,
+and SOC that rises only with measured charging power. The tariff and efficiency must match.
+An open row, a manual entry, an edited tariff, or provider-corrected energy is ineligible.
+
+The merge preserves the first row's ID, uses the final powered measurement to set the
+end and SOC, and retires the continuation row in the same transaction. It checks that
+the two rows are unchanged and that no third session intersects the merged window.
+Repeated delivery cannot add the continuation's energy again. Reconciliation also caps
+its telemetry and live SOC by the original recovery stop and the next session's start.
+The service-role merge RPC in `20261123110000_charging_session_continuations.sql` must be
+available before deploying the ingest adapter.
+
 ## End-of-charge range promise capture
 
 The same close hook also freezes the *range predictions* made at the top of a charge, so the

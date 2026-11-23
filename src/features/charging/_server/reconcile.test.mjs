@@ -4,12 +4,28 @@ import assert from "node:assert/strict";
 import {
   buildReconciledSessionPatch,
   buildSilenceClosePatch,
+  closedSessionReconcileWindow,
   liveSocWithinSessionWindow,
   measuredSocFromMate,
   OPEN_SESSION_SILENCE_MS,
   sessionNeedsReconcile,
   summarizeSessionTelemetry,
 } from "./charging-session-reconcile-logic.ts";
+
+test("historical repair never reads charging measurements across the recovered stop or next start", () => {
+  const session = {
+    started_at: "2026-11-19T17:43:33.223+00:00",
+    stopped_at: "2026-11-19T18:25:45.434+00:00",
+    updated_at: "2026-11-22T18:00:00.000Z",
+    session_origin: "telemetry_recovered",
+    recovery_key: "2026-11-19T17:43:33.223+00:00:2026-11-19T18:06:25.285+00:00",
+  };
+  const next = Date.parse("2026-11-19T18:09:13.408Z");
+  const window = closedSessionReconcileWindow(session, next, Date.parse(session.updated_at));
+  assert.equal(window.endMs, Date.parse("2026-11-19T18:06:25.285Z"));
+  const legacy = { ...session, session_origin: "legacy", recovery_key: null };
+  assert.equal(closedSessionReconcileWindow(legacy, next, Date.parse(session.updated_at)).endMs, next - 1);
+});
 
 const baseSession = {
   id: "s1",

@@ -1,3 +1,23 @@
+## Preserve charging history across station pauses and delayed delivery — APPROVED, implemented locally
+
+**Observed in production.** Mate delivered both the buffered start and the live continuation of a charging visit. Late recovery stored the first closed interval, and live ingest opened a second interval. Reconciliation then read past the first stop and moved its end and SOC into the second interval. History and analytics can count part of the charge twice. The existing repair for a live tail fully contained in a recovery candidate covers a different case.
+
+**Data ownership and storage.** Charging history remains user-owned in Postgres (`charging_sessions`), derived from retained vehicle telemetry. Use the existing schema and Mate upload contract.
+
+- **A. Bound reconciliation to the original interval.** Use reliable stop evidence already recorded by recovery and the next session's start to bound telemetry and live SOC used in a repair. This addresses the overlap directly. A charging visit interrupted by the station can still appear as several consecutive entries.
+- **B. Bound reconciliation and rebuild confirmed charging visits (recommended).** Apply A. Then use the same retained timeline for delayed and live intervals. When evidence confirms that power resumed during the same visit, represent it once in History with the first measured start and last measured end, and count energy from the supported charging intervals once. Movement, a confirmed disconnect, or insufficient telemetry to establish continuity keeps intervals separate. Any update to multiple rows must be atomic, idempotent and scoped to one owner and vehicle. This adds more server work but handles both the overlap and the fragmented history.
+- **C. Upload completed sessions from Mate.** This requires a versioned session contract and durable tracking through app/daemon handover. It also leaves existing cloud records needing a repair. The measured intervals already reach Postgres, so this is outside the first implementation.
+
+**Acceptance.** Replay a synthetic trace with delayed start, fresh continuation, multiple power pauses, and a drive-away. Every supported interval contributes its energy once, and repeat or reordered delivery and reconciliation converge on the same history. Cover two separate visits, an active continuation, and overlaps with manual, tariff-edited, or provider-corrected rows. Keep live status timely.
+
+**Existing records.** Prepare a read-only preview of the confirmed production correction with before/after bounds and energy. Apply only after the fix is verified and the production data change is explicitly approved.
+
+**Rollout.** Apply the new merge RPC migration before deploying the ingest adapter. The
+implementation and read-only preview are ready for review. Deployment and targeted data repair
+are pending.
+
+---
+
 ## Dashboard tiles: restore two-column layout on narrow screens — APPROVED, shipped 2026-11-18
 
 Restore the vehicle ring and charging tiles to the established side-by-side layout below 420 px.

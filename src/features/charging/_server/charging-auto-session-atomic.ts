@@ -32,7 +32,7 @@ export async function processVoltflowMateAutoChargingSessions({
   supabase, userId, samples,
 }: { supabase: SupabaseClient; userId: string; samples: TelemetryPayload[] }) {
   const ordinary = samples.filter((sample) => sample.live_only !== true);
-  const result = { started: 0, stopped: 0, sessionIds: [] as string[] };
+  const result = { started: 0, stopped: 0, sessionIds: [] as string[], closedIds: [] as string[] };
   for (const vehicleId of new Set(ordinary.map((sample) => sample.vehicle_id))) {
     // Retry charging work independently of telemetry insertion/deduplication.
     const { error: enqueueError } = await supabase.rpc("bydmate_enqueue_charging_samples", {
@@ -79,6 +79,7 @@ export async function processVoltflowMateAutoChargingSessions({
     result.started += processed.started;
     result.stopped += processed.stopped;
     result.sessionIds.push(...processed.sessionIds);
+    result.closedIds.push(...processed.closedIds);
     // Diagnostic capture remains outside the short state/session transaction.
     for (const id of processed.closedIds) await captureSessionEndDelta(supabase, id);
   }

@@ -4,3 +4,4 @@ export * from "./_server/charging-session-reconcile";
 export * from "./_server/charging-session-vehicle";
 export type { TelemetrySampleRow } from "./_server/charging-session-reconcile-logic";
 export * from "./_server/late-charge-recovery-supabase";
+export { mergeChargingContinuations } from "./_server/charging-session-continuation-supabase";

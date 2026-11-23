@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   buildReconciledSessionPatch,
   buildSilenceClosePatch,
+  closedSessionReconcileWindow,
   liveSocWithinSessionWindow,
   RECONCILE_LOOKBACK_DAYS,
   sessionNeedsReconcile,
@@ -32,12 +33,12 @@ async function loadSessionTelemetry(
   vehicleId: string,
   session: ChargingSessionRow,
   nowMs: number,
+  closedWindow: ReturnType<typeof closedSessionReconcileWindow> | null,
 ) {
   const startMs = Date.parse(session.started_at!);
-  const from = new Date(startMs - 5 * 60_000).toISOString();
-  const stoppedMs = session.stopped_at ? Date.parse(session.stopped_at) : NaN;
-  const endMs =
-    Number.isFinite(stoppedMs) && stoppedMs >= startMs ? stoppedMs + 5 * 60_000 : nowMs + 60_000;
+  const from = new Date(closedWindow?.startMs ?? startMs - 5 * 60_000).toISOString();
+  const endMs = closedWindow?.endMs ?? nowMs + 60_000;
+  if (endMs < startMs) return [];
   const to = new Date(endMs).toISOString();
 
   const rows: TelemetrySampleRow[] = [];
@@ -66,12 +67,14 @@ async function reconcileOneSession({
   car,
   session,
   nowMs,
+  nextStartMs,
 }: {
   supabase: SupabaseClient;
   userId: string;
   car: Car;
   session: ChargingSessionRow;
   nowMs: number;
+  nextStartMs: number | null;
 }): Promise<string | null> {
   const vehicleId = car.vehicle_alias?.trim();
   if (!vehicleId) return null;
@@ -79,9 +82,10 @@ async function reconcileOneSession({
   // closed sessions take the normal value-repair path.
   const isOpen = session.status === "charging";
   if (!isOpen && !sessionNeedsReconcile(session, nowMs)) return null;
+  const closedWindow = isOpen ? null : closedSessionReconcileWindow(session, nextStartMs, nowMs);
 
   const [samples, liveResult] = await Promise.all([
-    loadSessionTelemetry(supabase, userId, vehicleId, session, nowMs),
+    loadSessionTelemetry(supabase, userId, vehicleId, session, nowMs, closedWindow),
     supabase
       .from("bydmate_live_snapshots")
       .select("device_time, received_at, telemetry, vehicle_id")
@@ -106,24 +110,30 @@ async function reconcileOneSession({
         nowMs,
       })
     : (() => {
-        const liveWithin = liveSocWithinSessionWindow(session, liveRow);
+        const liveWithin = liveSocWithinSessionWindow(session, liveRow, closedWindow?.hardEndMs);
         return buildReconciledSessionPatch({
           session,
           summary,
           liveSoc: liveWithin?.soc ?? null,
           liveSocReceivedMs: liveWithin?.receivedMs ?? null,
           nowMs,
+          hardEndMs: closedWindow?.hardEndMs,
         });
       })();
   if (!patch) return null;
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("charging_sessions")
     .update(patch)
     .eq("id", session.id)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .eq("updated_at", session.updated_at)
+    .eq("status", session.status)
+    .select("id")
+    .maybeSingle();
 
   if (error) throw new Error(error.message);
+  if (!data) return null;
 
   // Only the silence-close path is a real session close. The value-repair path
   // re-runs over already-closed sessions, and must not re-trigger the capture.
@@ -163,18 +173,23 @@ export async function reconcileChargingSessionsForUser({
     .select("*")
     .eq("user_id", userId)
     .in("car_id", carIds)
-    .gte("started_at", since);
+    .gte("started_at", since)
+    .order("started_at", { ascending: false });
 
   if (sessionsError) throw new Error(sessionsError.message);
 
   const carsById = new Map(carList.map((car) => [car.id, car]));
   const sessionIds: string[] = [];
+  const nextStarts = new Map<string, number>();
 
   for (const session of (sessions ?? []) as ChargingSessionRow[]) {
     const car = carsById.get(session.car_id);
     if (!car?.vehicle_alias) continue;
+    const nextStartMs = nextStarts.get(session.car_id) ?? null;
+    const startedMs = Date.parse(session.started_at ?? "");
+    if (Number.isFinite(startedMs)) nextStarts.set(session.car_id, startedMs);
     try {
-      const id = await reconcileOneSession({ supabase, userId, car, session, nowMs });
+      const id = await reconcileOneSession({ supabase, userId, car, session, nowMs, nextStartMs });
       if (id) sessionIds.push(id);
     } catch (err) {
       console.error("charging session reconcile:", session.id, err);
