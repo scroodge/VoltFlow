@@ -4734,3 +4734,12 @@ Removed the ignored `features.skills` flag, renamed `model_personality` to `pers
 replaced `shell_environment_policy.policy` with `inherit = "all"`. Kept the explicit exclusions
 for `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`.
 
+## 2026-11-20 — Telegram Mini App live status recovery
+
+The shared VoltFlow Mate live query now refreshes every 15 seconds while a page is visible.
+It records Realtime channel interruptions in the browser console and immediately refreshes
+the active query after the channel reconnects. This reduces the time a charging screen can
+continue using stale snapshot data in Telegram Mini App and PWA views. The change is limited
+to foreground polling and browser-side recovery. Runtime reproduction was not available, and
+automated checks were not run.
+

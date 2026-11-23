@@ -899,6 +899,65 @@ separately requested under the current project verification preference.
 
 ### Should I build this?
 
+## ~~🟠 Telegram Mini App charging screen can fall back to stale power while live data continues~~ — SHIPPED 2026-11-20
+
+### Finding
+
+On 2026-11-18, an authenticated Telegram Mini App user reported that the charging screen
+stopped updating after a minute or two, then refreshed after switching tabs. The matching
+production charging session ran 07:40:45–12:45:05 Minsk and was configured at 5.408 kW.
+Its vehicle submitted 1,927 persisted telemetry samples. Maximum sample receipt gap was
+72 seconds, with no gap above 90 seconds. Grouped delivery batches show a maximum 82-second
+age for the latest measurement before the next batch. This confirms the car-to-ingest path
+remained active for the matching session, but cannot establish whether the browser Realtime
+subscription or live-only snapshot delivery reached the screen.
+
+`useVoltflowMateLiveQuery` shares authenticated Realtime invalidation and a 60-second
+visible-page poll across the dashboard and charging screen. Charging calculations treat
+live snapshots older than 90 seconds as stale and can then use session-average or configured
+power. Returning to the dashboard fetches server bootstrap data, consistent with the report
+that tab navigation restores fresh values. The Telegram identity could not be matched to a
+profile using the supplied name, so the session match is based on its reported time window
+and 5.4 kW value.
+
+### Options
+
+1. **Harden the shared live query recovery path (recommended).** Observe Realtime channel
+   status, force an immediate active-query refetch after reconnect, and add a shorter
+   foreground recovery poll with request deduplication. Keep the existing 60-second idle
+   cadence and premium fast-status heartbeat. This covers Mini App and PWA consumers. Cost
+   is modest additional requests while a live screen is open.
+2. **Change only the charging screen.** Add a focused refresh loop there. Smaller scope, but
+   dashboard and vehicle views keep the same failure mode and duplicate recovery behavior.
+3. **Instrument before changing refresh behavior.** Record client-side timestamps for
+   Realtime status, last invalidation, last successful fetch and snapshot age, then wait for
+   another reproduction. Better attribution, but does not reduce user impact until it recurs.
+
+### Recommendation
+
+Option 1. Add query recovery that handles dropped or stalled Realtime subscriptions and
+ensures a foreground charging view refreshes within a short bounded interval. Surface
+Realtime channel errors in lightweight diagnostics so a recurrence distinguishes subscription
+failure from stale server responses. Preserve the current snapshot freshness policy and the
+server-side live-status window. Confirm with the reporter in Telegram Mini App after approval.
+
+### Data ownership and location
+
+No new user-facing data. Live snapshots remain app-owned telemetry in Postgres. Any recovery
+timestamps or subscription status remain transient client state.
+
+### Verification
+
+Exercise a charging view with Realtime disconnected and confirm the foreground poll updates
+the live snapshot and ETA. Reconnect Realtime and confirm invalidation resumes. Check the same
+shared hook on dashboard and vehicle views, including the Telegram WebView path.
+
+### Shipped
+
+The shared live query now polls every 15 seconds while a page is visible and logs Realtime
+channel interruptions. When an interrupted channel reconnects, the hook immediately
+invalidates the live query so the active view fetches a fresh snapshot. See CHANGELOG.md.
+
 ---
 
 ## Dashboard active charge: edit tariff without leaving home — PROPOSED 2026-11-18

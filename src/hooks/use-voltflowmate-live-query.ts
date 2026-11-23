@@ -18,6 +18,7 @@ import type { VoltflowMateLiveSnapshotRow } from "@/types/database";
  * debounce continues to earn its keep — it just no longer dominates the latency budget.
  */
 const BYDMATE_LIVE_REFETCH_DEBOUNCE_MS = 1_000;
+const BYDMATE_LIVE_RECOVERY_POLL_MS = 15_000;
 
 async function fetchVoltflowMateLiveDev(): Promise<VoltflowMateLiveSnapshotRow[]> {
   const response = await devFetch("/api/vehicle/live");
@@ -64,6 +65,7 @@ export function useVoltflowMateLiveQuery(initialData?: VoltflowMateLiveSnapshotR
     let cancelled = false;
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let realtimeWasInterrupted = false;
     const scheduleInvalidate = () => {
       if (debounceTimer) return;
       debounceTimer = setTimeout(() => {
@@ -89,7 +91,18 @@ export function useVoltflowMateLiveQuery(initialData?: VoltflowMateLiveSnapshotR
           },
           scheduleInvalidate,
         )
-        .subscribe();
+        .subscribe((status) => {
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+            realtimeWasInterrupted = true;
+            console.warn("VoltFlow Mate live Realtime channel interrupted", status);
+            return;
+          }
+
+          if (status === "SUBSCRIBED" && realtimeWasInterrupted) {
+            realtimeWasInterrupted = false;
+            void queryClient.invalidateQueries({ queryKey: queryKeys.voltflowMateLive });
+          }
+        });
     });
 
     return () => {
@@ -106,6 +119,8 @@ export function useVoltflowMateLiveQuery(initialData?: VoltflowMateLiveSnapshotR
     queryFn: fetchVoltflowMateLive,
     initialData,
     staleTime: 15_000,
-    refetchInterval: pageVisible ? (devRoute ? 30_000 : 60_000) : false,
+    refetchInterval: pageVisible
+      ? (devRoute ? 30_000 : BYDMATE_LIVE_RECOVERY_POLL_MS)
+      : false,
   });
 }
