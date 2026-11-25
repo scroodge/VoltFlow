@@ -93,11 +93,13 @@ export function DashboardDevSnapshotProvider({
           ...charging,
           telemetry: {
             ...charging.telemetry,
-            soc: 58,
             speed_kmh: 0,
-            charge_type: dc ? "DC" : "AC",
-            charge_power_kw: power,
-            power_kw: -power,
+            ...(mode === "charge" ? {} : {
+              soc: 58,
+              charge_type: dc ? "DC" : "AC",
+              charge_power_kw: power,
+              power_kw: -power,
+            }),
           },
         };
       }

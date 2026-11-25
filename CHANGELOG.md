@@ -9,6 +9,16 @@ For unbuilt proposals see [BACKLOG.md](BACKLOG.md); for current behavior see the
 
 ---
 
+## 2026-11-25
+
+### Dashboard UI simulator
+
+`/dev/dashboard` uses the standard dashboard and tariff form with a synthetic car,
+telemetry, sessions and provider. The URL selects AC or DC charging, live charging
+without a session, missing or zero tariffs, driving, parked, stale or missing telemetry.
+Save the tariff in memory, fail the next save to exercise retry, or use Reset to restore
+the fixture. The simulator is available in development.
+
 ## 2026-11-17
 
 ### Dashboard tiles keep their side-by-side placement on narrow screens

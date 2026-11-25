@@ -1,7 +1,7 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import { DashboardView } from "@/components/dashboard/dashboard-view";
 import { DashboardDevToolbar } from "@/components/dev/dashboard-dev-toolbar";
@@ -16,6 +16,7 @@ import type { updateChargingSessionTariff } from "@/features/charging/actions";
 import { costFromGridEnergy } from "@/features/charging/domain";
 import { useTranslation } from "@/hooks/use-translation";
 import { buildMockChargingSession } from "@/lib/dev/build-mock-charging-session";
+import { noopSubscribe } from "@/lib/pwa";
 import { queryKeys } from "@/lib/query-keys";
 import type { Car, ChargingSessionRow, UserProviderRow } from "@/types/database";
 
@@ -111,18 +112,17 @@ function SimulatorCase({
   onReset: () => void;
 }) {
   const { t } = useTranslation();
+  // The simulator's telemetry and session clock begin in the browser.
+  const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
   const [session, setSession] = useState(() => buildSession(mode));
   const [failNextSave, setFailNextSave] = useState(false);
-  const failNextSaveRef = useRef(false);
 
   const saveTariff: typeof updateChargingSessionTariff = async (input) => {
-    const fail = failNextSaveRef.current;
-    failNextSaveRef.current = false;
     setFailNextSave(false);
 
     // Leave the pending state visible for manual UI checks.
     await new Promise((resolve) => setTimeout(resolve, 650));
-    if (fail) return { ok: false, error: String(t("charging.tariff.saveError")) };
+    if (failNextSave) return { ok: false, error: String(t("charging.tariff.saveError")) };
     if (!session || input.sessionId !== session.id) {
       return { ok: false, error: String(t("charging.unavailable")) };
     }
@@ -146,14 +146,11 @@ function SimulatorCase({
           <DashboardDevToolbar
             simulation={{
               failNextSave,
-              setFailNextSave: (value) => {
-                failNextSaveRef.current = value;
-                setFailNextSave(value);
-              },
+              setFailNextSave,
               onReset,
             }}
           />
-          <DashboardView simulation={{ car, session, saveTariff }} />
+          {mounted ? <DashboardView simulation={{ car, session, saveTariff }} /> : null}
         </main>
         <BottomNavigation />
       </div>

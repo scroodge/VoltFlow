@@ -1030,44 +1030,6 @@ queries after saving. Browser validation and deployment are pending.
 
 ---
 
-## Dashboard UI simulator — PROPOSED 2026-11-25
-
-The existing `/dev/dashboard` toolbar changes the telemetry snapshot, while
-`DashboardView` suppresses active sessions in that mode. `/dev/history/dev-preview`
-renders the shared tariff form and uses a synthetic session ID. It cannot exercise the
-dashboard entry point or the flow from saving a tariff to updating the cost tile.
-
-1. **Extend the existing dev dashboard (recommended).** Drive the real dashboard and
-   shared tariff form with a synthetic car, snapshot, session and providers. Switch
-   fixtures from the existing toolbar and include the selected scenario in the URL for
-   reproducible browser checks. Add an in-memory save handler for the fixture, including
-   pending and failed outcomes.
-2. **Create an isolated component preview.** Quick for visual checks, with the dashboard
-   tile, active-session logic and cost refresh covered separately.
-3. **Use a dedicated test database and seed sessions.** Covers server persistence as well
-   as the UI, with more setup and reset work. Useful for a separate integration pass.
-
-**First scenarios.** Keep the existing driving, parked, stale and no-data snapshots.
-Offer active AC and DC charging, live charging before a session opens, and active
-charging with a missing or explicitly zero price. Let testers switch the simulated
-save between success and failure and reset the case to its initial values.
-
-**Data ownership and storage.** Synthetic cars, sessions and providers are app-owned
-fixtures. Edits live in the browser's memory for the current preview, reset on reload or
-scenario change and use neither Postgres nor localStorage. The URL stores only the
-scenario selection. Production session tariffs remain user-owned in Postgres.
-
-**Acceptance.** Use the existing localhost server to check the real dashboard at phone
-and desktop widths. Tap or keyboard activation opens the form, a long press shows the
-calculation, cancel leaves the displayed estimate intact, success updates it, and a
-failed save keeps the draft with a retry path. Verify the preview does not call
-session start, stop, tariff-save or background persistence against a real database.
-
-### Should I build this?
-
----
-
-
 ## Charging-session power and battery-temperature timeline — IN PROGRESS 2026-11-17
 
 ### Problem and evidence
