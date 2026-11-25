@@ -35,11 +35,13 @@ export function ChargingSessionTariffForm({
   onCancel,
   onSaved,
   onSavingChange,
+  previewSave,
 }: {
   session: ChargingSessionRow;
   onCancel?: () => void;
   onSaved?: () => void;
   onSavingChange?: (saving: boolean) => void;
+  previewSave?: typeof updateChargingSessionTariff;
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -52,7 +54,9 @@ export function ChargingSessionTariffForm({
   const [provider, setProvider] = useState(savedProvider);
   const [tariffType, setTariffType] = useState(session.tariff_type);
   const [priceDraft, setPriceDraft] = useState(() =>
-    String(session.tariff_manual || session.price_per_kwh > 0 ? session.price_per_kwh : defaultPrice),
+    session.tariff_manual || session.price_per_kwh > 0
+      ? String(session.price_per_kwh)
+      : previewSave ? "" : String(defaultPrice),
   );
   const [saving, setSaving] = useState(false);
 
@@ -99,7 +103,7 @@ export function ChargingSessionTariffForm({
     setSaving(true);
     onSavingChange?.(true);
     try {
-      const result = await updateChargingSessionTariff({
+      const result = await (previewSave ?? updateChargingSessionTariff)({
         sessionId: session.id,
         tariffType,
         providerType: userProviderId ? "user_provider" : provider as ChargingProviderType,
@@ -110,10 +114,12 @@ export function ChargingSessionTariffForm({
         toast.error(result.error);
         return;
       }
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: queryKeys.session(session.id) }),
-        qc.invalidateQueries({ queryKey: queryKeys.sessions }),
-      ]);
+      if (!previewSave) {
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: queryKeys.session(session.id) }),
+          qc.invalidateQueries({ queryKey: queryKeys.sessions }),
+        ]);
+      }
       toast.success(t("charging.tariff.updated") as string);
       onSaved?.();
     } catch {

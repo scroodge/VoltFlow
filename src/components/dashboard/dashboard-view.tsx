@@ -20,6 +20,7 @@ import { Info, Zap } from "lucide-react";
 import {
   startChargingSession,
   stopChargingSession,
+  type updateChargingSessionTariff,
 } from "@/features/charging/actions";
 import { BrandBadge } from "@/components/brand/BrandBadge";
 import { ChargingBolt } from "@/components/brand/ChargingBolt";
@@ -163,6 +164,7 @@ import { useAppPreferences } from "@/stores/use-app-preferences";
 import type {
   VoltflowMateLiveSnapshotRow,
   VoltflowMateTripRow,
+  Car,
   ChargingProviderType,
   ChargingSessionRow,
   ChargingTariffType,
@@ -719,8 +721,14 @@ function DashboardLoadingSkeleton() {
 
 export function DashboardView({
   initialData,
+  simulation,
 }: {
   initialData?: DashboardBootstrapData;
+  simulation?: {
+    car: Car;
+    session: ChargingSessionRow | null;
+    saveTariff: typeof updateChargingSessionTariff;
+  };
 }) {
   const router = useRouter();
   const appPath = useAppPath();
@@ -740,13 +748,13 @@ export function DashboardView({
   } = useCarsQuery(
     initialData ? { cars: initialData.cars, preferredCarId: null } : undefined,
   );
-  const cars = carsResult?.cars;
+  const cars = simulation ? [simulation.car] : carsResult?.cars;
   const preferredCarId = carsResult?.preferredCarId ?? null;
   // A car row with no telemetry ever received is treated the same as having no car:
   // there is nothing real to show, so the demo preview applies here too.
   const { data: vehicleConnection } = useVehicleConnection();
   const treatAsNoCar =
-    cars?.length === 0 || vehicleConnection?.connected === false;
+    !simulation && (cars?.length === 0 || vehicleConnection?.connected === false);
   // Distinguishes "no car row yet" (send to /cars/new) from "car added, APK never
   // paired" (send to /onboarding to pair Mate) -- same demo treatment, different CTA.
   const needsPairing =
@@ -779,7 +787,8 @@ export function DashboardView({
     useVoltflowMateLiveQuery(initialData?.liveSnapshots);
   const persistedSelectedCarId = useAppPreferences((s) => s.selectedCarId);
   const setSelectedCarId = useAppPreferences((s) => s.setSelectedCarId);
-  const defaultPrice = useAppPreferences((s) => s.defaultPricePerKwh);
+  const savedDefaultPrice = useAppPreferences((s) => s.defaultPricePerKwh);
+  const defaultPrice = simulation ? 0 : savedDefaultPrice;
   const homePricePerKwh = useAppPreferences((s) => s.homePricePerKwh);
   const commercialAcPricePerKwh = useAppPreferences(
     (s) => s.commercialAcPricePerKwh,
@@ -822,6 +831,7 @@ export function DashboardView({
   });
 
   const selectedCarId =
+    simulation?.car.id ??
     persistedSelectedCarId ??
     initialData?.selectedCarId ??
     (cars?.length === 1 ? cars[0].id : null);
@@ -846,13 +856,14 @@ export function DashboardView({
   const forceDevParkMode = dashboardDevSnapshot?.mode === "park";
 
   const activeSession = useMemo(() => {
+    if (simulation) return simulation.session;
     if (forceDevMockMode || !selectedCar) return null;
     return (
       sessions?.find(
         (s) => s.status === "charging" && s.car_id === selectedCar.id,
       ) ?? null
     );
-  }, [forceDevMockMode, sessions, selectedCar]);
+  }, [simulation, forceDevMockMode, sessions, selectedCar]);
 
   const nowMs = useTickingClock(Boolean(activeSession) || pageVisible);
 
@@ -886,7 +897,7 @@ export function DashboardView({
   // point — see useVehicleLastKnownLocation) handed off to the phone's native
   // maps app. Hidden while driving (nonsensical) or with no location at all.
   const { location: walkToCarLocation } = useVehicleLastKnownLocation(
-    scopedVehicleId,
+    simulation ? null : scopedVehicleId,
     latestVoltflowMateSnapshot,
   );
   const walkToCarIsIos = useSyncExternalStore(
@@ -930,7 +941,7 @@ export function DashboardView({
   const latestTrip = forceDevMockMode ? null : (latestTrips[0] ?? null);
 
   useEffect(() => {
-    if (!cars?.length || selectedCarId || cars.length !== 1) return;
+    if (simulation || !cars?.length || selectedCarId || cars.length !== 1) return;
     const exists = cars.some((c) => c.id === selectedCarId);
     if (!exists) {
       const nextId =
@@ -939,11 +950,13 @@ export function DashboardView({
           : cars[0].id) ?? cars[0].id;
       setSelectedCarId(nextId);
     }
-  }, [cars, preferredCarId, selectedCarId, setSelectedCarId]);
+  }, [simulation, cars, preferredCarId, selectedCarId, setSelectedCarId]);
 
   const scopedLiveSnapshots = useMemo(
-    () => filterLiveSnapshotsForVehicle(voltflowMateLive, scopedVehicleId),
-    [voltflowMateLive, scopedVehicleId],
+    () => simulation
+      ? (latestVoltflowMateSnapshot ? [latestVoltflowMateSnapshot] : [])
+      : filterLiveSnapshotsForVehicle(voltflowMateLive, scopedVehicleId),
+    [simulation, latestVoltflowMateSnapshot, voltflowMateLive, scopedVehicleId],
   );
 
   const liveActive = useMemo(() => {
@@ -1070,6 +1083,7 @@ export function DashboardView({
         : "idle";
 
   const canStartSession =
+    !simulation &&
     hasMounted &&
     selectedCar &&
     !activeSession &&
@@ -1173,7 +1187,7 @@ export function DashboardView({
   });
   // Phase 4c (BACKLOG.md): display-only trust-corrected car promise, shown in the AI Range
   // explainer sheet behind a per-device switch. Never feeds rangeEstimate above.
-  const { data: rangeTrustData } = useRangeTrustQuery(scopedVehicleId);
+  const { data: rangeTrustData } = useRangeTrustQuery(simulation ? null : scopedVehicleId);
   const rangeTrust = rangeTrustData?.trust ?? null;
   const rawCarPromiseKm =
     latestVoltflowMateSnapshot?.telemetry.range_est_km ?? null;
@@ -1227,7 +1241,7 @@ export function DashboardView({
 
   const [reserveEditorOpen, setReserveEditorOpen] = useState(false);
   const handleReserveSelect = async (step: number) => {
-    if (!selectedCar) return;
+    if (simulation || !selectedCar) return;
     const { error } = await createClient()
       .from("cars")
       .update({ range_reserve_soc_percent: step })
@@ -1549,7 +1563,7 @@ export function DashboardView({
     loadingCars || (loadingLive && !latestVoltflowMateSnapshot);
 
   useEffect(() => {
-    if (heroReadyReported.current || isPageLoading || !selectedCar) return;
+    if (simulation || heroReadyReported.current || isPageLoading || !selectedCar) return;
 
     const navigation = performance.getEntriesByType("navigation")[0] as
       PerformanceNavigationTiming | undefined;
@@ -1571,7 +1585,7 @@ export function DashboardView({
       release:
         process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
     });
-  }, [isPageLoading, selectedCar]);
+  }, [simulation, isPageLoading, selectedCar]);
 
   useEffect(() => {
     if (isPageLoading || !selectedCar) return;
@@ -1604,7 +1618,7 @@ export function DashboardView({
 
   const handleStart = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!selectedCar) return;
+    if (simulation || !selectedCar) return;
     const validation = validateQuickSessionInput({
       startPct,
       targetPct,
@@ -1667,6 +1681,7 @@ export function DashboardView({
   };
 
   const handleMainAction = async () => {
+    if (simulation) return;
     if (!activeSession) {
       if (vehicleMode === "driving") {
         router.push(appPath("/vehicle"));
@@ -1884,7 +1899,7 @@ export function DashboardView({
                         setOpenMetric(rangeExplanation.metricKey);
                     }}
                     onReserve={
-                      selectedCar ? () => setReserveEditorOpen(true) : undefined
+                      selectedCar && !simulation ? () => setReserveEditorOpen(true) : undefined
                     }
                   />
                 </div>
@@ -1970,7 +1985,7 @@ export function DashboardView({
                       setEstimatePowerKw={(value) => {
                         setEstimatePowerTouched(true);
                         setEstimatePowerKw(value);
-                        setParkEstimatePrefs({
+                        if (!simulation) setParkEstimatePrefs({
                           parkEstimatePowerKw: value,
                           parkEstimatePowerTouched: true,
                         });
@@ -1978,21 +1993,21 @@ export function DashboardView({
                       setEstimateProviderType={(value) => {
                         setEstimateProviderTouched(true);
                         setEstimateProviderType(value);
-                        setParkEstimatePrefs({
+                        if (!simulation) setParkEstimatePrefs({
                           parkEstimateProviderType: value,
                           parkEstimateProviderTouched: true,
                         });
                       }}
                       setEstimateUserProviderId={(value) => {
                         setEstimateUserProviderId(value);
-                        setParkEstimatePrefs({
+                        if (!simulation) setParkEstimatePrefs({
                           parkEstimateUserProviderId: value,
                         });
                       }}
                       setEstimateTariffType={(value) => {
                         setEstimateTariffTouched(true);
                         setEstimateTariffType(value);
-                        setParkEstimatePrefs({
+                        if (!simulation) setParkEstimatePrefs({
                           parkEstimateTariffType: value,
                           parkEstimateTariffTouched: true,
                         });
@@ -2077,7 +2092,7 @@ export function DashboardView({
                             {chargingTileLabel}
                           </span>
                         }
-                        onClick={activeSession ? () => router.push(appPath(`/charging/${activeSession.id}`)) : undefined}
+                        onClick={activeSession && !simulation ? () => router.push(appPath(`/charging/${activeSession.id}`)) : undefined}
                       />
                     </div>
                   ) : (
@@ -2099,7 +2114,7 @@ export function DashboardView({
                               {chargingTileLabel}
                             </span>
                           }
-                          onClick={activeSession ? () => router.push(appPath(`/charging/${activeSession.id}`)) : undefined}
+                          onClick={activeSession && !simulation ? () => router.push(appPath(`/charging/${activeSession.id}`)) : undefined}
                         />
                       ) : null}
                     </div>
@@ -2119,7 +2134,7 @@ export function DashboardView({
                 </p>
                 <button
                   type="button"
-                  disabled={!selectedCar}
+                  disabled={Boolean(simulation) || !selectedCar}
                   onClick={() => void handleMainAction()}
                   className="text-xs font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground disabled:opacity-55"
                 >
@@ -2130,7 +2145,7 @@ export function DashboardView({
               <div className="mt-4 grid gap-2">
                 <ChargingActionButton
                   status={actionButtonStatus}
-                  disabled={!selectedCar || stopping}
+                  disabled={Boolean(simulation) || !selectedCar || stopping}
                   loading={stopping}
                   labels={{
                     start:
@@ -2476,6 +2491,7 @@ export function DashboardView({
             <ChargingSessionTariffForm
               key={tariffSession.id}
               session={tariffSession}
+              previewSave={simulation?.saveTariff}
               onCancel={() => setTariffSessionId(null)}
               onSaved={() => setTariffSessionId(null)}
               onSavingChange={setSavingTariff}

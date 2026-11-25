@@ -25,6 +25,7 @@ const DEV_AUTH_PREFIXES = [
   "/vehicle",
 ];
 const DIRECT_DEV_PATH_PREFIXES = [
+  "/dev/dashboard",
   "/dev/api",
   "/dev/gallery",
   "/dev/bydmate-diplus",

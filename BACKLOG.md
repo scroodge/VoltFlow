@@ -1,3 +1,14 @@
+## Run the local dev server on the project's Node 22
+
+With Node 26.4.0, importing `@tailwindcss/postcss` reproduces `DEP0205` in `@tailwindcss/node`. The two reported processes were Turbopack PostCSS workers. The same import with Node 22.22.3 exits without the warning. `.nvmrc` and `package.json` already select Node 22.
+
+- **Use the installed Node 22 for the next local dev-server launch (recommended).** Run `fnm exec --using=22 npm run dev`. This follows the existing project requirement and requires one local restart to switch the active process.
+- **Stay on Node 26 and update Tailwind when its loader uses the replacement API.** This requires checking a specific release and verifying CSS compilation. Consider it as part of a separate Node upgrade.
+
+**Acceptance.** Open an existing page after restarting under Node 22 and confirm that the PostCSS workers emit no `DEP0205` during compilation.
+
+---
+
 ## Preserve charging history across station pauses and delayed delivery — APPROVED, implemented locally
 
 **Observed in production.** Mate delivered both the buffered start and the live continuation of a charging visit. Late recovery stored the first closed interval, and live ingest opened a second interval. Reconciliation then read past the first stop and moved its end and SOC into the second interval. History and analytics can count part of the charge twice. The existing repair for a live tail fully contained in a recovery candidate covers a different case.
@@ -1016,6 +1027,43 @@ charging session in Postgres**, as today. No new preference or storage is propos
 
 The dashboard opens the shared tariff form from the cost tile and refreshes the session
 queries after saving. Browser validation and deployment are pending.
+
+---
+
+## Dashboard UI simulator — PROPOSED 2026-11-25
+
+The existing `/dev/dashboard` toolbar changes the telemetry snapshot, while
+`DashboardView` suppresses active sessions in that mode. `/dev/history/dev-preview`
+renders the shared tariff form and uses a synthetic session ID. It cannot exercise the
+dashboard entry point or the flow from saving a tariff to updating the cost tile.
+
+1. **Extend the existing dev dashboard (recommended).** Drive the real dashboard and
+   shared tariff form with a synthetic car, snapshot, session and providers. Switch
+   fixtures from the existing toolbar and include the selected scenario in the URL for
+   reproducible browser checks. Add an in-memory save handler for the fixture, including
+   pending and failed outcomes.
+2. **Create an isolated component preview.** Quick for visual checks, with the dashboard
+   tile, active-session logic and cost refresh covered separately.
+3. **Use a dedicated test database and seed sessions.** Covers server persistence as well
+   as the UI, with more setup and reset work. Useful for a separate integration pass.
+
+**First scenarios.** Keep the existing driving, parked, stale and no-data snapshots.
+Offer active AC and DC charging, live charging before a session opens, and active
+charging with a missing or explicitly zero price. Let testers switch the simulated
+save between success and failure and reset the case to its initial values.
+
+**Data ownership and storage.** Synthetic cars, sessions and providers are app-owned
+fixtures. Edits live in the browser's memory for the current preview, reset on reload or
+scenario change and use neither Postgres nor localStorage. The URL stores only the
+scenario selection. Production session tariffs remain user-owned in Postgres.
+
+**Acceptance.** Use the existing localhost server to check the real dashboard at phone
+and desktop widths. Tap or keyboard activation opens the form, a long press shows the
+calculation, cancel leaves the displayed estimate intact, success updates it, and a
+failed save keeps the draft with a retry path. Verify the preview does not call
+session start, stop, tariff-save or background persistence against a real database.
+
+### Should I build this?
 
 ---
 

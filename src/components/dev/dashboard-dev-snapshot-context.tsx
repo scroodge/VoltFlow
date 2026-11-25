@@ -24,6 +24,10 @@ export type DashboardDevSnapshotMode =
   | "live"
   | "park"
   | "charge"
+  | "charge-ac"
+  | "charge-dc"
+  | "charge-no-price"
+  | "charge-free"
   | "stale"
   | "nodata";
 
@@ -40,9 +44,11 @@ const DashboardDevSnapshotContext = createContext<DashboardDevSnapshotContextVal
   null,
 );
 
-function parseDevMode(value: string | null): DashboardDevSnapshotMode {
+export function parseDevMode(value: string | null): DashboardDevSnapshotMode {
   if (value === "park") return "park";
   if (value === "charge") return "charge";
+  if (value === "charge-ac" || value === "charge-dc" ||
+      value === "charge-no-price" || value === "charge-free") return value;
   if (value === "stale") return "stale";
   if (value === "nodata") return "nodata";
   return "live";
@@ -53,8 +59,15 @@ function useDevAppRouteFromPath() {
   return getDevPathPrefix(pathname) !== "";
 }
 
-export function DashboardDevSnapshotProvider({ children }: { children: ReactNode }) {
+export function DashboardDevSnapshotProvider({
+  children,
+  initialMode,
+}: {
+  children: ReactNode;
+  initialMode?: DashboardDevSnapshotMode;
+}) {
   const [mode, setModeState] = useState<DashboardDevSnapshotMode>(() => {
+    if (initialMode) return initialMode;
     if (typeof window === "undefined") return "live";
     return parseDevMode(new URLSearchParams(window.location.search).get("devSnapshot"));
   });
@@ -72,13 +85,19 @@ export function DashboardDevSnapshotProvider({ children }: { children: ReactNode
     (base: VoltflowMateLiveSnapshotRow | null): VoltflowMateLiveSnapshotRow | null => {
       if (!devRoute) return null;
       const seed = base ?? buildDevDashboardSeedSnapshot();
-      if (mode === "charge") {
+      if (mode === "charge" || mode.startsWith("charge-")) {
         const charging = buildChargingSnapshot(seed, null);
+        const dc = mode === "charge-dc";
+        const power = dc ? 48 : 7.4;
         return {
           ...charging,
           telemetry: {
             ...charging.telemetry,
+            soc: 58,
             speed_kmh: 0,
+            charge_type: dc ? "DC" : "AC",
+            charge_power_kw: power,
+            power_kw: -power,
           },
         };
       }

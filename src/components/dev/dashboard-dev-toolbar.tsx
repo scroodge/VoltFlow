@@ -17,12 +17,63 @@ const MODES: { id: DashboardDevSnapshotMode; label: string }[] = [
   { id: "nodata", label: "No Data" },
 ];
 
-export function DashboardDevToolbar() {
+const SIMULATOR_MODES = [
+  { id: "charge-ac", label: "Зарядка AC" },
+  { id: "charge-dc", label: "Зарядка DC" },
+  { id: "charge", label: "Зарядка без сессии" },
+  { id: "charge-no-price", label: "Тариф не задан" },
+  { id: "charge-free", label: "Бесплатная зарядка" },
+  { id: "live", label: "Едет" },
+  { id: "park", label: "Припарковано" },
+  { id: "stale", label: "Данные устарели" },
+  { id: "nodata", label: "Нет данных" },
+] as const satisfies ReadonlyArray<{ id: DashboardDevSnapshotMode; label: string }>;
+
+export function DashboardDevToolbar({
+  simulation,
+}: {
+  simulation?: {
+    failNextSave: boolean;
+    setFailNextSave: (value: boolean) => void;
+    onReset: () => void;
+  };
+}) {
   const pathname = usePathname();
   const ctx = useDashboardDevSnapshot();
   if (getDevPathPrefix(pathname) === "" || !ctx) return null;
 
   const { mode, setMode } = ctx;
+
+  if (simulation) {
+    return (
+      <div className="sticky top-0 z-20 grid shrink-0 gap-2 border-b border-border bg-background px-3 py-2 text-xs">
+        <div className="flex items-center gap-2">
+          <label htmlFor="dashboard-dev-scenario" className="shrink-0 font-semibold">Сценарий</label>
+          <select
+            id="dashboard-dev-scenario"
+            value={mode}
+            onChange={(event) => setMode(event.target.value as DashboardDevSnapshotMode)}
+            className="min-w-0 flex-1 rounded-md border border-border bg-card p-2"
+          >
+            {SIMULATOR_MODES.map((item) => (
+              <option key={item.id} value={item.id}>{item.label}</option>
+            ))}
+          </select>
+          <button type="button" onClick={simulation.onReset} className="p-2 font-semibold">Сбросить</button>
+        </div>
+        {mode.startsWith("charge-") ? (
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={simulation.failNextSave}
+              onChange={(event) => simulation.setFailNextSave(event.target.checked)}
+            />
+            Ошибка при следующем сохранении
+          </label>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className="sticky top-0 z-20 flex shrink-0 items-center justify-between gap-3 border-b border-border/40 bg-background/95 px-3 py-2 backdrop-blur">
