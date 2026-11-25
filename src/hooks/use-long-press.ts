@@ -9,8 +9,7 @@ export const MOVE_CANCEL_PX = 10;
 export function useLongPress(onTrigger: () => void, onTap: () => void = onTrigger) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startRef = useRef<{ x: number; y: number } | null>(null);
-  const heldRef = useRef(false);
-  const suppressHeldClickRef = useRef(false);
+  const suppressPointerClickRef = useRef(false);
 
   const clear = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -22,7 +21,6 @@ export function useLongPress(onTrigger: () => void, onTap: () => void = onTrigge
   const cancel = useCallback(() => {
     clear();
     startRef.current = null;
-    heldRef.current = false;
   }, [clear]);
 
   return {
@@ -30,10 +28,10 @@ export function useLongPress(onTrigger: () => void, onTap: () => void = onTrigge
       if (!event.isPrimary || event.button !== 0) return;
       clear();
       startRef.current = { x: event.clientX, y: event.clientY };
-      heldRef.current = false;
+      suppressPointerClickRef.current = false;
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
-        heldRef.current = true;
+        suppressPointerClickRef.current = true;
         globalThis.navigator?.vibrate?.(10);
         onTrigger();
       }, HOLD_MS);
@@ -41,27 +39,24 @@ export function useLongPress(onTrigger: () => void, onTap: () => void = onTrigge
     onPointerMove(event: ReactPointerEvent<HTMLElement>) {
       const start = startRef.current;
       if (!start) return;
-      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > MOVE_CANCEL_PX) cancel();
+      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > MOVE_CANCEL_PX) {
+        suppressPointerClickRef.current = true;
+        cancel();
+      }
     },
     onPointerUp(event: ReactPointerEvent<HTMLElement>) {
       if (!startRef.current || !event.isPrimary) return;
       event.stopPropagation();
-      const wasHeld = heldRef.current;
-      clear();
-      startRef.current = null;
-      heldRef.current = false;
-      if (!wasHeld) setTimeout(onTap, 0);
-      suppressHeldClickRef.current = wasHeld;
+      cancel();
     },
     onPointerCancel: cancel,
     onPointerLeave: cancel,
     onClick(event: ReactMouseEvent<HTMLElement>) {
       event.stopPropagation();
-      // Also covers keyboard and accessibility-generated activation. A quick
-      // pointer tap routes to onTap; a completed hold is explicitly suppressed
-      // so its trailing click is not treated as a tap.
-      if (suppressHeldClickRef.current) suppressHeldClickRef.current = false;
-      else setTimeout(onTap, 0);
+      // Native click handles taps and keyboard activation once. A hold or
+      // drag suppresses the trailing pointer click.
+      if (event.detail > 0 && suppressPointerClickRef.current) return;
+      onTap();
     },
     onContextMenu(event: ReactMouseEvent<HTMLElement>) {
       event.preventDefault();

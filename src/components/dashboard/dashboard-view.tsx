@@ -35,7 +35,11 @@ import {
   useDashboardDevSnapshotOverride,
 } from "@/components/dev/dashboard-dev-snapshot-context";
 import type { DashboardBootstrapData } from "@/components/dashboard/dashboard-bootstrap-types";
-import { BatteryRing, ChargingActionButton } from "@/features/charging/ui";
+import {
+  BatteryRing,
+  ChargingActionButton,
+  ChargingSessionTariffForm,
+} from "@/features/charging/ui";
 import { MetricExplainerSheet } from "@/components/vehicle/metric-explainer-sheet";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -48,6 +52,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import {
   Select,
   SelectContent,
@@ -266,16 +271,20 @@ function DashboardStatTile({
   explanation,
   onExplain,
   onClick,
+  dialogLabel,
+  buttonRef,
 }: {
   label: string;
   value: ReactNode;
   explanation?: MetricExplanation;
   onExplain?: (explanation: MetricExplanation) => void;
   onClick?: () => void;
+  dialogLabel?: string;
+  buttonRef?: RefObject<HTMLButtonElement | null>;
 }) {
   const longPressProps = useLongPress(() => {
     if (explanation) onExplain?.(explanation);
-  });
+  }, onClick);
   const content = (
     <>
       {explanation ? (
@@ -294,12 +303,18 @@ function DashboardStatTile({
   );
   const className =
     "relative grid min-h-[84px] w-full min-w-0 grid-rows-[auto_1fr] rounded-xl border border-border bg-white/[0.03] p-2.5 text-left";
-  return onClick ? (
-    <button type="button" className={`${className} cursor-pointer hover:border-primary/50 hover:bg-primary/5`} onClick={onClick} aria-label={label}>
-      {content}
-    </button>
-  ) : explanation ? (
-    <button type="button" className={className} {...longPressProps}>
+  return onClick || explanation ? (
+    <button
+      ref={buttonRef}
+      type="button"
+      className={cn(
+        className,
+        onClick && "cursor-pointer hover:border-primary/50 hover:bg-primary/5",
+      )}
+      aria-label={onClick ? (dialogLabel ?? label) : undefined}
+      aria-haspopup={dialogLabel ? "dialog" : undefined}
+      {...(explanation ? longPressProps : { onClick })}
+    >
       {content}
     </button>
   ) : (
@@ -946,6 +961,11 @@ export function DashboardView({
     "percent",
   );
   const [dialogOpen, setDialogOpen] = useState(false);
+  const tariffTileRef = useRef<HTMLButtonElement>(null);
+  const [tariffSessionId, setTariffSessionId] = useState<string | null>(null);
+  const [savingTariff, setSavingTariff] = useState(false);
+  const tariffSession =
+    activeSession?.id === tariffSessionId ? activeSession : null;
   const [startPct, setStartPct] = useState("42");
   const [targetPct, setTargetPct] = useState("100");
   const [chargerKw, setChargerKw] = useState("");
@@ -1271,7 +1291,7 @@ export function DashboardView({
     if (!activeSession || !liveActive) return null;
 
     const effectivePricePerKwh =
-      activeSession.price_per_kwh > 0
+      activeSession.tariff_manual || activeSession.price_per_kwh > 0
         ? activeSession.price_per_kwh
         : defaultPrice;
     const capacityKwh = activeSession.battery_capacity_kwh;
@@ -1294,7 +1314,8 @@ export function DashboardView({
           )
         : null;
     const costToFull =
-      totalGridEnergyToFullKwh != null && effectivePricePerKwh > 0
+      totalGridEnergyToFullKwh != null &&
+      (effectivePricePerKwh > 0 || activeSession.tariff_manual)
         ? costFromGridEnergy(totalGridEnergyToFullKwh, effectivePricePerKwh)
         : null;
     const availableKwh = availableBatteryKwh(capacityKwh, currentSoc);
@@ -1468,7 +1489,9 @@ export function DashboardView({
         explainActiveChargeCost({
           ...common,
           fromPercent: activeSession.start_percent,
-          pricePerKwh: activeChargingStats.effectivePricePerKwh,
+          pricePerKwh: activeChargingStats.costToFull != null
+            ? activeChargingStats.effectivePricePerKwh
+            : null,
           currencyUnit: currencySymbols[currency],
         }),
         activeChargingStats.costToFull != null
@@ -2023,6 +2046,13 @@ export function DashboardView({
                         onExplain={(explanation) =>
                           setOpenMetric(explanation.metricKey)
                         }
+                        buttonRef={tariffTileRef}
+                        dialogLabel={t("charging.tariff.edit") as string}
+                        onClick={
+                          activeSession
+                            ? () => setTariffSessionId(activeSession.id)
+                            : undefined
+                        }
                       />
                       <DashboardStatTile
                         label={t("dashboard.packShort") as string}
@@ -2429,6 +2459,30 @@ export function DashboardView({
           </p>
         </DialogContent>
       </Dialog>
+      <Sheet
+        open={Boolean(tariffSession)}
+        onOpenChange={(open) => {
+          if (!open && !savingTariff) setTariffSessionId(null);
+        }}
+      >
+        <SheetContent
+          side="bottom"
+          showCloseButton={false}
+          finalFocus={tariffTileRef}
+          className="voltflow-card safe-bottom mx-auto max-h-[85dvh] max-w-lg overflow-y-auto rounded-b-none rounded-t-2xl px-4 pb-5 pt-4 motion-reduce:transition-none"
+        >
+          <SheetTitle className="text-lg">{t("charging.tariff.whileCharging")}</SheetTitle>
+          {tariffSession ? (
+            <ChargingSessionTariffForm
+              key={tariffSession.id}
+              session={tariffSession}
+              onCancel={() => setTariffSessionId(null)}
+              onSaved={() => setTariffSessionId(null)}
+              onSavingChange={setSavingTariff}
+            />
+          ) : null}
+        </SheetContent>
+      </Sheet>
       <MetricExplainerSheet
         open={openMetric != null}
         onOpenChange={(open) => {

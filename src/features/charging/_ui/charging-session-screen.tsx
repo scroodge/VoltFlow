@@ -2,34 +2,22 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { updateChargingSessionTariff } from "../actions";
+import { useCallback, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 
 import { BatteryRing } from "./BatteryRing";
 import { ChargingDeltaCard } from "./charging-delta-card";
 import { ChargingPowerTemperatureChart } from "./charging-power-temperature-chart";
+import { ChargingSessionTariffForm } from "./charging-session-tariff-form";
 import { EnergyCorrectionCard } from "./energy-correction-card";
 import { ChargingStatsGrid, type ChargingStat } from "./ChargingStatsGrid";
 import { sessionStartOdometerKm } from "../_domain/session-start-odometer";
-import {
-  CurrencyAmount,
-  currencyTextWithIcon,
-} from "@/components/currency-amount";
+import { CurrencyAmount } from "@/components/currency-amount";
 import {
   useChargingDevLiveOverride,
   useChargingDevSource,
 } from "@/components/dev/charging-dev-source-context";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   costFromGridEnergy,
   deriveChargingState,
@@ -41,15 +29,8 @@ import {
   type ChargingParams,
   type DerivedChargingState,
 } from "../domain";
-import {
-  currencySymbols,
-  formatCurrencyAmount,
-  type TranslationKey,
-} from "@/lib/i18n";
-import {
-  resolveProviderTariff,
-  resolveTariffTypeByPower,
-} from "@/lib/charging-tariffs";
+import { formatCurrencyAmount, type TranslationKey } from "@/lib/i18n";
+import { resolveTariffTypeByPower } from "@/lib/charging-tariffs";
 import { resolveTariffLocationMatch } from "@/lib/charging-gps-location";
 import { isDevAppRoute } from "@/lib/dev/dev-fetch";
 import { isDevMockChargingSessionId } from "@/lib/dev/build-mock-charging-session";
@@ -58,10 +39,6 @@ import { mapChargingSession, mapChargingTariffLocation } from "@/lib/db-map";
 import { queryKeys } from "@/lib/query-keys";
 import { useChargingSessionLiveSync } from "../_client/use-charging-session-live-sync";
 import { useChargingSessionAutoTariff } from "../_client/use-charging-session-auto-tariff";
-import {
-  useUserProvidersQuery,
-  useUserProviderMap,
-} from "@/hooks/use-user-providers-query";
 import { useCarsQuery } from "@/hooks/use-cars-query";
 import { useSessionQuery } from "@/hooks/use-session-query";
 import { useVoltflowMateLiveQuery } from "@/hooks/use-voltflowmate-live-query";
@@ -87,16 +64,13 @@ import { formatSocPercent } from "@/lib/format-soc-percent";
 import { useChargingUi } from "../_client/use-charging-ui";
 import type {
   ChargingProviderType,
-  ChargingSessionRow,
   ChargingTariffType,
-  UserProviderRow,
   VoltflowMateLiveSnapshotRow,
 } from "@/types/database";
 
 const toParams = chargingParamsFromSession;
 
-// Pending queries must not create new effect/Select dependencies on each render.
-const EMPTY_USER_PROVIDERS: UserProviderRow[] = [];
+// Keep effect dependencies stable while the live query loads.
 const EMPTY_LIVE_SNAPSHOTS: VoltflowMateLiveSnapshotRow[] = [];
 
 const tariffProviderKey = (provider: ChargingProviderType) =>
@@ -122,20 +96,9 @@ export function ChargingSessionScreen({
   const defaultPricePerKwh = useAppPreferences((s) => s.defaultPricePerKwh);
   const appPath = useAppPath();
   const { locale, t } = useTranslation();
-  const [tariffTypeDraft, setTariffTypeDraft] =
-    useState<ChargingTariffType | null>(null);
-  const [priceDraft, setPriceDraft] = useState("");
-  const [providerTypeDraft, setProviderTypeDraft] =
-    useState<ChargingProviderType | null>(null);
-  const [userProviderIdDraft, setUserProviderIdDraft] = useState<string | null>(
-    null,
-  );
-  const [savingTariff, setSavingTariff] = useState(false);
 
   const { data: session, error, isLoading } = useSessionQuery(sessionId);
   const { data: carsResult } = useCarsQuery();
-  const { data: userProviderRows = EMPTY_USER_PROVIDERS } = useUserProvidersQuery();
-  const userProviderMap = useUserProviderMap();
   const { data: voltflowMateLive = EMPTY_LIVE_SNAPSHOTS } = useVoltflowMateLiveQuery();
   const devSource = useChargingDevSource();
   const devOverrideActive = devSource?.isOverrideActive ?? false;
@@ -158,43 +121,6 @@ export function ChargingSessionScreen({
     () => sessionStartOdometerKm(sessionSamples ?? []),
     [sessionSamples],
   );
-
-  // "custom" (manual price, no picked provider) is the only non-stored option —
-  // every named provider (including Home) is a `user_providers` row, seeded on
-  // signup so it's always at least present as Home.
-  const allProviderOptions = useMemo(() => {
-    const userOpts = userProviderRows.map((p) => ({
-      value: `up_${p.id}` as const,
-      label: p.label,
-    }));
-    return [
-      { value: "custom" as const, label: t(tariffProviderKey("custom")) },
-      ...userOpts,
-    ];
-  }, [userProviderRows, t]);
-
-  // Base UI tracks the items collection; keep its identity stable between
-  // unrelated live/status renders rather than rebuilding it inside Select.
-  const tariffTypeOptions = useMemo(
-    () => (["home", "commercial_ac", "fast_dc"] as const).map((value) => ({
-      value,
-      label: t(tariffTypeKey(value)),
-    })),
-    [t],
-  );
-
-  function parseProviderSelectValue(value: string | null | undefined): {
-    providerType: ChargingProviderType;
-    userProviderId: string | null;
-  } {
-    if (typeof value === "string" && value.startsWith("up_")) {
-      return { providerType: "user_provider", userProviderId: value.slice(3) };
-    }
-    return {
-      providerType: (value as ChargingProviderType) ?? "custom",
-      userProviderId: null,
-    };
-  }
 
   const clockActive = session?.status === "charging";
   const nowMs = useTickingClock(clockActive);
@@ -246,12 +172,6 @@ export function ChargingSessionScreen({
     vehicleId: sessionVehicleId,
     enabled: Boolean(session) && !isDevMockChargingSessionId(sessionId),
   });
-
-  useEffect(() => {
-    setTariffTypeDraft(null);
-    setProviderTypeDraft(null);
-    setPriceDraft("");
-  }, [session?.tariff_type, session?.provider_type, session?.price_per_kwh]);
 
   useEffect(() => {
     if (isDevAppRoute()) return;
@@ -403,68 +323,6 @@ export function ChargingSessionScreen({
     toast.message(t("charging.saved") as string);
   }, [voltflowMateLive, devSource, qc, session, sessionId, supabase, t]);
 
-  const saveTariff = useCallback(async () => {
-    if (!session) return;
-    const effectivePriceDraft =
-      priceDraft.trim() === ""
-        ? String(
-            session.price_per_kwh > 0
-              ? session.price_per_kwh
-              : defaultPricePerKwh,
-          )
-        : priceDraft;
-    const pricePerKwh = Number.parseFloat(
-      effectivePriceDraft.replace(",", "."),
-    );
-    if (!Number.isFinite(pricePerKwh) || pricePerKwh < 0) {
-      toast.error(t("charging.tariff.invalidPrice") as string);
-      return;
-    }
-    setSavingTariff(true);
-    const effectiveProvider = providerTypeDraft ?? session.provider_type;
-    const effectiveUserProviderId =
-      userProviderIdDraft ?? session.user_provider_id;
-    const res = await updateChargingSessionTariff({
-      sessionId,
-      tariffType: tariffTypeDraft ?? session.tariff_type,
-      providerType: effectiveProvider,
-      userProviderId: effectiveUserProviderId ?? undefined,
-      pricePerKwh,
-    });
-    setSavingTariff(false);
-    if (!res.ok) {
-      toast.error(res.error);
-      return;
-    }
-    await qc.invalidateQueries({ queryKey: queryKeys.session(sessionId) });
-    await qc.invalidateQueries({ queryKey: queryKeys.sessions });
-    toast.success(t("charging.tariff.updated") as string);
-  }, [
-    defaultPricePerKwh,
-    priceDraft,
-    providerTypeDraft,
-    qc,
-    session,
-    sessionId,
-    t,
-    tariffTypeDraft,
-  ]);
-
-  const applyProviderPresetPrice = useCallback(
-    (provider: ChargingProviderType, tariffType: ChargingTariffType) => {
-      if (provider === "custom") return;
-      const userProviderId =
-        provider === "user_provider" ? userProviderIdDraft : undefined;
-      const preset = resolveProviderTariff(
-        provider,
-        userProviderId,
-        userProviderMap,
-      );
-      setPriceDraft(String(preset[tariffType]));
-    },
-    [userProviderMap, userProviderIdDraft],
-  );
-
   const tariffLocationMatch = useMemo(
     () =>
       resolveTariffLocationMatch(autoTariffGps.activeLocation, tariffLocations),
@@ -506,21 +364,11 @@ export function ChargingSessionScreen({
       ? (session?.charged_energy_kwh ?? 0) / (derived.elapsedSeconds / 3600)
       : 0;
   const effectivePricePerKwh =
-    session.price_per_kwh > 0 ? session.price_per_kwh : defaultPricePerKwh;
-  const effectiveTariffTypeDraft = tariffTypeDraft ?? session.tariff_type;
-  const effectiveProviderTypeDraft = providerTypeDraft ?? session.provider_type;
-  const effectiveUserProviderIdDraft =
-    userProviderIdDraft ?? session.user_provider_id;
-  const effectivePriceDraft =
-    priceDraft.trim() === ""
-      ? String(
-          session.price_per_kwh > 0
-            ? session.price_per_kwh
-            : defaultPricePerKwh,
-        )
-      : priceDraft;
+    session.tariff_manual || session.price_per_kwh > 0
+      ? session.price_per_kwh
+      : defaultPricePerKwh;
   const displayCurrentCost =
-    effectivePricePerKwh > 0 ? (
+    effectivePricePerKwh > 0 || session.tariff_manual ? (
       <CurrencyAmount
         currency={currency}
         value={costFromGridEnergy(
@@ -533,7 +381,7 @@ export function ChargingSessionScreen({
       "—"
     );
   const displayCostAtFull =
-    effectivePricePerKwh > 0 ? (
+    effectivePricePerKwh > 0 || session.tariff_manual ? (
       <CurrencyAmount
         currency={currency}
         value={costFromGridEnergy(
@@ -828,107 +676,10 @@ export function ChargingSessionScreen({
             {t("charging.tariff.waitingGps") as string}
           </p>
         ) : null}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="session-provider-type">
-              {t("charging.tariff.provider") as string}
-            </Label>
-            <Select
-              value={
-                effectiveUserProviderIdDraft
-                  ? `up_${effectiveUserProviderIdDraft}`
-                  : effectiveProviderTypeDraft
-              }
-              onValueChange={(value) => {
-                const parsed = parseProviderSelectValue(value);
-                setProviderTypeDraft(parsed.providerType);
-                setUserProviderIdDraft(parsed.userProviderId);
-                applyProviderPresetPrice(
-                  parsed.providerType,
-                  effectiveTariffTypeDraft,
-                );
-              }}
-              modal={false}
-              items={allProviderOptions}
-            >
-              <SelectTrigger
-                id="session-provider-type"
-                className="h-11 w-full rounded-2xl text-sm"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="z-[200]">
-                {allProviderOptions.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="session-tariff-type">
-              {t("charging.tariff.type") as string}
-            </Label>
-            <Select
-              value={effectiveTariffTypeDraft}
-              onValueChange={(value) => {
-                const tariffType = value as ChargingTariffType;
-                setTariffTypeDraft(tariffType);
-                applyProviderPresetPrice(
-                  effectiveProviderTypeDraft,
-                  tariffType,
-                );
-              }}
-              modal={false}
-              items={tariffTypeOptions}
-            >
-              <SelectTrigger
-                id="session-tariff-type"
-                className="h-11 w-full rounded-2xl text-sm"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="z-[200]">
-                {tariffTypeOptions.map(
-                  ({ value, label }) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ),
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="session-tariff-price">
-              {currencyTextWithIcon(
-                t("charging.tariff.pricePerKwh", {
-                  currency: currencySymbols[currency],
-                }) as string,
-                currency,
-              )}
-            </Label>
-            <Input
-              id="session-tariff-price"
-              inputMode="decimal"
-              value={effectivePriceDraft}
-              onChange={(event) => setPriceDraft(event.target.value)}
-              className="h-11 rounded-2xl text-sm"
-            />
-          </div>
-        </div>
-        <Button
-          type="button"
-          variant="secondary"
-          className="h-11 w-full rounded-full text-sm font-semibold"
-          disabled={savingTariff}
-          onClick={() => void saveTariff()}
-        >
-          {savingTariff
-            ? (t("common.saving") as string)
-            : (t("charging.tariff.save") as string)}
-        </Button>
+        <ChargingSessionTariffForm
+          key={`${session.id}:${session.tariff_type}:${session.provider_type}:${session.user_provider_id}:${session.price_per_kwh}:${session.tariff_manual}`}
+          session={session}
+        />
       </section>
 
       {historyMode ? (

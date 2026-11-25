@@ -217,7 +217,7 @@ export function explainActiveChargeEnergy(input: ChargeEstimateInputs & { curren
 export function explainActiveChargeCost(input: ChargeEstimateInputs & { pricePerKwh: number | null | undefined; currencyUnit?: string; sourceAt?: string | null }): MetricExplanation {
   const energy = chargeGridEnergy(input);
   const price = finite(input.pricePerKwh);
-  const result = energy != null && price != null && price > 0 ? costFromGridEnergy(energy, price) : null;
+  const result = energy != null && price != null && price >= 0 ? costFromGridEnergy(energy, price) : null;
   return { metricKey: "activeChargeCost", titleKey: "dashboard.explain.metrics.activeChargeCost.title", formulaKey: "dashboard.explain.metrics.activeChargeCost.formula", sourceAt: input.sourceAt,
     rows: [row("dashboard.explain.rows.gridEnergy", energy, "kWh", "derived"), row("dashboard.explain.rows.pricePerKwh", price, `${input.currencyUnit ?? ""}/kWh`, "input", 2), row("vehicle.explain.rows.result", result, input.currencyUnit ?? "", "result", 2)], };
 }

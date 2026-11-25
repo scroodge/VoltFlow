@@ -581,6 +581,8 @@ export const dictionaries = {
       redirectStalls: "Tap if redirect stalls",
       tariff: {
         whileCharging: "Tariff while charging",
+        edit: "Price to 100% · edit tariff",
+        saveError: "Could not save the tariff",
         historyCorrection: "Session tariff correction",
         autoMatchHint:
           "Auto-matches saved GPS locations while charging. Tap Save tariff to pin manually.",
@@ -2310,6 +2312,8 @@ export const dictionaries = {
       redirectStalls: "Націсніце, калі пераход завіс",
       tariff: {
         whileCharging: "Тарыф падчас зарадкі",
+        edit: "Кошт да 100% · змяніць тарыф",
+        saveError: "Не ўдалося захаваць тарыф",
         historyCorrection: "Карэкцыя тарыфу сесіі",
         autoMatchHint:
           "Аўтаматычна падбірае захаваныя GPS-лакацыі падчас зарадкі. Націсніце «Захаваць тарыф», каб замацаваць уручную.",
@@ -4041,6 +4045,8 @@ export const dictionaries = {
       redirectStalls: "Нажмите, если переход завис",
       tariff: {
         whileCharging: "Тариф во время зарядки",
+        edit: "Цена до 100% · изменить тариф",
+        saveError: "Не удалось сохранить тариф",
         historyCorrection: "Коррекция тарифа сессии",
         autoMatchHint:
           "Автоматически подбирает сохранённые GPS-локации во время зарядки. Нажмите «Сохранить тариф», чтобы закрепить вручную.",

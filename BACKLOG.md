@@ -95,14 +95,14 @@ Today the tariff can only be changed on the session screen
 The dashboard «Цена до 100%» uses `activeSession.price_per_kwh` and offers no way to change
 it.
 
-- **Recommended.** Add a tappable «Тариф» chip under the 2×2 tiles: `<provider> ·
+- **Option.** Add a tappable «Тариф» chip under the 2×2 tiles: `<provider> ·
   <price>/kWh`, plus a «ночь» marker once part 3 exists. It opens a bottom sheet with the
   provider select, AC/DC type and price, and saves through the same
   `updateChargingSessionTariff` action. Extract the session screen's form into a shared
   component instead of duplicating it. After saving, invalidate the session query so the
   cost tile updates.
-- Alternative: make the «Цена до 100%» tile itself open the sheet. Less visible, and its
-  long-press is already used for the explanation.
+- **Selected entry point.** Tap «Цена до 100%» to open the sheet. Keep long-press for
+  the explanation. See “Dashboard active charge: edit tariff without leaving home” below.
 
 ### 3. Time-of-day tariffs, price locked at session start
 
@@ -980,7 +980,7 @@ invalidates the live query so the active view fetches a fresh snapshot. See CHAN
 
 ---
 
-## Dashboard active charge: edit tariff without leaving home — PROPOSED 2026-11-18
+## Dashboard active charge: edit tariff without leaving home — BUILT 2026-11-25, pending release
 
 ### Problem and evidence
 
@@ -994,28 +994,28 @@ cost are recomputed when a tariff changes; the server action already handles thi
 
 ### Options
 
-1. **Add an edit action to the active charge card that opens the existing session detail
-   tariff editor (recommended).** Minimal behavior duplication; reuses the existing
-   authenticated save path and cost recalculation. User can return to the dashboard after
-   saving.
-2. **Embed the tariff form directly on the dashboard card.** Fastest single-screen flow,
-   but duplicates state, provider options, validation, GPS auto-match messaging, and save
-   handling from the session detail screen.
-3. **Add compact provider/price controls but omit tariff type.** Smaller UI, but can leave
-   efficiency incorrect when switching between AC and fast DC.
+1. **Open the tariff editor in a sheet from «Цена до 100%» (recommended).** Keeps the
+   active charge visible on the dashboard and reuses the existing tariff form. Tap opens
+   the editor and long-press shows the cost explanation.
+2. **Add a separate «Тариф» chip.** Gives editing a visible label and takes another row
+   on the compact charging card.
+3. **Link to the session-detail editor.** Requires less UI work and sends the user away
+   from the dashboard to make an edit.
 
 ### Recommendation
 
-Build option 1: add a clearly labelled tariff-edit link/button to the active charging
-card, deep-linking to the active session's existing tariff editor (or add an editor anchor
-there if needed). Preserve the tariff type, provider, price, and existing cost/efficiency
-recalculation behavior. Avoid introducing a second mutation path. Verify active-session
-navigation and saving a tariff change from the home card flow.
+Give option 1 a clear, accessible edit label. Prefill the active session's price per kWh,
+provider and tariff type. Save through `updateChargingSessionTariff`, then refresh the
+active-session query so «Цена до 100%» reflects the saved price. Keep the sheet open on a
+save error. Verify that tap and keyboard activation open the editor, long-press opens only
+the explanation, cancelling leaves the saved tariff intact, and saving updates the tile
+without leaving the dashboard.
 
 **Data ownership and location:** tariff selection is part of the **user-owned active
 charging session in Postgres**, as today. No new preference or storage is proposed.
 
-### Should I build this?
+The dashboard opens the shared tariff form from the cost tile and refreshes the session
+queries after saving. Browser validation and deployment are pending.
 
 ---
 

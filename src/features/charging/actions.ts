@@ -315,29 +315,11 @@ export async function updateChargingSessionTariff(
   }
 
   const pricePerKwh = parsed.data.pricePerKwh;
-  let estimatedCost = Number(session.estimated_cost ?? 0);
-  let chargedEnergyKwh = Number(session.charged_energy_kwh ?? 0);
-  let currentPercent = Number(session.current_percent ?? session.start_percent);
-
-  if (session.status === "charging" && session.started_at) {
-    const derived = deriveChargingState(
-      {
-        startPercent: session.start_percent,
-        targetPercent: session.target_percent,
-        batteryCapacityKwh: session.battery_capacity_kwh,
-        chargerPowerKw: session.charger_power_kw,
-        efficiencyPercent: session.efficiency_percent,
-        pricePerKwh,
-      },
-      Date.parse(session.started_at),
-      Date.now(),
-    );
-    estimatedCost = derived.estimatedCost;
-    chargedEnergyKwh = derived.chargedEnergyKwh;
-    currentPercent = derived.currentPercent;
-  } else {
-    estimatedCost = costFromGridEnergy(chargedEnergyKwh, pricePerKwh);
-  }
+  // A tariff edit reprices stored energy without overwriting live charging progress.
+  const estimatedCost = costFromGridEnergy(
+    Number(session.charged_energy_kwh ?? 0),
+    pricePerKwh,
+  );
 
   const { error: updateError } = await supabase
     .from("charging_sessions")
@@ -353,8 +335,6 @@ export async function updateChargingSessionTariff(
           ? new Date().toISOString() : null,
       price_per_kwh: pricePerKwh,
       estimated_cost: estimatedCost,
-      charged_energy_kwh: chargedEnergyKwh,
-      current_percent: currentPercent,
     })
     .eq("id", parsed.data.sessionId)
     .eq("user_id", user.id);
